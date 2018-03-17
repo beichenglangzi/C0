@@ -206,8 +206,14 @@ extension Material.MaterialType {
  # Issue
  - 「線の強さ」を追加
  */
-final class MaterialEditor: Layer, Respondable {
+final class MaterialEditor: Layer, Respondable, Localizable {
     static let name = Localization(english: "Material Editor", japanese: "マテリアルエディタ")
+    
+    var locale = Locale.current {
+        didSet {
+            updateLayout()
+        }
+    }
     
     var material: Material {
         didSet {

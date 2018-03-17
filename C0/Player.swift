@@ -38,12 +38,6 @@ final class Player: Layer, Respondable {
         }
     }
     
-    var playCutItem = CutItem() {
-        didSet {
-            playCutItem.read()
-            self.playCut = playCutItem.cut.copied
-        }
-    }
     var playCut = Cut()
     
     override var bounds: CGRect {
@@ -60,11 +54,7 @@ final class Player: Layer, Respondable {
     }
     func draw(in ctx: CGContext) {
         ctx.concatenate(screenTransform)
-        playCut.rootNode.draw(scene: scene, viewType: .preview,
-                              scale: 1, rotation: 0,
-                              viewScale: scene.scale,
-                              viewRotation: scene.viewTransform.rotation,
-                              in: ctx)
+        playCut.draw(scene: scene, viewType: .preview, in: ctx)
     }
     
     var screenTransform = CGAffineTransform.identity
@@ -77,18 +67,18 @@ final class Player: Layer, Respondable {
     var didSetCutIndexHandler: ((Int) -> (Void))? = nil
     var didSetPlayFrameRateHandler: ((Int) -> (Void))? = nil
     
-    private var timer = LockTimer(), oldPlayCutItem: CutItem?
+    private var timer = LockTimer(), oldPlayCut: Cut?
     private var oldPlayTime = Beat(0), oldTimestamp = 0.0
     var isPlaying = false {
         didSet {
             if isPlaying {
-                playCutItem = scene.editCutItem
-                oldPlayCutItem = scene.editCutItem
-                oldPlayTime = scene.editCutItem.cut.time
+                playCut = scene.editCut.copied
+                oldPlayCut = scene.editCut
+                oldPlayTime = scene.editCut.currentTime
                 oldTimestamp = CFAbsoluteTimeGetCurrent()
-                let t = currentPlayTime
+                let t = scene.time
                 playIntSecond = t.integralPart
-                playCutIndex = scene.editCutItemIndex
+                playCutIndex = scene.editCutIndex
                 playFrameRate = scene.frameRate
                 playFrameTime = scene.frameTime(withBeatTime: scene.time)
                 playDrawCount = 0
@@ -145,9 +135,9 @@ final class Player: Layer, Respondable {
         let t = currentPlayTime
         didSetTimeHandler?(t)
         
-        if let cutItemIndex = scene.cutItems.index(of: playCutItem), playCutIndex != cutItemIndex {
-            playCutIndex = cutItemIndex
-            didSetCutIndexHandler?(cutItemIndex)
+        if let cutIndex = scene.cuts.index(of: playCut), playCutIndex != cutIndex {
+            playCutIndex = cutIndex
+            didSetCutIndexHandler?(cutIndex)
         }
         
         if isPlaying && !isPause {
@@ -170,18 +160,18 @@ final class Player: Layer, Respondable {
     }
     
     private func update(withTime newTime: Beat) {
-        let ci = scene.cutItemIndex(withTime: newTime)
+        let ci = scene.cutTrack.cutIndex(withTime: newTime)
         if ci.isOver {
-            playCutItem = scene.cutItems[0]
-            playCut.time = 0
+            playCut = scene.cuts[0]
+            playCut.currentTime = 0
             audioPlayer?.currentTime = 0
             playFrameTime = 0
         } else {
-            let playCutItem = scene.cutItems[ci.index]
-            if playCutItem != self.playCutItem {
-                self.playCutItem = playCutItem
+            let playCut = scene.cuts[ci.index]
+            if playCut != self.playCut {
+                self.playCut = playCut
             }
-            playCut.time = ci.interTime
+            playCut.currentTime = ci.interTime
         }
         drawLayer.draw()
         updateBinding()
@@ -200,11 +190,11 @@ final class Player: Layer, Respondable {
     var currentPlayTime: Beat {
         get {
             var t = Beat(0)
-            for cutItem in scene.cutItems {
-                if playCutItem != cutItem {
-                    t += cutItem.cut.duration
+            for cut in scene.cuts {
+                if playCut != cut {
+                    t += cut.duration
                 } else {
-                    t += playCut.time
+                    t += playCut.currentTime
                     break
                 }
             }
@@ -238,21 +228,26 @@ final class Player: Layer, Respondable {
     }
 }
 
-final class PlayerEditor: Layer, Respondable {
+final class PlayerEditor: Layer, Respondable, Localizable {
     static let name = Localization(english: "Player Editor", japanese: "プレイヤーエディタ")
     
-    private let timeLabelWidth = 40.0.cf, sliderWidth = 300.0.cf
+    var locale = Locale.current {
+        didSet {
+            updateLayout()
+        }
+    }
+    
+    private let timeLabelWidth = 45.0.cf, sliderWidth = 300.0.cf
     let playLabel = Label(text: Localization(english: "Play by Indicated", japanese: "指し示して再生"),
                           color: .locked)
     let slider = Slider(min: 0, max: 1,
                         description: Localization(english: "Play Time", japanese: "再生時間"))
-    let timeLabel = Label(text: Localization("0:00"), color: .locked)
-    let cutLabel = Label(text: Localization("No.0"), color: .locked)
-    let frameRateLabel = Label(text: Localization("0 fps"), color: .locked)
+    let timeLabel = Label(text: Localization("00:00"), color: .locked)
+    let frameRateLabel = Label(text: Localization("-- fps"), color: .locked)
     
     override init() {
         super.init()
-        replace(children: [playLabel, slider, timeLabel, cutLabel, frameRateLabel])
+        replace(children: [playLabel, slider, timeLabel, frameRateLabel])
         
         slider.disabledRegisterUndo = true
         slider.binding = { [unowned self] in
@@ -265,10 +260,10 @@ final class PlayerEditor: Layer, Respondable {
     
     override var bounds: CGRect {
         didSet {
-            updateChildren()
+            updateLayout()
         }
     }
-    func updateChildren() {
+    func updateLayout() {
         let padding = Layout.basicPadding, height = Layout.basicHeight
         let sliderY = round((frame.height - height) / 2)
         let labelHeight = Layout.basicHeight - padding * 2
@@ -277,8 +272,6 @@ final class PlayerEditor: Layer, Respondable {
         
         var x = bounds.width - timeLabelWidth - padding
         frameRateLabel.frame.origin = CGPoint(x: x, y: labelY)
-        x -= timeLabelWidth
-        cutLabel.frame.origin = CGPoint(x: x, y: labelY)
         x -= timeLabelWidth
         timeLabel.frame.origin = CGPoint(x: x, y: labelY)
         x -= padding
@@ -323,34 +316,31 @@ final class PlayerEditor: Layer, Respondable {
             guard second != oldValue else {
                 return
             }
-            timeLabel.string = minuteSecondString(withSecond: second, frameRate: frameRate)
+            timeLabel.string = minuteSecondString(withSecond: second, frameRate: Int(frameRate))
         }
     }
     func minuteSecondString(withSecond s: Int, frameRate: FPS) -> String {
         if s >= 60 {
             let minute = s / 60
             let second = s - minute * 60
-            return String(format: "%d:%02d", minute, second)
+            return String(format: "%02d:%02d", minute, second)
         } else {
-            return String(format: "0:%02d", s)
-        }
-    }
-    var cutIndex = 0 {
-        didSet {
-            cutLabel.string = "No.\(cutIndex)"
+            return String(format: "00:%02d", s)
         }
     }
     var playFrameRate = 1 {
         didSet {
-            frameRateLabel.string = "\(playFrameRate) fps"
-            frameRateLabel.textFrame.color = playFrameRate < frameRate ? .warning : .locked
+            updateWithFrameRate()
         }
     }
     var frameRate = 1 {
         didSet {
             playFrameRate = frameRate
-            frameRateLabel.string = "\(playFrameRate) fps"
-            frameRateLabel.textFrame.color = playFrameRate < frameRate ? .warning : .locked
+            updateWithFrameRate()
         }
+    }
+    private func updateWithFrameRate() {
+        frameRateLabel.string = playFrameRate == 0 ? "-- fps" : "\(playFrameRate) fps"
+        frameRateLabel.textFrame.color = playFrameRate < frameRate ? .warning : .locked
     }
 }

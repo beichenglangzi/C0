@@ -363,6 +363,10 @@ final class ArrayEditor: Layer, Respondable {
     func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
         return pasteHandler?(self, copiedObject, event) ?? false
     }
+    var newHandler: ((ArrayEditor, KeyInputEvent) -> (Bool))?
+    func new(with event: KeyInputEvent) -> Bool {
+        return newHandler?(self, event) ?? false
+    }
     
     var moveHandler: ((ArrayEditor, DragEvent) -> (Bool))?
     func move(with event: DragEvent) -> Bool {

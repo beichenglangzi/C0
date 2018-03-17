@@ -472,6 +472,9 @@ final class NodeTrack: NSObject, Track, NSCoding {
         self.materialItems = materialItems
     }
     
+    var speechItem: SpeechItem?
+    var soundItem: SoundItem?
+    
     var transformItem: TransformItem? {
         didSet {
             if let transformItem = transformItem {
@@ -1532,57 +1535,6 @@ extension WiggleItem: Referenceable {
     static let name = Localization(english: "Wiggle Item", japanese: "振動アイテム")
 }
 
-final class SpeechItem: TrackItem, Codable {
-    var speech: Speech
-    fileprivate(set) var keySpeechs: [Speech]
-    func replaceSpeech(_ speech: Speech, at i: Int) {
-        keySpeechs[i] = speech
-        self.speech = speech
-    }
-    
-    func step(_ f0: Int) {
-        self.speech = keySpeechs[f0]
-    }
-    func linear(_ f0: Int, _ f1: Int, t: CGFloat) {
-        self.speech = keySpeechs[f0]
-    }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        self.speech = keySpeechs[f1]
-    }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        self.speech = keySpeechs[f1]
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        self.speech = keySpeechs[f1]
-    }
-    
-    func update(with f0: Int) {
-        self.speech = keySpeechs[f0]
-    }
-    
-    init(speech: Speech = Speech(), keySpeechs: [Speech] = [Speech()]) {
-        self.speech = speech
-        self.keySpeechs = keySpeechs
-    }
-    
-    var isEmpty: Bool {
-        for t in keySpeechs {
-            if !t.isEmpty {
-                return false
-            }
-        }
-        return true
-    }
-}
-extension SpeechItem: Copying {
-    func copied(from copier: Copier) -> SpeechItem {
-        return SpeechItem(speech: speech, keySpeechs: keySpeechs)
-    }
-}
-extension SpeechItem: Referenceable {
-    static let name = Localization(english: "Speech Item", japanese: "スピーチアイテム")
-}
-
 final class TempoItem: TrackItem, Codable {
     var tempo: BPM
     fileprivate(set) var keyTempos: [BPM]
@@ -1636,43 +1588,4 @@ extension TempoItem: Copying {
 }
 extension TempoItem: Referenceable {
     static let name = Localization(english: "Tempo Item", japanese: "テンポアイテム")
-}
-
-final class SoundItem: TrackItem, Codable {
-    var sound: Sound
-    fileprivate(set) var keySounds: [Sound]
-    func replace(_ sound: Sound, at i: Int) {
-        keySounds[i] = sound
-        self.sound = sound
-    }
-    
-    func step(_ f0: Int) {
-        sound = keySounds[f0]
-    }
-    func linear(_ f0: Int, _ f1: Int, t: CGFloat) {
-        sound = keySounds[f0]
-    }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        sound = keySounds[f1]
-    }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        sound = keySounds[f1]
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        sound = keySounds[f1]
-    }
-    
-    static let defaultSound = Sound()
-    init(sound: Sound = defaultSound, keySounds: [Sound] = [defaultSound]) {
-        self.sound = sound
-        self.keySounds = keySounds
-    }
-}
-extension SoundItem: Copying {
-    func copied(from copier: Copier) -> SoundItem {
-        return SoundItem(sound: sound, keySounds: keySounds)
-    }
-}
-extension SoundItem: Referenceable {
-    static let name = Localization(english: "Sound Item", japanese: "サウンドアイテム")
 }

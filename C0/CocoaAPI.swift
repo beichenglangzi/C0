@@ -27,7 +27,7 @@ struct Font {
     static let action = Font(boldMonospacedSize: 9)
     static let hedding0 = Font(boldMonospacedSize: 14)
     static let hedding1 = Font(boldMonospacedSize: 10)
-    static let speech = Font(boldMonospacedSize: 25)
+    static let speech = Font(boldMonospacedSize: 20)
     
     let name: String, size: CGFloat
     let ascent: CGFloat, descent: CGFloat, leading: CGFloat, ctFont: CTFont
@@ -631,6 +631,9 @@ final class C0View: NSView, NSTextInputClient {
                          time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil)
     }
     func moveEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> MoveEvent {
+//        if sendType == .sending {
+//            Swift.print(nsEvent.subtype == .tabletPoint)
+//        }
         return MoveEvent(sendType: sendType, location: screenPoint(with: nsEvent),
                          time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil)
     }

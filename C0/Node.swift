@@ -19,12 +19,138 @@
 
 import Foundation
 
+final class NodeDifferential: NSObject, NSCoding {
+    var trackDifferentials: [UUID: NodeTrackDifferential]
+    init(trackDifferentials: [UUID: NodeTrackDifferential] = [:]) {
+        self.trackDifferentials = trackDifferentials
+    }
+    private enum CodingKeys: String, CodingKey {
+        case trackDifferentials
+    }
+    init?(coder: NSCoder) {
+        trackDifferentials = coder.decodeObject(
+            forKey: CodingKeys.trackDifferentials.rawValue) as? [UUID: NodeTrackDifferential] ?? [:]
+        super.init()
+    }
+    func encode(with coder: NSCoder) {
+        coder.encode(trackDifferentials, forKey: CodingKeys.trackDifferentials.rawValue)
+    }
+}
+final class NodeTrackDifferential: NSObject, NSCoding {
+    var drawing: Drawing, keyDrawings: [Drawing]
+    var cellDifferentials: [UUID: CellDifferential]
+    private enum CodingKeys: String, CodingKey {
+        case drawing, keyDrawings, cellDifferentials
+    }
+    init(drawing: Drawing = Drawing(), keyDrawings: [Drawing] = [],
+         cellDifferentials: [UUID: CellDifferential] = [:]) {
+        self.drawing = drawing
+        self.keyDrawings = keyDrawings
+        self.cellDifferentials = cellDifferentials
+    }
+    init?(coder: NSCoder) {
+        drawing = coder.decodeObject(forKey: CodingKeys.drawing.rawValue) as? Drawing ?? Drawing()
+        keyDrawings = coder.decodeObject(forKey: CodingKeys.keyDrawings.rawValue) as? [Drawing] ?? []
+        cellDifferentials = coder.decodeObject(
+            forKey: CodingKeys.cellDifferentials.rawValue) as? [UUID: CellDifferential] ?? [:]
+        super.init()
+    }
+    func encode(with coder: NSCoder) {
+        coder.encode(drawing, forKey: CodingKeys.drawing.rawValue)
+        coder.encode(keyDrawings, forKey: CodingKeys.keyDrawings.rawValue)
+        coder.encode(cellDifferentials, forKey: CodingKeys.cellDifferentials.rawValue)
+    }
+}
+final class CellDifferential: NSObject, NSCoding {
+    var geometry: Geometry, keyGeometries: [Geometry]
+    init(geometry: Geometry = Geometry(), keyGeometries: [Geometry] = []) {
+        self.geometry = geometry
+        self.keyGeometries = keyGeometries
+    }
+    private enum CodingKeys: String, CodingKey {
+        case geometry, keyGeometries
+    }
+    init?(coder: NSCoder) {
+        geometry = coder.decodeObject(forKey: CodingKeys.geometry.rawValue) as? Geometry ?? Geometry()
+        keyGeometries = coder.decodeObject(
+            forKey: CodingKeys.keyGeometries.rawValue) as? [Geometry] ?? []
+        super.init()
+    }
+    func encode(with coder: NSCoder) {
+        coder.encode(geometry, forKey: CodingKeys.geometry.rawValue)
+        coder.encode(keyGeometries, forKey: CodingKeys.keyGeometries.rawValue)
+    }
+}
+
 /**
  # Issue
  - 変更通知またはイミュータブル化またはstruct化
  */
 final class Node: NSObject, NSCoding {
     var name: String
+    
+    let key: UUID
+    var differentialDataModel: DataModel {
+        didSet {
+            differentialDataModel.dataHandler = { [unowned self] in self.differential.data }
+        }
+    }
+    func read() {
+        if !differentialDataModel.isRead,
+            let differential: NodeDifferential = differentialDataModel.readObject() {
+            
+            self.differential = differential
+        }
+    }
+    var differential: NodeDifferential {
+        get {
+            let nd = NodeDifferential(trackDifferentials: [:])
+            tracks.forEach { (track) in
+                let td = NodeTrackDifferential(drawing: track.drawingItem.drawing,
+                                               keyDrawings: track.drawingItem.keyDrawings)
+                td.drawing = track.drawingItem.drawing
+                td.keyDrawings = track.drawingItem.keyDrawings
+                track.cellItems.forEach { (cellItem) in
+                    td.cellDifferentials[cellItem.id] =
+                        CellDifferential(geometry: cellItem.cell.geometry,
+                                         keyGeometries: cellItem.keyGeometries)
+                }
+                nd.trackDifferentials[track.id] = td
+            }
+            return nd
+        }
+        set {
+            tracks.forEach { (track) in
+                guard let td = newValue.trackDifferentials[track.id] else {
+                    return
+                }
+                track.drawingItem.drawing = td.drawing
+                if track.drawingItem.keyDrawings.count == td.keyDrawings.count {
+                    track.set(td.keyDrawings)
+                } else {
+                    let count = min(track.drawingItem.keyDrawings.count, td.keyDrawings.count)
+                    var keyDrawings = track.drawingItem.keyDrawings
+                    (0..<count).forEach { keyDrawings[$0] = td.keyDrawings[$0] }
+                    track.set(keyDrawings)
+                }
+                
+                track.cellItems.forEach { (cellItem) in
+                    guard let gs = td.cellDifferentials[cellItem.id] else {
+                        return
+                    }
+                    cellItem.cell.geometry = gs.geometry
+                    if cellItem.keyGeometries.count == gs.keyGeometries.count {
+                        track.set(gs.keyGeometries, in: cellItem, isSetGeometryInCell: false)
+                    } else {
+                        let count = min(cellItem.keyGeometries.count, gs.keyGeometries.count)
+                        var keyGeometries = cellItem.keyGeometries
+                        (0..<count).forEach { keyGeometries[$0] = gs.keyGeometries[$0] }
+                        track.set(keyGeometries, in: cellItem, isSetGeometryInCell: false)
+                    }
+                }
+            }
+        }
+    }
     
     private(set) weak var parent: Node?
     var children: [Node] {
@@ -239,6 +365,8 @@ final class Node: NSObject, NSCoding {
         guard !tracks.isEmpty else {
             fatalError()
         }
+        key = UUID()
+        differentialDataModel = DataModel(key: key.uuidString)
         self.name = name
         self.parent = parent
         self.children = children
@@ -253,15 +381,18 @@ final class Node: NSObject, NSCoding {
         self.time = time
         super.init()
         children.forEach { $0.parent = self }
+        differentialDataModel.dataHandler = { [unowned self] in self.differential.data }
     }
     
     private enum CodingKeys: String, CodingKey {
         case
-        name, children, isHidden, rootCell, transform, wiggle, wigglePhase,
+        name, key, children, isHidden, rootCell, transform, wiggle, wigglePhase,
         material, tracks, editTrackIndex, selectionTrackIndexes, time
     }
     init?(coder: NSCoder) {
         name = coder.decodeObject(forKey: CodingKeys.name.rawValue) as? String ?? ""
+        key = coder.decodeObject(forKey: CodingKeys.key.rawValue) as? UUID ?? UUID()
+        differentialDataModel = DataModel(key: key.uuidString)
         parent = nil
         children = coder.decodeObject(forKey: CodingKeys.children.rawValue) as? [Node] ?? []
         isHidden = coder.decodeBool(forKey: CodingKeys.isHidden.rawValue)
@@ -282,6 +413,7 @@ final class Node: NSObject, NSCoding {
     }
     func encode(with coder: NSCoder) {
         coder.encode(name, forKey: CodingKeys.name.rawValue)
+        coder.encode(key, forKey: CodingKeys.key.rawValue)
         coder.encode(children, forKey: CodingKeys.children.rawValue)
         coder.encode(isHidden, forKey: CodingKeys.isHidden.rawValue)
         coder.encode(rootCell, forKey: CodingKeys.rootCell.rawValue)
@@ -1382,24 +1514,12 @@ final class NodeEditor: Layer, Respondable {
 
 /**
  # Issue
- - 木構造が未実装
+ - 木構造の修正
  */
-final class NodeTreeEditor: Layer, Respondable {
-    static let name = Localization(english: "Node Tree Editor", japanese: "ノードツリーエディタ")
-    
-    override init() {
-        super.init()
-        tracksEditor.nameHandler = { [unowned self] in
-            let tracks = self.cut.editNode.tracks
-            guard $0 < tracks.count else {
-                return Localization()
-            }
-            return Localization(tracks[$0].name)
-        }
-        tracksEditor.copyHandler = { [unowned self] _, _ in
-            return CopiedObject(objects: [self.cut.editNode.editTrack.copied])
-        }
-        tracksEditor.moveHandler = { [unowned self] in return self.moveTrack(with: $1) }
+final class NodeTreeManager {
+    init() {
+        nodesEditor.instanceDescription = Localization(english: "Node Tree Editor",
+                                                       japanese: "ノードツリーエディタ")
         nodesEditor.nameHandler = { [unowned self] in
             return Localization(self.cut.node(atTreeNodeIndex: $0).name)
         }
@@ -1412,10 +1532,15 @@ final class NodeTreeEditor: Layer, Respondable {
             return CopiedObject(objects: [self.cut.editNode.copied])
         }
         nodesEditor.moveHandler = { [unowned self] in return self.moveNode(with: $1) }
-        replace(children: [nodesEditor, tracksEditor])
     }
     
-    var setDurationHandler: ((Timeline, Beat, CutItem) -> ())?
+    var cut = Cut() {
+        didSet {
+            if cut != oldValue {
+                updateWithNodes(isAlwaysUpdate: true)
+            }
+        }
+    }
     
     func cutIndexLabel(_ cutItem: CutItem, index: Int) -> Label {
         return Label(frame: CGRect(x: 0, y: 0,
@@ -1434,109 +1559,33 @@ final class NodeTreeEditor: Layer, Respondable {
     }
     
     let nodesEditor = ArrayEditor()
-    let tracksEditor = ArrayEditor()
-    let knobWidth = 20.0.cf
-    override var bounds: CGRect {
-        didSet {
-            updateLayout()
-        }
-    }
-    private func updateLayout() {
-        let y = bounds.height / 2, sp = Layout.smallPadding
-        nodesEditor.frame = CGRect(x: sp, y: y, width: bounds.width - sp * 2, height: y - sp)
-        tracksEditor.frame = CGRect(x: sp, y: sp, width: bounds.width - sp * 2, height: y - sp)
-    }
-    func updateWithNodes() {
+
+    func updateWithNodes(isAlwaysUpdate: Bool = false) {
         nodesEditor.set(selectedIndex: cut.editTreeNodeIndex, count: cut.maxTreeNodeIndex + 1)
-        updateWithTracks()
-    }
-    func updateWithTracks() {
-        let node = cut.editNode
-        tracksEditor.set(selectedIndex: node.editTrackIndex, count: node.tracks.count)
-    }
-    func updateWithMovedNodes() {
-        updateWithNodes()
-        nodesEditor.updateLayout()
-        updateWithMovedTracks()
-    }
-    func updateWithMovedTracks() {
-        updateWithTracks()
-        tracksEditor.updateLayout()
+        if isAlwaysUpdate {
+            nodesEditor.updateLayout()
+        }
     }
     
     var disabledRegisterUndo = true
     
-    struct NodeTracksBinding {
-        let nodeTreeEditor: NodeTreeEditor
-        let track: NodeTrack, index: Int, oldIndex: Int, beginIndex: Int
-        let inNode: Node, type: Action.SendType
-    }
-    var setTracksHandler: ((NodeTracksBinding) -> ())?
-    
     struct NodesBinding {
-        let nodeTreeEditor: NodeTreeEditor
+        let nodeTreeEditor: NodeTreeManager
         let node: Node, index: Int, oldIndex: Int, beginIndex: Int
         let toNode: Node, fromNode: Node, beginNode: Node
         let type: Action.SendType
     }
     var setNodesHandler: ((NodesBinding) -> ())?
     
-    let trackHeight = 8.0.cf, nodeHeight = 8.0.cf
-    
-    var cut = Cut() {
-        didSet {
-            if cut != oldValue {
-                updateWithNodes()
-                updateWithMovedNodes()
-            }
-        }
-    }
+    let moveHeight = 8.0.cf
     
     private var oldIndex = 0, beginIndex = 0, oldP = CGPoint()
     private var treeNodeIndex = 0, oldMovableNodeIndex = 0, beginMovableNodeIndex = 0
     private weak var editTrack: NodeTrack?
     private var oldParent = Node(), beginParent = Node()
-    private var oldTracks = [NodeTrack](), oldNodes = [Node]()
-    func moveTrack(with event: DragEvent) -> Bool {
-        let p = point(from: event)
-        switch event.sendType {
-        case .begin:
-            oldParent = cut.editNode
-            oldTracks = oldParent.tracks
-            oldIndex = oldParent.editTrackIndex
-            beginIndex = oldIndex
-            editTrack = oldParent.editTrack
-            oldP = p
-            setTracksHandler?(NodeTracksBinding(nodeTreeEditor: self,
-                                                track: oldParent.editTrack,
-                                                index: oldIndex,
-                                                oldIndex: oldIndex,
-                                                beginIndex: beginIndex,
-                                                inNode: oldParent, type: .begin))
-        case .sending, .end:
-            guard let editTrack = editTrack else {
-                return true
-            }
-            let d = p.y - oldP.y
-            let i = (beginIndex + Int(d / trackHeight)).clip(min: 0, max: oldTracks.count - 1)
-            if i != oldIndex || (event.sendType == .end && i != beginIndex) {
-                setTracksHandler?(NodeTracksBinding(nodeTreeEditor: self,
-                                                    track: editTrack,
-                                                    index: i,
-                                                    oldIndex: oldIndex,
-                                                    beginIndex: beginIndex,
-                                                    inNode: oldParent, type: event.sendType))
-                oldIndex = i
-            }
-            if event.sendType == .end {
-                oldTracks = []
-            }
-        }
-        return true
-    }
     private var maxMovableNodeIndex = 0, beginTreeNode: TreeNode<Node>?
     func moveNode(with event: DragEvent) -> Bool {
-        let p = point(from: event)
+        let p = nodesEditor.point(from: event)
         switch event.sendType {
         case .begin:
             let beginTreeNode = cut.rootNode.treeNode
@@ -1561,7 +1610,7 @@ final class NodeTreeEditor: Layer, Respondable {
                 return true
             }
             let d = p.y - oldP.y
-            let ini = (beginMovableNodeIndex + Int(d / nodeHeight)).clip(min: 0,
+            let ini = (beginMovableNodeIndex + Int(d / moveHeight)).clip(min: 0,
                                                                          max: maxMovableNodeIndex)
             let tuple = beginTreeNode.movableIndexTuple(atMovableIndex: ini)
             if ini != oldMovableNodeIndex
@@ -1580,8 +1629,93 @@ final class NodeTreeEditor: Layer, Respondable {
                 oldMovableNodeIndex = ini
             }
             if event.sendType == .end {
-                oldNodes = []
                 self.beginTreeNode = nil
+            }
+        }
+        return true
+    }
+}
+
+final class TracksManager {
+    let tracksEditor = ArrayEditor()
+    
+    init() {
+        tracksEditor.instanceDescription = Localization(english: "Track Editor",
+                                                        japanese: "トラックエディタ")
+        tracksEditor.nameHandler = { [unowned self] in
+            let tracks = self.node.tracks
+            guard $0 < tracks.count else {
+                return Localization()
+            }
+            return Localization(tracks[$0].name)
+        }
+        tracksEditor.copyHandler = { [unowned self] _, _ in
+            return CopiedObject(objects: [self.node.editTrack.copied])
+        }
+        tracksEditor.moveHandler = { [unowned self] in return self.moveTrack(with: $1) }
+    }
+    
+    var node = Node() {
+        didSet {
+            if node != oldValue {
+                updateWithTracks(isAlwaysUpdate: true)
+            }
+        }
+    }
+    
+    func updateWithTracks(isAlwaysUpdate: Bool = false) {
+        tracksEditor.set(selectedIndex: node.editTrackIndex, count: node.tracks.count)
+        if isAlwaysUpdate {
+            tracksEditor.updateLayout()
+        }
+    }
+    
+    var disabledRegisterUndo = true
+    
+    struct NodeTracksBinding {
+        let tracksManager: TracksManager
+        let track: NodeTrack, index: Int, oldIndex: Int, beginIndex: Int
+        let inNode: Node, type: Action.SendType
+    }
+    var setTracksHandler: ((NodeTracksBinding) -> ())?
+    
+    var moveHeight = 8.0.cf
+    private var oldIndex = 0, beginIndex = 0, oldP = CGPoint()
+    private weak var editTrack: NodeTrack?
+    private var oldInNode = Node(), oldTracks = [NodeTrack]()
+    func moveTrack(with event: DragEvent) -> Bool {
+        let p = tracksEditor.point(from: event)
+        switch event.sendType {
+        case .begin:
+            oldInNode = node
+            oldTracks = oldInNode.tracks
+            oldIndex = oldInNode.editTrackIndex
+            beginIndex = oldIndex
+            editTrack = oldInNode.editTrack
+            oldP = p
+            setTracksHandler?(NodeTracksBinding(tracksManager: self,
+                                                track: oldInNode.editTrack,
+                                                index: oldIndex,
+                                                oldIndex: oldIndex,
+                                                beginIndex: beginIndex,
+                                                inNode: oldInNode, type: .begin))
+        case .sending, .end:
+            guard let editTrack = editTrack else {
+                return true
+            }
+            let d = p.y - oldP.y
+            let i = (beginIndex + Int(d / moveHeight)).clip(min: 0, max: oldTracks.count - 1)
+            if i != oldIndex || (event.sendType == .end && i != beginIndex) {
+                setTracksHandler?(NodeTracksBinding(tracksManager: self,
+                                                    track: editTrack,
+                                                    index: i,
+                                                    oldIndex: oldIndex,
+                                                    beginIndex: beginIndex,
+                                                    inNode: oldInNode, type: event.sendType))
+                oldIndex = i
+            }
+            if event.sendType == .end {
+                oldTracks = []
             }
         }
         return true

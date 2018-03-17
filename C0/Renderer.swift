@@ -38,7 +38,7 @@ final class SceneImageRendedrer {
         drawLayer.bounds.size = renderSize
         drawLayer.drawBlock = { [unowned self] ctx in
             ctx.concatenate(scene.viewTransform.affineTransform)
-            self.scene.editCutItem.cut.draw(scene: self.scene, viewType: .preview, in: ctx)
+            self.scene.editCut.draw(scene: self.scene, viewType: .preview, in: ctx)
         }
     }
     
@@ -97,7 +97,7 @@ final class SceneMovieRenderer {
         drawLayer.bounds.size = renderSize
         drawLayer.drawBlock = { [unowned self] ctx in
             ctx.concatenate(scene.viewTransform.affineTransform)
-            self.scene.editCutItem.cut.draw(scene: self.scene, viewType: .preview, in: ctx)
+            self.scene.editCut.draw(scene: self.scene, viewType: .preview, in: ctx)
         }
     }
     
@@ -109,7 +109,8 @@ final class SceneMovieRenderer {
                     completionHandler: @escaping (Error?) -> ()) throws {
         guard let colorSpace = CGColorSpace.with(scene.colorSpace),
             let colorSpaceProfile = colorSpace.iccData else {
-                throw NSError(domain: AVFoundationErrorDomain, code: AVError.Code.exportFailed.rawValue)
+                throw NSError(domain: AVFoundationErrorDomain,
+                              code: AVError.Code.exportFailed.rawValue)
         }
         
         let fileManager = FileManager.default
@@ -180,8 +181,8 @@ final class SceneMovieRenderer {
                                        bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) {
                     
                     let cutTime = scene.cutTime(withFrameTime: i)
-                    scene.editCutItemIndex = cutTime.cutItemIndex
-                    cutTime.cut.time = cutTime.time
+                    scene.editCutIndex = cutTime.cutItemIndex
+                    cutTime.cut.currentTime = cutTime.time
                     drawLayer.render(in: ctx)
                 }
                 CVPixelBufferUnlockBaseAddress(pb, CVPixelBufferLockFlags(rawValue: CVOptionFlags(0)))
@@ -312,8 +313,8 @@ final class RendererManager {
         let size1080pString = "w: \(Int(size1080p.width)) px, h: 1080 px"
         let size2160pString = "w: \(Int(size2160p.width)) px, h: 2160 px"
         
-        let cutIndexText = Localization(english: "No.\(self.scene.editCutItemIndex) Only",
-                                        japanese: "No.\(self.scene.editCutItemIndex)のみ")
+        let cutIndexText = Localization(english: "No.\(self.scene.editCutIndex) Only",
+                                        japanese: "No.\(self.scene.editCutIndex)のみ")
         let cutIndexString = cutIndexText.currentString
         
         self.popupBox.panel.replace(children: [
@@ -456,6 +457,14 @@ final class RendererManager {
                     self.exportImage(message: $0.label.string, size: size2160p)
                     return true
                 }
+            ),
+            TextBox(
+                name: Localization(english: "Export Subtitle", japanese: "字幕として書き出す"),
+                isLeftAlignment: true,
+                runHandler: { [unowned self] in
+                    self.exportSpeech(message: $0.label.string)
+                    return true
+                }
             )
         ])
         
@@ -573,22 +582,39 @@ final class RendererManager {
             
             let renderer = SceneImageRendedrer(scene: self.scene.copied,
                                                renderSize: size,
-                                               cut: self.scene.editCutItem.cut)
+                                               cut: self.scene.editCut)
             do {
                 try renderer.writeImage(to: exportURL.url)
                 try FileManager.default.setAttributes([.extensionHidden: exportURL.isExtensionHidden],
                                                       ofItemAtPath: exportURL.url.path)
             } catch {
-                let progressBar = Progress()
-                progressBar.name = exportURL.name
-                progressBar.state = Localization(english: "Error", japanese: "エラー")
-                progressBar.label.textFrame.color = .warning
-                progressBar.deleteHandler = { [unowned self] in
-                    self.endProgress($0)
-                    return true
-                }
-                self.beginProgress(progressBar)
+                self.showError(withName: exportURL.name)
             }
         }
+    }
+    
+    func exportSpeech(message: String?) {
+        URL.file(message: message, name: nil, fileTypes: ["vtt"]) { [unowned self] exportURL in
+            let vttData = self.scene.vtt
+            do {
+                try vttData?.write(to: exportURL.url)
+                try FileManager.default.setAttributes([.extensionHidden: exportURL.isExtensionHidden],
+                                                      ofItemAtPath: exportURL.url.path)
+            } catch {
+                self.showError(withName: exportURL.name)
+            }
+        }
+    }
+    
+    func showError(withName name: String) {
+        let progressBar = Progress()
+        progressBar.name = name
+        progressBar.state = Localization(english: "Error", japanese: "エラー")
+        progressBar.label.textFrame.color = .warning
+        progressBar.deleteHandler = { [unowned self] in
+            self.endProgress($0)
+            return true
+        }
+        beginProgress(progressBar)
     }
 }

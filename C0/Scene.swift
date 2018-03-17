@@ -50,8 +50,8 @@
  - ツリーノード導入
  - 補間選択
  - カット単位での読み込み＆保存
- △ 有理数タイムライン //(バグ修正)
  △ ストローク修正、スローの廃止
+ △ 有理数タイムライン //track間移動 Selection->Selected, Editor->View, Cut->Container?, Slider->Editor
  */
 
 import Foundation
@@ -82,7 +82,6 @@ final class Scene: NSObject, NSCoding {
     }
     var editMaterial: Material, materials: [Material]
     var isShownPrevious: Bool, isShownNext: Bool
-    var sound: Sound
     
     var viewTransform: Transform {
         didSet {
@@ -92,22 +91,29 @@ final class Scene: NSObject, NSCoding {
     }
     private(set) var scale: CGFloat, reciprocalViewScale: CGFloat
     var reciprocalScale: CGFloat {
-        return reciprocalViewScale / editCutItem.cut.editNode.worldScale
+        return reciprocalViewScale / editNode.worldScale
     }
     
+    var sound: Sound
+    
     var tempoTrack: TempoTrack
-    var cutItems: [CutItem] {
-        didSet {
-            updateCutTimeAndDuration()
-        }
+    var cutTrack: CutTrack
+    var editCut: Cut {
+        return cutTrack.cutItem.cut
     }
-    var editCutItemIndex: Int {
-        didSet {
-            editCutItem.read()
-        }
+    var cuts: [Cut] {
+        return cutTrack.cutItem.keyCuts
     }
-    var editCutItem: CutItem {
-        return cutItems[editCutItemIndex]
+    var editNode: Node {
+        return editCut.editNode
+    }
+    var editCutIndex: Int {
+        get {
+            return cutTrack.animation.editLoopframeIndex
+        }
+        set {
+            cutTrack.time = cutTrack.time(at: newValue)
+        }
     }
     
     var timeBinding: ((Scene, Beat) -> ())?
@@ -116,19 +122,13 @@ final class Scene: NSObject, NSCoding {
             timeBinding?(self, time)
         }
     }
-    private(set) var duration: Beat
-    func updateCutTimeAndDuration() {
-        self.duration = cutItems.reduce(Beat(0)) {
-            $1.time = $0
-            return $0 + $1.cut.duration
-        }
+    var duration: Beat {
+        return cutTrack.animation.duration
     }
-    var maxCutKeyIndex: Int
     
     var differentialData: Data {
         func set(isEncodeGeometryAndDrawing: Bool) {
-            cutItems.forEach { (cutItem) in
-                let cut = cutItem.cut
+            cuts.forEach { (cut) in
                 cut.rootNode.allChildrenAndSelf { (node) in
                     node.tracks.forEach { (track) in
                         track.drawingItem.isEncodeDrawings = isEncodeGeometryAndDrawing
@@ -153,8 +153,8 @@ final class Scene: NSObject, NSCoding {
          isShownPrevious: Bool = false, isShownNext: Bool = false,
          sound: Sound = Sound(),
          tempoTrack: TempoTrack = TempoTrack(),
-         cutItems: [CutItem] = [CutItem()], editCutItemIndex: Int = 0, maxCutKeyIndex: Int = 0,
-         time: Beat = 0, duration: Beat = 1,
+         cutTrack: CutTrack = CutTrack(),
+         time: Beat = 0,
          viewTransform: Transform = Transform()) {
         
         self.name = name
@@ -167,13 +167,10 @@ final class Scene: NSObject, NSCoding {
         self.isShownPrevious = isShownPrevious
         self.isShownNext = isShownNext
         self.sound = sound
-        self.viewTransform = viewTransform
         self.tempoTrack = tempoTrack
-        self.cutItems = cutItems
-        self.editCutItemIndex = editCutItemIndex
-        self.maxCutKeyIndex = maxCutKeyIndex
+        self.cutTrack = cutTrack
         self.time = time
-        self.duration = duration
+        self.viewTransform = viewTransform
         self.scale = viewTransform.scale.x
         self.reciprocalViewScale = 1 / viewTransform.scale.x
     }
@@ -181,8 +178,9 @@ final class Scene: NSObject, NSCoding {
     private enum CodingKeys: String, CodingKey {
         case
         name, frame, frameRate, baseTimeInterval, tempo, colorSpace,
-        editMaterial, materials, isShownPrevious, isShownNext, sound, viewTransform, tempoTrack,
-        cutItems, editCutItemIndex, maxCutKeyIndex, time, duration
+        editMaterial, materials, isShownPrevious, isShownNext, sound,
+        tempoTrack, cutTrack, time,
+        viewTransform
     }
     init?(coder: NSCoder) {
         name = coder.decodeObject(forKey: CodingKeys.name.rawValue) as? String ?? ""
@@ -197,18 +195,13 @@ final class Scene: NSObject, NSCoding {
         materials = coder.decodeObject(forKey: CodingKeys.materials.rawValue) as? [Material] ?? []
         isShownPrevious = coder.decodeBool(forKey: CodingKeys.isShownPrevious.rawValue)
         isShownNext = coder.decodeBool(forKey: CodingKeys.isShownNext.rawValue)
-        sound = coder.decodeDecodable(Sound.self, forKey: CodingKeys.sound.rawValue) ?? Sound()
         viewTransform = coder.decodeDecodable(
             Transform.self, forKey: CodingKeys.viewTransform.rawValue) ?? Transform()
+        sound = coder.decodeDecodable(Sound.self, forKey: CodingKeys.sound.rawValue) ?? Sound()
         tempoTrack = coder.decodeObject(
             forKey: CodingKeys.tempoTrack.rawValue) as? TempoTrack ?? TempoTrack()
-        cutItems = coder.decodeObject(
-            forKey: CodingKeys.cutItems.rawValue) as? [CutItem] ?? [CutItem()]
-        editCutItemIndex = coder.decodeInteger(forKey: CodingKeys.editCutItemIndex.rawValue)
-        maxCutKeyIndex = coder.decodeInteger(forKey: CodingKeys.maxCutKeyIndex.rawValue)
+        cutTrack = coder.decodeObject(forKey: CodingKeys.cutTrack.rawValue) as? CutTrack ?? CutTrack()
         time = coder.decodeDecodable(Beat.self, forKey: CodingKeys.time.rawValue) ?? 0
-        duration = coder.decodeDecodable(
-            Beat.self, forKey: CodingKeys.duration.rawValue) ?? Beat(0)
         scale = viewTransform.scale.x
         reciprocalViewScale = 1 / viewTransform.scale.x
         super.init()
@@ -223,27 +216,25 @@ final class Scene: NSObject, NSCoding {
         coder.encode(materials, forKey: CodingKeys.materials.rawValue)
         coder.encode(isShownPrevious, forKey: CodingKeys.isShownPrevious.rawValue)
         coder.encode(isShownNext, forKey: CodingKeys.isShownNext.rawValue)
-        coder.encodeEncodable(sound, forKey: CodingKeys.sound.rawValue)
         coder.encodeEncodable(viewTransform, forKey: CodingKeys.viewTransform.rawValue)
+        coder.encodeEncodable(sound, forKey: CodingKeys.sound.rawValue)
         coder.encode(tempoTrack, forKey: CodingKeys.tempoTrack.rawValue)
-        coder.encode(cutItems, forKey: CodingKeys.cutItems.rawValue)
-        coder.encode(editCutItemIndex, forKey: CodingKeys.editCutItemIndex.rawValue)
-        coder.encode(maxCutKeyIndex, forKey: CodingKeys.maxCutKeyIndex.rawValue)
+        coder.encode(cutTrack, forKey: CodingKeys.cutTrack.rawValue)
         coder.encodeEncodable(time, forKey: CodingKeys.time.rawValue)
-        coder.encodeEncodable(duration, forKey: CodingKeys.duration.rawValue)
     }
     
     func beatTime(withFrameTime frameTime: FrameTime) -> Beat {
         return Beat(tempoTrack.doubleBeatTime(withSecondTime: Second(frameTime) / Second(frameRate)))
-    }
-    func frameTime(withBeatTime beatTime: Beat) -> FrameTime {
-        return FrameTime(secondTime(withBeatTime: beatTime) * Second(frameRate))
     }
     func basedBeatTime(withSecondTime secondTime: Second) -> Beat {
         return basedBeatTime(withDoubleBeatTime: tempoTrack.doubleBeatTime(withSecondTime: secondTime))
     }
     func secondTime(withBeatTime beatTime: Beat) -> Second {
         return tempoTrack.secondTime(withBeatTime: beatTime)
+    }
+    
+    func frameTime(withBeatTime beatTime: Beat) -> FrameTime {
+        return FrameTime(secondTime(withBeatTime: beatTime) * Second(frameRate))
     }
     func secondTime(withFrameTime frameTime: FrameTime) -> Second {
         return Second(frameTime) / Second(frameRate)
@@ -271,8 +262,8 @@ final class Scene: NSObject, NSCoding {
     }
     
     func cutTime(withFrameTime frameTime: Int) -> (cutItemIndex: Int, cut: Cut, time: Beat) {
-        let t = cutItemIndex(withTime: beatTime(withFrameTime: frameTime))
-        return (t.index, cutItems[t.index].cut, t.interTime)
+        let t = cutTrack.cutIndex(withTime: beatTime(withFrameTime: frameTime))
+        return (t.index, cuts[t.index], t.interTime)
     }
     var secondTime: (second: Int, frame: Int) {
         let second = secondTime(withBeatTime: time)
@@ -284,29 +275,19 @@ final class Scene: NSObject, NSCoding {
         return (second, frameTime - second)
     }
     
-    func cutItemIndex(withTime time: Beat) -> (index: Int, interTime: Beat, isOver: Bool) {
-        guard cutItems.count > 1 else {
-            return (0, time, duration <= time)
-        }
-        for i in 1 ..< cutItems.count {
-            if time < cutItems[i].time {
-                return (i - 1, time - cutItems[i - 1].time, false)
+    var vtt: Data? {
+        var speechTuples = [(time: Beat, duration: Beat, speech: Speech)]()
+        cutTrack.cutItem.keyCuts.enumerated().forEach { (i, cut) in
+            let cutTime = cutTrack.time(at: i)
+            let lfs = cut.speechTrack.animation.loopFrames
+            speechTuples += lfs.enumerated().map { (li, lf) in
+                let speech = cut.speechTrack.speechItem.keySpeechs[lf.index]
+                let nextTime = li + 1 < lfs.count ?
+                    lfs[li + 1].time : cut.speechTrack.animation.duration
+                return (lf.time + cutTime, nextTime - lf.time, speech)
             }
         }
-        let lastCutItem = cutItems[cutItems.count - 1]
-        return (cutItems.count - 1, time - lastCutItem.time,
-                lastCutItem.time + lastCutItem.cut.duration <= time)
-    }
-    func movingCutItemIndex(withTime time: Beat) -> Int {
-        guard cutItems.count > 1 else {
-            return 0
-        }
-        for i in 1 ..< cutItems.count {
-            if time <= cutItems[i].time {
-                return i - 1
-            }
-        }
-        return cutItems.count - 1
+        return Speech.vtt(speechTuples, timeHandler: { secondTime(withBeatTime: $0) })
     }
 }
 extension Scene: Copying {
@@ -315,9 +296,9 @@ extension Scene: Copying {
                      editMaterial: editMaterial, materials: materials,
                      isShownPrevious: isShownPrevious, isShownNext: isShownNext,
                      sound: sound,
-                     cutItems: cutItems.map { copier.copied($0) },
-                     editCutItemIndex: editCutItemIndex, maxCutKeyIndex: maxCutKeyIndex,
-                     time: time, duration: duration,
+                     tempoTrack: tempoTrack.copied,
+                     cutTrack: cutTrack.copied,
+                     time: time,
                      viewTransform: viewTransform)
     }
 }
@@ -346,9 +327,8 @@ final class SceneEditor: Layer, Respondable, Localizable {
         }
     }
     
-    static let sceneEditorKey = "sceneEditor", sceneKey = "scene", cutsKey = "cuts"
+    static let sceneEditorKey = "sceneEditor", sceneKey = "scene"
     var sceneDataModel = DataModel(key: SceneEditor.sceneKey)
-    var cutsDataModel = DataModel(key: SceneEditor.cutsKey, directoryWithDataModels: [])
     override var dataModel: DataModel? {
         didSet {
             guard let dataModel = dataModel else {
@@ -364,19 +344,13 @@ final class SceneEditor: Layer, Respondable, Localizable {
                 dataModel.insert(sceneDataModel)
             }
             
-            if let cutsDataModel = dataModel.children[SceneEditor.cutsKey] {
-                self.cutsDataModel = cutsDataModel
-                scene.cutItems.forEach {
-                    if let cutDataModel = cutsDataModel.children[$0.key] {
-                        $0.differentialDataModel = cutDataModel
-                    }
-                }
-                canvas.cutItem = scene.editCutItem
+            if let cutTrackDataModel = dataModel.children[CutTrack.dataModelKey] {
+                scene.cutTrack.differentialDataModel = cutTrackDataModel
+                canvas.cut = scene.editCut
             } else {
-                dataModel.insert(cutsDataModel)
+                dataModel.insert(scene.cutTrack.differentialDataModel)
             }
             
-            timeline.cutsDataModel = cutsDataModel
             timeline.sceneDataModel = sceneDataModel
             canvas.sceneDataModel = sceneDataModel
             updateWithScene()
@@ -390,7 +364,7 @@ final class SceneEditor: Layer, Respondable, Localizable {
     static let canvasSize = CGSize(width: 730, height: 480)
     static let propertyWidth = MaterialEditor.defaultWidth + Layout.basicPadding * 2
     static let buttonsWidth = 120.0.cf, timelineWidth = 430.0.cf
-    static let timelineTextBoxesWidth = 142.0.cf, timelineHeight = 126.0.cf
+    static let timelineTextBoxesWidth = 142.0.cf, timelineHeight = 170.0.cf
     
     let nameLabel = Label(text: Scene.name, font: .bold)
     let versionEditor = VersionEditor()
@@ -428,9 +402,6 @@ final class SceneEditor: Layer, Respondable, Localizable {
     
     let shapeLinesBox = PopupBox(frame: CGRect(x: 0, y: 0, width: 100.0, height: Layout.basicHeight),
                                  text: Localization(english: "Shape Lines", japanese: "図形の線"))
-    let newNodeTrackBox = TextBox(name: Localization(english: "New Node Track",
-                                                     japanese: "新規ノードトラック"))
-    let newNodeBox = TextBox(name: Localization(english: "New Node", japanese: "新規ノード"))
     let changeToDraftBox = TextBox(name: Localization(english: "Change to Draft", japanese: "下書き化"))
     let removeDraftBox = TextBox(name: Localization(english: "Remove Draft", japanese: "下書きを削除"))
     let swapDraftBox = TextBox(name: Localization(english: "Swap Draft", japanese: "下書きと交換"))
@@ -443,9 +414,9 @@ final class SceneEditor: Layer, Respondable, Localizable {
     let splitOtherThanColorBox = TextBox(name: Localization(english: "Split Material",
                                                             japanese: "マテリアルを分割"))
     
+    let soundEditor = SoundEditor()
     let transformEditor = TransformEditor()
     let wiggleEditor = WiggleEditor()
-    let soundEditor = SoundEditor()
     
     let timeline = Timeline()
     let canvas = Canvas()
@@ -454,32 +425,27 @@ final class SceneEditor: Layer, Respondable, Localizable {
     let materialManager = SceneMaterialManager()
     
     override init() {
-        cutsDataModel.insert(scene.cutItems[0].differentialDataModel)
-        
         super.init()
         materialManager.sceneEditor = self
         dataModel = DataModel(key: SceneEditor.sceneEditorKey,
-                              directoryWithDataModels: [sceneDataModel, cutsDataModel])
-        timeline.cutsDataModel = cutsDataModel
+                              directoryWithDataModels: [sceneDataModel,
+                                                        scene.cutTrack.differentialDataModel])
         timeline.sceneDataModel = sceneDataModel
         canvas.sceneDataModel = sceneDataModel
         
         replace(children: [nameLabel,
-                           versionEditor, rendererManager.popupBox,
-                           sizeEditor, frameRateSlider, baseTimeIntervalSlider,
-                           timeline.timeBindingLineLayer,
-                           isShownPreviousEditor, isShownNextEditor,
-                           transformEditor, wiggleEditor, soundEditor,
-                           shapeLinesBox, newNodeTrackBox, newNodeBox,
-                           changeToDraftBox, removeDraftBox, swapDraftBox,
-                           showAllBox, clipCellInSelectionBox, splitColorBox, splitOtherThanColorBox,
-                           canvas.editCellBindingLineLayer,
+                           versionEditor,
+                           rendererManager.popupBox, sizeEditor, frameRateSlider,
+                           baseTimeIntervalSlider, isShownPreviousEditor, isShownNextEditor,
+                           soundEditor, timeline.tempoSlider, transformEditor, wiggleEditor,
+                           timeline.nodeEditor,
+                           timeline.keyframeEditor,
                            timeline.nodeBindingLineLayer,
-                           canvas.materialEditor, canvas.cellEditor,
-                           timeline.keyframeEditor, timeline.nodeEditor,
-                           timeline,
-                           canvas,
-                           playerEditor])
+                           shapeLinesBox, changeToDraftBox, removeDraftBox, swapDraftBox,
+                           canvas.cellEditor, showAllBox, clipCellInSelectionBox,
+                           canvas.materialEditor, splitColorBox, splitOtherThanColorBox,
+                           canvas.editCellBindingLineLayer,
+                           timeline, canvas, playerEditor])
         
         sceneDataModel.dataHandler = { [unowned self] in self.scene.differentialData }
         
@@ -576,15 +542,6 @@ final class SceneEditor: Layer, Respondable, Localizable {
         Layout.topAlignment(shapeLinesBox.panel.children, minSize: &minSize)
         shapeLinesBox.panel.frame.size = CGSize(width: minSize.width + Layout.basicPadding * 2,
                                                 height: minSize.height + Layout.basicPadding * 2)
-        
-        newNodeTrackBox.runHandler = { [unowned self] _ in
-            self.timeline.newNodeTrack()
-            return true
-        }
-        newNodeBox.runHandler = { [unowned self] _ in
-            _ = self.timeline.newNode()
-            return true
-        }
         changeToDraftBox.runHandler = { [unowned self] _ in
             self.canvas.changeToRough()
             return true
@@ -636,9 +593,9 @@ final class SceneEditor: Layer, Respondable, Localizable {
             self.playerEditor.maxTime = self.scene.secondTime(withBeatTime: $1)
         }
         timeline.setEditCutItemIndexHandler = { [unowned self] _, _ in
-            self.canvas.cutItem = self.scene.editCutItem
+            self.canvas.cut = self.scene.editCut
             self.transformEditor.transform =
-                self.scene.editCutItem.cut.editNode.editTrack.transformItem?.transform ?? Transform()
+                self.scene.editNode.editTrack.transformItem?.transform ?? Transform()
         }
         timeline.updateViewHandler = { [unowned self] in
             if $0.isCut {
@@ -650,10 +607,10 @@ final class SceneEditor: Layer, Respondable, Localizable {
             }
             if $0.isTransform {
                 self.transformEditor.transform =
-                    self.scene.editCutItem.cut.editNode.editTrack.transformItem?.transform ??
+                    self.scene.editNode.editTrack.transformItem?.transform ??
                     Transform()
                 self.wiggleEditor.wiggle =
-                    self.scene.editCutItem.cut.editNode.editTrack.wiggleItem?.wiggle ??
+                    self.scene.editNode.editTrack.wiggleItem?.wiggle ??
                     Wiggle()
             }
         }
@@ -713,7 +670,6 @@ final class SceneEditor: Layer, Respondable, Localizable {
         canvas.player.didSetTimeHandler = { [unowned self] in
             self.playerEditor.time = self.scene.secondTime(withBeatTime: $0)
         }
-        canvas.player.didSetCutIndexHandler = { [unowned self] in self.playerEditor.cutIndex = $0 }
         canvas.player.didSetPlayFrameRateHandler = { [unowned self] in
             if !self.canvas.player.isPause {
                 self.playerEditor.playFrameRate = $0
@@ -739,7 +695,6 @@ final class SceneEditor: Layer, Respondable, Localizable {
                 self.canvas.play()
             } else {
                 self.playerEditor.time = self.scene.secondTime(withBeatTime: self.scene.time)
-                self.playerEditor.cutIndex = self.scene.editCutItemIndex
                 self.playerEditor.frameRate = 0
                 self.canvas.player.stop()
             }
@@ -747,6 +702,7 @@ final class SceneEditor: Layer, Respondable, Localizable {
         
         soundEditor.setSoundHandler = { [unowned self] in
             self.scene.sound = $0.sound
+            self.timeline.soundWaveformView.sound = $0.sound
             if $0.type == .end && $0.sound != $0.oldSound {
                 self.sceneDataModel.isWrite = true
             }
@@ -767,7 +723,7 @@ final class SceneEditor: Layer, Respondable, Localizable {
         let cs = SceneEditor.canvasSize, th = SceneEditor.timelineHeight
         let inWidth = cs.width + SceneEditor.propertyWidth + padding
         let width = inWidth + padding * 2
-        let height = buttonH + h * 3 + th + cs.height + padding * 4
+        let height = h * 3 + th + cs.height + padding * 4
         let y = height - padding
         versionEditor.frame.size = CGSize(width: SceneEditor.undoWidth, height: buttonH)
         rendererManager.popupBox.frame.size = CGSize(width: SceneEditor.rendererWidth,
@@ -789,22 +745,20 @@ final class SceneEditor: Layer, Respondable, Localizable {
                                                   height: h))
         
         let trw = transformEditor.defaultBounds.width, ww = wiggleEditor.defaultBounds.width
+        let tew = Layout.valueWidth
         soundEditor.frame = CGRect(x: padding,
                                    y: y - h * 2 - padding,
-                                   width: inWidth - trw - ww - padding, height: h)
-        transformEditor.frame = CGRect(x: soundEditor.frame.maxX + padding,
+                                   width: inWidth - trw - ww - tew - padding * 2, height: h)
+        timeline.tempoSlider.frame = CGRect(x: soundEditor.frame.maxX + padding,
+                                            y: y - h * 2 - padding,
+                                            width: tew, height: h)
+        transformEditor.frame = CGRect(x: timeline.tempoSlider.frame.maxX + padding,
                                        y: y - h * 2 - padding,
                                        width: trw, height: h)
         wiggleEditor.frame = CGRect(x: transformEditor.frame.maxX,
                                     y: y - h * 2 - padding,
                                     width: ww, height: h)
         
-        let buttons = [shapeLinesBox, newNodeTrackBox, newNodeBox,
-                       changeToDraftBox, removeDraftBox, swapDraftBox]
-        Layout.autoHorizontalAlignment(buttons, in: CGRect(x: padding,
-                                                           y: y - h * 2 - buttonH - padding * 2,
-                                                           width: cs.width,
-                                                           height: buttonH))
         let kh = 160.0.cf
         let propertyX = padding * 2 + cs.width, propertyMaxY = y - h - padding
         timeline.nodeEditor.frame = CGRect(x: propertyX,
@@ -812,13 +766,30 @@ final class SceneEditor: Layer, Respondable, Localizable {
                                            width: SceneEditor.propertyWidth,
                                            height: h)
         timeline.keyframeEditor.frame = CGRect(x: propertyX,
-                                               y: propertyMaxY - h * 2 - kh - padding,
+                                               y: propertyMaxY - h * 2 - kh,
                                                width: SceneEditor.propertyWidth,
                                                height: kh)
         let ch = canvas.cellEditor.defaultBounds.height
         let mh = canvas.materialEditor.defaultBounds.height
-        let canvasPropertyMaxY = propertyMaxY - h * 2 - kh - padding * 2
         
+        shapeLinesBox.frame = CGRect(x: propertyX,
+                                     y: propertyMaxY - h * 2 - buttonH - kh - padding,
+                                     width: SceneEditor.propertyWidth,
+                                     height: buttonH)
+        changeToDraftBox.frame = CGRect(x: propertyX,
+                                        y: propertyMaxY - h * 2 - buttonH * 2 - kh - padding,
+                                        width: SceneEditor.propertyWidth,
+                                        height: buttonH)
+        removeDraftBox.frame = CGRect(x: propertyX,
+                                      y: propertyMaxY - h * 2 - buttonH * 3 - kh - padding,
+                                      width: SceneEditor.propertyWidth,
+                                      height: buttonH)
+        swapDraftBox.frame = CGRect(x: propertyX,
+                                    y: propertyMaxY - h * 2 - buttonH * 4 - kh - padding,
+                                    width: SceneEditor.propertyWidth,
+                                    height: buttonH)
+        
+        let canvasPropertyMaxY = propertyMaxY - h * 2 - buttonH * 4 - kh - padding * 2
         canvas.cellEditor.frame = CGRect(x: propertyX,
                                          y: canvasPropertyMaxY - ch,
                                          width: SceneEditor.propertyWidth,
@@ -846,17 +817,15 @@ final class SceneEditor: Layer, Respondable, Localizable {
                                               height: buttonH)
         
         timeline.frame = CGRect(x: padding,
-                                y: y - h * 2 - buttonH - th - padding * 2,
+                                y: y - h * 2 - th - padding * 2,
                                 width: cs.width, height: SceneEditor.timelineHeight)
         canvas.frame = CGRect(x: padding,
-                              y: y - h * 2 - buttonH - th - cs.height - padding * 2,
+                              y: y - h * 2 - th - cs.height - padding * 2,
                               width: cs.width, height: cs.height)
         playerEditor.frame = CGRect(x: padding, y: padding, width: cs.width, height: h)
         
-        timeline.updateBindingLine()
-        
         let timeBindingPath = CGMutablePath()
-        timeBindingPath.move(to: CGPoint(x: timeline.frame.midX, y: timeline.frame.maxY + buttonH))
+        timeBindingPath.move(to: CGPoint(x: timeline.frame.midX, y: timeline.frame.maxY))
         timeBindingPath.addLine(to: CGPoint(x: timeline.frame.midX, y: transformEditor.frame.minY))
         timeline.nodeBindingLineLayer.path = timeBindingPath
         
@@ -878,24 +847,22 @@ final class SceneEditor: Layer, Respondable, Localizable {
         colorSpaceEditor.selectionIndex = scene.colorSpace == .sRGB ? 0 : 1
         isShownPreviousEditor.selectionIndex = scene.isShownPrevious ? 1 : 0
         isShownNextEditor.selectionIndex = scene.isShownNext ? 1 : 0
+        soundEditor.sound = scene.sound
         let sp = CGPoint(x: scene.frame.width, y: scene.frame.height)
         transformEditor.standardTranslation = sp
         wiggleEditor.standardAmplitude = sp
-        soundEditor.sound = scene.sound
-        if let transform = scene.editCutItem.cut.editNode.editTrack.transformItem?.transform {
+        if let transform = scene.editNode.editTrack.transformItem?.transform {
             transformEditor.transform = transform
         }
-        if let wiggle = scene.editCutItem.cut.editNode.editTrack.wiggleItem?.wiggle {
+        if let wiggle = scene.editNode.editTrack.wiggleItem?.wiggle {
             wiggleEditor.wiggle = wiggle
         }
         playerEditor.time = scene.secondTime(withBeatTime: scene.time)
-        playerEditor.cutIndex = scene.editCutItemIndex
         playerEditor.maxTime = scene.secondTime(withBeatTime: scene.duration)
     }
     
     func update(withTime time: Beat) {
         playerEditor.time = scene.secondTime(withBeatTime: time)
-        playerEditor.cutIndex = scene.editCutItemIndex
     }
     
     var time: Beat {
@@ -930,7 +897,7 @@ final class SceneEditor: Layer, Respondable, Localizable {
         switch obj.type {
         case .begin:
             let cutEditor = timeline.editCutEditor
-            let track = cutEditor.cutItem.cut.editNode.editTrack
+            let track = cutEditor.cut.editNode.editTrack
             self.cutEditor = cutEditor
             self.animationEditor = cutEditor.editAnimationEditor
             self.track = track
@@ -1013,6 +980,8 @@ final class SceneEditor: Layer, Respondable, Localizable {
                    in: animationEditor, time: $1)
         }
         set(keyframe, at: index, in: track, in: animationEditor)
+        timeline.updateTimeRuler()
+        timeline.soundWaveformView.updateWaveform()
         sceneDataModel.isWrite = true
     }
     
@@ -1023,7 +992,7 @@ final class SceneEditor: Layer, Respondable, Localizable {
         switch type {
         case .begin:
             let cutEditor = timeline.editCutEditor
-            let track = cutEditor.cutItem.cut.editNode.editTrack
+            let track = cutEditor.cut.editNode.editTrack
             oldTransformItem = track.transformItem
             if track.transformItem != nil {
                 isMadeTransformItem = false
@@ -1084,7 +1053,7 @@ final class SceneEditor: Layer, Respondable, Localizable {
     private func set(_ transform: Transform, at index: Int,
                      in track: NodeTrack, in cutEditor: CutEditor) {
         track.transformItem?.replace(transform, at: index)
-        cutEditor.cutItem.cut.editNode.updateTransform()
+        cutEditor.cut.editNode.updateTransform()
         cutEditor.updateChildren()
         canvas.setNeedsDisplay()
     }
@@ -1103,7 +1072,7 @@ final class SceneEditor: Layer, Respondable, Localizable {
         switch type {
         case .begin:
             let cutEditor = timeline.editCutEditor
-            let track = cutEditor.cutItem.cut.editNode.editTrack
+            let track = cutEditor.cut.editNode.editTrack
             oldWiggleItem = track.wiggleItem
             if track.wiggleItem != nil {
                 isMadeWiggleItem = false
@@ -1164,7 +1133,7 @@ final class SceneEditor: Layer, Respondable, Localizable {
     private func set(_ wiggle: Wiggle, at index: Int,
                      in track: NodeTrack, in cutEditor: CutEditor) {
         track.replaceWiggle(wiggle, at: index)
-        cutEditor.cutItem.cut.editNode.updateWiggle()
+        cutEditor.cut.editNode.updateWiggle()
         canvas.setNeedsDisplay()
     }
     private func set(_ wiggle: Wiggle, old oldWiggle: Wiggle,
@@ -1271,6 +1240,7 @@ final class SceneEditor: Layer, Respondable, Localizable {
     private func set(_ tempo: BPM, at index: Int, in track: TempoTrack) {
         track.replace(tempo: tempo, at: index)
         timeline.updateTimeRuler()
+        timeline.soundWaveformView.updateWaveform()
     }
     private func set(_ tempo: BPM, old oldTempo: BPM,
                      at index: Int, in track: TempoTrack, time: Beat) {
@@ -1316,7 +1286,7 @@ final class SceneMaterialManager {
     }
     
     var isAnimatedMaterial: Bool {
-        for materialItem in scene.editCutItem.cut.editNode.editTrack.materialItems {
+        for materialItem in scene.editNode.editTrack.materialItems {
             if materialItem.keyMaterials.contains(material) {
                 return true
             }
@@ -1331,7 +1301,7 @@ final class SceneMaterialManager {
         var material: Material, cutTuples: [CutTuple]
     }
     private struct CutTuple {
-        var cutItem: CutItem, cells: [Cell], materialItemTuples: [MaterialItemTuple]
+        var cut: Cut, cells: [Cell], materialItemTuples: [MaterialItemTuple]
     }
     private struct MaterialItemTuple {
         var track: NodeTrack, materialItem: MaterialItem, editIndexes: [Int]
@@ -1339,9 +1309,9 @@ final class SceneMaterialManager {
                                        isSelection: Bool, in track: NodeTrack
             ) -> [UUID: (material: Material, itemTupe: MaterialItemTuple)] {
             
-            var materialItemTuples = [UUID: (material: Material, itemTupe: MaterialItemTuple)]()
+            var mits = [UUID: (material: Material, itemTupe: MaterialItemTuple)]()
             for (i, material) in materialItem.keyMaterials.enumerated() {
-                if materialItemTuples[material.id] == nil {
+                if mits[material.id] == nil {
                     let indexes: [Int]
                     if isSelection {
                         indexes = [track.animation.editKeyframeIndex]
@@ -1349,36 +1319,34 @@ final class SceneMaterialManager {
                         indexes = (i ..< materialItem.keyMaterials.count)
                             .filter { materialItem.keyMaterials[$0].id == material.id }
                     }
-                    materialItemTuples[material.id] = (material,
-                                                       MaterialItemTuple(track: track,
-                                                                         materialItem: materialItem,
-                                                                         editIndexes: indexes))
+                    mits[material.id] = (material, MaterialItemTuple(track: track,
+                                                                     materialItem: materialItem,
+                                                                     editIndexes: indexes))
                 }
             }
-            return materialItemTuples
+            return mits
         }
     }
     
     private var materialTuples = [UUID: MaterialTuple](), colorTuples = [ColorTuple]()
     private var oldMaterialTuple: MaterialTuple?, oldMaterial: Material?
     private func colorTuplesWith(color: Color?, useSelection: Bool = false,
-                                 in cutItem: CutItem, _ cutItems: [CutItem]) -> [ColorTuple] {
+                                 in cut: Cut, _ cuts: [Cut]) -> [ColorTuple] {
         if useSelection {
-            let allSelectionCells = cutItem.cut.editNode.allSelectionCellItemsWithNoEmptyGeometry
+            let allSelectionCells = cut.editNode.allSelectionCellItemsWithNoEmptyGeometry
             if !allSelectionCells.isEmpty {
                 return colorTuplesWith(cells: allSelectionCells.map { $0.cell },
-                                       isSelection: useSelection, in: cutItem)
+                                       isSelection: useSelection, in: cut)
             }
         }
         if let color = color {
-            return colorTuplesWith(color: color, isSelection: useSelection, in: cutItems)
+            return colorTuplesWith(color: color, isSelection: useSelection, in: cuts)
         } else {
-            return colorTuplesWith(cells: cutItem.cut.cells,
-                                   isSelection: useSelection, in: cutItem)
+            return colorTuplesWith(cells: cut.cells, isSelection: useSelection, in: cut)
         }
     }
     private func colorTuplesWith(cells: [Cell], isSelection: Bool,
-                                 in cutItem: CutItem) -> [ColorTuple] {
+                                 in cut: Cut) -> [ColorTuple] {
         struct ColorCell {
             var color: Color, cells: [Cell]
         }
@@ -1387,24 +1355,22 @@ final class SceneMaterialManager {
             if colorDic[cell.material.color.id] != nil {
                 colorDic[cell.material.color.id]?.cells.append(cell)
             } else {
-                colorDic[cell.material.color.id] = ColorCell(color: cell.material.color,
-                                                             cells: [cell])
+                colorDic[cell.material.color.id] = ColorCell(color: cell.material.color, cells: [cell])
             }
         }
         return colorDic.map {
             ColorTuple(color: $0.value.color,
                        materialTuples: materialTuplesWith(cells: $0.value.cells,
-                                                          isSelection: isSelection, in: cutItem))
+                                                          isSelection: isSelection, in: cut))
         }
     }
-    private func colorTuplesWith(color: Color, isSelection: Bool,
-                                 in cutItems: [CutItem]) -> [ColorTuple] {
+    private func colorTuplesWith(color: Color, isSelection: Bool, in cuts: [Cut]) -> [ColorTuple] {
         var materialTuples = [UUID: MaterialTuple]()
-        for cutItem in cutItems {
-            let cells = cutItem.cut.cells.filter { $0.material.color == color }
+        for cut in cuts {
+            let cells = cut.cells.filter { $0.material.color == color }
             if !cells.isEmpty {
                 let mts = materialTuplesWith(cells: cells, color: color,
-                                             isSelection: isSelection, in: cutItem)
+                                             isSelection: isSelection, in: cut)
                 for mt in mts {
                     if materialTuples[mt.key] != nil {
                         materialTuples[mt.key]?.cutTuples += mt.value.cutTuples
@@ -1414,45 +1380,43 @@ final class SceneMaterialManager {
                 }
             }
         }
-        return materialTuples.isEmpty ? [] : [ColorTuple(color: color,
-                                                         materialTuples: materialTuples)]
+        return materialTuples.isEmpty ?
+            [] : [ColorTuple(color: color, materialTuples: materialTuples)]
     }
     
     private func materialTuplesWith(cells: [Cell], color: Color? = nil,
-                                    isSelection: Bool, in cutItem: CutItem) -> [UUID: MaterialTuple] {
+                                    isSelection: Bool, in cut: Cut) -> [UUID: MaterialTuple] {
         var materialDic = [UUID: MaterialTuple]()
         for cell in cells {
             if materialDic[cell.material.id] != nil {
                 materialDic[cell.material.id]?.cutTuples[0].cells.append(cell)
             } else {
-                let cutTuples = [CutTuple(cutItem: cutItem, cells: [cell], materialItemTuples: [])]
+                let cutTuples = [CutTuple(cut: cut, cells: [cell], materialItemTuples: [])]
                 materialDic[cell.material.id] = MaterialTuple(material: cell.material,
                                                               cutTuples: cutTuples)
             }
         }
         
-        for track in cutItem.cut.editNode.tracks {
+        for track in cut.editNode.tracks {
             for materialItem in track.materialItems {
                 if cells.contains(where: { materialItem.cells.contains($0) }) {
-                    let materialItemTuples = MaterialItemTuple.materialItemTuples(
+                    let mits = MaterialItemTuple.materialItemTuples(
                         with: materialItem, isSelection: isSelection, in: track)
-                    for materialItemTuple in materialItemTuples {
+                    for mit in mits {
                         if let color = color {
-                            if materialItemTuple.value.material.color != color {
+                            if mit.value.material.color != color {
                                 continue
                             }
                         }
-                        if materialDic[materialItemTuple.key] != nil {
-                            materialDic[materialItemTuple.key]?.cutTuples[0]
-                                .materialItemTuples.append(materialItemTuple.value.itemTupe)
+                        if materialDic[mit.key] != nil {
+                            materialDic[mit.key]?.cutTuples[0]
+                                .materialItemTuples.append(mit.value.itemTupe)
                         } else {
-                            let materialItemTuples = [materialItemTuple.value.itemTupe]
-                            let cutTuples = [CutTuple(cutItem: cutItem, cells: [],
+                            let materialItemTuples = [mit.value.itemTupe]
+                            let cutTuples = [CutTuple(cut: cut, cells: [],
                                                       materialItemTuples: materialItemTuples)]
-                            materialDic[materialItemTuple.key] = MaterialTuple(
-                                material: materialItemTuple.value.material,
-                                cutTuples: cutTuples
-                            )
+                            materialDic[mit.key] = MaterialTuple(material: mit.value.material,
+                                                                 cutTuples: cutTuples)
                         }
                     }
                 }
@@ -1462,21 +1426,21 @@ final class SceneMaterialManager {
         return materialDic
     }
     private func materialTuplesWith(material: Material?, useSelection: Bool = false,
-                                    in cutItem: CutItem,
-                                    _ cutItems: [CutItem]) -> [UUID: MaterialTuple] {
+                                    in cut: Cut,
+                                    _ cuts: [Cut]) -> [UUID: MaterialTuple] {
         if useSelection {
-            let allSelectionCells = cutItem.cut.editNode.allSelectionCellItemsWithNoEmptyGeometry
+            let allSelectionCells = cut.editNode.allSelectionCellItemsWithNoEmptyGeometry
             if !allSelectionCells.isEmpty {
                 return materialTuplesWith(cells: allSelectionCells.map { $0.cell },
-                                          isSelection: useSelection, in: cutItem)
+                                          isSelection: useSelection, in: cut)
             }
         }
         if let material = material {
-            let cutTuples: [CutTuple] = cutItems.flatMap { cutItem in
-                let cells = cutItem.cut.cells.filter { $0.material.id == material.id }
+            let cutTuples: [CutTuple] = cuts.flatMap { cut in
+                let cells = cut.cells.filter { $0.material.id == material.id }
                 
                 var materialItemTuples = [MaterialItemTuple]()
-                for track in cutItem.cut.editNode.tracks {
+                for track in cut.editNode.tracks {
                     for materialItem in track.materialItems {
                         let indexes = useSelection ?
                             [track.animation.editKeyframeIndex] :
@@ -1491,14 +1455,12 @@ final class SceneMaterialManager {
                 }
                 
                 return cells.isEmpty && materialItemTuples.isEmpty ?
-                    nil : CutTuple(cutItem: cutItem, cells: cells,
-                                   materialItemTuples: materialItemTuples)
+                    nil : CutTuple(cut: cut, cells: cells, materialItemTuples: materialItemTuples)
             }
             return cutTuples.isEmpty ? [:] : [material.id: MaterialTuple(material: material,
                                                                          cutTuples: cutTuples)]
         } else {
-            return materialTuplesWith(cells: cutItem.cut.cells,
-                                      isSelection: useSelection, in: cutItem)
+            return materialTuplesWith(cells: cut.cells, isSelection: useSelection, in: cut)
         }
     }
     
@@ -1551,20 +1513,17 @@ final class SceneMaterialManager {
     }
     private func _set(_ material: Material, in materialTuple: MaterialTuple) {
         for cutTuple in materialTuple.cutTuples {
-            _set(material, old: materialTuple.material,
-                 in: cutTuple.cells, cutTuple.cutItem)
+            _set(material, old: materialTuple.material, in: cutTuple.cells, cutTuple.cut)
         }
     }
     
-    private func append(_ materialItem: MaterialItem, in track: NodeTrack, _ cutItem: CutItem) {
-        undoManager?.registerUndo(withTarget: self) { $0.remove(materialItem, in: track, cutItem) }
+    private func append(_ materialItem: MaterialItem, in track: NodeTrack, _ cut: Cut) {
+        undoManager?.registerUndo(withTarget: self) { $0.remove(materialItem, in: track, cut) }
         track.append(materialItem)
         sceneEditor.sceneDataModel.isWrite = true
     }
-    private func remove(_ materialItem: MaterialItem, in track: NodeTrack, _ cutItem: CutItem) {
-        undoManager?.registerUndo(withTarget: self) {
-            $0.append(materialItem, in: track, cutItem)
-        }
+    private func remove(_ materialItem: MaterialItem, in track: NodeTrack, _ cut: Cut) {
+        undoManager?.registerUndo(withTarget: self) { $0.append(materialItem, in: track, cut) }
         track.remove(materialItem)
         sceneEditor.sceneDataModel.isWrite = true
     }
@@ -1583,7 +1542,7 @@ final class SceneMaterialManager {
         guard let editCell = sceneEditor.canvas.editCell else {
             return
         }
-        let node = scene.editCutItem.cut.editNode
+        let node = scene.editNode
         let cells = node.selectionCells(with: editCell)
         if !cells.isEmpty {
             splitColor(with: cells)
@@ -1593,7 +1552,7 @@ final class SceneMaterialManager {
         guard let editCell = sceneEditor.canvas.editCell else {
             return
         }
-        let node = scene.editCutItem.cut.editNode
+        let node = scene.editNode
         let cells = node.selectionCells(with: editCell)
         if !cells.isEmpty {
             splitOtherThanColor(with: cells)
@@ -1604,8 +1563,7 @@ final class SceneMaterialManager {
         if cells.count == 1, let cell = cells.first {
             paste(material, withSelection: cell.material, useSelection: false)
         } else {
-            let materialTuples = materialTuplesWith(cells: cells, isSelection: true,
-                                                    in: scene.editCutItem)
+            let materialTuples = materialTuplesWith(cells: cells, isSelection: true, in: scene.editCut)
             for materialTuple in materialTuples.values {
                 _set(material, in: materialTuple)
             }
@@ -1615,8 +1573,7 @@ final class SceneMaterialManager {
         }
     }
     func paste(_ color: Color, in cells: [Cell]) {
-        let colorTuples = colorTuplesWith(cells: cells, isSelection: true,
-                                          in: scene.editCutItem)
+        let colorTuples = colorTuplesWith(cells: cells, isSelection: true, in: scene.editCut)
         for colorTuple in colorTuples {
             for materialTuple in colorTuple.materialTuples.values {
                 _set(materialTuple.material.with(color), in: materialTuple)
@@ -1632,7 +1589,7 @@ final class SceneMaterialManager {
     func paste(_ material: Material, withSelection selectionMaterial: Material, useSelection: Bool) {
         let materialTuples = materialTuplesWith(material: selectionMaterial,
                                                 useSelection: useSelection,
-                                                in: scene.editCutItem, scene.cutItems)
+                                                in: scene.editCut, scene.cutTrack.cutItem.keyCuts)
         for materialTuple in materialTuples.values {
             _set(material, in: materialTuple)
         }
@@ -1642,7 +1599,7 @@ final class SceneMaterialManager {
     }
     func paste(_ color: Color, withSelection selectionMaterial: Material, useSelection: Bool) {
         let colorTuples = colorTuplesWith(color: selectionMaterial.color, useSelection: useSelection,
-                                          in: scene.editCutItem, scene.cutItems)
+                                          in: scene.editCut, scene.cutTrack.cutItem.keyCuts)
         _setColor(color, in: colorTuples)
         if let material =
             colorTuples.first?.materialTuples.first?.value.cutTuples.first?.cells.first?.material {
@@ -1651,8 +1608,7 @@ final class SceneMaterialManager {
         }
     }
     func splitMaterial(with cells: [Cell]) {
-        let materialTuples = materialTuplesWith(cells: cells, isSelection: true,
-                                                in: scene.editCutItem)
+        let materialTuples = materialTuplesWith(cells: cells, isSelection: true, in: scene.editCut)
         for materialTuple in materialTuples.values {
             _set(materialTuple.material.with(materialTuple.material.color.withNewID()),
                  in: materialTuple)
@@ -1662,8 +1618,7 @@ final class SceneMaterialManager {
         }
     }
     func splitColor(with cells: [Cell]) {
-        let colorTuples = colorTuplesWith(cells: cells, isSelection: true,
-                                          in: scene.editCutItem)
+        let colorTuples = colorTuplesWith(cells: cells, isSelection: true, in: scene.editCut)
         for colorTuple in colorTuples {
             let newColor = colorTuple.color.withNewID()
             for materialTuple in colorTuple.materialTuples.values {
@@ -1677,8 +1632,7 @@ final class SceneMaterialManager {
         }
     }
     func splitOtherThanColor(with cells: [Cell]) {
-        let materialTuples = materialTuplesWith(cells: cells, isSelection: true,
-                                                in: scene.editCutItem)
+        let materialTuples = materialTuplesWith(cells: cells, isSelection: true, in: scene.editCut)
         for materialTuple in materialTuples.values {
             _set(materialTuple.material.with(materialTuple.material.color),
                  in: materialTuple)
@@ -1688,13 +1642,13 @@ final class SceneMaterialManager {
         }
     }
     private func _set(_ material: Material, old oldMaterial: Material,
-                      in cells: [Cell], _ cutItem: CutItem) {
+                      in cells: [Cell], _ cut: Cut) {
         undoManager?.registerUndo(withTarget: self) {
-            $0._set(oldMaterial, old: material, in: cells, cutItem)
+            $0._set(oldMaterial, old: material, in: cells, cut)
         }
         cells.forEach { $0.material = material }
         sceneEditor.sceneDataModel.isWrite = true
-        if cutItem === sceneEditor.canvas.cutItem {
+        if cut === sceneEditor.canvas.cut {
             sceneEditor.canvas.setNeedsDisplay()
         }
     }
@@ -1710,7 +1664,7 @@ final class SceneMaterialManager {
         switch binding.sendType {
         case .begin:
             materialTuples = materialTuplesWith(material: binding.oldMaterial,
-                                                in: scene.editCutItem, scene.cutItems)
+                                                in: scene.editCut, scene.cutTrack.cutItem.keyCuts)
         case .sending:
             setMaterialType(binding.type, in: materialTuples)
         case .end:
@@ -1737,7 +1691,7 @@ final class SceneMaterialManager {
         switch binding.type {
         case .begin:
             colorTuples = colorTuplesWith(color: binding.oldColor,
-                                          in: scene.editCutItem, scene.cutItems)
+                                          in: scene.editCut, scene.cutTrack.cutItem.keyCuts)
         case .sending:
             setColor(binding.color, in: colorTuples)
         case .end:
@@ -1766,7 +1720,7 @@ final class SceneMaterialManager {
         switch binding.type {
         case .begin:
             materialTuples = materialTuplesWith(material: binding.oldMaterial,
-                                                in: scene.editCutItem, scene.cutItems)
+                                                in: scene.editCut, scene.cutTrack.cutItem.keyCuts)
             setLineColor(binding.lineColor, in: materialTuples)
         case .sending:
             setLineColor(binding.lineColor, in: materialTuples)
@@ -1792,7 +1746,7 @@ final class SceneMaterialManager {
         switch binding.type {
         case .begin:
             materialTuples = materialTuplesWith(material: binding.oldMaterial,
-                                                in: scene.editCutItem, scene.cutItems)
+                                                in: scene.editCut, scene.cutTrack.cutItem.keyCuts)
         case .sending:
             setLineWidth(binding.lineWidth, in: materialTuples)
         case .end:
@@ -1817,7 +1771,7 @@ final class SceneMaterialManager {
         switch binding.type {
         case .begin:
             materialTuples = materialTuplesWith(material: binding.oldMaterial,
-                                                in: scene.editCutItem, scene.cutItems)
+                                                in: scene.editCut, scene.cutTrack.cutItem.keyCuts)
         case .sending:
             setOpacity(binding.opacity, in: materialTuples)
         case .end:
@@ -1841,17 +1795,17 @@ final class SceneMaterialManager {
     private func changeAnimation(with binding: EnumEditor.Binding) {
         let isAnimation = self.isAnimatedMaterial
         if binding.index == 0 && !isAnimation {
-            let cutItem =  scene.editCutItem
-            let track = cutItem.cut.editNode.editTrack
+            let cut =  scene.editCut
+            let track = cut.editNode.editTrack
             let keyMaterials = track.emptyKeyMaterials(with: material)
-            let cells = cutItem.cut.cells.filter { $0.material == material }
+            let cells = cut.cells.filter { $0.material == material }
             append(MaterialItem(material: material, cells: cells, keyMaterials: keyMaterials),
-                   in: track, cutItem)
+                   in: track, cut)
         } else if isAnimation {
-            let cutItem =  scene.editCutItem
-            let track = cutItem.cut.editNode.editTrack
+            let cut = scene.editCut
+            let track = cut.editNode.editTrack
             remove(track.materialItems[track.materialItems.count - 1],
-                   in: cutItem.cut.editNode.editTrack, cutItem)
+                   in: cut.editNode.editTrack, cut)
         }
     }
 }

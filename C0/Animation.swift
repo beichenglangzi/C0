@@ -48,7 +48,7 @@ struct Animation: Codable {
         }
     }
     
-    private(set) var time = Beat(0)
+    private(set) var currentTime = Beat(0)
     private(set) var isInterpolated = false
     private(set) var editKeyframeIndex = 0
     private(set) var editLoopframeIndex = 0
@@ -72,7 +72,7 @@ struct Animation: Codable {
         self.keyframes = keyframes
         self.editKeyframeIndex = editKeyframeIndex
         self.selectionKeyframeIndexes = selectionKeyframeIndexes
-        self.time = time
+        self.currentTime = time
         self.duration = duration
         self.isInterpolated = isInterpolated
         self.loopFrames = loopFrames
@@ -127,7 +127,7 @@ struct Animation: Codable {
     }
     
     mutating func update(withTime time: Beat) {
-        self.time = time
+        self.currentTime = time
         let timeResult = loopedKeyframeIndex(withTime: time)
         let li1 = timeResult.loopFrameIndex, interTime = max(0, timeResult.interTime)
         editLoopframeIndex = li1
@@ -145,7 +145,7 @@ struct Animation: Codable {
     }
     
     mutating func update(withTime time: Beat, to animatable: Animatable) {
-        self.time = time
+        self.currentTime = time
         let timeResult = loopedKeyframeIndex(withTime: time)
         let li1 = timeResult.loopFrameIndex, interTime = max(0, timeResult.interTime)
         editLoopframeIndex = li1
@@ -320,7 +320,7 @@ final class AnimationEditor: Layer, Respondable {
     init(_ animation: Animation = Animation(),
          beginBaseTime: Beat = 0, baseTimeInterval: Beat = Beat(1, 16),
          origin: CGPoint = CGPoint(),
-         height: CGFloat = 24.0, smallHeight: CGFloat = 8.0, isSmall: Bool = true) {
+         height: CGFloat = Layout.basicHeight, smallHeight: CGFloat = 8.0, isSmall: Bool = true) {
         
         self.animation = animation
         self.beginBaseTime = beginBaseTime

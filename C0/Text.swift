@@ -243,6 +243,11 @@ final class TextEditor: DrawLayer, Respondable, Localizable {
         }
     }
     
+    struct Binding {
+        let editor: TextEditor, text: String, oldText: String, type: Action.SendType
+    }
+    var binding: ((Binding) -> ())?
+    
     func delete(with event: KeyInputEvent) -> Bool {
         guard !isLocked else {
             return false
@@ -263,7 +268,11 @@ final class TextEditor: DrawLayer, Respondable, Localizable {
         }
         for object in copiedObject.objects {
             if let string = object as? String {
+                let oldText = string
+                binding?(Binding(editor: self, text: oldText, oldText: oldText, type: .begin))
                 self.string = string
+                binding?(Binding(editor: self, text: string, oldText: oldText, type: .end))
+                
                 draw()
             }
         }
@@ -284,11 +293,13 @@ final class TextEditor: DrawLayer, Respondable, Localizable {
         timer.begin(endDuration: 1,
                     beginHandler:
             { [unowned self] in
+                print("Begin")
                 self.oldText = self.string
                 self.draw()
             },
                     endHandler:
             { [unowned self] in
+                print("End")
                 self.draw()
             }
         )
@@ -364,7 +375,12 @@ final class TextEditor: DrawLayer, Respondable, Localizable {
         if markedRange.length == 0 {
             unmarkText()
         }
+        
+        let oldText = string
+        binding?(Binding(editor: self, text: oldText, oldText: oldText, type: .begin))
         backingStore.deleteCharacters(in: range)
+        binding?(Binding(editor: self, text: string, oldText: oldText, type: .end))
+        
         self.selectedRange = NSRange(location: range.location, length: 0)
         TextInputContext.invalidateCharacterCoordinates()
         
@@ -420,6 +436,8 @@ final class TextEditor: DrawLayer, Respondable, Localizable {
     func insertText(_ string: Any, replacementRange: NSRange) {
         let replaceRange = replacementRange.location != NSNotFound ?
             replacementRange : (markedRange.location != NSNotFound ? markedRange : selectedRange)
+        
+        print("Insert")
         
         if let attString = string as? NSAttributedString {
             let range = NSRange(location: replaceRange.location, length: attString.length)
@@ -518,7 +536,7 @@ struct TextFrame {
         }
     }
     
-    init (attributedString: NSAttributedString, frameWidth: Double? = nil) {
+    init(attributedString: NSAttributedString, frameWidth: Double? = nil) {
         self.attributedString = attributedString
         self.frameWidth = frameWidth
         self.lines = TextFrame.lineWith(attributedString: attributedString,
@@ -842,38 +860,5 @@ extension NSAttributedString {
         return [.ctFont: font.ctFont,
                 .ctForegroundColor: color.cgColor,
                 .ctParagraphStyle: style]
-    }
-}
-
-struct Speech: Codable {
-    var string = ""
-    
-    var isEmpty: Bool {
-        return string.isEmpty
-    }
-    let borderColor = Color.speechBorder, fillColor = Color.speechFill
-    func draw(bounds: CGRect, in ctx: CGContext) {
-        let attString = NSAttributedString(string: string, attributes: [
-            NSAttributedStringKey(rawValue: String(kCTFontAttributeName)): Font.speech.ctFont,
-            NSAttributedStringKey(rawValue: String(kCTForegroundColorFromContextAttributeName)): true
-            ])
-        let framesetter = CTFramesetterCreateWithAttributedString(attString)
-        let range = CFRange(location: 0, length: attString.length), ratio = bounds.size.width/640
-        let size = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, range, nil,
-                                                                CGSize(width: CGFloat.infinity,
-                                                                       height: CGFloat.infinity), nil)
-        let lineBounds = CGRect(origin: CGPoint(), size: size)
-        let ctFrame = CTFramesetterCreateFrame(framesetter, range,
-                                               CGPath(rect: lineBounds, transform: nil), nil)
-        ctx.saveGState()
-        ctx.translateBy(x: round(bounds.midX - lineBounds.midX),  y: round(bounds.minY + 20 * ratio))
-        ctx.setTextDrawingMode(.stroke)
-        ctx.setLineWidth(ceil(3 * ratio))
-        ctx.setStrokeColor(borderColor.cgColor)
-        CTFrameDraw(ctFrame, ctx)
-        ctx.setTextDrawingMode(.fill)
-        ctx.setFillColor(fillColor.cgColor)
-        CTFrameDraw(ctFrame, ctx)
-        ctx.restoreGState()
     }
 }

@@ -19,170 +19,185 @@
 
 import Foundation
 
-final class CutDifferential: NSObject, NSCoding {
-    var trackDifferentials: [UUID: NodeTrackDifferential]
-    init(trackDifferentials: [UUID: NodeTrackDifferential] = [:]) {
-        self.trackDifferentials = trackDifferentials
+final class CutTrack: NSObject, Track, NSCoding {
+    private(set) var animation: Animation
+    
+    static let dataModelKey = "cutTrack"
+    var differentialDataModel = DataModel(key: CutTrack.dataModelKey, directoryWithDataModels: []) {
+        didSet {
+            var nodeDic = [String: Node]()
+            cutItem.keyCuts.forEach { cut in
+                cut.rootNode.allChildren { (node) in
+                    nodeDic[node.key.uuidString] = node
+                }
+            }
+            differentialDataModel.children.forEach { (key, dataModel) in
+                nodeDic[key]?.differentialDataModel = dataModel
+            }
+        }
     }
+    func insert(_ cut: Cut, at index: Int) {
+        cutItem.keyCuts.insert(cut, at: index)
+        let cutTime = index == animation.keyframes.count ? animation.duration : time(at: index)
+        let keyframe = Keyframe(time: cutTime, easing: Easing(),
+                                interpolation: .none, loop: .none, label: .main)
+        animation.keyframes.insert(keyframe, at: index)
+        updateCutTimeAndDuration()
+        cut.rootNode.allChildren { differentialDataModel.insert($0.differentialDataModel) }
+    }
+    func removeCut(at index: Int) {
+        let cut = cutItem.keyCuts[index]
+        cutItem.keyCuts.remove(at: index)
+        animation.keyframes.remove(at: index)
+        updateCutTimeAndDuration()
+        cut.rootNode.allChildren { differentialDataModel.remove($0.differentialDataModel) }
+    }
+    
+    let cutItem: CutItem
+    
+    var time: Beat {
+        didSet {
+            updateInterpolation()
+        }
+    }
+    func updateInterpolation() {
+        animation.update(withTime: time, to: self)
+    }
+    func step(_ f0: Int) {
+        cutItem.step(f0)
+    }
+    func linear(_ f0: Int, _ f1: Int, t: CGFloat) {
+        cutItem.linear(f0, f1, t: t)
+    }
+    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
+        cutItem.firstMonospline(f1, f2, f3, with: ms)
+    }
+    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
+        cutItem.monospline(f0, f1, f2, f3, with: ms)
+    }
+    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
+        cutItem.lastMonospline(f0, f1, f2, with: ms)
+    }
+    
+    init(animation: Animation = Animation(), time: Beat = 0, cutItem: CutItem = CutItem()) {
+        guard animation.keyframes.count == cutItem.keyCuts.count else {
+            fatalError()
+        }
+        self.animation = animation
+        self.time = time
+        self.cutItem = cutItem
+        super.init()
+        cutItem.keyCuts.forEach { cut in
+            cut.rootNode.allChildren { node in
+                differentialDataModel.insert(node.differentialDataModel)
+            }
+        }
+    }
+    
     private enum CodingKeys: String, CodingKey {
-        case trackDifferentials
+        case animation, time, cutItem
     }
     init?(coder: NSCoder) {
-        trackDifferentials = coder.decodeObject(
-            forKey: CodingKeys.trackDifferentials.rawValue) as? [UUID: NodeTrackDifferential] ?? [:]
+        animation = coder.decodeDecodable(
+            Animation.self, forKey: CodingKeys.animation.rawValue) ?? Animation()
+        time = coder.decodeDecodable(Beat.self, forKey: CodingKeys.time.rawValue) ?? 0
+        cutItem = coder.decodeObject(forKey: CodingKeys.cutItem.rawValue) as? CutItem ?? CutItem()
         super.init()
     }
     func encode(with coder: NSCoder) {
-        coder.encode(trackDifferentials, forKey: CodingKeys.trackDifferentials.rawValue)
+        coder.encodeEncodable(animation, forKey: CodingKeys.animation.rawValue)
+        coder.encodeEncodable(time, forKey: CodingKeys.time.rawValue)
+        coder.encode(cutItem, forKey: CodingKeys.cutItem.rawValue)
+    }
+    
+    func index(atTime time: Beat) -> Int {
+        return animation.loopFrames[animation.loopedKeyframeIndex(withTime: time).loopFrameIndex].index
+    }
+    func time(at index: Int) -> Beat {
+        return animation.loopFrames[index].time
+    }
+    
+    func updateCutTimeAndDuration() {
+        animation.duration = cutItem.keyCuts.enumerated().reduce(Beat(0)) {
+            animation.keyframes[$1.offset].time = $0
+            return $0 + $1.element.duration
+        }
+    }
+    
+    func cutIndex(withTime time: Beat) -> (index: Int, interTime: Beat, isOver: Bool) {
+        guard cutItem.keyCuts.count > 1 else {
+            return (0, time, animation.duration <= time)
+        }
+        let lfi = animation.loopedKeyframeIndex(withTime: time)
+        return (lfi.keyframeIndex, lfi.interTime, animation.duration <= time)
+    }
+    func movingCutIndex(withTime time: Beat) -> Int {
+        guard cutItem.keyCuts.count > 1 else {
+            return 0
+        }
+        for i in 1 ..< cutItem.keyCuts.count {
+            if time <= cutItem.keyCuts[i].currentTime {
+                return i - 1
+            }
+        }
+        return cutItem.keyCuts.count - 1
     }
 }
-final class NodeTrackDifferential: NSObject, NSCoding {
-    var drawing: Drawing, keyDrawings: [Drawing]
-    var cellDifferentials: [UUID: CellDifferential]
-    private enum CodingKeys: String, CodingKey {
-        case drawing, keyDrawings, cellDifferentials
-    }
-    init(drawing: Drawing = Drawing(), keyDrawings: [Drawing] = [],
-         cellDifferentials: [UUID: CellDifferential] = [:]) {
-        
-        self.drawing = drawing
-        self.keyDrawings = keyDrawings
-        self.cellDifferentials = cellDifferentials
-    }
-    init?(coder: NSCoder) {
-        drawing = coder.decodeObject(forKey: CodingKeys.drawing.rawValue) as? Drawing ?? Drawing()
-        keyDrawings = coder.decodeObject(forKey: CodingKeys.keyDrawings.rawValue) as? [Drawing] ?? []
-        cellDifferentials = coder.decodeObject(
-            forKey: CodingKeys.cellDifferentials.rawValue) as? [UUID: CellDifferential] ?? [:]
-        super.init()
-    }
-    func encode(with coder: NSCoder) {
-        coder.encode(drawing, forKey: CodingKeys.drawing.rawValue)
-        coder.encode(keyDrawings, forKey: CodingKeys.keyDrawings.rawValue)
-        coder.encode(cellDifferentials, forKey: CodingKeys.cellDifferentials.rawValue)
+extension CutTrack: Copying {
+    func copied(from copier: Copier) -> CutTrack {
+        return CutTrack(animation: animation, time: time, cutItem: copier.copied(cutItem))
     }
 }
-final class CellDifferential: NSObject, NSCoding {
-    var geometry: Geometry, keyGeometries: [Geometry]
-    init(geometry: Geometry = Geometry(), keyGeometries: [Geometry] = []) {
-        self.geometry = geometry
-        self.keyGeometries = keyGeometries
-    }
-    private enum CodingKeys: String, CodingKey {
-        case geometry, keyGeometries
-    }
-    init?(coder: NSCoder) {
-        geometry = coder.decodeObject(forKey: CodingKeys.geometry.rawValue) as? Geometry ?? Geometry()
-        keyGeometries = coder.decodeObject(
-            forKey: CodingKeys.keyGeometries.rawValue) as? [Geometry] ?? []
-        super.init()
-    }
-    func encode(with coder: NSCoder) {
-        coder.encode(geometry, forKey: CodingKeys.geometry.rawValue)
-        coder.encode(keyGeometries, forKey: CodingKeys.keyGeometries.rawValue)
-    }
+extension CutTrack: Referenceable {
+    static let name = Localization(english: "Cut Track", japanese: "カットトラック")
 }
 
-/**
- # Issue
- - animation, keyCuts, cut
- */
-final class CutItem: NSObject, NSCoding {
-    var differentialDataModel = DataModel(key: "0") {
-        didSet {
-            differentialDataModel.dataHandler = { [unowned self] in self.differential.data }
-        }
+final class CutItem: NSObject, TrackItem, NSCoding {
+    fileprivate(set) var keyCuts: [Cut]
+    var cut: Cut
+    
+    func step(_ f0: Int) {
+        cut = keyCuts[f0]
     }
-    func read() {
-        if !differentialDataModel.isRead,
-            let differential: CutDifferential = differentialDataModel.readObject() {
-            
-            self.differential = differential
-        }
+    func linear(_ f0: Int, _ f1: Int, t: CGFloat) {
+        cut = keyCuts[f0]
     }
-    var differential: CutDifferential {
-        get {
-            let cd = CutDifferential(trackDifferentials: [:])
-            cut.rootNode.allChildrenAndSelf { (node) in
-                node.tracks.forEach { (track) in
-                    let td = NodeTrackDifferential(drawing: track.drawingItem.drawing,
-                                                   keyDrawings: track.drawingItem.keyDrawings)
-                    td.drawing = track.drawingItem.drawing
-                    td.keyDrawings = track.drawingItem.keyDrawings
-                    track.cellItems.forEach { (cellItem) in
-                        td.cellDifferentials[cellItem.id] =
-                            CellDifferential(geometry: cellItem.cell.geometry,
-                                             keyGeometries: cellItem.keyGeometries)
-                    }
-                    cd.trackDifferentials[track.id] = td
-                }
-            }
-            return cd
-        }
-        set {
-            cut.rootNode.allChildren { (node) in
-                node.tracks.forEach { (track) in
-                    guard let td = newValue.trackDifferentials[track.id] else {
-                        return
-                    }
-                    track.drawingItem.drawing = td.drawing
-                    if track.drawingItem.keyDrawings.count == td.keyDrawings.count {
-                        track.set(td.keyDrawings)
-                    } else {
-                        let count = min(track.drawingItem.keyDrawings.count, td.keyDrawings.count)
-                        var keyDrawings = track.drawingItem.keyDrawings
-                        (0..<count).forEach { keyDrawings[$0] = td.keyDrawings[$0] }
-                        track.set(keyDrawings)
-                    }
-                    
-                    track.cellItems.forEach { (cellItem) in
-                        guard let gs = td.cellDifferentials[cellItem.id] else {
-                            return
-                        }
-                        cellItem.cell.geometry = gs.geometry
-                        if cellItem.keyGeometries.count == gs.keyGeometries.count {
-                            track.set(gs.keyGeometries, in: cellItem, isSetGeometryInCell: false)
-                        } else {
-                            let count = min(cellItem.keyGeometries.count, gs.keyGeometries.count)
-                            var keyGeometries = cellItem.keyGeometries
-                            (0..<count).forEach { keyGeometries[$0] = gs.keyGeometries[$0] }
-                            track.set(keyGeometries, in: cellItem, isSetGeometryInCell: false)
-                        }
-                    }
-                }
-            }
-        }
+    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
+        cut = keyCuts[f1]
+    }
+    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
+        cut = keyCuts[f1]
+    }
+    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
+        cut = keyCuts[f1]
     }
     
-    var time = Beat(0)
-    var key: String
-    var cut = Cut()
-    init(cut: Cut = Cut(), time: Beat = 0, key: String = "0") {
+    init(keyCuts: [Cut] = [], cut: Cut = Cut()) {
+        if keyCuts.isEmpty {
+            self.keyCuts = [cut]
+        } else {
+            self.keyCuts = keyCuts
+        }
         self.cut = cut
-        self.time = time
-        self.key = key
         super.init()
-        differentialDataModel.dataHandler = { [unowned self] in self.differential.data }
     }
     
     private enum CodingKeys: String, CodingKey {
-        case time, key, cut
+        case keyCuts, cut
     }
     init?(coder: NSCoder) {
-        time = coder.decodeDecodable(Beat.self, forKey: CodingKeys.time.rawValue) ?? 0
-        key = coder.decodeObject(forKey: CodingKeys.key.rawValue) as? String ?? "0"
+        keyCuts = coder.decodeObject(forKey: CodingKeys.keyCuts.rawValue) as? [Cut] ?? []
         cut = coder.decodeObject(forKey: CodingKeys.cut.rawValue) as? Cut ?? Cut()
         super.init()
     }
     func encode(with coder: NSCoder) {
-        coder.encodeEncodable(time, forKey: CodingKeys.time.rawValue)
-        coder.encode(key, forKey: CodingKeys.key.rawValue)
+        coder.encode(keyCuts, forKey: CodingKeys.keyCuts.rawValue)
         coder.encode(cut, forKey: CodingKeys.cut.rawValue)
     }
 }
 extension CutItem: Copying {
     func copied(from copier: Copier) -> CutItem {
-        return CutItem(cut: copier.copied(cut), time: time, key: key)
+        return CutItem(keyCuts: keyCuts.map { copier.copied($0) }, cut: copier.copied(cut))
     }
 }
 
@@ -209,51 +224,67 @@ final class Cut: NSObject, NSCoding {
         }
     }
     
-    var time: Beat {
+    let speechTrack: SpeechTrack
+    
+    var currentTime: Beat {
         didSet {
             updateWithTime()
         }
     }
     func updateWithTime() {
-        rootNode.time = time
+        rootNode.time = currentTime
+        speechTrack.time = currentTime
     }
-    var duration: Beat
+    var duration: Beat {
+        didSet {
+            speechTrack.replace(duration: duration)
+        }
+    }
     
     init(rootNode: Node = Node(tracks: [NodeTrack(animation: Animation(duration: 0))]),
          editNode: Node = Node(name: Localization(english: "Node 0",
                                                   japanese: "ノード0").currentString),
-         time: Beat = 0) {
+         speechTrack: SpeechTrack = SpeechTrack(),
+         currentTime: Beat = 0) {
        
         editNode.editTrack.name = Localization(english: "Track 0", japanese: "トラック0").currentString
         if rootNode.children.isEmpty {
-            rootNode.children.append(editNode)
+            let node = Node(name: Localization(english: "Root", japanese: "ルート").currentString)
+            node.editTrack.name = Localization(english: "Track 0", japanese: "トラック0").currentString
+            node.children.append(editNode)
+            rootNode.children.append(node)
         }
         self.rootNode = rootNode
         self.editNode = editNode
-        self.time = time
+        self.speechTrack = speechTrack
+        self.currentTime = currentTime
         self.duration = rootNode.maxDuration
-        rootNode.time = time
+        speechTrack.replace(duration: duration)
+        rootNode.time = currentTime
         rootNode.isEdited = true
         editNode.isEdited = true
         super.init()
     }
     
     private enum CodingKeys: String, CodingKey {
-        case rootNode, editNode, time, duration
+        case rootNode, editNode, speechTrack, time, duration
     }
     init?(coder: NSCoder) {
         rootNode = coder.decodeObject(forKey: CodingKeys.rootNode.rawValue) as? Node ?? Node()
         editNode = coder.decodeObject(forKey: CodingKeys.editNode.rawValue) as? Node ?? Node()
         rootNode.isEdited = true
         editNode.isEdited = true
-        time = coder.decodeDecodable(Beat.self, forKey: CodingKeys.time.rawValue) ?? 0
+        speechTrack = coder.decodeObject(
+            forKey: CodingKeys.speechTrack.rawValue) as? SpeechTrack ?? SpeechTrack()
+        currentTime = coder.decodeDecodable(Beat.self, forKey: CodingKeys.time.rawValue) ?? 0
         duration = coder.decodeDecodable(Beat.self, forKey: CodingKeys.duration.rawValue) ?? 0
         super.init()
     }
     func encode(with coder: NSCoder) {
         coder.encode(rootNode, forKey: CodingKeys.rootNode.rawValue)
         coder.encode(editNode, forKey: CodingKeys.editNode.rawValue)
-        coder.encodeEncodable(time, forKey: CodingKeys.time.rawValue)
+        coder.encode(speechTrack, forKey: CodingKeys.speechTrack.rawValue)
+        coder.encodeEncodable(currentTime, forKey: CodingKeys.time.rawValue)
         coder.encodeEncodable(duration, forKey: CodingKeys.duration.rawValue)
     }
     
@@ -261,21 +292,28 @@ final class Cut: NSObject, NSCoding {
         return rootNode.imageBounds
     }
     
+    func read() {
+        rootNode.allChildren { $0.read() }
+    }
+    
     func draw(scene: Scene, viewType: Cut.ViewType, in ctx: CGContext) {
-        ctx.saveGState()
         if viewType == .preview {
+            ctx.saveGState()
             rootNode.draw(scene: scene, viewType: viewType,
                           scale: 1, rotation: 0,
                           viewScale: 1, viewRotation: 0,
                           in: ctx)
+            speechTrack.speechItem.speech.draw(bounds: scene.frame, in: ctx)
+            ctx.restoreGState()
         } else {
+            ctx.saveGState()
             ctx.concatenate(scene.viewTransform.affineTransform)
             rootNode.draw(scene: scene, viewType: viewType,
                           scale: 1, rotation: 0,
                           viewScale: scene.scale, viewRotation: scene.viewTransform.rotation,
                           in: ctx)
+            ctx.restoreGState()
         }
-        ctx.restoreGState()
     }
     
     func drawCautionBorder(scene: Scene, bounds: CGRect, in ctx: CGContext) {
@@ -288,16 +326,13 @@ final class Cut: NSObject, NSCoding {
                       CGRect(x: bounds.minX + width, y: bounds.maxY - width,
                              width: bounds.width - width * 2, height: width),
                       CGRect(x: bounds.maxX - width, y: bounds.minY,
-                             width: width, height: bounds.height)]
-            )
+                             width: width, height: bounds.height)])
         }
         if scene.viewTransform.rotation > .pi / 2 || scene.viewTransform.rotation < -.pi / 2 {
             let borderWidth = 2.0.cf
             drawBorderWith(bounds: bounds, width: borderWidth * 2, color: .warning, in: ctx)
-            let textLine = TextFrame(
-                string: "\(Int(scene.viewTransform.rotation * 180 / (.pi)))°",
-                font: .bold, color: .warning
-            )
+            let textLine = TextFrame(string: "\(Int(scene.viewTransform.rotation * 180 / (.pi)))°",
+                                     font: .bold, color: .warning)
             let sb = textLine.typographicBounds.insetBy(dx: -10, dy: -2).integral
             textLine.draw(in: CGRect(x: bounds.minX + (bounds.width - sb.width) / 2,
                                      y: bounds.minY + bounds.height - sb.height - borderWidth,
@@ -453,7 +488,8 @@ final class Cut: NSObject, NSCoding {
 extension Cut: Copying {
     func copied(from copier: Copier) -> Cut {
         return Cut(rootNode: copier.copied(rootNode), editNode: copier.copied(editNode),
-                   time: time)
+                   speechTrack: copier.copied(speechTrack),
+                   currentTime: currentTime)
     }
 }
 extension Cut: Referenceable {
@@ -462,6 +498,9 @@ extension Cut: Referenceable {
 
 final class CutEditor: Layer, Respondable {
     static let name = Localization(english: "Cut Editor", japanese: "カットエディタ")
+    
+    let nameLabel = Label(font: .small)
+    let clipEditor = Box()
     
     private(set) var editAnimationEditor: AnimationEditor {
         didSet {
@@ -472,8 +511,11 @@ final class CutEditor: Layer, Respondable {
     }
     private(set) var animationEditors: [AnimationEditor]
     
+    let speechAnimationEditor: AnimationEditor
+    var speechTextEditors = [TextEditor]()
+    
     func animationEditor(with nodeAndTrack: Cut.NodeAndTrack) -> AnimationEditor {
-        let index = cutItem.cut.nodeAndTrackIndex(with: nodeAndTrack)
+        let index = cut.nodeAndTrackIndex(with: nodeAndTrack)
         return animationEditors[index]
     }
     func animationEditors(with node: Node) -> [AnimationEditor] {
@@ -484,10 +526,10 @@ final class CutEditor: Layer, Respondable {
         return animationEditors
     }
     func tracks(handler: (Node, NodeTrack, Int) -> ()) {
-        CutEditor.tracks(with: cutItem, handler: handler)
+        CutEditor.tracks(with: cut, handler: handler)
     }
     func tracks(from node: Node, handler: (Node, NodeTrack, Int) -> ()) {
-        CutEditor.tracks(from: node, with: cutItem, handler: handler)
+        CutEditor.tracks(from: node, with: cut, handler: handler)
     }
     static func tracks(with node: Node, handler: (Node, NodeTrack, Int) -> ()) {
         var i = 0
@@ -498,29 +540,29 @@ final class CutEditor: Layer, Respondable {
             }
         }
     }
-    static func tracks(with cutItem: CutItem, handler: (Node, NodeTrack, Int) -> ()) {
+    static func tracks(with cut: Cut, handler: (Node, NodeTrack, Int) -> ()) {
         var i = 0
-        cutItem.cut.rootNode.allChildren { node in
+        cut.rootNode.allChildren { node in
             node.tracks.forEach { track in
                 handler(node, track, i)
                 i += 1
             }
         }
     }
-    static func tracks(from node: Node, with cutItem: CutItem, handler: (Node, NodeTrack, Int) -> ()) {
-        tracks(with: cutItem) { (aNode, track, i) in
-            aNode.allParentsAndSelf({ (n) -> (Bool) in
+    static func tracks(from node: Node, with cut: Cut, handler: (Node, NodeTrack, Int) -> ()) {
+        tracks(with: cut) { (aNode, track, i) in
+            aNode.allParentsAndSelf { (n) -> (Bool) in
                 if node == n {
                     handler(aNode, track, i)
                     return true
                 } else {
                     return false
                 }
-            })
+            }
             
         }
     }
-    static func animationEditor(with track: NodeTrack, beginBaseTime: Beat,
+    static func animationEditor(with track: Track, beginBaseTime: Beat,
                                 baseTimeInterval: Beat, isSmall: Bool) -> AnimationEditor {
         return AnimationEditor(track.animation,
                                beginBaseTime: beginBaseTime,
@@ -528,7 +570,7 @@ final class CutEditor: Layer, Respondable {
                                isSmall: isSmall)
     }
     func newAnimationEditor(with track: NodeTrack, node: Node, isSmall: Bool) -> AnimationEditor {
-        let animationEditor = CutEditor.animationEditor(with: track, beginBaseTime: cutItem.time,
+        let animationEditor = CutEditor.animationEditor(with: track, beginBaseTime: beginBaseTime,
                                                         baseTimeInterval: baseTimeInterval,
                                                         isSmall: isSmall)
         animationEditor.frame.size.width = frame.width
@@ -538,7 +580,7 @@ final class CutEditor: Layer, Respondable {
     func newAnimationEditors(with node: Node) -> [AnimationEditor] {
         var animationEditors = [AnimationEditor]()
         CutEditor.tracks(with: node) { (node, track, index) in
-            let animationEditor = CutEditor.animationEditor(with: track, beginBaseTime: cutItem.time,
+            let animationEditor = CutEditor.animationEditor(with: track, beginBaseTime: beginBaseTime,
                                                             baseTimeInterval: baseTimeInterval,
                                                             isSmall: false)
             animationEditor.frame.size.width = frame.width
@@ -548,24 +590,28 @@ final class CutEditor: Layer, Respondable {
         return animationEditors
     }
     
-    let cutItem: CutItem
-    init(_ cutItem: CutItem,
+    let cut: Cut
+    init(_ cut: Cut,
+         beginBaseTime: Beat = 0,
          baseWidth: CGFloat, baseTimeInterval: Beat,
          knobHalfHeight: CGFloat, subKnobHalfHeight: CGFloat, maxLineWidth: CGFloat, height: CGFloat) {
         
-        self.cutItem = cutItem
+        nameLabel.fillColor = nil
+        clipEditor.isClipped = true
+        
+        self.cut = cut
+        self.beginBaseTime = beginBaseTime
         self.baseWidth = baseWidth
         self.baseTimeInterval = baseTimeInterval
         self.knobHalfHeight = knobHalfHeight
         self.subKnobHalfHeight = subKnobHalfHeight
         self.maxLineWidth = maxLineWidth
         
-        let editNode = cutItem.cut.editNode
+        let editNode = cut.editNode
         var animationEditors = [AnimationEditor](), editAnimationEditor = AnimationEditor()
-        CutEditor.tracks(with: cutItem) { (node, track, index) in
+        CutEditor.tracks(with: cut) { (node, track, index) in
             let isEdit = node === editNode && track == editNode.editTrack
             let animationEditor = AnimationEditor(track.animation,
-                                                  beginBaseTime: cutItem.time,
                                                   baseTimeInterval: baseTimeInterval,
                                                   isSmall: !isEdit)
             animationEditors.append(animationEditor)
@@ -576,14 +622,59 @@ final class CutEditor: Layer, Respondable {
         self.animationEditors = animationEditors
         self.editAnimationEditor = editAnimationEditor
         
+        speechAnimationEditor = CutEditor.animationEditor(with: cut.speechTrack,
+                                                          beginBaseTime: beginBaseTime,
+                                                          baseTimeInterval: baseTimeInterval,
+                                                          isSmall: true)
+        
         super.init()
-        replace(children: animationEditors)
+        clipEditor.replace(children: animationEditors)
+        replace(children: [clipEditor, nameLabel])
         frame.size.height = height
-        updateChildren()
+        updateLayout()
         updateWithDuration()
         
+        speechTextEditors = cut.speechTrack.speechItem.keySpeechs.enumerated().map { (i, speech) in
+            let textEditor = TextEditor()
+            textEditor.isLocked = false
+            textEditor.string = speech.string
+            textEditor.noIndicatedLineColor = .border
+            textEditor.indicatedLineColor = .indicated
+            textEditor.fillColor = nil
+            textEditor.binding = {
+                cut.speechTrack.replace(Speech(string: $0.text), at: i)
+            }
+            return textEditor
+        }
+        speechAnimationEditor.setKeyframeHandler = { [unowned self] ab in
+            guard ab.type == .end else {
+                return
+            }
+            switch ab.setType {
+            case .insert:
+                let speech = Speech()
+                let textEditor = TextEditor()
+                textEditor.isLocked = false
+                textEditor.noIndicatedLineColor = .border
+                textEditor.indicatedLineColor = .indicated
+                textEditor.fillColor = nil
+                textEditor.string = speech.string
+                textEditor.binding = {
+                    cut.speechTrack.replace(Speech(string: $0.text), at: ab.index)
+                }
+                cut.speechTrack.insert(ab.keyframe,
+                                       SpeechTrack.KeyframeValues(speech: speech), at: ab.index)
+                self.speechTextEditors.insert(textEditor, at: ab.index)
+            case .remove:
+                cut.speechTrack.removeKeyframe(at: ab.index)
+                self.speechTextEditors.remove(at: ab.index)
+            case .replace:
+                break
+            }
+        }
+        
         animationEditors.enumerated().forEach { (i, animationEditor) in
-            let nodeAndTrack = cutItem.cut.nodeAndTrack(atNodeAndTrackIndex: i)
+            let nodeAndTrack = cut.nodeAndTrack(atNodeAndTrackIndex: i)
             bind(in: animationEditor, from: nodeAndTrack.node, from: nodeAndTrack.track)
         }
     }
@@ -600,6 +691,12 @@ final class CutEditor: Layer, Respondable {
         }
         animationEditor.knobColorHandler = {
             track.drawingItem.keyDrawings[$0].roughLines.isEmpty ? .knob : .timelineRough
+        }
+    }
+    
+    var beginBaseTime: Beat {
+        didSet {
+            tracks { animationEditors[$2].beginBaseTime = beginBaseTime }
         }
     }
     
@@ -630,11 +727,26 @@ final class CutEditor: Layer, Respondable {
         return DoubleBeat(time / baseTimeInterval).cf * baseWidth
     }
     
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    
+    func updateLayout() {
+        let sp = Layout.smallPadding
+        nameLabel.frame.origin = CGPoint(x: sp, y: bounds.height - nameLabel.frame.height - sp)
+        clipEditor.frame = CGRect(x: 0, y: 0, width: frame.width, height: nameLabel.frame.minY)
+        updateChildren()
+    }
+    func updateIndex(_ i: Int) {
+        nameLabel.localization = Localization(english: "Cut\(i)", japanese: "カット\(i)")
+    }
     func updateChildren() {
         guard let index = animationEditors.index(of: editAnimationEditor) else {
             return
         }
-        let midY = frame.height / 2
+        let midY = clipEditor.frame.height / 2
         var y = midY - editAnimationEditor.frame.height / 2
         editAnimationEditor.frame.origin = CGPoint(x: 0, y: y)
         for i in (0 ..< index).reversed() {
@@ -650,63 +762,59 @@ final class CutEditor: Layer, Respondable {
         }
     }
     func updateWithDuration() {
-        frame.size.width = x(withTime: cutItem.cut.duration)
+        frame.size.width = x(withTime: cut.duration)
         animationEditors.forEach { $0.frame.size.width = frame.width }
-    }
-    func updateWithCutTime() {
-        tracks { animationEditors[$2].beginBaseTime = cutItem.time }
+        speechAnimationEditor.frame.size.width = frame.width
     }
     func updateIfChangedEditTrack() {
-        editAnimationEditor.animation = cutItem.cut.editNode.editTrack.animation
+        editAnimationEditor.animation = cut.editNode.editTrack.animation
         updateChildren()
     }
-    
     func updateWithTime() {
         tracks { animationEditors[$2].updateKeyframeIndex(with: $1.animation) }
     }
     
     var editNodeAndTrack: Cut.NodeAndTrack {
         get {
-            return cutItem.cut.editNodeAndTrack
+            return cut.editNodeAndTrack
         }
         set {
-            cutItem.cut.editNodeAndTrack = newValue
-            editAnimationEditor = animationEditors[cutItem.cut.editNodeAndTrackIndex]
+            cut.editNodeAndTrack = newValue
+            editAnimationEditor = animationEditors[cut.editNodeAndTrackIndex]
         }
     }
     
     func insert(_ node: Node, at index: Int, _ animationEditors: [AnimationEditor], parent: Node) {
         parent.children.insert(node, at: index)
-        let nodeAndTrackIndex = cutItem.cut.nodeAndTrackIndex(with: Cut.NodeAndTrack(node: node,
-                                                                                     trackIndex: 0))
+        let nodeAndTrackIndex = cut.nodeAndTrackIndex(with: Cut.NodeAndTrack(node: node,
+                                                                             trackIndex: 0))
         self.animationEditors.insert(contentsOf: animationEditors, at: nodeAndTrackIndex)
-        var children = self.children
+        var children = self.clipEditor.children
         children.insert(contentsOf: animationEditors as [Layer], at: nodeAndTrackIndex)
         replace(children: children)
         updateChildren()
     }
     func remove(at index: Int, _ animationEditors: [AnimationEditor], parent: Node) {
         let node = parent.children[index]
-        let animationIndex = cutItem.cut.nodeAndTrackIndex(with: Cut.NodeAndTrack(node: node,
-                                                                                  trackIndex: 0))
+        let animationIndex = cut.nodeAndTrackIndex(with: Cut.NodeAndTrack(node: node, trackIndex: 0))
         let maxAnimationIndex = animationIndex + animationEditors.count
         parent.children.remove(at: index)
         self.animationEditors.removeSubrange(animationIndex..<maxAnimationIndex)
-        var children = self.children
+        var children = self.clipEditor.children
         children.removeSubrange(animationIndex..<maxAnimationIndex)
         replace(children: children)
         updateChildren()
     }
     func insert(_ track: NodeTrack, _ animationEditor: AnimationEditor,
                 in nodeAndTrack: Cut.NodeAndTrack) {
-        let i = cutItem.cut.nodeAndTrackIndex(with: nodeAndTrack)
+        let i = cut.nodeAndTrackIndex(with: nodeAndTrack)
         nodeAndTrack.node.tracks.insert(track, at: nodeAndTrack.trackIndex)
         animationEditors.insert(animationEditor, at: i)
         append(child: animationEditor)
         updateChildren()
     }
     func removeTrack(at nodeAndTrack: Cut.NodeAndTrack) {
-        let i = cutItem.cut.nodeAndTrackIndex(with: nodeAndTrack)
+        let i = cut.nodeAndTrackIndex(with: nodeAndTrack)
         nodeAndTrack.node.tracks.remove(at: nodeAndTrack.trackIndex)
         animationEditors[i].removeFromParent()
         animationEditors.remove(at: i)
@@ -720,7 +828,7 @@ final class CutEditor: Layer, Respondable {
         let node = oldParent.children[oldIndex]
         let moveAnimationEditors = self.animationEditors(with: node)
         let oldNodeAndTrack = Cut.NodeAndTrack(node: node, trackIndex: 0)
-        let oldMaxAnimationIndex = cutItem.cut.nodeAndTrackIndex(with: oldNodeAndTrack)
+        let oldMaxAnimationIndex = cut.nodeAndTrackIndex(with: oldNodeAndTrack)
         let oldAnimationIndex = oldMaxAnimationIndex - (moveAnimationEditors.count - 1)
         
         var animationEditors = self.animationEditors
@@ -731,11 +839,11 @@ final class CutEditor: Layer, Respondable {
         parent.children.insert(node, at: index)
         
         let nodeAndTrack = Cut.NodeAndTrack(node: node, trackIndex: 0)
-        let newMaxAnimationIndex = cutItem.cut.nodeAndTrackIndex(with: nodeAndTrack)
+        let newMaxAnimationIndex = cut.nodeAndTrackIndex(with: nodeAndTrack)
         let newAnimationIndex = newMaxAnimationIndex - (moveAnimationEditors.count - 1)
         animationEditors.insert(contentsOf: moveAnimationEditors, at: newAnimationIndex)
         self.animationEditors = animationEditors
-        editAnimationEditor = animationEditors[cutItem.cut.editNodeAndTrackIndex]
+        editAnimationEditor = animationEditors[cut.editNodeAndTrackIndex]
     }
     func moveTrack(from oldIndex: Int, to index: Int, in node: Node) {
         let editTrack = node.tracks[oldIndex]
@@ -744,7 +852,6 @@ final class CutEditor: Layer, Respondable {
         tracks.insert(editTrack, at: index)
         node.tracks = tracks
         
-        let cut = cutItem.cut
         let oldAnimationIndex = cut.nodeAndTrackIndex(with: Cut.NodeAndTrack(node: node,
                                                                              trackIndex: oldIndex))
         let newAnimationIndex = cut.nodeAndTrackIndex(with: Cut.NodeAndTrack(node: node,
@@ -754,7 +861,7 @@ final class CutEditor: Layer, Respondable {
         animationEditors.remove(at: oldAnimationIndex)
         animationEditors.insert(editAnimationEditor, at: newAnimationIndex)
         self.animationEditors = animationEditors
-        self.editAnimationEditor = animationEditors[cutItem.cut.editNodeAndTrackIndex]
+        self.editAnimationEditor = animationEditors[cut.editNodeAndTrackIndex]
     }
     
     var disabledRegisterUndo = true
@@ -763,14 +870,14 @@ final class CutEditor: Layer, Respondable {
     
     var removeTrackHandler: ((CutEditor, Int, Node) -> ())?
     func removeTrack() {
-        let node = cutItem.cut.editNode
+        let node = cut.editNode
         if node.tracks.count > 1 {
             removeTrackHandler?(self, node.editTrackIndex, node)
         }
     }
     
     func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [cutItem.cut.copied])
+        return CopiedObject(objects: [cut.copied])
     }
     
     var pasteHandler: ((CutEditor, CopiedObject) -> (Bool))?
@@ -820,7 +927,7 @@ final class CutEditor: Layer, Respondable {
             scrollObject.deltaScrollY = 0
             let editNodeAndTrack = self.editNodeAndTrack
             scrollObject.oldNodeAndTrack = editNodeAndTrack
-            scrollObject.oldNodeAndTrackIndex = cutItem.cut.nodeAndTrackIndex(with: editNodeAndTrack)
+            scrollObject.oldNodeAndTrackIndex = cut.nodeAndTrackIndex(with: editNodeAndTrack)
             scrollHandler?(ScrollBinding(cutEditor: self,
                                          nodeAndTrack: editNodeAndTrack,
                                          oldNodeAndTrack: editNodeAndTrack,
@@ -830,13 +937,13 @@ final class CutEditor: Layer, Respondable {
                 return
             }
             scrollObject.deltaScrollY += event.scrollDeltaPoint.y
-            let maxIndex = cutItem.cut.maxNodeAndTrackIndex
+            let maxIndex = cut.maxNodeAndTrackIndex
             let i = (scrollObject.oldNodeAndTrackIndex - Int(scrollObject.deltaScrollY / 10))
                 .clip(min: 0, max: maxIndex)
             if i != scrollObject.nodeAndTrackIndex {
                 isUseUpdateChildren = false
                 scrollObject.nodeAndTrackIndex = i
-                editNodeAndTrack = cutItem.cut.nodeAndTrack(atNodeAndTrackIndex: i)
+                editNodeAndTrack = cut.nodeAndTrack(atNodeAndTrackIndex: i)
                 scrollHandler?(ScrollBinding(cutEditor: self,
                                              nodeAndTrack: editNodeAndTrack,
                                              oldNodeAndTrack: oldEditNodeAndTrack,
@@ -848,11 +955,11 @@ final class CutEditor: Layer, Respondable {
                 return
             }
             scrollObject.deltaScrollY += event.scrollDeltaPoint.y
-            let maxIndex = cutItem.cut.maxNodeAndTrackIndex
+            let maxIndex = cut.maxNodeAndTrackIndex
             let i = (scrollObject.oldNodeAndTrackIndex - Int(scrollObject.deltaScrollY / 10))
                 .clip(min: 0, max: maxIndex)
             isUseUpdateChildren = false
-            editNodeAndTrack = cutItem.cut.nodeAndTrack(atNodeAndTrackIndex: i)
+            editNodeAndTrack = cut.nodeAndTrack(atNodeAndTrackIndex: i)
             scrollHandler?(ScrollBinding(cutEditor: self,
                                          nodeAndTrack: editNodeAndTrack,
                                          oldNodeAndTrack: oldEditNodeAndTrack,

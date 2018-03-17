@@ -372,6 +372,7 @@ class PathLayer: Layer {
         caLayer.actions = actions
         caShapeLayer = caLayer
         super.init(caLayer)
+        caLayer.lineJoin = kCALineJoinBevel
         caLayer.fillColor = nil
         caLayer.lineWidth = 0
         caLayer.strokeColor = lineColor?.cgColor
