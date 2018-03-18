@@ -247,7 +247,7 @@ final class Node: NSObject, NSCoding {
     var editTrack: NodeTrack {
         return tracks[editTrackIndex]
     }
-    var selectionTrackIndexes = [Int]()
+    var selectedTrackIndexes = [Int]()
     
     struct CellRemoveManager {
         let trackAndCellItems: [(track: NodeTrack, cellItems: [CellItem])]
@@ -387,7 +387,7 @@ final class Node: NSObject, NSCoding {
     private enum CodingKeys: String, CodingKey {
         case
         name, key, children, isHidden, rootCell, transform, wiggle, wigglePhase,
-        material, tracks, editTrackIndex, selectionTrackIndexes, time
+        material, tracks, editTrackIndex, selectedTrackIndexes, time
     }
     init?(coder: NSCoder) {
         name = coder.decodeObject(forKey: CodingKeys.name.rawValue) as? String ?? ""
@@ -405,7 +405,7 @@ final class Node: NSObject, NSCoding {
         material = coder.decodeObject(forKey: CodingKeys.material.rawValue) as? Material ?? Material()
         tracks = coder.decodeObject(forKey: CodingKeys.tracks.rawValue) as? [NodeTrack] ?? []
         editTrackIndex = coder.decodeInteger(forKey: CodingKeys.editTrackIndex.rawValue)
-        selectionTrackIndexes = coder.decodeObject(forKey: CodingKeys.selectionTrackIndexes.rawValue)
+        selectedTrackIndexes = coder.decodeObject(forKey: CodingKeys.selectedTrackIndexes.rawValue)
             as? [Int] ?? []
         time = coder.decodeDecodable(Beat.self, forKey: CodingKeys.time.rawValue) ?? 0
         super.init()
@@ -423,7 +423,7 @@ final class Node: NSObject, NSCoding {
         coder.encode(material, forKey: CodingKeys.material.rawValue)
         coder.encode(tracks, forKey: CodingKeys.tracks.rawValue)
         coder.encode(editTrackIndex, forKey: CodingKeys.editTrackIndex.rawValue)
-        coder.encode(selectionTrackIndexes, forKey: CodingKeys.selectionTrackIndexes.rawValue)
+        coder.encode(selectedTrackIndexes, forKey: CodingKeys.selectedTrackIndexes.rawValue)
         coder.encodeEncodable(time, forKey: CodingKeys.time.rawValue)
     }
     
@@ -435,19 +435,19 @@ final class Node: NSObject, NSCoding {
         case none, indicated, selected
     }
     func indicatedCellsTuple(with  point: CGPoint, reciprocalScale: CGFloat
-        ) -> (cellItems: [CellItem], selectionLineIndexes: [Int], type: IndicatedCellType) {
+        ) -> (cellItems: [CellItem], selectedLineIndexes: [Int], type: IndicatedCellType) {
         
-        let selectionCellItems = editTrack.selectionCellItemsWithNoEmptyGeometry(at: point)
-        if !selectionCellItems.isEmpty {
-            return (sort(selectionCellItems), [], .selected)
+        let selectedCellItems = editTrack.selectedCellItemsWithNoEmptyGeometry(at: point)
+        if !selectedCellItems.isEmpty {
+            return (sort(selectedCellItems), [], .selected)
         } else if
             let cell = rootCell.at(point, reciprocalScale: reciprocalScale),
             let cellItem = editTrack.cellItem(with: cell) {
             return ([cellItem], [], .indicated)
         } else {
             let drawing = editTrack.drawingItem.drawing
-            let lineIndexes = drawing.isNearestSelectionLineIndexes(at: point) ?
-                drawing.selectionLineIndexes : []
+            let lineIndexes = drawing.isNearestSelectedLineIndexes(at: point) ?
+                drawing.selectedLineIndexes : []
             if lineIndexes.isEmpty {
                 return drawing.lines.count == 0 ?
                     ([], [], .none) : ([], Array(0 ..< drawing.lines.count), .indicated)
@@ -456,18 +456,18 @@ final class Node: NSObject, NSCoding {
             }
         }
     }
-    var allSelectionCellItemsWithNoEmptyGeometry: [CellItem] {
-        var selectionCellItems = [CellItem]()
-        tracks.forEach { selectionCellItems += $0.selectionCellItemsWithNoEmptyGeometry }
-        return selectionCellItems
+    var allSelectedCellItemsWithNoEmptyGeometry: [CellItem] {
+        var selectedCellItems = [CellItem]()
+        tracks.forEach { selectedCellItems += $0.selectedCellItemsWithNoEmptyGeometry }
+        return selectedCellItems
     }
-    func allSelectionCellItemsWithNoEmptyGeometry(at p: CGPoint) -> [CellItem] {
+    func allSelectedCellItemsWithNoEmptyGeometry(at p: CGPoint) -> [CellItem] {
         for track in tracks {
-            let cellItems = track.selectionCellItemsWithNoEmptyGeometry(at: p)
+            let cellItems = track.selectedCellItemsWithNoEmptyGeometry(at: p)
             if !cellItems.isEmpty {
-                var selectionCellItems = [CellItem]()
-                tracks.forEach { selectionCellItems += $0.selectionCellItemsWithNoEmptyGeometry }
-                return selectionCellItems
+                var selectedCellItems = [CellItem]()
+                tracks.forEach { selectedCellItems += $0.selectedCellItemsWithNoEmptyGeometry }
+                return selectedCellItems
             }
         }
         return []
@@ -484,17 +484,17 @@ final class Node: NSObject, NSCoding {
         if !ict.cellItems.isEmpty {
             return Selection(cellTuples: ict.cellItems.map { (track(with: $0), $0, $0.cell.geometry) },
                              drawingTuple: nil)
-        } else if !ict.selectionLineIndexes.isEmpty {
+        } else if !ict.selectedLineIndexes.isEmpty {
             let drawing = editTrack.drawingItem.drawing
             return Selection(cellTuples: [],
-                             drawingTuple: (drawing, ict.selectionLineIndexes, drawing.lines))
+                             drawingTuple: (drawing, ict.selectedLineIndexes, drawing.lines))
         } else {
             return Selection()
         }
     }
     
-    func selectionCells(with cell: Cell) -> [Cell] {
-        let cells = editTrack.selectionCellItemsWithNoEmptyGeometry.map { $0.cell }
+    func selectedCells(with cell: Cell) -> [Cell] {
+        let cells = editTrack.selectedCellItemsWithNoEmptyGeometry.map { $0.cell }
         if cells.contains(cell) {
             return cells
         } else {
@@ -910,9 +910,9 @@ final class Node: NSObject, NSCoding {
         
         drawStroke: do {
             if let strokeLine = strokeLine {
-                if viewType == .editSelection || viewType == .editDeselection {
+                if viewType == .editSelected || viewType == .editDeselected {
                     let geometry = Geometry(lines: [strokeLine])
-                    if viewType == .editSelection {
+                    if viewType == .editSelected {
                         geometry.drawSkin(lineColor: .selectBorder, subColor: .select,
                                           reciprocalScale: rScale, reciprocalAllScale: rAllScale,
                                           in: ctx)
@@ -942,20 +942,20 @@ final class Node: NSObject, NSCoding {
             
             for track in tracks {
                 if !track.isHidden {
-                    track.drawSelectionCells(
+                    track.drawSelectedCells(
                         opacity: 0.75 * (track != editTrack ? 0.5 : 1),
-                        color: .selection,
-                        subColor: .subSelection,
+                        color: .selected,
+                        subColor: .subSelected,
                         reciprocalScale: rScale,  in: ctx
                     )
                     
                     let drawing = track.drawingItem.drawing
-                    let selectionLineIndexes = drawing.selectionLineIndexes
-                    if !selectionLineIndexes.isEmpty {
-                        let imageBounds = selectionLineIndexes.reduce(CGRect()) {
+                    let selectedLineIndexes = drawing.selectedLineIndexes
+                    if !selectedLineIndexes.isEmpty {
+                        let imageBounds = selectedLineIndexes.reduce(CGRect()) {
                             $0.unionNoEmpty(drawing.lines[$1].imageBounds)
                         }
-                        ctx.setStrokeColor(Color.selection.with(alpha: 0.8).cgColor)
+                        ctx.setStrokeColor(Color.selected.with(alpha: 0.8).cgColor)
                         ctx.setLineWidth(rScale)
                         ctx.stroke(imageBounds)
                     }
@@ -995,9 +995,9 @@ final class Node: NSObject, NSCoding {
                     let indicatedCellItem = edit.indicatedCellItem,
                     editTrack.cellItems.contains(indicatedCellItem) {
                     
-                    if editTrack.selectionCellItems.contains(indicatedCellItem), let p = edit.point {
-                        editTrack.selectionCellItems.forEach {
-                            drawNearestCellLine(for: p, cell: $0.cell, lineColor: .selection,
+                    if editTrack.selectedCellItems.contains(indicatedCellItem), let p = edit.point {
+                        editTrack.selectedCellItems.forEach {
+                            drawNearestCellLine(for: p, cell: $0.cell, lineColor: .selected,
                                                 reciprocalAllScale: rAllScale, in: ctx)
                         }
                     }
@@ -1085,7 +1085,7 @@ final class Node: NSObject, NSCoding {
         func draw(withReciprocalAllScale reciprocalAllScale: CGFloat,
                   lineColor: Color, in ctx: CGContext) {
             for line in lines {
-                ctx.setFillColor((line === nearestLine ? lineColor : Color.subSelection).cgColor)
+                ctx.setFillColor((line === nearestLine ? lineColor : Color.subSelected).cgColor)
                 line.draw(size: 2 * reciprocalAllScale, in: ctx)
             }
             point.draw(radius: 3 * reciprocalAllScale, lineWidth: reciprocalAllScale,
@@ -1121,7 +1121,7 @@ final class Node: NSObject, NSCoding {
                         ctx.move(to: ps.p0)
                         ctx.addLine(to: ps.p1)
                         ctx.setLineWidth(1 * reciprocalAllScale)
-                        ctx.setStrokeColor(Color.selection.cgColor)
+                        ctx.setStrokeColor(Color.selected.cgColor)
                         ctx.strokePath()
                     }
                     if let np = np, ep.nearestLine.controls.count > 2 {
@@ -1132,10 +1132,10 @@ final class Node: NSObject, NSCoding {
                         ctx.addLine(to: p1)
                         ctx.addLine(to: capPoint)
                         ctx.setLineWidth(0.5 * reciprocalAllScale)
-                        ctx.setStrokeColor(Color.selection.cgColor)
+                        ctx.setStrokeColor(Color.selected.cgColor)
                         ctx.strokePath()
                         p1.draw(radius: 2 * reciprocalAllScale, lineWidth: reciprocalAllScale,
-                                inColor: Color.selection, outColor: Color.controlPointIn, in: ctx)
+                                inColor: Color.selected, outColor: Color.controlPointIn, in: ctx)
                     }
                 }
                 func drawSnap(with lines: [Line]) {
@@ -1181,7 +1181,7 @@ final class Node: NSObject, NSCoding {
             }
         }
         editPoint?.draw(withReciprocalAllScale: reciprocalAllScale,
-                        lineColor: .selection,
+                        lineColor: .selected,
                         in: ctx)
         
         var capPointDic = [CGPoint: Bool]()
@@ -1448,26 +1448,26 @@ extension Node: Referenceable {
  # Issue
  - ぼかし、透明度設定
  */
-final class NodeEditor: Layer, Respondable {
-    static let name = Localization(english: "Node Editor", japanese: "ノードエディタ")
+final class NodeView: Layer, Respondable {
+    static let name = Localization(english: "Node View", japanese: "ノード表示")
     
     var node = Node() {
         didSet {
-            isHiddenEditor.selectionIndex = node.isHidden ? 0 : 1
+            isHiddenView.selectedIndex = node.isHidden ? 0 : 1
         }
     }
     
     private let nameLabel = Label(text: Node.name, font: .bold)
-    private let isHiddenEditor = EnumEditor(names: [Localization(english: "Hidden",
+    private let isHiddenView = EnumView(names: [Localization(english: "Hidden",
                                                                  japanese: "表示なし"),
                                                     Localization(english: "Shown",
                                                                  japanese: "表示あり")],
                                             cationIndex: 0)
     override init() {
         super.init()
-        replace(children: [nameLabel, isHiddenEditor])
+        replace(children: [nameLabel, isHiddenView])
         
-        isHiddenEditor.binding = { [unowned self] in self.setIsHidden(with: $0) }
+        isHiddenView.binding = { [unowned self] in self.setIsHidden(with: $0) }
     }
     
     override var bounds: CGRect {
@@ -1478,31 +1478,31 @@ final class NodeEditor: Layer, Respondable {
     private func updateLayout() {
         let padding = Layout.basicPadding
         nameLabel.frame.origin = CGPoint(x: padding, y: padding * 2)
-        isHiddenEditor.frame = CGRect(x: nameLabel.frame.maxX + padding, y: padding,
+        isHiddenView.frame = CGRect(x: nameLabel.frame.maxX + padding, y: padding,
                                       width: bounds.width - nameLabel.frame.width - padding * 3,
                                       height: Layout.basicHeight)
     }
     func updateWithNode() {
-        isHiddenEditor.selectionIndex = node.isHidden ? 0 : 1
+        isHiddenView.selectedIndex = node.isHidden ? 0 : 1
     }
     
     var disabledRegisterUndo = true
     
     struct Binding {
-        let nodeEditor: NodeEditor, isHidden: Bool, oldIsHidden: Bool
+        let nodeView: NodeView, isHidden: Bool, oldIsHidden: Bool
         let inNode: Node, type: Action.SendType
     }
     var setIsHiddenHandler: ((Binding) -> ())?
     
     private var oldNode = Node()
     
-    private func setIsHidden(with binding: EnumEditor.Binding) {
+    private func setIsHidden(with binding: EnumView.Binding) {
         if binding.type == .begin {
             oldNode = node
         } else {
             node.isHidden = binding.index == 0
         }
-        setIsHiddenHandler?(Binding(nodeEditor: self, isHidden: binding.index == 0,
+        setIsHiddenHandler?(Binding(nodeView: self, isHidden: binding.index == 0,
                                     oldIsHidden: binding.oldIndex == 0, inNode: oldNode,
                                     type: binding.type))
     }
@@ -1518,20 +1518,20 @@ final class NodeEditor: Layer, Respondable {
  */
 final class NodeTreeManager {
     init() {
-        nodesEditor.instanceDescription = Localization(english: "Node Tree Editor",
-                                                       japanese: "ノードツリーエディタ")
-        nodesEditor.nameHandler = { [unowned self] in
+        nodesView.instanceDescription = Localization(english: "Node Tree View",
+                                                       japanese: "ノードツリー表示")
+        nodesView.nameHandler = { [unowned self] in
             return Localization(self.cut.node(atTreeNodeIndex: $0).name)
         }
-        nodesEditor.treeLevelHandler = { [unowned self] in
+        nodesView.treeLevelHandler = { [unowned self] in
             var i = 0
             self.cut.node(atTreeNodeIndex: $0).allParentsAndSelf { _ in i += 1 }
             return i - 2
         }
-        nodesEditor.copyHandler = { [unowned self] _, _ in
+        nodesView.copyHandler = { [unowned self] _, _ in
             return CopiedObject(objects: [self.cut.editNode.copied])
         }
-        nodesEditor.moveHandler = { [unowned self] in return self.moveNode(with: $1) }
+        nodesView.moveHandler = { [unowned self] in return self.moveNode(with: $1) }
     }
     
     var cut = Cut() {
@@ -1558,19 +1558,19 @@ final class NodeTreeManager {
         return Localization("\(index): ") + string
     }
     
-    let nodesEditor = ArrayEditor()
+    let nodesView = ArrayView()
 
     func updateWithNodes(isAlwaysUpdate: Bool = false) {
-        nodesEditor.set(selectedIndex: cut.editTreeNodeIndex, count: cut.maxTreeNodeIndex + 1)
+        nodesView.set(selectedIndex: cut.editTreeNodeIndex, count: cut.maxTreeNodeIndex + 1)
         if isAlwaysUpdate {
-            nodesEditor.updateLayout()
+            nodesView.updateLayout()
         }
     }
     
     var disabledRegisterUndo = true
     
     struct NodesBinding {
-        let nodeTreeEditor: NodeTreeManager
+        let nodeTreeView: NodeTreeManager
         let node: Node, index: Int, oldIndex: Int, beginIndex: Int
         let toNode: Node, fromNode: Node, beginNode: Node
         let type: Action.SendType
@@ -1585,7 +1585,7 @@ final class NodeTreeManager {
     private var oldParent = Node(), beginParent = Node()
     private var maxMovableNodeIndex = 0, beginTreeNode: TreeNode<Node>?
     func moveNode(with event: DragEvent) -> Bool {
-        let p = nodesEditor.point(from: event)
+        let p = nodesView.point(from: event)
         switch event.sendType {
         case .begin:
             let beginTreeNode = cut.rootNode.treeNode
@@ -1600,7 +1600,7 @@ final class NodeTreeManager {
             maxMovableNodeIndex = beginTreeNode.movableCount - 1
             
             oldP = p
-            setNodesHandler?(NodesBinding(nodeTreeEditor: self,
+            setNodesHandler?(NodesBinding(nodeTreeView: self,
                                           node: cut.editNode,
                                           index: oldIndex, oldIndex: oldIndex, beginIndex: beginIndex,
                                           toNode: oldParent, fromNode: oldParent, beginNode: oldParent,
@@ -1617,7 +1617,7 @@ final class NodeTreeManager {
                 || (event.sendType == .end && ini != beginMovableNodeIndex) {
                 
                 let parent = tuple.parent.object
-                setNodesHandler?(NodesBinding(nodeTreeEditor: self,
+                setNodesHandler?(NodesBinding(nodeTreeView: self,
                                               node: cut.editNode,
                                               index: tuple.insertIndex, oldIndex: oldIndex,
                                               beginIndex: beginIndex,
@@ -1637,22 +1637,22 @@ final class NodeTreeManager {
 }
 
 final class TracksManager {
-    let tracksEditor = ArrayEditor()
+    let tracksView = ArrayView()
     
     init() {
-        tracksEditor.instanceDescription = Localization(english: "Track Editor",
-                                                        japanese: "トラックエディタ")
-        tracksEditor.nameHandler = { [unowned self] in
+        tracksView.instanceDescription = Localization(english: "Track View",
+                                                        japanese: "トラック表示")
+        tracksView.nameHandler = { [unowned self] in
             let tracks = self.node.tracks
             guard $0 < tracks.count else {
                 return Localization()
             }
             return Localization(tracks[$0].name)
         }
-        tracksEditor.copyHandler = { [unowned self] _, _ in
+        tracksView.copyHandler = { [unowned self] _, _ in
             return CopiedObject(objects: [self.node.editTrack.copied])
         }
-        tracksEditor.moveHandler = { [unowned self] in return self.moveTrack(with: $1) }
+        tracksView.moveHandler = { [unowned self] in return self.moveTrack(with: $1) }
     }
     
     var node = Node() {
@@ -1664,9 +1664,9 @@ final class TracksManager {
     }
     
     func updateWithTracks(isAlwaysUpdate: Bool = false) {
-        tracksEditor.set(selectedIndex: node.editTrackIndex, count: node.tracks.count)
+        tracksView.set(selectedIndex: node.editTrackIndex, count: node.tracks.count)
         if isAlwaysUpdate {
-            tracksEditor.updateLayout()
+            tracksView.updateLayout()
         }
     }
     
@@ -1684,7 +1684,7 @@ final class TracksManager {
     private weak var editTrack: NodeTrack?
     private var oldInNode = Node(), oldTracks = [NodeTrack]()
     func moveTrack(with event: DragEvent) -> Bool {
-        let p = tracksEditor.point(from: event)
+        let p = tracksView.point(from: event)
         switch event.sendType {
         case .begin:
             oldInNode = node

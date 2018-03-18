@@ -53,9 +53,9 @@ extension String: ResponderExpression {
  # Issue
  - モードレス文字入力
  */
-typealias Label = TextEditor
-final class TextEditor: DrawLayer, Respondable, Localizable {
-    static let name = Localization(english: "Text Editor", japanese: "テキストエディタ")
+typealias Label = TextView
+final class TextView: DrawLayer, Respondable, Localizable {
+    static let name = Localization(english: "Text View", japanese: "テキスト表示")
     static let feature = Localization(english: "Run (Verb sentence only): Click",
                                       japanese: "実行 (動詞文のみ): クリック")
     
@@ -244,7 +244,7 @@ final class TextEditor: DrawLayer, Respondable, Localizable {
     }
     
     struct Binding {
-        let editor: TextEditor, text: String, oldText: String, type: Action.SendType
+        let view: TextView, text: String, oldText: String, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
     
@@ -269,9 +269,9 @@ final class TextEditor: DrawLayer, Respondable, Localizable {
         for object in copiedObject.objects {
             if let string = object as? String {
                 let oldText = string
-                binding?(Binding(editor: self, text: oldText, oldText: oldText, type: .begin))
+                binding?(Binding(view: self, text: oldText, oldText: oldText, type: .begin))
                 self.string = string
-                binding?(Binding(editor: self, text: string, oldText: oldText, type: .end))
+                binding?(Binding(view: self, text: string, oldText: oldText, type: .end))
                 
                 draw()
             }
@@ -377,9 +377,9 @@ final class TextEditor: DrawLayer, Respondable, Localizable {
         }
         
         let oldText = string
-        binding?(Binding(editor: self, text: oldText, oldText: oldText, type: .begin))
+        binding?(Binding(view: self, text: oldText, oldText: oldText, type: .begin))
         backingStore.deleteCharacters(in: range)
-        binding?(Binding(editor: self, text: string, oldText: oldText, type: .end))
+        binding?(Binding(view: self, text: string, oldText: oldText, type: .end))
         
         self.selectedRange = NSRange(location: range.location, length: 0)
         TextInputContext.invalidateCharacterCoordinates()

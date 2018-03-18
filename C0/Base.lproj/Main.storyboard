@@ -25,7 +25,7 @@
                                         <menuItem title="Readme" id="RQf-Hb-eTv">
                                             <modifierMask key="keyEquivalentModifierMask"/>
                                             <connections>
-                                                <action selector="readme:" target="Ady-hI-5gd" id="FiF-7x-BNp"/>
+                                                <action selector="readme:" target="Voe-Tx-rLC" id="v50-Cq-kTW"/>
                                             </connections>
                                         </menuItem>
                                         <menuItem isSeparatorItem="YES" id="VOq-y0-SEH"/>

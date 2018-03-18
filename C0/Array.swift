@@ -224,8 +224,8 @@ extension Array {
  # Issue
  - ツリー操作が複雑
  */
-final class ArrayEditor: Layer, Respondable {
-    static let name = Localization(english: "Array Editor", japanese: "配列エディタ")
+final class ArrayView: Layer, Respondable {
+    static let name = Localization(english: "Array View", japanese: "配列表示")
     
     private let labelLineLayer: PathLayer = {
         let lineLayer = PathLayer()
@@ -351,24 +351,24 @@ final class ArrayEditor: Layer, Respondable {
             + treeLabels as [Layer] + labels as [Layer])
     }
     
-    var deleteHandler: ((ArrayEditor, KeyInputEvent) -> (Bool))?
+    var deleteHandler: ((ArrayView, KeyInputEvent) -> (Bool))?
     func delete(with event: KeyInputEvent) -> Bool {
         return deleteHandler?(self, event) ?? false
     }
-    var copyHandler: ((ArrayEditor, KeyInputEvent) -> (CopiedObject))?
+    var copyHandler: ((ArrayView, KeyInputEvent) -> (CopiedObject))?
     func copy(with event: KeyInputEvent) -> CopiedObject? {
         return copyHandler?(self, event)
     }
-    var pasteHandler: ((ArrayEditor, CopiedObject, KeyInputEvent) -> (Bool))?
+    var pasteHandler: ((ArrayView, CopiedObject, KeyInputEvent) -> (Bool))?
     func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
         return pasteHandler?(self, copiedObject, event) ?? false
     }
-    var newHandler: ((ArrayEditor, KeyInputEvent) -> (Bool))?
+    var newHandler: ((ArrayView, KeyInputEvent) -> (Bool))?
     func new(with event: KeyInputEvent) -> Bool {
         return newHandler?(self, event) ?? false
     }
     
-    var moveHandler: ((ArrayEditor, DragEvent) -> (Bool))?
+    var moveHandler: ((ArrayView, DragEvent) -> (Bool))?
     func move(with event: DragEvent) -> Bool {
         return moveHandler?(self, event) ?? false
     }

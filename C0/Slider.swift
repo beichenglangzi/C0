@@ -31,7 +31,7 @@ protocol Slidable {
 
 /**
  # Issue
- - 数を包括するNumberオブジェクトを設計、NumberEditorおよびRelativeNumberEditorに変更
+ - 数を包括するNumberオブジェクトを設計、NumberViewおよびRelativeNumberViewに変更
  */
 final class Slider: Layer, Respondable, Slidable {
     static let name = Localization(english: "Slider", japanese: "スライダー")

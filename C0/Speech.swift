@@ -90,8 +90,8 @@ final class SpeechTrack: NSObject, Track, NSCoding {
         animation.keyframes = keyframes
         animation.duration = duration
     }
-    func set(selectionkeyframeIndexes: [Int]) {
-        animation.selectionKeyframeIndexes = selectionkeyframeIndexes
+    func set(selectedkeyframeIndexes: [Int]) {
+        animation.selectedKeyframeIndexes = selectedkeyframeIndexes
     }
     
     private func check(keyCount count: Int) {
@@ -279,8 +279,8 @@ extension Speech: Referenceable {
     static let name = Localization(english: "Speech", japanese: "台詞")
 }
 
-final class SpeechEditor: Layer, Respondable {
-    static let name = Localization(english: "Speech Editor", japanese: "台詞エディタ")
+final class SpeechView: Layer, Respondable {
+    static let name = Localization(english: "Speech View", japanese: "台詞表示")
     
     let selectedLabel = Label()
     var otherLabels = [Label]()

@@ -326,7 +326,7 @@ final class RendererManager {
                 isLeftAlignment: true,
                 runHandler: { [unowned self] in
                     self.exportMovie(message: $0.label.string,
-                                     size: size2, isSelectionCutOnly: false)
+                                     size: size2, isSelectedCutOnly: false)
                     return true
                 }
             ),
@@ -338,7 +338,7 @@ final class RendererManager {
                 isLeftAlignment: true,
                 runHandler: { [unowned self] in
                     self.exportMovie(message: $0.label.string,
-                                     size: size720p, isSelectionCutOnly: false)
+                                     size: size720p, isSelectedCutOnly: false)
                     return true
                 }
             ),
@@ -350,7 +350,7 @@ final class RendererManager {
                 isLeftAlignment: true,
                 runHandler: { [unowned self] in
                     self.exportMovie(message: $0.label.string,
-                                     size: size1080p, isSelectionCutOnly: false)
+                                     size: size1080p, isSelectedCutOnly: false)
                     return true
                 }
             ),
@@ -362,7 +362,7 @@ final class RendererManager {
                 isLeftAlignment: true,
                 runHandler: { [unowned self] in
                     self.exportMovie(message: $0.label.string,
-                                     size: size2160p, isSelectionCutOnly: false)
+                                     size: size2160p, isSelectedCutOnly: false)
                     return true
                 }
             ),
@@ -374,7 +374,7 @@ final class RendererManager {
                 isLeftAlignment: true,
                 runHandler: { [unowned self] in
                     self.exportMovie(message: $0.label.string,
-                                     size: size2, isSelectionCutOnly: true)
+                                     size: size2, isSelectedCutOnly: true)
                     return true
                 }
             ),
@@ -386,7 +386,7 @@ final class RendererManager {
                 isLeftAlignment: true,
                 runHandler: { [unowned self] in
                     self.exportMovie(message: $0.label.string,
-                                     size: size720p, isSelectionCutOnly: true)
+                                     size: size720p, isSelectedCutOnly: true)
                     return true
                 }
             ),
@@ -398,7 +398,7 @@ final class RendererManager {
                 isLeftAlignment: true,
                 runHandler: { [unowned self] in
                     self.exportMovie(message: $0.label.string,
-                                     size: size1080p, isSelectionCutOnly: true)
+                                     size: size1080p, isSelectedCutOnly: true)
                     return true
                 }
             ),
@@ -410,7 +410,7 @@ final class RendererManager {
                 isLeftAlignment: true,
                 runHandler: { [unowned self] in
                     self.exportMovie(message: $0.label.string,
-                                     size: size2160p, isSelectionCutOnly: true)
+                                     size: size2160p, isSelectedCutOnly: true)
                     return true
                 }
             ),
@@ -504,7 +504,7 @@ final class RendererManager {
     
     func exportMovie(message: String?, name: String? = nil, size: CGSize,
                      fileType: AVFileType = .mp4, codec: String = AVVideoCodecH264,
-                     isSelectionCutOnly: Bool) {
+                     isSelectedCutOnly: Bool) {
         
         guard let utType = SceneMovieRenderer.UTTypeWithAVFileType(fileType) else {
             return

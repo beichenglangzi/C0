@@ -47,8 +47,8 @@ struct Color: Codable {
     static let selectBorder = Color(red: 0, green: 0.5, blue: 1, alpha: 0.5)
     static let deselect = Color(red: 0.9, green: 0.3, blue: 0, alpha: 0.3)
     static let deselectBorder = Color(red: 1, green: 0, blue: 0, alpha: 0.5)
-    static let selection = Color(red: 0.1, green: 0.7, blue: 1)
-    static let subSelection = Color(red: 0.8, green: 0.95, blue: 1)
+    static let selected = Color(red: 0.1, green: 0.7, blue: 1)
+    static let subSelected = Color(red: 0.8, green: 0.95, blue: 1)
     static let warning = rgbRed
     
     static let moveZ = Color(red: 1, green: 0, blue: 0)
@@ -466,8 +466,8 @@ extension CGColorSpace {
     }
 }
 
-final class ColorEditor: Layer, Respondable {
-    static let name = Localization(english: "Color Editor", japanese: "カラーエディタ")
+final class ColorView: Layer, Respondable {
+    static let name = Localization(english: "Color View", japanese: "カラー表示")
     static let feature = Localization(english: "Ring: Hue, Width: Saturation, Height: Luminance",
                                       japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
     
@@ -490,7 +490,7 @@ final class ColorEditor: Layer, Respondable {
     }
     let hKnob = Knob()
     
-    let slEditor = PointEditor()
+    let slView = PointView()
     let slColorLayer: GradientLayer = {
         let layer = GradientLayer()
         layer.gradient = Gradient(colors: [], locations: [],
@@ -517,10 +517,10 @@ final class ColorEditor: Layer, Respondable {
          description: Localization = Localization()) {
         
         if let slPadding = slPadding {
-            slEditor.padding = slPadding
+            slView.padding = slPadding
         }
         if let knobRadius = knobRadius {
-            slEditor.knob.radius = knobRadius
+            slView.knob.radius = knobRadius
             hKnob.radius = knobRadius
         }
         self.hLineWidth = hLineWidth
@@ -529,20 +529,20 @@ final class ColorEditor: Layer, Respondable {
         
         hLayer.append(child: hKnob)
         
-        slEditor.instanceDescription = Localization(english: "Width: Saturation, Height: Luminance",
+        slView.instanceDescription = Localization(english: "Width: Saturation, Height: Luminance",
                                                     japanese: "横: 彩度, 縦: 輝度")
-        slEditor.backgroundLayers = [slColorLayer, slBlackWhiteLayer]
+        slView.backgroundLayers = [slColorLayer, slBlackWhiteLayer]
         
         super.init()
         instanceDescription = description
         self.frame = frame
-        replace(children: [hLayer, hKnob, slEditor])
+        replace(children: [hLayer, hKnob, slView])
         updateLayout()
         
         hLayer.drawBlock = { [unowned self] ctx in
             self.hCircle.draw(in: ctx)
         }
-        slEditor.binding = { [unowned self] in self.setColor(with: $0) }
+        slView.binding = { [unowned self] in self.setColor(with: $0) }
     }
     
     override var bounds: CGRect {
@@ -558,11 +558,11 @@ final class ColorEditor: Layer, Respondable {
         let sr = r - hLineWidth - inPadding - outPadding
         let b2 = floor(sr * 0.82)
         let a2 = floor(sqrt(sr * sr - b2 * b2))
-        slEditor.frame = CGRect(x: bounds.size.width / 2 - a2,
+        slView.frame = CGRect(x: bounds.size.width / 2 - a2,
                                 y: bounds.size.height / 2 - b2,
                                 width: a2 * 2,
                                 height: b2 * 2)
-        let slInFrame = slEditor.bounds.inset(by: slEditor.padding)
+        let slInFrame = slView.bounds.inset(by: slView.padding)
         slColorLayer.frame = slInFrame
         slBlackWhiteLayer.frame = slInFrame
         
@@ -580,7 +580,7 @@ final class ColorEditor: Layer, Respondable {
         slBlackWhiteLayer.gradient?.locations = [0, y, y, 1]
         hKnob.position = CGPoint(x: hLayer.bounds.midX + r * cos(CGFloat(hueAngle)),
                                  y: hLayer.bounds.midY + r * sin(CGFloat(hueAngle)))
-        slEditor.point = CGPoint(x: color.saturation, y: color.lightness)
+        slView.point = CGPoint(x: color.saturation, y: color.lightness)
     }
     private func updateWithColorSpace() {
         slBlackWhiteLayer.gradient?.colors = [Color(white: 0, alpha: 1, colorSpace: color.colorSpace),
@@ -593,20 +593,20 @@ final class ColorEditor: Layer, Respondable {
     }
     
     struct Binding {
-        let colorEditor: ColorEditor, color: Color, oldColor: Color, type: Action.SendType
+        let colorView: ColorView, color: Color, oldColor: Color, type: Action.SendType
     }
     var setColorHandler: ((Binding) -> ())?
     
     var disabledRegisterUndo = false
     
-    private func setColor(with obj: PointEditor.Binding) {
+    private func setColor(with obj: PointView.Binding) {
         if obj.type == .begin {
             oldColor = color
-            setColorHandler?(Binding(colorEditor: self,
+            setColorHandler?(Binding(colorView: self,
                                            color: oldColor, oldColor: oldColor, type: .begin))
         } else {
             color = color.with(saturation: obj.point.x.d, lightness: obj.point.y.d)
-            setColorHandler?(Binding(colorEditor: self,
+            setColorHandler?(Binding(colorView: self,
                                            color: color, oldColor: oldColor, type: obj.type))
         }
     }
@@ -621,10 +621,10 @@ final class ColorEditor: Layer, Respondable {
                 guard color != oldColor else {
                     continue
                 }
-                setColorHandler?(Binding(colorEditor: self,
+                setColorHandler?(Binding(colorView: self,
                                                color: oldColor, oldColor: oldColor, type: .begin))
                 set(color, old: oldColor)
-                setColorHandler?(Binding(colorEditor: self,
+                setColorHandler?(Binding(colorView: self,
                                                color: color, oldColor: oldColor, type: .end))
                 return true
             }
@@ -636,10 +636,10 @@ final class ColorEditor: Layer, Respondable {
         guard color != oldColor else {
             return false
         }
-        setColorHandler?(Binding(colorEditor: self,
+        setColorHandler?(Binding(colorView: self,
                                        color: oldColor, oldColor: oldColor, type: .begin))
         set(color, old: oldColor)
-        setColorHandler?(Binding(colorEditor: self,
+        setColorHandler?(Binding(colorView: self,
                                        color: color, oldColor: oldColor, type: .end))
         return true
     }
@@ -655,14 +655,14 @@ final class ColorEditor: Layer, Respondable {
             hKnob.fillColor = .editing
             oldColor = color
             oldPoint = p
-            setColorHandler?(Binding(colorEditor: self,
+            setColorHandler?(Binding(colorView: self,
                                            color: oldColor, oldColor: oldColor, type: .begin))
             color = self.color(withHPosition: p)
-            setColorHandler?(Binding(colorEditor: self,
+            setColorHandler?(Binding(colorView: self,
                                            color: color, oldColor: oldColor, type: .sending))
         case .sending:
             color = self.color(withHPosition: isSlow ? p.mid(oldPoint) : p)
-            setColorHandler?(Binding(colorEditor: self,
+            setColorHandler?(Binding(colorView: self,
                                            color: color, oldColor: oldColor, type: .sending))
         case .end:
             color = self.color(withHPosition:isSlow ? p.mid(oldPoint) : p)
@@ -671,7 +671,7 @@ final class ColorEditor: Layer, Respondable {
                     $0.set(oldColor, old: color)
                 }
             }
-            setColorHandler?(Binding(colorEditor: self,
+            setColorHandler?(Binding(colorView: self,
                                            color: color, oldColor: oldColor, type: .end))
             hKnob.fillColor = .knob
         }
@@ -684,10 +684,10 @@ final class ColorEditor: Layer, Respondable {
     
     private func set(_ color: Color, old oldColor: Color) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldColor, old: color) }
-        setColorHandler?(Binding(colorEditor: self,
+        setColorHandler?(Binding(colorView: self,
                                        color: oldColor, oldColor: oldColor, type: .begin))
         self.color = color
-        setColorHandler?(Binding(colorEditor: self,
+        setColorHandler?(Binding(colorView: self,
                                        color: color, oldColor: oldColor, type: .end))
     }
 }

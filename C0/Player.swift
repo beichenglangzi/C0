@@ -228,8 +228,8 @@ final class Player: Layer, Respondable {
     }
 }
 
-final class PlayerEditor: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Player Editor", japanese: "プレイヤーエディタ")
+final class PlayerView: Layer, Respondable, Localizable {
+    static let name = Localization(english: "Player View", japanese: "プレイヤー表示")
     
     var locale = Locale.current {
         didSet {
@@ -279,7 +279,7 @@ final class PlayerEditor: Layer, Respondable, Localizable {
         let sliderWidth = x - playLabel.frame.maxX - padding
         slider.frame = CGRect(x: playLabel.frame.maxX + padding, y: sliderY,
                               width: sliderWidth, height: height)
-        slider.backgroundLayers = [PlayerEditor.sliderLayer(with: slider.bounds,
+        slider.backgroundLayers = [PlayerView.sliderLayer(with: slider.bounds,
                                                             padding: slider.padding)]
     }
     static func sliderLayer(with bounds: CGRect, padding: CGFloat) -> Layer {

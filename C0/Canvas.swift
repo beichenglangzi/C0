@@ -36,7 +36,7 @@ final class Canvas: DrawLayer, Respondable {
             player.updateChildren()
             cut = scene.editCut
             player.scene = scene
-            materialEditor.material = scene.editMaterial
+            materialView.material = scene.editMaterial
             updateScreenTransform()
             updateEditCellBindingLine()
         }
@@ -63,7 +63,7 @@ final class Canvas: DrawLayer, Respondable {
             self.draw(in: ctx)
         }
         player.endPlayHandler = { [unowned self] _ in self.isOpenedPlayer = false }
-        cellEditor.copyHandler = { [unowned self] _, _ in self.copyCell() }
+        cellView.copyHandler = { [unowned self] _, _ in self.copyCell() }
     }
     
     var cursor = Cursor.stroke
@@ -89,12 +89,12 @@ final class Canvas: DrawLayer, Respondable {
     }
     
     enum MaterialViewType {
-        case none, selection, preview
+        case none, selected, preview
     }
-    var materialEditorType = MaterialViewType.none {
+    var materialViewType = MaterialViewType.none {
         didSet {
             updateViewType()
-            editCellLineLayer.isHidden = materialEditorType == .preview
+            editCellLineLayer.isHidden = materialViewType == .preview
         }
     }
     
@@ -111,9 +111,9 @@ final class Canvas: DrawLayer, Respondable {
         }
     }
     private func updateViewType() {
-        if materialEditorType == .selection {
+        if materialViewType == .selected {
             viewType = .editMaterial
-        } else if materialEditorType == .preview {
+        } else if materialViewType == .preview {
             viewType = .changingMaterial
         } else {
             switch editQuasimode {
@@ -132,11 +132,11 @@ final class Canvas: DrawLayer, Respondable {
             case .transform:
                 viewType = .editTransform
             case .select:
-                viewType = .editSelection
+                viewType = .editSelected
             case .deselect:
-                viewType = .editDeselection
+                viewType = .editDeselected
             case .lassoErase:
-                viewType = .editDeselection
+                viewType = .editDeselected
             }
         }
     }
@@ -150,7 +150,7 @@ final class Canvas: DrawLayer, Respondable {
     func updateEditView(with p: CGPoint) {
         switch viewType {
         case .edit, .editMaterial, .changingMaterial,
-             .preview, .editSelection, .editDeselection:
+             .preview, .editSelected, .editDeselected:
             editZ = nil
             editPoint = nil
             editTransform = nil
@@ -174,7 +174,7 @@ final class Canvas: DrawLayer, Respondable {
         let cellsTuple = cut.editNode.indicatedCellsTuple(with: p,
                                                            reciprocalScale: scene.reciprocalScale)
         indicatedCellItem = cellsTuple.cellItems.first
-        if indicatedCellItem != nil && cut.editNode.editTrack.selectionCellItems.count > 1 {
+        if indicatedCellItem != nil && cut.editNode.editTrack.selectedCellItems.count > 1 {
             indicatedPoint = p
             setNeedsDisplay()
         }
@@ -436,7 +436,7 @@ final class Canvas: DrawLayer, Respondable {
         cut.draw(scene: scene, viewType: viewType, in: ctx)
         if viewType != .preview {
             let edit = Node.Edit(indicatedCellItem: indicatedCellItem,
-                                 editMaterial: materialEditor.material,
+                                 editMaterial: materialView.material,
                                  editZ: editZ, editPoint: editPoint,
                                  editTransform: editTransform, point: indicatedPoint)
             ctx.concatenate(scene.viewTransform.affineTransform)
@@ -466,15 +466,15 @@ final class Canvas: DrawLayer, Respondable {
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         switch ict.type {
         case .none:
-            let copySelectionLines = cut.editNode.editTrack.drawingItem.drawing.editLines
-            if !copySelectionLines.isEmpty {
-                let drawing = Drawing(lines: copySelectionLines)
+            let copySelectedLines = cut.editNode.editTrack.drawingItem.drawing.editLines
+            if !copySelectedLines.isEmpty {
+                let drawing = Drawing(lines: copySelectedLines)
                 return CopiedObject(objects: [drawing.copied])
             }
         case .indicated, .selected:
-            if !ict.selectionLineIndexes.isEmpty {
-                let copySelectionLines = cut.editNode.editTrack.drawingItem.drawing.editLines
-                let drawing = Drawing(lines: copySelectionLines)
+            if !ict.selectedLineIndexes.isEmpty {
+                let copySelectedLines = cut.editNode.editTrack.drawingItem.drawing.editLines
+                let drawing = Drawing(lines: copySelectedLines)
                 return CopiedObject(objects: [drawing.copied])
             } else {
                 let cell = cut.editNode.rootCell.intersection(ict.cellItems.map { $0.cell },
@@ -489,7 +489,7 @@ final class Canvas: DrawLayer, Respondable {
         guard let editCell = editCell else {
             return nil
         }
-        let cells = cut.editNode.selectionCells(with: editCell)
+        let cells = cut.editNode.selectedCells(with: editCell)
         let cell = cut.editNode.rootCell.intersection(cells, isNewID: true)
         return CopiedObject(objects: [cell.copied])
     }
@@ -580,8 +580,8 @@ final class Canvas: DrawLayer, Respondable {
         let index = cellIndex(withTrackIndex: inNode.editTrackIndex, in: cut.editNode.rootCell)
         insertCells(newCellItems, rootCell: copyRootCell,
                     at: index, in: inNode.rootCell, inNode.editTrack, inNode, time: time)
-        setSelectionCellItems(inNode.editTrack.selectionCellItems + newCellItems,
-                              oldCellItems: inNode.editTrack.selectionCellItems,
+        setSelectedCellItems(inNode.editTrack.selectedCellItems + newCellItems,
+                              oldCellItems: inNode.editTrack.selectedCellItems,
                               in: inNode.editTrack, time: time)
         return true
     }
@@ -617,8 +617,8 @@ final class Canvas: DrawLayer, Respondable {
             let lineIndexes = (0 ..< copyDrawing.lines.count).map { $0 + oldCount }
             set(drawing.lines + copyDrawing.lines,
                      old: drawing.lines, in: drawing, inNode, time: time)
-            setSelectionLineIndexes(drawing.selectionLineIndexes + lineIndexes,
-                                    oldLineIndexes: drawing.selectionLineIndexes,
+            setSelectedLineIndexes(drawing.selectedLineIndexes + lineIndexes,
+                                    oldLineIndexes: drawing.selectedLineIndexes,
                                     in: drawing, inNode, time: time)
         }
         return true
@@ -629,7 +629,7 @@ final class Canvas: DrawLayer, Respondable {
         if deleteCells(for: point) {
             return true
         }
-        if deleteSelectionDrawingLines(for: point) {
+        if deleteSelectedDrawingLines(for: point) {
             return true
         }
         if deleteDrawingLines(for: point) {
@@ -637,14 +637,14 @@ final class Canvas: DrawLayer, Respondable {
         }
         return false
     }
-    func deleteSelectionDrawingLines(for p: CGPoint) -> Bool {
+    func deleteSelectedDrawingLines(for p: CGPoint) -> Bool {
         let inNode = cut.editNode
         let drawingItem = inNode.editTrack.drawingItem
-        guard drawingItem.drawing.isNearestSelectionLineIndexes(at: p) else {
+        guard drawingItem.drawing.isNearestSelectedLineIndexes(at: p) else {
             return false
         }
         let unseletionLines = drawingItem.drawing.uneditLines
-        setSelectionLineIndexes([], oldLineIndexes: drawingItem.drawing.selectionLineIndexes,
+        setSelectedLineIndexes([], oldLineIndexes: drawingItem.drawing.selectedLineIndexes,
                                 in: drawingItem.drawing, inNode, time: time)
         set(unseletionLines, old: drawingItem.drawing.lines,
                  in: drawingItem.drawing, inNode, time: time)
@@ -656,7 +656,7 @@ final class Canvas: DrawLayer, Respondable {
         guard !drawingItem.drawing.lines.isEmpty else {
             return false
         }
-        setSelectionLineIndexes([], oldLineIndexes: drawingItem.drawing.selectionLineIndexes,
+        setSelectedLineIndexes([], oldLineIndexes: drawingItem.drawing.selectedLineIndexes,
                                 in: drawingItem.drawing, inNode, time: time)
         set([], old: drawingItem.drawing.lines,
                  in: drawingItem.drawing, inNode, time: time)
@@ -669,7 +669,7 @@ final class Canvas: DrawLayer, Respondable {
         case .selected:
             var isChanged = false
             for track in inNode.tracks {
-                let removeSelectionCellItems = ict.cellItems.filter {
+                let removeSelectedCellItems = ict.cellItems.filter {
                     if !$0.cell.geometry.isEmpty {
                         set(Geometry(), old: $0.cell.geometry,
                             at: track.animation.editKeyframeIndex, in: $0, inNode, time: time)
@@ -681,8 +681,8 @@ final class Canvas: DrawLayer, Respondable {
                     }
                     return false
                 }
-                if !removeSelectionCellItems.isEmpty {
-                    removeCellItems(removeSelectionCellItems)
+                if !removeSelectedCellItems.isEmpty {
+                    removeCellItems(removeSelectedCellItems)
                 }
             }
             if isChanged {
@@ -716,11 +716,11 @@ final class Canvas: DrawLayer, Respondable {
             let cellRemoveManager = inNode.cellRemoveManager(with: cellItems[0])
             for trackAndCellItems in cellRemoveManager.trackAndCellItems {
                 let track = trackAndCellItems.track, cellItems = trackAndCellItems.cellItems
-                let removeSelectionCellItems
-                    = Array(Set(track.selectionCellItems).subtracting(cellItems))
-                if removeSelectionCellItems.count != track.selectionCellItems.count {
-                    setSelectionCellItems(removeSelectionCellItems,
-                                          oldCellItems: track.selectionCellItems,
+                let removeSelectedCellItems
+                    = Array(Set(track.selectedCellItems).subtracting(cellItems))
+                if removeSelectedCellItems.count != track.selectedCellItems.count {
+                    setSelectedCellItems(removeSelectedCellItems,
+                                          oldCellItems: track.selectedCellItems,
                                           in: track, time: time)
                 }
             }
@@ -773,12 +773,12 @@ final class Canvas: DrawLayer, Respondable {
         let track = inNode.editTrack
         let drawing = track.drawingItem.drawing
         let lineIndexes = Array(0 ..< drawing.lines.count)
-        if Set(drawing.selectionLineIndexes) != Set(lineIndexes) {
-            setSelectionLineIndexes(lineIndexes, oldLineIndexes: drawing.selectionLineIndexes,
+        if Set(drawing.selectedLineIndexes) != Set(lineIndexes) {
+            setSelectedLineIndexes(lineIndexes, oldLineIndexes: drawing.selectedLineIndexes,
                                     in: drawing, inNode, time: time)
         }
-        if Set(track.selectionCellItems) != Set(track.cellItems) {
-            setSelectionCellItems(track.cellItems, oldCellItems: track.selectionCellItems,
+        if Set(track.selectedCellItems) != Set(track.cellItems) {
+            setSelectedCellItems(track.cellItems, oldCellItems: track.selectedCellItems,
                                   in: track, time: time)
         }
         return true
@@ -787,12 +787,12 @@ final class Canvas: DrawLayer, Respondable {
         let inNode = cut.editNode
         let track = inNode.editTrack
         let drawing = track.drawingItem.drawing
-        if !drawing.selectionLineIndexes.isEmpty {
-            setSelectionLineIndexes([], oldLineIndexes: drawing.selectionLineIndexes,
+        if !drawing.selectedLineIndexes.isEmpty {
+            setSelectedLineIndexes([], oldLineIndexes: drawing.selectedLineIndexes,
                                     in: drawing, inNode, time: time)
         }
-        if !track.selectionCellItems.isEmpty {
-            setSelectionCellItems([], oldCellItems: track.selectionCellItems,
+        if !track.selectedCellItems.isEmpty {
+            setSelectedCellItems([], oldCellItems: track.selectedCellItems,
                                   in: track, time: time)
         }
         return true
@@ -814,13 +814,13 @@ final class Canvas: DrawLayer, Respondable {
         guard !geometry.isEmpty else {
             return false
         }
-        let isDrawingSelectionLines = !drawingItem.drawing.selectionLineIndexes.isEmpty
-        let unselectionLines = drawingItem.drawing.uneditLines
-        if isDrawingSelectionLines {
-            setSelectionLineIndexes([], oldLineIndexes: drawingItem.drawing.selectionLineIndexes,
+        let isDrawingSelectedLines = !drawingItem.drawing.selectedLineIndexes.isEmpty
+        let unselectedLines = drawingItem.drawing.uneditLines
+        if isDrawingSelectedLines {
+            setSelectedLineIndexes([], oldLineIndexes: drawingItem.drawing.selectedLineIndexes,
                                     in: drawingItem.drawing, inNode, time: time)
         }
-        set(unselectionLines, old: drawingItem.drawing.lines,
+        set(unselectedLines, old: drawingItem.drawing.lines,
                  in: drawingItem.drawing, inNode, time: time)
         let lki = track.animation.loopedKeyframeIndex(withTime: cut.currentTime)
         let keyGeometries = track.emptyKeyGeometries.withReplaced(geometry, at: lki.keyframeIndex)
@@ -921,8 +921,8 @@ final class Canvas: DrawLayer, Respondable {
         if let index = drawing.lines.index(of: line) {
             removeLine(at: index, in: drawing, inNode, time: time)
         }
-        if !drawing.selectionLineIndexes.isEmpty {
-            setSelectionLineIndexes([], oldLineIndexes: drawing.selectionLineIndexes,
+        if !drawing.selectedLineIndexes.isEmpty {
+            setSelectedLineIndexes([], oldLineIndexes: drawing.selectedLineIndexes,
                                     in: drawing, inNode, time: time)
         }
         var isRemoveLineInDrawing = false, isRemoveLineInCell = false
@@ -1041,14 +1041,14 @@ final class Canvas: DrawLayer, Respondable {
         cell.isTranslucentLock = isTranslucentLock
         sceneDataModel?.isWrite = true
         setNeedsDisplay()
-        if cell == cellEditor.cell {
-            cellEditor.updateWithCell()
+        if cell == cellView.cell {
+            cellView.updateWithCell()
         }
     }
     
     func changeToRough() {
         let inNode = cut.editNode
-        let indexes = inNode.editTrack.animation.selectionKeyframeIndexes.sorted()
+        let indexes = inNode.editTrack.animation.selectedKeyframeIndexes.sorted()
         let i = inNode.editTrack.animation.editKeyframeIndex
         (indexes.contains(i) ? indexes : [i]).forEach {
             let drawing = inNode.editTrack.drawingItem.keyDrawings[$0]
@@ -1056,8 +1056,8 @@ final class Canvas: DrawLayer, Respondable {
                 setRoughLines(drawing.editLines, old: drawing.roughLines,
                               in: drawing, inNode, time: time)
                 set(drawing.uneditLines, old: drawing.lines, in: drawing, inNode, time: time)
-                if !drawing.selectionLineIndexes.isEmpty {
-                    setSelectionLineIndexes([], oldLineIndexes: drawing.selectionLineIndexes,
+                if !drawing.selectedLineIndexes.isEmpty {
+                    setSelectedLineIndexes([], oldLineIndexes: drawing.selectedLineIndexes,
                                             in: drawing, inNode, time: time)
                 }
             }
@@ -1065,7 +1065,7 @@ final class Canvas: DrawLayer, Respondable {
     }
     func removeRough() {
         let inNode = cut.editNode
-        let indexes = inNode.editTrack.animation.selectionKeyframeIndexes.sorted()
+        let indexes = inNode.editTrack.animation.selectedKeyframeIndexes.sorted()
         let i = inNode.editTrack.animation.editKeyframeIndex
         (indexes.contains(i) ? indexes : [i]).forEach {
             let drawing = inNode.editTrack.drawingItem.keyDrawings[$0]
@@ -1076,13 +1076,13 @@ final class Canvas: DrawLayer, Respondable {
     }
     func swapRough() {
         let inNode = cut.editNode
-        let indexes = inNode.editTrack.animation.selectionKeyframeIndexes.sorted()
+        let indexes = inNode.editTrack.animation.selectedKeyframeIndexes.sorted()
         let i = inNode.editTrack.animation.editKeyframeIndex
         (indexes.contains(i) ? indexes : [i]).forEach {
             let drawing = inNode.editTrack.drawingItem.keyDrawings[$0]
             if !drawing.roughLines.isEmpty || !drawing.lines.isEmpty {
-                if !drawing.selectionLineIndexes.isEmpty {
-                    setSelectionLineIndexes([], oldLineIndexes: drawing.selectionLineIndexes,
+                if !drawing.selectedLineIndexes.isEmpty {
+                    setSelectedLineIndexes([], oldLineIndexes: drawing.selectedLineIndexes,
                                             in: drawing, inNode, time: time)
                 }
                 let newLines = drawing.roughLines, newRoughLines = drawing.lines
@@ -1206,10 +1206,10 @@ final class Canvas: DrawLayer, Respondable {
     var editCell: Cell?
     var (editCellLineLayer, subEditCellLineLayer): (PathLayer, PathLayer) = {
         let layer = PathLayer()
-        layer.lineColor = .subSelection
+        layer.lineColor = .subSelected
         layer.lineWidth = 3
         let sublayer = PathLayer()
-        sublayer.lineColor = .selection
+        sublayer.lineColor = .selected
         sublayer.lineWidth = 1
         layer.append(child: sublayer)
         return (layer, sublayer)
@@ -1225,7 +1225,7 @@ final class Canvas: DrawLayer, Respondable {
         return cell.intersects(bounds.applying(currentTransform.inverted()))
     }
     
-    let materialEditor = MaterialEditor(), cellEditor = CellEditor()
+    let materialView = MaterialView(), cellView = CellView()
     func bind(with event: RightClickEvent) -> Bool {
         let p = convertToCurrentLocal(point(from: event))
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
@@ -1235,16 +1235,16 @@ final class Canvas: DrawLayer, Respondable {
         return true
     }
     func bind(_ material: Material, _ editCell: Cell?, time: Beat) {
-        registerUndo { [oec = editCell] in $0.bind($0.materialEditor.material, oec, time: $1) }
+        registerUndo { [oec = editCell] in $0.bind($0.materialView.material, oec, time: $1) }
         self.time = time
-        materialEditor.material = material
-        cellEditor.cell = editCell ?? Cell()
+        materialView.material = material
+        cellView.cell = editCell ?? Cell()
         self.editCell = editCell
         updateEditCellBindingLine()
     }
     
     func updateEditCellBindingLine() {
-        let maxX = cellEditor.frame.minX
+        let maxX = cellView.frame.minX
         let width = maxX - frame.maxX, midY = frame.midY
         if let editCell = editCell, !editCell.isEmpty && isVisible(editCell) {
             let path = CGPath(rect: CGRect(x: frame.maxX, y: midY - bindingLineHeight / 2,
@@ -1286,7 +1286,7 @@ final class Canvas: DrawLayer, Respondable {
     }
     
     private struct SelectOption {
-        var selectionLineIndexes = [Int](), selectionCellItems = [CellItem]()
+        var selectedLineIndexes = [Int](), selectedCellItems = [CellItem]()
         var node: Node?, drawing: Drawing?, track: NodeTrack?
     }
     private var selectOption = SelectOption()
@@ -1304,7 +1304,7 @@ final class Canvas: DrawLayer, Respondable {
         func unionWithStrokeLine(with drawing: Drawing, _ track: NodeTrack
             ) -> (lineIndexes: [Int], cellItems: [CellItem]) {
             
-            func selection() -> (lineIndexes: [Int], cellItems: [CellItem]) {
+            func selected() -> (lineIndexes: [Int], cellItems: [CellItem]) {
                 guard let line = strokeLine else {
                     return ([], [])
                 }
@@ -1312,13 +1312,13 @@ final class Canvas: DrawLayer, Respondable {
                 return (drawing.lines.enumerated().flatMap { lasso.intersects($1) ? $0 : nil },
                         track.cellItems.filter { $0.cell.intersects(lasso) })
             }
-            let s = selection()
+            let s = selected()
             if isDeselect {
-                return (Array(Set(selectOption.selectionLineIndexes).subtracting(Set(s.lineIndexes))),
-                        Array(Set(selectOption.selectionCellItems).subtracting(Set(s.cellItems))))
+                return (Array(Set(selectOption.selectedLineIndexes).subtracting(Set(s.lineIndexes))),
+                        Array(Set(selectOption.selectedCellItems).subtracting(Set(s.cellItems))))
             } else {
-                return (Array(Set(selectOption.selectionLineIndexes).union(Set(s.lineIndexes))),
-                        Array(Set(selectOption.selectionCellItems).union(Set(s.cellItems))))
+                return (Array(Set(selectOption.selectedLineIndexes).union(Set(s.lineIndexes))),
+                        Array(Set(selectOption.selectedCellItems).union(Set(s.cellItems))))
             }
         }
         
@@ -1328,29 +1328,29 @@ final class Canvas: DrawLayer, Respondable {
             let drawing = cut.editNode.editTrack.drawingItem.drawing, track = cut.editNode.editTrack
             selectOption.drawing = drawing
             selectOption.track = track
-            selectOption.selectionLineIndexes = drawing.selectionLineIndexes
-            selectOption.selectionCellItems = track.selectionCellItems
+            selectOption.selectedLineIndexes = drawing.selectedLineIndexes
+            selectOption.selectedCellItems = track.selectedCellItems
         case .sending:
             guard let drawing = selectOption.drawing, let track = selectOption.track else {
                 return true
             }
-            (drawing.selectionLineIndexes, track.selectionCellItems)
+            (drawing.selectedLineIndexes, track.selectedCellItems)
                 = unionWithStrokeLine(with: drawing, track)
         case .end:
             guard let drawing = selectOption.drawing,
                 let track = selectOption.track, let node = selectOption.node else {
                     return true
             }
-            let (selectionLineIndexes, selectionCellItems)
+            let (selectedLineIndexes, selectedCellItems)
                 = unionWithStrokeLine(with: drawing, track)
-            if selectionLineIndexes != selectOption.selectionLineIndexes {
-                setSelectionLineIndexes(selectionLineIndexes,
-                                        oldLineIndexes: selectOption.selectionLineIndexes,
+            if selectedLineIndexes != selectOption.selectedLineIndexes {
+                setSelectedLineIndexes(selectedLineIndexes,
+                                        oldLineIndexes: selectOption.selectedLineIndexes,
                                         in: drawing, node, time: time)
             }
-            if selectionCellItems != selectOption.selectionCellItems {
-                setSelectionCellItems(selectionCellItems,
-                                      oldCellItems: selectOption.selectionCellItems,
+            if selectedCellItems != selectOption.selectedCellItems {
+                setSelectedCellItems(selectedCellItems,
+                                      oldCellItems: selectOption.selectedCellItems,
                                       in: track, time: time)
             }
             self.selectOption = SelectOption()
@@ -1648,41 +1648,41 @@ final class Canvas: DrawLayer, Respondable {
         node.differentialDataModel.isWrite = true
         setNeedsDisplay()
     }
-    private func setSelectionLineIndexes(_ lineIndexes: [Int], oldLineIndexes: [Int],
+    private func setSelectedLineIndexes(_ lineIndexes: [Int], oldLineIndexes: [Int],
                                          in drawing: Drawing, _ node: Node, time: Beat) {
-        registerUndo { $0.setSelectionLineIndexes(oldLineIndexes, oldLineIndexes: lineIndexes,
+        registerUndo { $0.setSelectedLineIndexes(oldLineIndexes, oldLineIndexes: lineIndexes,
                                                   in: drawing, node, time: $1) }
         self.time = time
-        drawing.selectionLineIndexes = lineIndexes
+        drawing.selectedLineIndexes = lineIndexes
         node.differentialDataModel.isWrite = true
         setNeedsDisplay()
     }
     
     func selectCell(at point: CGPoint) {
         let p = convertToCurrentLocal(point)
-        let selectionCell = cut.editNode.rootCell.at(p, reciprocalScale: scene.reciprocalScale)
-        if let selectionCell = selectionCell {
-            if selectionCell.material.id != materialEditor.material.id {
-                setMaterial(selectionCell.material, time: time)
+        let selectedCell = cut.editNode.rootCell.at(p, reciprocalScale: scene.reciprocalScale)
+        if let selectedCell = selectedCell {
+            if selectedCell.material.id != materialView.material.id {
+                setMaterial(selectedCell.material, time: time)
             }
         } else {
-            if cut.editNode.material != materialEditor.material {
+            if cut.editNode.material != materialView.material {
                 setMaterial(cut.editNode.material, time: time)
             }
         }
     }
     private func setMaterial(_ material: Material, time: Beat) {
-        registerUndo { [om = materialEditor.material] in $0.setMaterial(om, time: $1) }
+        registerUndo { [om = materialView.material] in $0.setMaterial(om, time: $1) }
         self.time = time
-        materialEditor.material = material
+        materialView.material = material
     }
-    private func setSelectionCellItems(_ cellItems: [CellItem], oldCellItems: [CellItem],
+    private func setSelectedCellItems(_ cellItems: [CellItem], oldCellItems: [CellItem],
                                        in track: NodeTrack, time: Beat) {
         registerUndo {
-            $0.setSelectionCellItems(oldCellItems, oldCellItems: cellItems, in: track, time: $1)
+            $0.setSelectedCellItems(oldCellItems, oldCellItems: cellItems, in: track, time: $1)
         }
         self.time = time
-        track.selectionCellItems = cellItems
+        track.selectedCellItems = cellItems
         setNeedsDisplay()
         sceneDataModel?.isWrite = true
         setNeedsDisplay()
@@ -2180,16 +2180,16 @@ final class Canvas: DrawLayer, Respondable {
         setNeedsDisplay()
     }
     
-    func clipCellInSelection(with event: KeyInputEvent) {
-        clipCellInSelection()
+    func clipCellInSelected(with event: KeyInputEvent) {
+        clipCellInSelected()
     }
-    func clipCellInSelection() {
+    func clipCellInSelected() {
         guard let fromCell = editCell else {
             return
         }
         let node = cut.editNode
-        let selectionCells = node.allSelectionCellItemsWithNoEmptyGeometry.map { $0.cell }
-        if selectionCells.isEmpty {
+        let selectedCells = node.allSelectedCellItemsWithNoEmptyGeometry.map { $0.cell }
+        if selectedCells.isEmpty {
             if !node.rootCell.children.contains(fromCell) {
                 let fromParents = node.rootCell.parents(with: fromCell)
                 moveCell(fromCell,
@@ -2197,10 +2197,10 @@ final class Canvas: DrawLayer, Respondable {
                          to: [(node.rootCell, node.rootCell.children.count)], in: node,
                          time: time)
             }
-        } else if !selectionCells.contains(fromCell) {
+        } else if !selectedCells.contains(fromCell) {
             let fromChildrens = fromCell.allCells
             var newFromParents = node.rootCell.parents(with: fromCell)
-            let newToParents: [(cell: Cell, index: Int)] = selectionCells.flatMap { toCell in
+            let newToParents: [(cell: Cell, index: Int)] = selectedCells.flatMap { toCell in
                 for fromChild in fromChildrens {
                     if fromChild == toCell {
                         return nil
@@ -2247,8 +2247,8 @@ final class Canvas: DrawLayer, Respondable {
                 }
             case .selected:
                 let firstCell = ict.cellItems[0].cell
-                let cutAllSelectionCells
-                    = cut.editNode.allSelectionCellItemsWithNoEmptyGeometry.map { $0.cell }
+                let cutAllSelectedCells
+                    = cut.editNode.allSelectedCellItemsWithNoEmptyGeometry.map { $0.cell }
                 var firstParent: Cell?
                 cut.editNode.rootCell.depthFirstSearch(duplicate: false) { parent, cell in
                     if cell === firstCell {
@@ -2259,7 +2259,7 @@ final class Canvas: DrawLayer, Respondable {
                 if let firstParent = firstParent {
                     var indexes = [Int]()
                     cut.editNode.rootCell.depthFirstSearch(duplicate: false) { parent, cell in
-                        if cutAllSelectionCells.contains(cell) && firstParent === parent,
+                        if cutAllSelectedCells.contains(cell) && firstParent === parent,
                             let index = parent.children.index(of: cell) {
                             
                             indexes.append(index)
@@ -2324,7 +2324,7 @@ final class Canvas: DrawLayer, Respondable {
         setNeedsDisplay()
     }
     
-    private var moveSelection = Node.Selection()
+    private var moveSelected = Node.Selection()
     private var transformBounds = CGRect(), moveOldPoint = CGPoint(), moveTransformOldPoint = CGPoint()
     enum TransformEditType {
         case move, warp, transform
@@ -2366,7 +2366,7 @@ final class Canvas: DrawLayer, Respondable {
         }
         switch event.sendType {
         case .begin:
-            moveSelection = cut.editNode.selection(with: p, reciprocalScale: scene.reciprocalScale)
+            moveSelected = cut.editNode.selection(with: p, reciprocalScale: scene.reciprocalScale)
             if type != .move {
                 self.editTransform = editTransform(at: p)
                 self.moveTransformAngleOldTime = event.time
@@ -2431,9 +2431,9 @@ final class Canvas: DrawLayer, Respondable {
                             }
                         }
                     }
-                    if moveSelection.cellTuples.isEmpty {
-                        if moveSelection.drawingTuple?.lineIndexes.isEmpty ?? true {
-                        } else if let moveDrawingTuple = moveSelection.drawingTuple {
+                    if moveSelected.cellTuples.isEmpty {
+                        if moveSelected.drawingTuple?.lineIndexes.isEmpty ?? true {
+                        } else if let moveDrawingTuple = moveSelected.drawingTuple {
                             let net = newEditTransform(with: moveDrawingTuple.lineIndexes.map {
                                 moveDrawingTuple.drawing.lines[$0]
                             })
@@ -2446,7 +2446,7 @@ final class Canvas: DrawLayer, Respondable {
                                                                isCenter: editTransform.isCenter)
                         }
                     } else {
-                        let lines = moveSelection.cellTuples.reduce(into: [Line]()) {
+                        let lines = moveSelected.cellTuples.reduce(into: [Line]()) {
                             $0 += $1.cellItem.cell.geometry.lines
                         }
                         let net = newEditTransform(with: lines)
@@ -2468,9 +2468,9 @@ final class Canvas: DrawLayer, Respondable {
                     return true
                 }
             }
-            if !moveSelection.isEmpty, let node = moveNode {
+            if !moveSelected.isEmpty, let node = moveNode {
                 let affine = affineTransform(with: node)
-                if let mdp = moveSelection.drawingTuple {
+                if let mdp = moveSelected.drawingTuple {
                     var newLines = mdp.oldLines
                     for index in mdp.lineIndexes {
                         newLines.remove(at: index)
@@ -2478,7 +2478,7 @@ final class Canvas: DrawLayer, Respondable {
                     }
                     mdp.drawing.lines = newLines
                 }
-                for mcp in moveSelection.cellTuples {
+                for mcp in moveSelected.cellTuples {
                     mcp.cellItem.replace(mcp.geometry.applying(affine),
                                          at: mcp.track.animation.editKeyframeIndex)
                 }
@@ -2492,22 +2492,22 @@ final class Canvas: DrawLayer, Respondable {
                     return true
                 }
             }
-            if !moveSelection.isEmpty, let node = moveNode {
+            if !moveSelected.isEmpty, let node = moveNode {
                 let affine = affineTransform(with: node)
-                if let mdp = moveSelection.drawingTuple {
+                if let mdp = moveSelected.drawingTuple {
                     var newLines = mdp.oldLines
                     for index in mdp.lineIndexes {
                         newLines[index] = mdp.oldLines[index].applying(affine)
                     }
                     set(newLines, old: mdp.oldLines, in: mdp.drawing, node, time: time)
                 }
-                for mcp in moveSelection.cellTuples {
+                for mcp in moveSelected.cellTuples {
                     set(mcp.geometry.applying(affine),
                         old: mcp.geometry,
                         at: mcp.track.animation.editKeyframeIndex, in:mcp.cellItem, node, time: time)
                 }
                 cut.updateWithTime()
-                moveSelection = Node.Selection()
+                moveSelected = Node.Selection()
             }
             self.editTransform = nil
         }
@@ -2520,16 +2520,16 @@ final class Canvas: DrawLayer, Respondable {
         let p = convertToCurrentLocal(point(from: event))
         switch event.sendType {
         case .begin:
-            moveSelection = cut.editNode.selection(with: p, reciprocalScale: scene.reciprocalScale)
+            moveSelected = cut.editNode.selection(with: p, reciprocalScale: scene.reciprocalScale)
             let mm = minMaxPointFrom(p)
             moveNode = cut.editNode
             moveOldPoint = p
             minWarpDistance = mm.minDistance
             maxWarpDistance = mm.maxDistance
         case .sending:
-            if !moveSelection.isEmpty {
+            if !moveSelected.isEmpty {
                 let dp = p - moveOldPoint
-                if let wdp = moveSelection.drawingTuple {
+                if let wdp = moveSelected.drawingTuple {
                     var newLines = wdp.oldLines
                     for i in wdp.lineIndexes {
                         newLines[i] = wdp.oldLines[i].warpedWith(deltaPoint: dp,
@@ -2539,7 +2539,7 @@ final class Canvas: DrawLayer, Respondable {
                     }
                     wdp.drawing.lines = newLines
                 }
-                for wcp in moveSelection.cellTuples {
+                for wcp in moveSelected.cellTuples {
                     wcp.cellItem.replace(wcp.geometry.warpedWith(deltaPoint: dp,
                                                                  editPoint: moveOldPoint,
                                                                  minDistance: minWarpDistance,
@@ -2548,9 +2548,9 @@ final class Canvas: DrawLayer, Respondable {
                 }
             }
         case .end:
-            if !moveSelection.isEmpty, let node = moveNode {
+            if !moveSelected.isEmpty, let node = moveNode {
                 let dp = p - moveOldPoint
-                if let wdp = moveSelection.drawingTuple {
+                if let wdp = moveSelected.drawingTuple {
                     var newLines = wdp.oldLines
                     for i in wdp.lineIndexes {
                         newLines[i] = wdp.oldLines[i].warpedWith(deltaPoint: dp,
@@ -2560,7 +2560,7 @@ final class Canvas: DrawLayer, Respondable {
                     }
                     set(newLines, old: wdp.oldLines, in: wdp.drawing, node, time: time)
                 }
-                for wcp in moveSelection.cellTuples {
+                for wcp in moveSelected.cellTuples {
                     set(wcp.geometry.warpedWith(deltaPoint: dp, editPoint: moveOldPoint,
                                                 minDistance: minWarpDistance,
                                                 maxDistance: maxWarpDistance),
@@ -2568,7 +2568,7 @@ final class Canvas: DrawLayer, Respondable {
                         at: wcp.track.animation.editKeyframeIndex,
                         in: wcp.cellItem, node, time: time)
                 }
-                moveSelection = Node.Selection()
+                moveSelected = Node.Selection()
             }
         }
         setNeedsDisplay()
@@ -2591,12 +2591,12 @@ final class Canvas: DrawLayer, Respondable {
                 }
             }
         }
-        if let wdp = moveSelection.drawingTuple {
+        if let wdp = moveSelected.drawingTuple {
             for lineIndex in wdp.lineIndexes {
                 minMaxPointFrom(wdp.drawing.lines[lineIndex])
             }
         }
-        for wcp in moveSelection.cellTuples {
+        for wcp in moveSelected.cellTuples {
             for line in wcp.cellItem.cell.geometry.lines {
                 minMaxPointFrom(line)
             }

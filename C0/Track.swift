@@ -296,8 +296,8 @@ final class TempoTrack: NSObject, Track, NSCoding {
         animation.duration = duration
         updateKeySeconds()
     }
-    func set(selectionkeyframeIndexes: [Int]) {
-        animation.selectionKeyframeIndexes = selectionkeyframeIndexes
+    func set(selectedkeyframeIndexes: [Int]) {
+        animation.selectedKeyframeIndexes = selectedkeyframeIndexes
     }
     
     private func check(keyCount count: Int) {
@@ -441,7 +441,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         }
     }
     
-    var selectionCellItems: [CellItem]
+    var selectedCellItems: [CellItem]
     private(set) var cellItems: [CellItem]
     func append(_ cellItem: CellItem) {
         check(keyCount: cellItem.keyGeometries.count)
@@ -637,8 +637,8 @@ final class NodeTrack: NSObject, Track, NSCoding {
     func set(duration: Beat) {
         animation.duration = duration
     }
-    func set(selectionkeyframeIndexes: [Int]) {
-        animation.selectionKeyframeIndexes = selectionkeyframeIndexes
+    func set(selectedkeyframeIndexes: [Int]) {
+        animation.selectedKeyframeIndexes = selectedkeyframeIndexes
     }
     
     private func check(keyCount count: Int) {
@@ -787,7 +787,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
     
     init(animation: Animation = Animation(), name: String = "",
          time: Beat = 0,
-         isHidden: Bool = false, selectionCellItems: [CellItem] = [],
+         isHidden: Bool = false, selectedCellItems: [CellItem] = [],
          drawingItem: DrawingItem = DrawingItem(), cellItems: [CellItem] = [],
          materialItems: [MaterialItem] = [],
          transformItem: TransformItem? = nil, wiggleItem: WiggleItem? = nil) {
@@ -796,7 +796,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         self.name = name
         self.time = time
         self.isHidden = isHidden
-        self.selectionCellItems = selectionCellItems
+        self.selectedCellItems = selectedCellItems
         self.drawingItem = drawingItem
         self.cellItems = cellItems
         self.materialItems = materialItems
@@ -806,14 +806,14 @@ final class NodeTrack: NSObject, Track, NSCoding {
         super.init()
     }
     private init(animation: Animation, name: String, time: Beat,
-                 isHidden: Bool, selectionCellItems: [CellItem],
+                 isHidden: Bool, selectedCellItems: [CellItem],
                  drawingItem: DrawingItem, cellItems: [CellItem], materialItems: [MaterialItem],
                  transformItem: TransformItem?, wiggleItem: WiggleItem?, keyPhases: [CGFloat]) {
         self.animation = animation
         self.name = name
         self.time = time
         self.isHidden = isHidden
-        self.selectionCellItems = selectionCellItems
+        self.selectedCellItems = selectedCellItems
         self.drawingItem = drawingItem
         self.cellItems = cellItems
         self.materialItems = materialItems
@@ -826,7 +826,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
     
     private enum CodingKeys: String, CodingKey {
         case
-        animation, name, time, duration, isHidden, selectionCellItems,
+        animation, name, time, duration, isHidden, selectedCellItems,
         drawingItem, cellItems, materialItems, transformItem, wiggleItem, keyPhases, id
     }
     init?(coder: NSCoder) {
@@ -839,8 +839,8 @@ final class NodeTrack: NSObject, Track, NSCoding {
         drawingItem = coder.decodeObject(
             forKey: CodingKeys.drawingItem.rawValue) as? DrawingItem ?? DrawingItem()
         cellItems = coder.decodeObject(forKey: CodingKeys.cellItems.rawValue) as? [CellItem] ?? []
-        selectionCellItems = coder.decodeObject(
-            forKey: CodingKeys.selectionCellItems.rawValue) as? [CellItem] ?? []
+        selectedCellItems = coder.decodeObject(
+            forKey: CodingKeys.selectedCellItems.rawValue) as? [CellItem] ?? []
         materialItems = coder.decodeObject(
             forKey: CodingKeys.materialItems.rawValue) as? [MaterialItem] ?? []
         transformItem = coder.decodeDecodable(
@@ -865,7 +865,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         coder.encode(isHidden, forKey: CodingKeys.isHidden.rawValue)
         coder.encode(drawingItem, forKey: CodingKeys.drawingItem.rawValue)
         coder.encode(cellItems, forKey: CodingKeys.cellItems.rawValue)
-        coder.encode(selectionCellItems, forKey: CodingKeys.selectionCellItems.rawValue)
+        coder.encode(selectedCellItems, forKey: CodingKeys.selectedCellItems.rawValue)
         coder.encode(materialItems, forKey: CodingKeys.materialItems.rawValue)
         coder.encodeEncodable(transformItem, forKey: CodingKeys.transformItem.rawValue)
         coder.encodeEncodable(wiggleItem, forKey: CodingKeys.wiggleItem.rawValue)
@@ -895,13 +895,13 @@ final class NodeTrack: NSObject, Track, NSCoding {
     var cells: [Cell] {
         return cellItems.map { $0.cell }
     }
-    var selectionCellItemsWithNoEmptyGeometry: [CellItem] {
-        return selectionCellItems.filter { !$0.cell.geometry.isEmpty }
+    var selectedCellItemsWithNoEmptyGeometry: [CellItem] {
+        return selectedCellItems.filter { !$0.cell.geometry.isEmpty }
     }
-    func selectionCellItemsWithNoEmptyGeometry(at point: CGPoint) -> [CellItem] {
-        for cellItem in selectionCellItems {
+    func selectedCellItemsWithNoEmptyGeometry(at point: CGPoint) -> [CellItem] {
+        for cellItem in selectedCellItems {
             if cellItem.cell.contains(point) {
-                return selectionCellItems.filter { !$0.cell.geometry.isEmpty }
+                return selectedCellItems.filter { !$0.cell.geometry.isEmpty }
             }
         }
         return []
@@ -1089,9 +1089,9 @@ final class NodeTrack: NSObject, Track, NSCoding {
                                 index: index, in: ctx)
         }
     }
-    func drawSelectionCells(opacity: CGFloat, color: Color, subColor: Color,
+    func drawSelectedCells(opacity: CGFloat, color: Color, subColor: Color,
                             reciprocalScale: CGFloat, in ctx: CGContext) {
-        guard !isHidden && !selectionCellItems.isEmpty else {
+        guard !isHidden && !selectedCellItems.isEmpty else {
             return
         }
         ctx.setAlpha(opacity)
@@ -1106,7 +1106,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
                 geometrys.append(cell.geometry)
             }
         }
-        selectionCellItems.forEach { setPaths(with: $0) }
+        selectedCellItems.forEach { setPaths(with: $0) }
         ctx.endTransparencyLayer()
         ctx.setAlpha(1)
         
@@ -1133,7 +1133,7 @@ extension NodeTrack: Copying {
     func copied(from copier: Copier) -> NodeTrack {
         return NodeTrack(animation: animation, name: name,
                          time: time, isHidden: isHidden,
-                         selectionCellItems: selectionCellItems.map { copier.copied($0) },
+                         selectedCellItems: selectedCellItems.map { copier.copied($0) },
                          drawingItem: copier.copied(drawingItem),
                          cellItems: cellItems.map { copier.copied($0) },
                          materialItems: materialItems.map { copier.copied($0) },

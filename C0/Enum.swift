@@ -24,8 +24,8 @@ import Foundation
  - RawRepresentable利用
  - ノブの滑らかな移動
  */
-final class EnumEditor: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Enumerated Type Editor", japanese: "列挙型エディタ")
+final class EnumView: Layer, Respondable, Localizable {
+    static let name = Localization(english: "Enumerated Type View", japanese: "列挙型表示")
     static let feature = Localization(english: "Select Index: Up and down drag",
                                       japanese: "インデックスを選択: 上下ドラッグ")
     
@@ -43,7 +43,7 @@ final class EnumEditor: Layer, Respondable, Localizable {
         return lineLayer
     } ()
     init(frame: CGRect = CGRect(), names: [Localization] = [],
-         selectionIndex: Int = 0, cationIndex: Int? = nil,
+         selectedIndex: Int = 0, cationIndex: Int? = nil,
          description: Localization = Localization()) {
         
         self.menu = Menu(names: names, knobPaddingWidth: knobPaddingWidth, width: frame.width)
@@ -82,7 +82,7 @@ final class EnumEditor: Layer, Respondable, Localizable {
     }
     
     struct Binding {
-        let enumEditor: EnumEditor, index: Int, oldIndex: Int, type: Action.SendType
+        let enumView: EnumView, index: Int, oldIndex: Int, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
     
@@ -90,7 +90,7 @@ final class EnumEditor: Layer, Respondable, Localizable {
     
     var defaultValue = 0
     func delete(with event: KeyInputEvent) -> Bool {
-        let oldIndex = selectionIndex, index = defaultValue
+        let oldIndex = selectedIndex, index = defaultValue
         guard index != oldIndex else {
             return false
         }
@@ -98,12 +98,12 @@ final class EnumEditor: Layer, Respondable, Localizable {
         return true
     }
     func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [String(selectionIndex)])
+        return CopiedObject(objects: [String(selectedIndex)])
     }
     func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
         for object in copiedObject.objects {
             if let string = object as? String, let index = Int(string) {
-                let oldIndex = selectionIndex
+                let oldIndex = selectedIndex
                 guard index != oldIndex else {
                     continue
                 }
@@ -117,12 +117,12 @@ final class EnumEditor: Layer, Respondable, Localizable {
         registeringUndoManager?.registerUndo(withTarget: self) {
             $0.set(index: oldIndex, oldIndex: index)
         }
-        binding?(Binding(enumEditor: self, index: oldIndex, oldIndex: oldIndex, type: .begin))
-        self.selectionIndex = index
-        binding?(Binding(enumEditor: self, index: index, oldIndex: oldIndex, type: .end))
+        binding?(Binding(enumView: self, index: oldIndex, oldIndex: oldIndex, type: .begin))
+        self.selectedIndex = index
+        binding?(Binding(enumView: self, index: index, oldIndex: oldIndex, type: .end))
     }
     
-    var willOpenMenuHandler: ((EnumEditor) -> ())? = nil
+    var willOpenMenuHandler: ((EnumView) -> ())? = nil
     var menu: Menu
     private var isDrag = false, oldIndex = 0, beginPoint = CGPoint()
     func move(with event: DragEvent) -> Bool {
@@ -143,32 +143,32 @@ final class EnumEditor: Layer, Respondable, Localizable {
                 root.append(child: menu)
             }
             
-            oldIndex = selectionIndex
-            binding?(Binding(enumEditor: self, index: oldIndex, oldIndex: oldIndex, type: .begin))
+            oldIndex = selectedIndex
+            binding?(Binding(enumView: self, index: oldIndex, oldIndex: oldIndex, type: .begin))
             
             let index = self.index(withY: -(p.y - beginPoint.y))
-            if index != selectionIndex {
-                selectionIndex = index
-                binding?(Binding(enumEditor: self, index: index, oldIndex: oldIndex, type: .sending))
+            if index != selectedIndex {
+                selectedIndex = index
+                binding?(Binding(enumView: self, index: index, oldIndex: oldIndex, type: .sending))
             }
         case .sending:
             isDrag = true
             let index = self.index(withY: -(p.y - beginPoint.y))
-            if index != selectionIndex {
-                selectionIndex = index
-                binding?(Binding(enumEditor: self, index: index, oldIndex: oldIndex, type: .sending))
+            if index != selectedIndex {
+                selectedIndex = index
+                binding?(Binding(enumView: self, index: index, oldIndex: oldIndex, type: .sending))
             }
         case .end:
             let index = self.index(withY: -(p.y - beginPoint.y))
-            if index != selectionIndex {
-                selectionIndex = index
+            if index != selectedIndex {
+                selectedIndex = index
             }
             if index != oldIndex {
                 registeringUndoManager?.registerUndo(withTarget: self) { [index, oldIndex] in
                     $0.set(index: oldIndex, oldIndex: index)
                 }
             }
-            binding?(Binding(enumEditor: self, index: index, oldIndex: oldIndex, type: .end))
+            binding?(Binding(enumView: self, index: index, oldIndex: oldIndex, type: .end))
             
             label.isHidden = false
             lineLayer.isHidden = false
@@ -187,23 +187,23 @@ final class EnumEditor: Layer, Respondable, Localizable {
     
     var knobPaddingWidth = 16.0.cf
     private var oldFontColor: Color?
-    var selectionIndex = 0 {
+    var selectedIndex = 0 {
         didSet {
-            guard selectionIndex != oldValue else {
+            guard selectedIndex != oldValue else {
                 return
             }
-            menu.selectionIndex = selectionIndex
-            if selectionIndex != oldValue {
+            menu.selectedIndex = selectedIndex
+            if selectedIndex != oldValue {
                 updateLabel()
             }
         }
     }
     private func updateLabel() {
-        label.localization = menu.names[selectionIndex]
+        label.localization = menu.names[selectedIndex]
         label.frame.origin = CGPoint(x: knobPaddingWidth,
                                      y: round((frame.height - label.frame.height) / 2))
         if let cationIndex = cationIndex {
-            if selectionIndex != cationIndex {
+            if selectedIndex != cationIndex {
                 if let oldFontColor = oldFontColor {
                     label.textFrame.color = oldFontColor
                 }
@@ -224,15 +224,15 @@ final class Menu: Layer, Respondable, Localizable {
         }
     }
     
-    var selectionIndex = 0 {
+    var selectedIndex = 0 {
         didSet {
-            guard selectionIndex != oldValue else {
+            guard selectedIndex != oldValue else {
                 return
             }
-            let selectionLabel = items[selectionIndex]
-            selectionLayer.frame = selectionLabel.frame
-            selectionKnob.position = CGPoint(x: knobPaddingWidth / 2,
-                                             y: selectionLabel.frame.midY)
+            let selectedLabel = items[selectedIndex]
+            selectedLayer.frame = selectedLabel.frame
+            selectedKnob.position = CGPoint(x: knobPaddingWidth / 2,
+                                             y: selectedLabel.frame.midY)
         }
     }
     
@@ -248,7 +248,7 @@ final class Menu: Layer, Respondable, Localizable {
     }
     let knobPaddingWidth: CGFloat
     
-    let selectionLayer: Layer = {
+    let selectedLayer: Layer = {
         let layer = Layer()
         layer.fillColor = .translucentEdit
         return layer
@@ -258,7 +258,7 @@ final class Menu: Layer, Respondable, Localizable {
         lineLayer.fillColor = .content
         return lineLayer
     } ()
-    let selectionKnob = DiscreteKnob(CGSize(width: 8, height: 8), lineWidth: 1)
+    let selectedKnob = DiscreteKnob(CGSize(width: 8, height: 8), lineWidth: 1)
     
     var names = [Localization]() {
         didSet {
@@ -293,13 +293,13 @@ final class Menu: Layer, Respondable, Localizable {
                                     height: 4))
             }
             lineLayer.path = path
-            let selectionLabel = items[selectionIndex]
-            selectionLayer.frame = selectionLabel.frame
-            selectionKnob.position = CGPoint(x: knobPaddingWidth / 2,
-                                             y: selectionLabel.frame.midY)
+            let selectedLabel = items[selectedIndex]
+            selectedLayer.frame = selectedLabel.frame
+            selectedKnob.position = CGPoint(x: knobPaddingWidth / 2,
+                                             y: selectedLabel.frame.midY)
             frame.size = CGSize(width: width, height: h)
             self.items = items
-            replace(children: items + [lineLayer, selectionKnob, selectionLayer])
+            replace(children: items + [lineLayer, selectedKnob, selectedLayer])
         }
     }
     

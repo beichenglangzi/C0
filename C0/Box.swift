@@ -40,25 +40,25 @@ final class Box: Layer, Respondable {
             let p = self.point(from: event)
             for object in copiedObject.objects {
                 if let url = object as? URL {
-                    append(child: makeImageEditor(url: url, position: p))
+                    append(child: makeImageView(url: url, position: p))
                     isChanged = true
                 }
             }
         }
         return isChanged
     }
-    func makeImageEditor(url :URL, position p: CGPoint) -> ImageEditor {
-        let imageEditor = ImageEditor(url: url)
-        if let size = imageEditor.image?.size {
+    func makeImageView(url :URL, position p: CGPoint) -> ImageView {
+        let imageView = ImageView(url: url)
+        if let size = imageView.image?.size {
             let maxWidth = max(size.width, size.height)
             let ratio = minPasteImageWidth < maxWidth ? minPasteImageWidth / maxWidth : 1
             let width = ceil(size.width * ratio), height = ceil(size.height * ratio)
-            imageEditor.frame = CGRect(x: round(p.x - width / 2),
+            imageView.frame = CGRect(x: round(p.x - width / 2),
                                        y: round(p.y - height / 2),
                                        width: width,
                                        height: height)
         }
-        return imageEditor
+        return imageView
     }
     
     var bindHandler: ((Box, RightClickEvent) -> (Bool))?

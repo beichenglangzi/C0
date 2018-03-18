@@ -94,8 +94,8 @@ extension Easing: ResponderExpression {
  # Issue
  - 前後キーフレームからの傾斜スナップ
  */
-final class EasingEditor: Layer, Respondable {
-    static let name = Localization(english: "Easing Editor", japanese: "イージングエディタ")
+final class EasingView: Layer, Respondable {
+    static let name = Localization(english: "Easing View", japanese: "イージング表示")
     static let feature = Localization(english: "Horizontal axis: Time\nVertical axis: Correction time",
                                       japanese: "横軸: 時間\n縦軸: 補正後の時間")
     
@@ -127,9 +127,9 @@ final class EasingEditor: Layer, Respondable {
         axis.lineWidth = 1
         return axis
     } ()
-    private let cp0Editor = PointEditor(description: Localization(english: "Control Point0",
+    private let cp0View = PointView(description: Localization(english: "Control Point0",
                                                                   japanese: "コントロールポイント0"))
-    private let cp1Editor = PointEditor(description: Localization(english: "Control Point1",
+    private let cp1View = PointView(description: Localization(english: "Control Point1",
                                                                   japanese: "コントロールポイント1"))
     var padding = Layout.basicPadding {
         didSet {
@@ -140,11 +140,11 @@ final class EasingEditor: Layer, Respondable {
     init(frame: CGRect = CGRect(), description: Localization = Localization()) {
         super.init()
         instanceDescription = description
-        replace(children: [xLabel, yLabel, controlLine, easingLine, axis, cp0Editor, cp1Editor])
+        replace(children: [xLabel, yLabel, controlLine, easingLine, axis, cp0View, cp1View])
         self.frame = frame
         
-        cp0Editor.binding = { [unowned self] in self.setEasing(with: $0) }
-        cp1Editor.binding = { [unowned self] in self.setEasing(with: $0) }
+        cp0View.binding = { [unowned self] in self.setEasing(with: $0) }
+        cp1View.binding = { [unowned self] in self.setEasing(with: $0) }
     }
     
     override var bounds: CGRect {
@@ -153,22 +153,22 @@ final class EasingEditor: Layer, Respondable {
         }
     }
     private func updateLayout() {
-        cp0Editor.frame = CGRect(x: padding,
+        cp0View.frame = CGRect(x: padding,
                                  y: padding,
                                  width: (bounds.width - padding * 2) / 2,
                                  height: (bounds.height - padding * 2) / 2)
-        cp1Editor.frame = CGRect(x: bounds.width / 2,
+        cp1View.frame = CGRect(x: bounds.width / 2,
                                  y: padding + (bounds.height - padding * 2) / 2,
                                  width: (bounds.width - padding * 2) / 2,
                                  height: (bounds.height - padding * 2) / 2)
         let path = CGMutablePath()
         let sp = Layout.smallPadding
-        path.addLines(between: [CGPoint(x: padding + cp0Editor.padding,
+        path.addLines(between: [CGPoint(x: padding + cp0View.padding,
                                         y: bounds.height - padding - yLabel.frame.height - sp),
-                                CGPoint(x: padding + cp0Editor.padding,
-                                        y: padding + cp0Editor.padding),
+                                CGPoint(x: padding + cp0View.padding,
+                                        y: padding + cp0View.padding),
                                 CGPoint(x: bounds.width - padding - xLabel.frame.width - sp,
-                                        y: padding + cp0Editor.padding)])
+                                        y: padding + cp0View.padding)])
         axis.path = path
         xLabel.frame.origin = CGPoint(x: bounds.width - padding - xLabel.frame.width,
                                       y: padding)
@@ -180,37 +180,37 @@ final class EasingEditor: Layer, Respondable {
         guard !bounds.isEmpty else {
             return
         }
-        cp0Editor.point = easing.cp0
-        cp1Editor.point = easing.cp1
-        easingLine.path = easing.path(in: bounds.insetBy(dx: padding + cp0Editor.padding,
-                                                          dy: padding + cp0Editor.padding))
+        cp0View.point = easing.cp0
+        cp1View.point = easing.cp1
+        easingLine.path = easing.path(in: bounds.insetBy(dx: padding + cp0View.padding,
+                                                          dy: padding + cp0View.padding))
         let knobLinePath = CGMutablePath()
-        knobLinePath.addLines(between: [CGPoint(x: cp0Editor.frame.minX + cp0Editor.padding,
-                                                y: cp0Editor.frame.minY + cp0Editor.padding),
-                                        cp0Editor.knob.position + cp0Editor.frame.origin])
-        knobLinePath.addLines(between: [CGPoint(x: cp1Editor.frame.maxX - cp1Editor.padding,
-                                                y: cp1Editor.frame.maxY - cp1Editor.padding),
-                                        cp1Editor.knob.position + cp1Editor.frame.origin])
+        knobLinePath.addLines(between: [CGPoint(x: cp0View.frame.minX + cp0View.padding,
+                                                y: cp0View.frame.minY + cp0View.padding),
+                                        cp0View.knob.position + cp0View.frame.origin])
+        knobLinePath.addLines(between: [CGPoint(x: cp1View.frame.maxX - cp1View.padding,
+                                                y: cp1View.frame.maxY - cp1View.padding),
+                                        cp1View.knob.position + cp1View.frame.origin])
         controlLine.path = knobLinePath
     }
     
     var disabledRegisterUndo = false
     
     struct Binding {
-       let editor: EasingEditor, easing: Easing, oldEasing: Easing, type: Action.SendType
+       let view: EasingView, easing: Easing, oldEasing: Easing, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
     
     private var oldEasing = Easing()
     
-    private func setEasing(with obj: PointEditor.Binding) {
+    private func setEasing(with obj: PointView.Binding) {
         if obj.type == .begin {
             oldEasing = easing
-            binding?(Binding(editor: self, easing: oldEasing, oldEasing: oldEasing, type: .begin))
+            binding?(Binding(view: self, easing: oldEasing, oldEasing: oldEasing, type: .begin))
         } else {
-            easing = obj.editor == cp0Editor ?
+            easing = obj.view == cp0View ?
                 easing.with(cp0: obj.point) : easing.with(cp1: obj.point)
-            binding?(Binding(editor: self, easing: easing, oldEasing: oldEasing, type: obj.type))
+            binding?(Binding(view: self, easing: easing, oldEasing: oldEasing, type: obj.type))
         }
     }
     
@@ -240,8 +240,8 @@ final class EasingEditor: Layer, Respondable {
     
     private func set(_ easing: Easing, old oldEasing: Easing) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldEasing, old: easing) }
-        binding?(Binding(editor: self, easing: oldEasing, oldEasing: oldEasing, type: .begin))
+        binding?(Binding(view: self, easing: oldEasing, oldEasing: oldEasing, type: .begin))
         self.easing = easing
-        binding?(Binding(editor: self, easing: easing, oldEasing: oldEasing, type: .end))
+        binding?(Binding(view: self, easing: easing, oldEasing: oldEasing, type: .end))
     }
 }

@@ -25,10 +25,10 @@ import Foundation
  - バージョン管理UndoManager
  - ブランチ機能
  */
-final class VersionEditor: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Version Editor", japanese: "バージョンエディタ")
-    static let feature = Localization(english: "Show undoable count and undoed count in parent editor",
-                                      japanese: "親エディタでの取り消し可能回数、取り消し済み回数を表示")
+final class VersionView: Layer, Respondable, Localizable {
+    static let name = Localization(english: "Version View", japanese: "バージョン表示")
+    static let feature = Localization(english: "Show undoable count and undoed count in parent view",
+                                      japanese: "親表示での取り消し可能回数、取り消し済み回数を表示")
     
     private var undoGroupToken: NSObjectProtocol?
     private var undoToken: NSObjectProtocol?, redoToken: NSObjectProtocol?

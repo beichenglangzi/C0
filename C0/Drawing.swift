@@ -24,27 +24,27 @@ import Foundation
  - 変更通知またはイミュータブル化またはstruct化
  */
 final class Drawing: NSObject, NSCoding {
-    var lines: [Line], roughLines: [Line], selectionLineIndexes: [Int]
-    init(lines: [Line] = [], roughLines: [Line] = [], selectionLineIndexes: [Int] = []) {
+    var lines: [Line], roughLines: [Line], selectedLineIndexes: [Int]
+    init(lines: [Line] = [], roughLines: [Line] = [], selectedLineIndexes: [Int] = []) {
         self.lines = lines
         self.roughLines = roughLines
-        self.selectionLineIndexes = selectionLineIndexes
+        self.selectedLineIndexes = selectedLineIndexes
     }
     
     private enum CodingKeys: String, CodingKey {
-        case lines, roughLines, selectionLineIndexes
+        case lines, roughLines, selectedLineIndexes
     }
     init?(coder: NSCoder) {
         lines = coder.decodeDecodable([Line].self, forKey: CodingKeys.lines.rawValue) ?? []
         roughLines = coder.decodeDecodable([Line].self, forKey: CodingKeys.roughLines.rawValue) ?? []
-        selectionLineIndexes = coder.decodeObject(
-            forKey: CodingKeys.selectionLineIndexes.rawValue) as? [Int] ?? []
+        selectedLineIndexes = coder.decodeObject(
+            forKey: CodingKeys.selectedLineIndexes.rawValue) as? [Int] ?? []
         super.init()
     }
     func encode(with coder: NSCoder) {
         coder.encodeEncodable(lines, forKey: CodingKeys.lines.rawValue)
         coder.encodeEncodable(roughLines, forKey: CodingKeys.roughLines.rawValue)
-        coder.encode(selectionLineIndexes, forKey: CodingKeys.selectionLineIndexes.rawValue)
+        coder.encode(selectedLineIndexes, forKey: CodingKeys.selectedLineIndexes.rawValue)
     }
     
     func imageBounds(withLineWidth lineWidth: CGFloat) -> CGRect {
@@ -63,8 +63,8 @@ final class Drawing: NSObject, NSCoding {
         }
         return minLine
     }
-    func isNearestSelectionLineIndexes(at p: CGPoint) -> Bool {
-        guard !selectionLineIndexes.isEmpty else {
+    func isNearestSelectedLineIndexes(at p: CGPoint) -> Bool {
+        guard !selectedLineIndexes.isEmpty else {
             return false
         }
         var minD² = CGFloat.infinity, minIndex = 0
@@ -75,17 +75,17 @@ final class Drawing: NSObject, NSCoding {
                 minIndex = $0.offset
             }
         }
-        return selectionLineIndexes.contains(minIndex)
+        return selectedLineIndexes.contains(minIndex)
     }
     var editLines: [Line] {
-        return selectionLineIndexes.isEmpty ? lines : selectionLineIndexes.map { lines[$0] }
+        return selectedLineIndexes.isEmpty ? lines : selectedLineIndexes.map { lines[$0] }
     }
     var uneditLines: [Line] {
-        guard  !selectionLineIndexes.isEmpty else {
+        guard  !selectedLineIndexes.isEmpty else {
             return []
         }
         return (0 ..< lines.count)
-            .filter { !selectionLineIndexes.contains($0) }
+            .filter { !selectedLineIndexes.contains($0) }
             .map { lines[$0] }
     }
     
@@ -101,7 +101,7 @@ final class Drawing: NSObject, NSCoding {
     func drawEdit(lineWidth: CGFloat, lineColor: Color, in ctx: CGContext) {
         drawRough(lineWidth: lineWidth, lineColor: Color.rough, in: ctx)
         draw(lineWidth: lineWidth, lineColor: lineColor, in: ctx)
-        drawSelectionLines(lineWidth: lineWidth + 1.5, lineColor: Color.selection, in: ctx)
+        drawSelectedLines(lineWidth: lineWidth + 1.5, lineColor: Color.selected, in: ctx)
     }
     func drawRough(lineWidth: CGFloat, lineColor: Color, in ctx: CGContext) {
         ctx.setFillColor(lineColor.cgColor)
@@ -111,9 +111,9 @@ final class Drawing: NSObject, NSCoding {
         ctx.setFillColor(lineColor.cgColor)
         lines.forEach { $0.draw(size: lineWidth, in: ctx) }
     }
-    func drawSelectionLines(lineWidth: CGFloat, lineColor: Color, in ctx: CGContext) {
+    func drawSelectedLines(lineWidth: CGFloat, lineColor: Color, in ctx: CGContext) {
         ctx.setFillColor(lineColor.cgColor)
-        selectionLineIndexes.forEach { lines[$0].draw(size: lineWidth, in: ctx) }
+        selectedLineIndexes.forEach { lines[$0].draw(size: lineWidth, in: ctx) }
     }
 }
 extension Drawing: Referenceable {
@@ -122,7 +122,7 @@ extension Drawing: Referenceable {
 extension Drawing: Copying {
     func copied(from copier: Copier) -> Drawing {
         return Drawing(lines: lines, roughLines: roughLines,
-                       selectionLineIndexes: selectionLineIndexes)
+                       selectedLineIndexes: selectedLineIndexes)
     }
 }
 extension Drawing: ResponderExpression {

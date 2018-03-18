@@ -230,8 +230,8 @@ struct CopiedObject {
         self.objects = objects
     }
 }
-final class ObjectEditor: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Object Editor", japanese: "オブジェクトエディタ")
+final class ObjectView: Layer, Respondable, Localizable {
+    static let name = Localization(english: "Object View", japanese: "オブジェクト表示")
     
     var locale = Locale.current {
         didSet {
@@ -243,9 +243,9 @@ final class ObjectEditor: Layer, Respondable, Localizable {
     let object: Any
     
     static let thumbnailWidth = 40.0.cf
-    let thumbnailEditor: Layer, label: Label, thumbnailWidth: CGFloat
+    let thumbnailView: Layer, label: Label, thumbnailWidth: CGFloat
     init(object: Any, origin: CGPoint,
-         thumbnailWidth: CGFloat = ObjectEditor.thumbnailWidth, height: CGFloat) {
+         thumbnailWidth: CGFloat = ObjectView.thumbnailWidth, height: CGFloat) {
         
         self.object = object
         if let reference = object as? Referenceable {
@@ -255,12 +255,12 @@ final class ObjectEditor: Layer, Respondable, Localizable {
         }
         self.thumbnailWidth = thumbnailWidth
         let thumbnailBounds = CGRect(x: 0, y: 0, width: thumbnailWidth, height: 0)
-        self.thumbnailEditor = (object as? ResponderExpression)?
+        self.thumbnailView = (object as? ResponderExpression)?
             .responder(withBounds: thumbnailBounds) ?? Box()
         
         super.init()
         instanceDescription = (object as? Referenceable)?.valueDescription ?? Localization()
-        replace(children: [label, thumbnailEditor])
+        replace(children: [label, thumbnailView])
         updateFrameWith(origin: origin, thumbnailWidth: thumbnailWidth, height: height)
     }
     func updateFrameWith(origin: CGPoint, thumbnailWidth: CGFloat, height: CGFloat) {
@@ -269,7 +269,7 @@ final class ObjectEditor: Layer, Respondable, Localizable {
         let width = label.frame.width + thumbnailSize.width + Layout.basicPadding * 3
         frame = CGRect(x: origin.x, y: origin.y, width: width, height: height)
         label.frame.origin = CGPoint(x: Layout.basicPadding, y: Layout.basicPadding)
-        self.thumbnailEditor.frame = CGRect(x: label.frame.maxX + Layout.basicPadding,
+        self.thumbnailView.frame = CGRect(x: label.frame.maxX + Layout.basicPadding,
                                             y: Layout.basicPadding,
                                             width: thumbnailSize.width,
                                             height: thumbnailSize.height)
@@ -278,8 +278,8 @@ final class ObjectEditor: Layer, Respondable, Localizable {
         return CopiedObject(objects: [object])
     }
 }
-final class CopiedObjectEditor: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Copied Object Editor", japanese: "コピーオブジェクトエディタ")
+final class CopiedObjectView: Layer, Respondable, Localizable {
+    static let name = Localization(english: "Copied Object View", japanese: "コピーオブジェクト表示")
     
     var locale = Locale.current {
         didSet {
@@ -295,18 +295,18 @@ final class CopiedObjectEditor: Layer, Respondable, Localizable {
     
     var changeCount = 0
     
-    var objectEditors = [ObjectEditor]() {
+    var objectViews = [ObjectView]() {
         didSet {
             let padding = Layout.basicPadding
             nameLabel.frame.origin = CGPoint(x: padding, y: padding * 2)
-            if objectEditors.isEmpty {
-                replace(children: [nameLabel, versionEditor, versionCommaLabel, noneLabel])
-                let cs = [versionEditor, Padding(), versionCommaLabel, noneLabel]
+            if objectViews.isEmpty {
+                replace(children: [nameLabel, versionView, versionCommaLabel, noneLabel])
+                let cs = [versionView, Padding(), versionCommaLabel, noneLabel]
                 _ = Layout.leftAlignment(cs, minX: nameLabel.frame.maxX + padding,
                                          height: frame.height)
             } else {
-                replace(children: [nameLabel, versionEditor, versionCommaLabel] + objectEditors)
-                let cs = [versionEditor, Padding(), versionCommaLabel] + objectEditors as [Layer]
+                replace(children: [nameLabel, versionView, versionCommaLabel] + objectViews)
+                let cs = [versionView, Padding(), versionCommaLabel] + objectViews as [Layer]
                 _ = Layout.leftAlignment(cs, minX: nameLabel.frame.maxX + padding,
                                          height: frame.height)
             }
@@ -314,15 +314,15 @@ final class CopiedObjectEditor: Layer, Respondable, Localizable {
     }
     let nameLabel = Label(text: Localization(english: "Copy Manager", japanese: "コピー管理"),
                           font: .bold)
-    let versionEditor = VersionEditor()
+    let versionView = VersionView()
     let versionCommaLabel = Label(text: Localization(english: "Copied:", japanese: "コピー済み:"))
     let noneLabel = Label(text: Localization(english: "Empty", japanese: "空"))
     override init() {
-        versionEditor.frame = CGRect(x: 0, y: 0, width: 120, height: Layout.basicHeight)
-        versionEditor.rootUndoManager = rootUndoManager
+        versionView.frame = CGRect(x: 0, y: 0, width: 120, height: Layout.basicHeight)
+        versionView.rootUndoManager = rootUndoManager
         super.init()
         isClipped = true
-        replace(children: [nameLabel, versionEditor, versionCommaLabel, noneLabel])
+        replace(children: [nameLabel, versionView, versionCommaLabel, noneLabel])
     }
     var copiedObject = CopiedObject() {
         didSet {
@@ -333,11 +333,11 @@ final class CopiedObjectEditor: Layer, Respondable, Localizable {
     func updateChildren() {
         let padding = Layout.basicPadding
         var origin = CGPoint(x: padding, y: padding)
-        objectEditors = copiedObject.objects.map { object in
-            let objectEditor = ObjectEditor(object: object, origin: origin,
+        objectViews = copiedObject.objects.map { object in
+            let objectView = ObjectView(object: object, origin: origin,
                                             height: frame.height - padding * 2)
-            origin.x += objectEditor.frame.width + padding
-            return objectEditor
+            origin.x += objectView.frame.width + padding
+            return objectView
         }
     }
     
@@ -360,8 +360,8 @@ final class CopiedObjectEditor: Layer, Respondable, Localizable {
     }
 }
 
-final class DiscreteSizeEditor: Layer, Respondable {
-    static let name = Localization(english: "Size Editor", japanese: "サイズエディタ")
+final class DiscreteSizeView: Layer, Respondable {
+    static let name = Localization(english: "Size View", japanese: "サイズ表示")
     
     private let wLabel = Label(text: Localization("w:"))
     private let widthSlider = NumberSlider(frame: Layout.valueFrame,
@@ -397,7 +397,7 @@ final class DiscreteSizeEditor: Layer, Respondable {
     var defaultSize = CGSize()
     
     struct Binding {
-        let editor: DiscreteSizeEditor
+        let view: DiscreteSizeView
         let size: CGSize, oldSize: CGSize, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
@@ -408,11 +408,11 @@ final class DiscreteSizeEditor: Layer, Respondable {
     private func setSize(with obj: NumberSlider.Binding) {
         if obj.type == .begin {
             oldSize = size
-            binding?(Binding(editor: self, size: oldSize, oldSize: oldSize, type: .begin))
+            binding?(Binding(view: self, size: oldSize, oldSize: oldSize, type: .begin))
         } else {
             size = obj.slider == widthSlider ?
                 size.with(width: obj.value) : size.with(height: obj.value)
-            binding?(Binding(editor: self, size: size, oldSize: oldSize, type: obj.type))
+            binding?(Binding(view: self, size: size, oldSize: oldSize, type: obj.type))
         }
     }
     
@@ -442,14 +442,14 @@ final class DiscreteSizeEditor: Layer, Respondable {
     
     func set(_ size: CGSize, oldSize: CGSize) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldSize, oldSize: size) }
-        binding?(Binding(editor: self, size: size, oldSize: oldSize, type: .begin))
+        binding?(Binding(view: self, size: size, oldSize: oldSize, type: .begin))
         self.size = size
-        binding?(Binding(editor: self, size: size, oldSize: oldSize, type: .end))
+        binding?(Binding(view: self, size: size, oldSize: oldSize, type: .end))
     }
 }
 
-final class PointEditor: Layer, Respondable {
-    static let name = Localization(english: "Point Editor", japanese: "ポイントエディタ")
+final class PointView: Layer, Respondable {
+    static let name = Localization(english: "Point View", japanese: "ポイント表示")
     
     var backgroundLayers = [Layer]() {
         didSet {
@@ -515,7 +515,7 @@ final class PointEditor: Layer, Respondable {
     }
     
     struct Binding {
-        let editor: PointEditor, point: CGPoint, oldPoint: CGPoint, type: Action.SendType
+        let view: PointView, point: CGPoint, oldPoint: CGPoint, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
     
@@ -552,12 +552,12 @@ final class PointEditor: Layer, Respondable {
         case .begin:
             knob.fillColor = .editing
             oldPoint = point
-            binding?(Binding(editor: self, point: point, oldPoint: oldPoint, type: .begin))
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .begin))
             point = clippedPoint(with: self.point(withPosition: p))
-            binding?(Binding(editor: self, point: point, oldPoint: oldPoint, type: .sending))
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .sending))
         case .sending:
             point = clippedPoint(with: self.point(withPosition: p))
-            binding?(Binding(editor: self, point: point, oldPoint: oldPoint, type: .sending))
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .sending))
         case .end:
             point = clippedPoint(with: self.point(withPosition: p))
             if point != oldPoint {
@@ -565,7 +565,7 @@ final class PointEditor: Layer, Respondable {
                     $0.set(oldPoint, oldPoint: point)
                 }
             }
-            binding?(Binding(editor: self, point: point, oldPoint: oldPoint, type: .end))
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .end))
             knob.fillColor = .knob
         }
         return true
@@ -573,9 +573,9 @@ final class PointEditor: Layer, Respondable {
     
     func set(_ point: CGPoint, oldPoint: CGPoint) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldPoint, oldPoint: point) }
-        binding?(Binding(editor: self, point: point, oldPoint: oldPoint, type: .begin))
+        binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .begin))
         self.point = point
-        binding?(Binding(editor: self, point: point, oldPoint: oldPoint, type: .end))
+        binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .end))
     }
 }
 
@@ -694,8 +694,8 @@ extension CGImage {
     }
 }
 
-final class ImageEditor: Layer, Respondable {
-    static let name = Localization(english: "Image Editor", japanese: "画像エディタ")
+final class ImageView: Layer, Respondable {
+    static let name = Localization(english: "Image View", japanese: "画像表示")
     
     init(image: CGImage? = nil) {
         super.init()
@@ -705,14 +705,14 @@ final class ImageEditor: Layer, Respondable {
         super.init()
         self.url = url
         if let url = url {
-            self.image = ImageEditor.image(with: url)
+            self.image = ImageView.image(with: url)
         }
     }
     
     var url: URL? {
         didSet {
             if let url = url {
-                self.image = ImageEditor.image(with: url)
+                self.image = ImageView.image(with: url)
             }
         }
     }

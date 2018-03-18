@@ -45,13 +45,13 @@ class Layer {
         self.fillColor = fillColor
     }
     
-    class var selection: Layer {
+    class var selectionBox: Layer {
         let layer = Layer()
         layer.fillColor = .select
         layer.lineColor = .selectBorder
         return layer
     }
-    static var deselection: Layer {
+    static var deselectionBox: Layer {
         let layer = Layer()
         layer.fillColor = .deselect
         layer.lineColor = .deselectBorder
@@ -372,7 +372,6 @@ class PathLayer: Layer {
         caLayer.actions = actions
         caShapeLayer = caLayer
         super.init(caLayer)
-        caLayer.lineJoin = kCALineJoinBevel
         caLayer.fillColor = nil
         caLayer.lineWidth = 0
         caLayer.strokeColor = lineColor?.cgColor
@@ -587,7 +586,7 @@ extension CALayer {
         return layer
     }
     
-    static var selection: CALayer {
+    static var selected: CALayer {
         let layer = CALayer()
         layer.actions = disabledAnimationActions
         layer.backgroundColor = Color.select.cgColor
@@ -595,7 +594,7 @@ extension CALayer {
         layer.borderWidth = 1
         return layer
     }
-    static var deselection: CALayer {
+    static var deselected: CALayer {
         let layer = CALayer()
         layer.actions = disabledAnimationActions
         layer.backgroundColor = Color.deselect.cgColor

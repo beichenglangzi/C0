@@ -206,8 +206,8 @@ extension Material.MaterialType {
  # Issue
  - 「線の強さ」を追加
  */
-final class MaterialEditor: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Material Editor", japanese: "マテリアルエディタ")
+final class MaterialView: Layer, Respondable, Localizable {
+    static let name = Localization(english: "Material View", japanese: "マテリアル表示")
     
     var locale = Locale.current {
         didSet {
@@ -220,11 +220,11 @@ final class MaterialEditor: Layer, Respondable, Localizable {
             guard material.id != oldValue.id else {
                 return
             }
-            typeEditor.selectionIndex = index(with: material.type)
-            colorEditor.color = material.color
-            lineColorEditor.color = material.lineColor
-            lineWidthEditor.value = material.lineWidth
-            opacityEditor.value = material.opacity
+            typeView.selectedIndex = index(with: material.type)
+            colorView.color = material.color
+            lineColorView.color = material.lineColor
+            lineWidthView.value = material.lineWidth
+            opacityView.value = material.opacity
         }
     }
     var defaultMaterial = Material()
@@ -233,16 +233,16 @@ final class MaterialEditor: Layer, Respondable, Localizable {
     
     private let nameLabel = Label(text: Material.name, font: .bold)
     
-    private let typeEditor = EnumEditor(names: [Material.MaterialType.normal.displayString,
+    private let typeView = EnumView(names: [Material.MaterialType.normal.displayString,
                                                 Material.MaterialType.lineless.displayString,
                                                 Material.MaterialType.blur.displayString,
                                                 Material.MaterialType.luster.displayString,
                                                 Material.MaterialType.add.displayString,
                                                 Material.MaterialType.subtract.displayString],
                                         description: Localization(english: "Type", japanese: "タイプ"))
-    private let colorEditor = ColorEditor()
+    private let colorView = ColorView()
     
-    private let lineWidthEditor = Slider(min: Material.defaultLineWidth, max: 500, exp: 3,
+    private let lineWidthView = Slider(min: Material.defaultLineWidth, max: 500, exp: 3,
                                          description: Localization(english: "Line Width",
                                                                    japanese: "線の太さ"))
     private static func lineWidthLayer(with bounds: CGRect, padding: CGFloat) -> Layer {
@@ -260,7 +260,7 @@ final class MaterialEditor: Layer, Respondable, Localizable {
         return shapeLayer
     }
     
-    private let opacityEditor = Slider(value: 1, defaultValue: 1, min: 0, max: 1,
+    private let opacityView = Slider(value: 1, defaultValue: 1, min: 0, max: 1,
                                        description: Localization(english: "Opacity",
                                                                  japanese: "不透明度"))
     private static func opacitySliderLayers(with bounds: CGRect, padding: CGFloat) -> [Layer] {
@@ -284,7 +284,7 @@ final class MaterialEditor: Layer, Respondable, Localizable {
     
     private let lineColorLabel = Label(text: Localization(english: "Line Color:",
                                                           japanese: "線のカラー:"))
-    private let lineColorEditor = ColorEditor(hLineWidth: 2,
+    private let lineColorView = ColorView(hLineWidth: 2,
                                               inPadding: 4, outPadding: 4,
                                               slPadding: 4, knobRadius: 4)
     
@@ -292,23 +292,23 @@ final class MaterialEditor: Layer, Respondable, Localizable {
         material = defaultMaterial
         super.init()
         replace(children: [nameLabel,
-                           typeEditor,
-                           colorEditor, lineColorLabel, lineColorEditor,
-                           lineWidthEditor, opacityEditor])
+                           typeView,
+                           colorView, lineColorLabel, lineColorView,
+                           lineWidthView, opacityView])
         
-        typeEditor.binding = { [unowned self] in self.setMaterial(with: $0) }
+        typeView.binding = { [unowned self] in self.setMaterial(with: $0) }
         
-        colorEditor.setColorHandler = { [unowned self] in self.setMaterial(with: $0) }
-        lineColorEditor.setColorHandler = { [unowned self] in self.setMaterial(with: $0) }
+        colorView.setColorHandler = { [unowned self] in self.setMaterial(with: $0) }
+        lineColorView.setColorHandler = { [unowned self] in self.setMaterial(with: $0) }
         
-        lineWidthEditor.binding = { [unowned self] in self.setMaterial(with: $0) }
-        opacityEditor.binding = { [unowned self] in self.setMaterial(with: $0) }
+        lineWidthView.binding = { [unowned self] in self.setMaterial(with: $0) }
+        opacityView.binding = { [unowned self] in self.setMaterial(with: $0) }
     }
     
     override var defaultBounds: CGRect {
         return CGRect(x: 0, y: 0,
-                      width: MaterialEditor.defaultWidth,
-                      height: MaterialEditor.defaultWidth + nameLabel.frame.height
+                      width: MaterialView.defaultWidth,
+                      height: MaterialView.defaultWidth + nameLabel.frame.height
                         + Layout.basicHeight * 4 + Layout.basicPadding * 3)
     }
     override var bounds: CGRect {
@@ -321,19 +321,19 @@ final class MaterialEditor: Layer, Respondable, Localizable {
         let cw = bounds.width - padding * 2
         let leftWidth = cw - h * 3
         nameLabel.frame.origin = CGPoint(x: padding, y: padding * 2 + h * 4 + cw)
-        typeEditor.frame = CGRect(x: padding, y: padding + h * 3 + cw, width: cw, height: h)
-        colorEditor.frame = CGRect(x: padding, y: padding + h * 3, width: cw, height: cw)
+        typeView.frame = CGRect(x: padding, y: padding + h * 3 + cw, width: cw, height: h)
+        colorView.frame = CGRect(x: padding, y: padding + h * 3, width: cw, height: cw)
         lineColorLabel.frame.origin = CGPoint(x: padding + leftWidth - lineColorLabel.frame.width,
                                               y: padding * 2)
-        lineColorEditor.frame = CGRect(x: padding + leftWidth, y: padding, width: h * 3, height: h * 3)
-        lineWidthEditor.frame = CGRect(x: padding, y: padding + h * 2, width: leftWidth, height: h)
-        let lineWidthLayer = MaterialEditor.lineWidthLayer(with: lineWidthEditor.bounds,
-                                                           padding: lineWidthEditor.padding)
-        lineWidthEditor.backgroundLayers = [lineWidthLayer]
-        opacityEditor.frame = CGRect(x: padding, y: padding + h, width: leftWidth, height: h)
-        let opacitySliderLayers = MaterialEditor.opacitySliderLayers(with: opacityEditor.bounds,
-                                                                     padding: opacityEditor.padding)
-        opacityEditor.backgroundLayers = opacitySliderLayers
+        lineColorView.frame = CGRect(x: padding + leftWidth, y: padding, width: h * 3, height: h * 3)
+        lineWidthView.frame = CGRect(x: padding, y: padding + h * 2, width: leftWidth, height: h)
+        let lineWidthLayer = MaterialView.lineWidthLayer(with: lineWidthView.bounds,
+                                                           padding: lineWidthView.padding)
+        lineWidthView.backgroundLayers = [lineWidthLayer]
+        opacityView.frame = CGRect(x: padding, y: padding + h, width: leftWidth, height: h)
+        let opacitySliderLayers = MaterialView.opacitySliderLayers(with: opacityView.bounds,
+                                                                     padding: opacityView.padding)
+        opacityView.backgroundLayers = opacitySliderLayers
     }
     
     private func materialType(withIndex index: Int) -> Material.MaterialType {
@@ -343,14 +343,14 @@ final class MaterialEditor: Layer, Respondable, Localizable {
         return Int(type.rawValue)
     }
     
-    var isEditingBinding: ((MaterialEditor, Bool) -> ())?
+    var isEditingBinding: ((MaterialView, Bool) -> ())?
     var isEditing = false {
         didSet {
             isEditingBinding?(self, isEditing)
         }
     }
     
-    var isSubIndicatedBinding: ((MaterialEditor, Bool) -> ())?
+    var isSubIndicatedBinding: ((MaterialView, Bool) -> ())?
     override var isSubIndicated: Bool {
         didSet {
             isSubIndicatedBinding?(self, isSubIndicated)
@@ -360,41 +360,41 @@ final class MaterialEditor: Layer, Respondable, Localizable {
     var disabledRegisterUndo = true
     
     struct Binding {
-        let editor: MaterialEditor
+        let view: MaterialView
         let material: Material, oldMaterial: Material, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
     
     struct TypeBinding {
-        let editor: MaterialEditor
+        let view: MaterialView
         let type: Material.MaterialType, oldType: Material.MaterialType
         let material: Material, oldMaterial: Material, sendType: Action.SendType
     }
     var typeBinding: ((TypeBinding) -> ())?
     
     struct ColorBinding {
-        let editor: MaterialEditor
+        let view: MaterialView
         let color: Color, oldColor: Color
         let material: Material, oldMaterial: Material, type: Action.SendType
     }
     var colorBinding: ((ColorBinding) -> ())?
     
     struct LineColorBinding {
-        let editor: MaterialEditor
+        let view: MaterialView
         let lineColor: Color, oldLineColor: Color
         let material: Material, oldMaterial: Material, type: Action.SendType
     }
     var lineColorBinding: ((LineColorBinding) -> ())?
     
     struct LineWidthBinding {
-        let editor: MaterialEditor
+        let view: MaterialView
         let lineWidth: CGFloat, oldLineWidth: CGFloat
         let material: Material, oldMaterial: Material, type: Action.SendType
     }
     var lineWidthBinding: ((LineWidthBinding) -> ())?
     
     struct OpacityBinding {
-        let editor: MaterialEditor
+        let view: MaterialView
         let opacity: CGFloat, oldOpacity: CGFloat
         let material: Material, oldMaterial: Material, type: Action.SendType
     }
@@ -402,18 +402,18 @@ final class MaterialEditor: Layer, Respondable, Localizable {
     
     private var oldMaterial = Material()
     
-    private func setMaterial(with binding: EnumEditor.Binding) {
+    private func setMaterial(with binding: EnumView.Binding) {
         if binding.type == .begin {
             isEditing = true
             oldMaterial = material
-            typeBinding?(TypeBinding(editor: self,
+            typeBinding?(TypeBinding(view: self,
                                      type: oldMaterial.type, oldType: oldMaterial.type,
                                      material: oldMaterial, oldMaterial: oldMaterial,
                                      sendType: .begin))
         } else {
             let type = materialType(withIndex: binding.index)
             material = material.with(type)
-            typeBinding?(TypeBinding(editor: self,
+            typeBinding?(TypeBinding(view: self,
                                      type: type, oldType: oldMaterial.type,
                                      material: material, oldMaterial: oldMaterial,
                                      sendType: binding.type))
@@ -423,19 +423,19 @@ final class MaterialEditor: Layer, Respondable, Localizable {
         }
     }
     
-    private func setMaterial(with obj: ColorEditor.Binding) {
-        switch obj.colorEditor {
-        case colorEditor:
+    private func setMaterial(with obj: ColorView.Binding) {
+        switch obj.colorView {
+        case colorView:
             if obj.type == .begin {
                 isEditing = true
                 oldMaterial = material
-                colorBinding?(ColorBinding(editor: self,
+                colorBinding?(ColorBinding(view: self,
                                            color: obj.color, oldColor: obj.oldColor,
                                            material: oldMaterial, oldMaterial: oldMaterial,
                                            type: .begin))
             } else {
                 material = material.with(obj.color)
-                colorBinding?(ColorBinding(editor: self,
+                colorBinding?(ColorBinding(view: self,
                                            color: obj.color, oldColor: obj.oldColor,
                                            material: material, oldMaterial: oldMaterial,
                                            type: obj.type))
@@ -443,17 +443,17 @@ final class MaterialEditor: Layer, Respondable, Localizable {
                     isEditing = false
                 }
             }
-        case lineColorEditor:
+        case lineColorView:
             if obj.type == .begin {
                 isEditing = true
                 oldMaterial = material
-                lineColorBinding?(LineColorBinding(editor: self,
+                lineColorBinding?(LineColorBinding(view: self,
                                                    lineColor: obj.color, oldLineColor: obj.oldColor,
                                                    material: oldMaterial, oldMaterial: oldMaterial,
                                                    type: .begin))
             } else {
                 material = material.with(lineColor: obj.color)
-                lineColorBinding?(LineColorBinding(editor: self,
+                lineColorBinding?(LineColorBinding(view: self,
                                                    lineColor: obj.color, oldLineColor: obj.oldColor,
                                                    material: material, oldMaterial: oldMaterial,
                                                    type: obj.type))
@@ -468,17 +468,17 @@ final class MaterialEditor: Layer, Respondable, Localizable {
     
     private func setMaterial(with obj: Slider.Binding) {
         switch obj.slider {
-        case lineWidthEditor:
+        case lineWidthView:
             if obj.type == .begin {
                 isEditing = true
                 oldMaterial = material
-                lineWidthBinding?(LineWidthBinding(editor: self,
+                lineWidthBinding?(LineWidthBinding(view: self,
                                                    lineWidth: obj.value, oldLineWidth: obj.oldValue,
                                                    material: oldMaterial, oldMaterial: oldMaterial,
                                                    type: .begin))
             } else {
                 material = material.with(lineWidth: obj.value)
-                lineWidthBinding?(LineWidthBinding(editor: self,
+                lineWidthBinding?(LineWidthBinding(view: self,
                                                    lineWidth: obj.value, oldLineWidth: obj.oldValue,
                                                    material: material, oldMaterial: oldMaterial,
                                                    type: obj.type))
@@ -486,17 +486,17 @@ final class MaterialEditor: Layer, Respondable, Localizable {
                     isEditing = false
                 }
             }
-        case opacityEditor:
+        case opacityView:
             if obj.type == .begin {
                 isEditing = true
                 oldMaterial = material
-                opacityBinding?(OpacityBinding(editor: self,
+                opacityBinding?(OpacityBinding(view: self,
                                                opacity: obj.value, oldOpacity: obj.oldValue,
                                                material: oldMaterial, oldMaterial: oldMaterial,
                                                type: .begin))
             } else {
                 material = material.with(opacity: obj.value)
-                opacityBinding?(OpacityBinding(editor: self,
+                opacityBinding?(OpacityBinding(view: self,
                                                opacity: obj.value, oldOpacity: obj.oldValue,
                                                material: material, oldMaterial: oldMaterial,
                                                type: obj.type))
@@ -532,8 +532,8 @@ final class MaterialEditor: Layer, Respondable, Localizable {
     
     private func set(_ material: Material, old oldMaterial: Material) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldMaterial, old: material) }
-        binding?(Binding(editor: self, material: oldMaterial, oldMaterial: oldMaterial, type: .begin))
+        binding?(Binding(view: self, material: oldMaterial, oldMaterial: oldMaterial, type: .begin))
         self.material = material
-        binding?(Binding(editor: self, material: material, oldMaterial: oldMaterial, type: .end))
+        binding?(Binding(view: self, material: material, oldMaterial: oldMaterial, type: .end))
     }
 }

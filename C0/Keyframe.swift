@@ -83,8 +83,8 @@ extension Keyframe: Referenceable {
     static let name = Localization(english: "Keyframe", japanese: "キーフレーム")
 }
 
-final class KeyframeEditor: Layer, Respondable {
-    static let name = Localization(english: "Keyframe Editor", japanese: "キーフレームエディタ")
+final class KeyframeView: Layer, Respondable {
+    static let name = Localization(english: "Keyframe View", japanese: "キーフレーム表示")
     
     var keyframe = Keyframe() {
         didSet {
@@ -95,8 +95,8 @@ final class KeyframeEditor: Layer, Respondable {
     }
     
     let nameLabel = Label(text: Keyframe.name, font: .bold)
-    let easingEditor = EasingEditor()
-    let interpolationEditor = EnumEditor(
+    let easingView = EasingView()
+    let interpolationView = EnumView(
         names: [Localization(english: "Spline", japanese: "スプライン"),
                 Localization(english: "Bound", japanese: "バウンド"),
                 Localization(english: "Linear", japanese: "リニア"),
@@ -106,7 +106,7 @@ final class KeyframeEditor: Layer, Respondable {
             japanese: "バウンド: 前方側の補間をしないスプライン補間, 前後が足りない場合: リニア補間を使用"
         )
     )
-    let loopEditor = EnumEditor(
+    let loopView = EnumView(
         names: [Localization(english: "No Loop", japanese: "ループなし"),
                 Localization(english: "Began Loop", japanese: "ループ開始"),
                 Localization(english: "Ended Loop", japanese: "ループ終了")],
@@ -115,18 +115,18 @@ final class KeyframeEditor: Layer, Respondable {
             japanese: "「ループ開始」キーフレームから「ループ終了」キーフレームの間を「ループ終了」キーフレーム上でループ"
         )
     )
-    let labelEditor = EnumEditor(
+    let labelView = EnumView(
         names: [Localization(english: "Main Label", japanese: "メインラベル"),
                 Localization(english: "Sub Label", japanese: "サブラベル")]
     )
     
     override init() {
         super.init()
-        replace(children: [nameLabel, easingEditor, interpolationEditor, loopEditor, labelEditor])
-        interpolationEditor.binding = { [unowned self] in self.setKeyframe(with: $0) }
-        loopEditor.binding = { [unowned self] in self.setKeyframe(with: $0) }
-        labelEditor.binding = { [unowned self] in self.setKeyframe(with: $0) }
-        easingEditor.binding = { [unowned self] in self.setKeyframe(with: $0) }
+        replace(children: [nameLabel, easingView, interpolationView, loopView, labelView])
+        interpolationView.binding = { [unowned self] in self.setKeyframe(with: $0) }
+        loopView.binding = { [unowned self] in self.setKeyframe(with: $0) }
+        labelView.binding = { [unowned self] in self.setKeyframe(with: $0) }
+        easingView.binding = { [unowned self] in self.setKeyframe(with: $0) }
     }
     
     override var bounds: CGRect {
@@ -140,20 +140,20 @@ final class KeyframeEditor: Layer, Respondable {
         var y = bounds.height - nameLabel.frame.height - padding
         nameLabel.frame.origin = CGPoint(x: padding, y: y)
         y -= h + padding
-        interpolationEditor.frame = CGRect(x: padding, y: y, width: w, height: h)
+        interpolationView.frame = CGRect(x: padding, y: y, width: w, height: h)
         y -= h
-        loopEditor.frame = CGRect(x: padding, y: y, width: w, height: h)
+        loopView.frame = CGRect(x: padding, y: y, width: w, height: h)
         y -= h
-        labelEditor.frame = CGRect(x: padding, y: y, width: w, height: h)
-        easingEditor.frame = CGRect(x: padding, y: padding,
+        labelView.frame = CGRect(x: padding, y: y, width: w, height: h)
+        easingView.frame = CGRect(x: padding, y: padding,
                                     width: w, height: y - padding)
     }
     
     private func updateWithKeyframeOption() {
-        labelEditor.selectionIndex = KeyframeEditor.index(with: keyframe.label)
-        loopEditor.selectionIndex = KeyframeEditor.index(with: keyframe.loop)
-        interpolationEditor.selectionIndex = KeyframeEditor.index(with: keyframe.interpolation)
-        easingEditor.easing = keyframe.easing
+        labelView.selectedIndex = KeyframeView.index(with: keyframe.label)
+        loopView.selectedIndex = KeyframeView.index(with: keyframe.loop)
+        interpolationView.selectedIndex = KeyframeView.index(with: keyframe.interpolation)
+        easingView.easing = keyframe.easing
     }
     
     private static func index(with interpolation: Keyframe.Interpolation) -> Int {
@@ -180,41 +180,41 @@ final class KeyframeEditor: Layer, Respondable {
     var disabledRegisterUndo = false
     
     struct Binding {
-        let editor: KeyframeEditor
+        let view: KeyframeView
         let keyframe: Keyframe, oldKeyframe: Keyframe, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
     
     private var oldKeyframe = Keyframe()
     
-    private func setKeyframe(with binding: EnumEditor.Binding) {
+    private func setKeyframe(with binding: EnumView.Binding) {
         if binding.type == .begin {
             oldKeyframe = keyframe
-            self.binding?(Binding(editor: self,
+            self.binding?(Binding(view: self,
                                   keyframe: oldKeyframe, oldKeyframe: oldKeyframe, type: .begin))
         } else {
-            switch binding.enumEditor {
-            case interpolationEditor:
-                keyframe = keyframe.with(KeyframeEditor.interpolation(at: binding.index))
-            case loopEditor:
-                keyframe = keyframe.with(KeyframeEditor.loop(at: binding.index))
-            case labelEditor:
-                keyframe = keyframe.with(KeyframeEditor.label(at: binding.index))
+            switch binding.enumView {
+            case interpolationView:
+                keyframe = keyframe.with(KeyframeView.interpolation(at: binding.index))
+            case loopView:
+                keyframe = keyframe.with(KeyframeView.loop(at: binding.index))
+            case labelView:
+                keyframe = keyframe.with(KeyframeView.label(at: binding.index))
             default:
                 fatalError("No case")
             }
-            self.binding?(Binding(editor: self,
+            self.binding?(Binding(view: self,
                                   keyframe: keyframe, oldKeyframe: oldKeyframe, type: binding.type))
         }
     }
-    private func setKeyframe(with binding: EasingEditor.Binding) {
+    private func setKeyframe(with binding: EasingView.Binding) {
         if binding.type == .begin {
             oldKeyframe = keyframe
-            self.binding?(Binding(editor: self,
+            self.binding?(Binding(view: self,
                                   keyframe: oldKeyframe, oldKeyframe: oldKeyframe, type: .begin))
         } else {
             keyframe = keyframe.with(binding.easing)
-            self.binding?(Binding(editor: self,
+            self.binding?(Binding(view: self,
                                   keyframe: keyframe, oldKeyframe: oldKeyframe, type: binding.type))
         }
     }
@@ -249,10 +249,10 @@ final class KeyframeEditor: Layer, Respondable {
     
     private func set(_ keyframe: Keyframe, old oldKeyframe: Keyframe) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldKeyframe, old: keyframe) }
-        binding?(Binding(editor: self,
+        binding?(Binding(view: self,
                          keyframe: oldKeyframe, oldKeyframe: oldKeyframe, type: .begin))
         self.keyframe = keyframe
-        binding?(Binding(editor: self,
+        binding?(Binding(view: self,
                          keyframe: keyframe, oldKeyframe: oldKeyframe, type: .end))
     }
 }

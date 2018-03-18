@@ -41,8 +41,8 @@ extension Referenceable {
  # Issue
  - リファレンス表示の具体化
  */
-final class ReferenceEditor: Layer, Respondable {
-    static let name = Localization(english: "Reference Editor", japanese: "情報エディタ")
+final class ReferenceView: Layer, Respondable {
+    static let name = Localization(english: "Reference View", japanese: "情報表示")
     static let feature = Localization(english: "Close: Move cursor to outside",
                                       japanese: "閉じる: カーソルを外に出す")
     
@@ -63,7 +63,7 @@ final class ReferenceEditor: Layer, Respondable {
     
     private func updateWithReference() {
         if let reference = reference {
-            let cas = ReferenceEditor.childrenAndSize(with: reference, width: minWidth)
+            let cas = ReferenceView.childrenAndSize(with: reference, width: minWidth)
             replace(children: cas.children)
             frame = CGRect(x: frame.origin.x, y: frame.origin.y - (cas.size.height - frame.height),
                            width: cas.size.width, height: cas.size.height)

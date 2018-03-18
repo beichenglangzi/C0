@@ -303,6 +303,12 @@ final class C0Application: NSApplication {
         bringAllToFrontItem?.title = Localization(english: "Bring All to Front",
                                                   japanese: "すべてを手前に移動").string(with: locale)
     }
+    
+    @IBAction func readme(_ sender: Any?) {
+        if let url = URL(string: "https://github.com/smdls/C0") {
+            NSWorkspace.shared.open(url)
+        }
+    }
 }
 
 /**
@@ -383,13 +389,13 @@ final class C0Document: NSDocument, NSWindowDelegate {
         }
         setupWindow(with: preference)
         
-        undoManager = view.human.sceneEditor.undoManager
+        undoManager = view.human.sceneView.undoManager
         
         view.human.preferenceDataModel.didChangeIsWriteHandler = isWriteHandler
-        view.human.sceneEditor.sceneDataModel.didChangeIsWriteHandler = isWriteHandler
+        view.human.sceneView.sceneDataModel.didChangeIsWriteHandler = isWriteHandler
         preferenceDataModel.didChangeIsWriteHandler = isWriteHandler
         
-        view.human.copiedObjectEditor.copiedObject = copiedObject(with: NSPasteboard.general)
+        view.human.copiedObjectView.copiedObject = copiedObject(with: NSPasteboard.general)
     }
     private func setupWindow(with preference: C0Preference) {
         window.setFrame(preference.windowFrame, display: false)
@@ -430,15 +436,15 @@ final class C0Document: NSDocument, NSWindowDelegate {
         let pasteboard = NSPasteboard.general
         if pasteboard.changeCount != oldChangeCountWithPsteboard {
             oldChangeCountWithPsteboard = pasteboard.changeCount
-            view.human.copiedObjectEditor.copiedObject = copiedObject(with: pasteboard)
-            oldChangeCountWithCopiedObject = view.human.copiedObjectEditor.changeCount
+            view.human.copiedObjectView.copiedObject = copiedObject(with: pasteboard)
+            oldChangeCountWithCopiedObject = view.human.copiedObjectView.changeCount
         }
     }
     func windowDidResignMain(_ notification: Notification) {
-        if oldChangeCountWithCopiedObject != view.human.copiedObjectEditor.changeCount {
-            oldChangeCountWithCopiedObject = view.human.copiedObjectEditor.changeCount
+        if oldChangeCountWithCopiedObject != view.human.copiedObjectView.changeCount {
+            oldChangeCountWithCopiedObject = view.human.copiedObjectView.changeCount
             let pasteboard = NSPasteboard.general
-            setCopiedObject(view.human.copiedObjectEditor.copiedObject, in: pasteboard)
+            setCopiedObject(view.human.copiedObjectView.copiedObject, in: pasteboard)
             oldChangeCountWithPsteboard = pasteboard.changeCount
         }
     }
@@ -517,11 +523,6 @@ final class C0Document: NSDocument, NSWindowDelegate {
         }
     }
     
-    @IBAction func readme(_ sender: Any?) {
-        if let url = URL(string: "https://github.com/smdls/C0") {
-            NSWorkspace.shared.open(url)
-        }
-    }
     func openEmoji() {
         NSApp.orderFrontCharacterPalette(nil)
     }
@@ -787,37 +788,37 @@ final class C0View: NSView, NSTextInputClient {
         human.sendResetView(with: doubleTapEventWith(.end, event))
     }
     
-    var editTextEditor: TextEditor? {
-        return human.editTextEditor
+    var editTextView: TextView? {
+        return human.editTextView
     }
     func hasMarkedText() -> Bool {
-        return editTextEditor?.hasMarkedText ?? false
+        return editTextView?.hasMarkedText ?? false
     }
     func markedRange() -> NSRange {
-        return editTextEditor?.markedRange ?? NSRange(location: NSNotFound, length: 0)
+        return editTextView?.markedRange ?? NSRange(location: NSNotFound, length: 0)
     }
     func selectedRange() -> NSRange {
-        return editTextEditor?.selectedRange ?? NSRange(location: NSNotFound, length: 0)
+        return editTextView?.selectedRange ?? NSRange(location: NSNotFound, length: 0)
     }
     func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
-        editTextEditor?.setMarkedText(string, selectedRange: selectedRange,
+        editTextView?.setMarkedText(string, selectedRange: selectedRange,
                                       replacementRange: replacementRange)
     }
     func unmarkText() {
-        editTextEditor?.unmarkText()
+        editTextView?.unmarkText()
     }
     func validAttributesForMarkedText() -> [NSAttributedStringKey] {
         return [.markedClauseSegment, .glyphInfo]
     }
     func attributedSubstring(forProposedRange range: NSRange,
                              actualRange: NSRangePointer?) -> NSAttributedString? {
-        return editTextEditor?.attributedSubstring(forProposedRange: range, actualRange: actualRange)
+        return editTextView?.attributedSubstring(forProposedRange: range, actualRange: actualRange)
     }
     func insertText(_ string: Any, replacementRange: NSRange) {
-        editTextEditor?.insertText(string, replacementRange: replacementRange)
+        editTextView?.insertText(string, replacementRange: replacementRange)
     }
     func characterIndex(for point: NSPoint) -> Int {
-        if let editText = editTextEditor {
+        if let editText = editTextView {
             let p = editText.convert(convertFromTopScreen(point), from: nil)
             return editText.characterIndex(for: p)
         } else {
@@ -825,7 +826,7 @@ final class C0View: NSView, NSTextInputClient {
         }
     }
     func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
-        if let editText = editTextEditor {
+        if let editText = editTextView {
             let rect = editText.firstRect(forCharacterRange: range, actualRange: actualRange)
             return convertToTopScreen(editText.convert(rect, to: nil))
         } else {
@@ -833,10 +834,10 @@ final class C0View: NSView, NSTextInputClient {
         }
     }
     func attributedString() -> NSAttributedString {
-        return editTextEditor?.attributedString ?? NSAttributedString()
+        return editTextView?.attributedString ?? NSAttributedString()
     }
     func fractionOfDistanceThroughGlyph(for point: NSPoint) -> CGFloat {
-        if let editText = editTextEditor {
+        if let editText = editTextView {
             let p = editText.convert(convertFromTopScreen(point), from: nil)
             return editText.characterFraction(for: p)
         } else {
@@ -844,7 +845,7 @@ final class C0View: NSView, NSTextInputClient {
         }
     }
     func baselineDeltaForCharacter(at anIndex: Int) -> CGFloat {
-        return editTextEditor?.baselineDelta(at: anIndex) ?? 0
+        return editTextView?.baselineDelta(at: anIndex) ?? 0
     }
     func windowLevel() -> Int {
         return window?.level.rawValue ?? 0
@@ -854,22 +855,22 @@ final class C0View: NSView, NSTextInputClient {
     }
     
     override func insertNewline(_ sender: Any?) {
-        editTextEditor?.insertNewline()
+        editTextView?.insertNewline()
     }
     override func insertTab(_ sender: Any?) {
-        editTextEditor?.insertTab()
+        editTextView?.insertTab()
     }
     override func deleteBackward(_ sender: Any?) {
-        editTextEditor?.deleteBackward()
+        editTextView?.deleteBackward()
     }
     override func deleteForward(_ sender: Any?) {
-        editTextEditor?.deleteForward()
+        editTextView?.deleteForward()
     }
     override func moveLeft(_ sender: Any?) {
-        editTextEditor?.moveLeft()
+        editTextView?.moveLeft()
     }
     override func moveRight(_ sender: Any?) {
-        editTextEditor?.moveRight()
+        editTextView?.moveRight()
     }
 }
 

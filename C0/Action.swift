@@ -391,8 +391,8 @@ extension Action: Equatable {
     }
 }
 
-final class ActionEditor: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Action Manager Editor", japanese: "アクション管理エディタ")
+final class ActionView: Layer, Respondable, Localizable {
+    static let name = Localization(english: "Action Manager View", japanese: "アクション管理表示")
     
     var locale = Locale.current {
         didSet {
@@ -406,14 +406,14 @@ final class ActionEditor: Layer, Respondable, Localizable {
     
     let nameLabel = Label(text: Localization(english: "Action Manager", japanese: "アクション管理"),
                           font: .bold)
-    let isHiddenEditor = EnumEditor(names: [Localization(english: "Hidden", japanese: "表示なし"),
+    let isHiddenView = EnumView(names: [Localization(english: "Hidden", japanese: "表示なし"),
                                             Localization(english: "Shown", japanese: "表示あり")])
     var isHiddenActions = false {
         didSet {
             guard isHiddenActions != oldValue else {
                 return
             }
-            isHiddenEditor.selectionIndex = isHiddenActions ? 0 : 1
+            isHiddenView.selectedIndex = isHiddenActions ? 0 : 1
             updateChildren()
         }
     }
@@ -424,23 +424,23 @@ final class ActionEditor: Layer, Respondable, Localizable {
         if isHiddenActions {
             actionItems = []
             nameLabel.frame.origin = CGPoint(x: padding, y: padding * 2)
-            isHiddenEditor.frame = CGRect(x: nameLabel.frame.width + padding * 2,
+            isHiddenView.frame = CGRect(x: nameLabel.frame.width + padding * 2,
                                           y: padding,
                                           width: 80.0,
                                           height: Layout.basicHeight)
-            replace(children: [nameLabel, isHiddenEditor])
+            replace(children: [nameLabel, isHiddenView])
             frame.size = CGSize(width: actionWidth, height: Layout.basicHeight + padding * 2)
         } else {
-            let aaf = ActionEditor.actionItemsAndFrameWith(actionManager: actionManager,
+            let aaf = ActionView.actionItemsAndFrameWith(actionManager: actionManager,
                                                            actionWidth: actionWidth - padding * 2,
                                                            minY: padding)
             self.actionItems = aaf.actionItems
             nameLabel.frame.origin = CGPoint(x: padding,
                                                y: aaf.size.height + padding * 3)
-            isHiddenEditor.frame = CGRect(x: nameLabel.frame.width + padding * 2,
+            isHiddenView.frame = CGRect(x: nameLabel.frame.width + padding * 2,
                                           y: aaf.size.height + padding * 2,
                                           width: 80.0, height: Layout.basicHeight)
-            replace(children: [nameLabel, isHiddenEditor] + actionItems)
+            replace(children: [nameLabel, isHiddenView] + actionItems)
             frame.size = CGSize(width: actionWidth,
                                 height: aaf.size.height + Layout.basicHeight + padding * 3)
         }
@@ -448,8 +448,8 @@ final class ActionEditor: Layer, Respondable, Localizable {
     
     override init() {
         super.init()
-        isHiddenEditor.selectionIndex = 1
-        isHiddenEditor.binding = { [unowned self] in
+        isHiddenView.selectedIndex = 1
+        isHiddenView.binding = { [unowned self] in
             self.isHiddenActions = $0.index == 0
             self.isHiddenActionBinding?(self.isHiddenActions)
         }
@@ -458,7 +458,7 @@ final class ActionEditor: Layer, Respondable, Localizable {
     
     var isHiddenActionBinding: ((Bool) -> (Void))? = nil
     
-    var actionWidth = ActionEditor.defaultWidth, commandFont = Font.action
+    var actionWidth = ActionView.defaultWidth, commandFont = Font.action
     
     static func actionItemsAndFrameWith(actionManager: ActionManager,
                                         actionWidth: CGFloat,

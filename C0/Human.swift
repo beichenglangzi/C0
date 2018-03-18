@@ -21,7 +21,7 @@ import Foundation
 
 /**
  # Issue
- - sceneEditorを取り除く
+ - sceneViewを取り除く
  */
 final class Human: Layer, Respondable, Localizable {
     static let name = Localization(english: "Human", japanese: "人間")
@@ -42,8 +42,8 @@ final class Human: Layer, Respondable, Localizable {
     }
     var preference = Preference() {
         didSet {
-            actionEditor.isHiddenEditor.selectionIndex = preference.isHiddenAction ? 0 : 1
-            actionEditor.isHiddenActions = preference.isHiddenAction
+            actionView.isHiddenView.selectedIndex = preference.isHiddenAction ? 0 : 1
+            actionView.isHiddenActions = preference.isHiddenAction
             updateLayout()
         }
     }
@@ -66,32 +66,32 @@ final class Human: Layer, Respondable, Localizable {
                     return self.preference.jsonData
                 }
             }
-            if let sceneEditorDataModel = worldDataModel.children[SceneEditor.sceneEditorKey] {
-                sceneEditor.dataModel = sceneEditorDataModel
-            } else if let sceneEditorDataModel = sceneEditor.dataModel {
-                worldDataModel.insert(sceneEditorDataModel)
+            if let sceneViewDataModel = worldDataModel.children[SceneView.sceneViewKey] {
+                sceneView.dataModel = sceneViewDataModel
+            } else if let sceneViewDataModel = sceneView.dataModel {
+                worldDataModel.insert(sceneViewDataModel)
             }
         }
     }
     
     let vision = Vision()
-    let copiedObjectEditor = CopiedObjectEditor(), actionEditor = ActionEditor()
+    let copiedObjectView = CopiedObjectView(), actionView = ActionView()
     let world = Box()
-    var editTextEditor: TextEditor? {
-        if let editTextEditor = indicatedResponder as? TextEditor {
-            return editTextEditor.isLocked ? nil : editTextEditor
+    var editTextView: TextView? {
+        if let editTextView = indicatedResponder as? TextView {
+            return editTextView.isLocked ? nil : editTextView
         } else {
             return nil
         }
     }
-    let sceneEditor = SceneEditor()
+    let sceneView = SceneView()
     
-    var actionWidth = ActionEditor.defaultWidth {
+    var actionWidth = ActionView.defaultWidth {
         didSet {
             updateLayout()
         }
     }
-    var copyEditorHeight = Layout.basicHeight + Layout.basicPadding * 2 {
+    var copyViewHeight = Layout.basicHeight + Layout.basicPadding * 2 {
         didSet {
             updateLayout()
         }
@@ -104,15 +104,15 @@ final class Human: Layer, Respondable, Localizable {
     }
     
     override init() {
-        if let sceneEditorDataModel = sceneEditor.dataModel {
+        if let sceneViewDataModel = sceneView.dataModel {
             worldDataModel = DataModel(key: Human.worldDataModelKey,
-                                       directoryWithDataModels: [sceneEditorDataModel])
+                                       directoryWithDataModels: [sceneViewDataModel])
         } else {
             worldDataModel = DataModel(key: Human.worldDataModelKey, directoryWithDataModels: [])
         }
         world.isClipped = true
-        world.replace(children: [sceneEditor])
-        vision.replace(children: [copiedObjectEditor, actionEditor, world])
+        world.replace(children: [sceneView])
+        vision.replace(children: [copiedObjectView, actionView, world])
         indicatedResponder = vision
         
         super.init()
@@ -120,7 +120,7 @@ final class Human: Layer, Respondable, Localizable {
                               directoryWithDataModels: [preferenceDataModel, worldDataModel])
         editQuasimode = EditQuasimode.move
         
-        actionEditor.isHiddenActionBinding = { [unowned self] in
+        actionView.isHiddenActionBinding = { [unowned self] in
             self.preference.isHiddenAction = $0
             self.updateLayout()
             self.preferenceDataModel.isWrite = true
@@ -131,51 +131,51 @@ final class Human: Layer, Respondable, Localizable {
     private func updateLayout() {
         let padding = Layout.basicPadding
         if preference.isHiddenAction {
-            actionEditor.frame = CGRect(
+            actionView.frame = CGRect(
                 x: padding,
-                y: fieldOfVision.height - actionEditor.frame.height - padding,
+                y: fieldOfVision.height - actionView.frame.height - padding,
                 width: actionWidth,
-                height: actionEditor.frame.height
+                height: actionView.frame.height
             )
-            copiedObjectEditor.frame = CGRect(
+            copiedObjectView.frame = CGRect(
                 x: padding + actionWidth,
-                y: fieldOfVision.height - copyEditorHeight - padding,
+                y: fieldOfVision.height - copyViewHeight - padding,
                 width: fieldOfVision.width - actionWidth - padding * 2,
-                height: copyEditorHeight
+                height: copyViewHeight
             )
             world.frame = CGRect(
                 x: padding,
                 y: padding,
                 width: vision.frame.width - padding * 2,
-                height: vision.frame.height - copyEditorHeight - padding * 2
+                height: vision.frame.height - copyViewHeight - padding * 2
             )
         } else {
-            actionEditor.frame = CGRect(
+            actionView.frame = CGRect(
                 x: padding,
-                y: fieldOfVision.height - actionEditor.frame.height - padding,
+                y: fieldOfVision.height - actionView.frame.height - padding,
                 width: actionWidth,
-                height: actionEditor.frame.height
+                height: actionView.frame.height
             )
-            copiedObjectEditor.frame = CGRect(
+            copiedObjectView.frame = CGRect(
                 x: padding + actionWidth,
-                y: fieldOfVision.height - copyEditorHeight - padding,
+                y: fieldOfVision.height - copyViewHeight - padding,
                 width: fieldOfVision.width - actionWidth - padding * 2,
-                height: copyEditorHeight
+                height: copyViewHeight
             )
             world.frame = CGRect(
                 x: padding + actionWidth,
                 y: padding,
                 width: vision.frame.width - (padding * 2 + actionWidth),
-                height: vision.frame.height - copyEditorHeight - padding * 2
+                height: vision.frame.height - copyViewHeight - padding * 2
             )
         }
         world.bounds.origin = CGPoint(
             x: -round((world.frame.width / 2)),
             y: -round((world.frame.height / 2))
         )
-        sceneEditor.frame.origin = CGPoint(
-            x: -round(sceneEditor.frame.width / 2),
-            y: -round(sceneEditor.frame.height / 2)
+        sceneView.frame.origin = CGPoint(
+            x: -round(sceneView.frame.width / 2),
+            y: -round(sceneView.frame.height / 2)
         )
     }
     override var contentsScale: CGFloat {
@@ -192,7 +192,7 @@ final class Human: Layer, Respondable, Localizable {
         }
     }
     
-    var setEditTextEditor: (((human: Human, textEditor: TextEditor?, oldValue: TextEditor?)) -> ())?
+    var setEditTextView: (((human: Human, textView: TextView?, oldValue: TextView?)) -> ())?
     var indicatedResponder: Respondable {
         didSet {
             if indicatedResponder !== oldValue {
@@ -212,13 +212,13 @@ final class Human: Layer, Respondable, Localizable {
                 allParents.forEach { $0.isSubIndicated = true }
                 oldValue.isIndicated = false
                 indicatedResponder.isIndicated = true
-                if indicatedResponder is TextEditor || oldValue is TextEditor {
-                    if let editTextEditor = oldValue as? TextEditor {
-                        editTextEditor.unmarkText()
+                if indicatedResponder is TextView || oldValue is TextView {
+                    if let editTextView = oldValue as? TextView {
+                        editTextView.unmarkText()
                     }
-                    setEditTextEditor?((self,
-                                        indicatedResponder as? TextEditor,
-                                        oldValue as? TextEditor))
+                    setEditTextView?((self,
+                                        indicatedResponder as? TextView,
+                                        oldValue as? TextView))
                 }
             }
         }
@@ -273,7 +273,7 @@ final class Human: Layer, Respondable, Localizable {
     private var oldQuasimodeAction = Action()
     private weak var oldQuasimodeResponder: Respondable?
     func sendEditQuasimode(with event: Event) {
-        let quasimodeAction = actionEditor.actionManager.actionWith(.drag, event) ?? Action()
+        let quasimodeAction = actionView.actionManager.actionWith(.drag, event) ?? Action()
         if !isDown {
             if editQuasimode != quasimodeAction.editQuasimode {
                 editQuasimode = quasimodeAction.editQuasimode
@@ -285,7 +285,7 @@ final class Human: Layer, Respondable, Localizable {
     }
     
     private var isKey = false, keyAction = Action(), keyEvent: KeyInputEvent?
-    private weak var keyTextEditor: TextEditor?
+    private weak var keyTextView: TextView?
     func sendKeyInputIsEditText(with event: KeyInputEvent) -> Bool {
         switch event.sendType {
         case .begin:
@@ -295,9 +295,9 @@ final class Human: Layer, Respondable, Localizable {
                 return false
             }
             isKey = true
-            keyAction = actionEditor.actionManager.actionWith(.keyInput, event) ?? Action()
-            if let editTextEditor = editTextEditor, keyAction.canTextKeyInput() {
-                self.keyTextEditor = editTextEditor
+            keyAction = actionView.actionManager.actionWith(.keyInput, event) ?? Action()
+            if let editTextView = editTextView, keyAction.canTextKeyInput() {
+                self.keyTextView = editTextView
                 return true
             } else if keyAction != Action() {
                 _ = responder(with: indicatedLayer(with: event)) {
@@ -312,8 +312,8 @@ final class Human: Layer, Respondable, Localizable {
         case .sending:
             break
         case .end:
-            if keyTextEditor != nil, isKey {
-                keyTextEditor = nil
+            if keyTextView != nil, isKey {
+                keyTextView = nil
                 return false
             }
         }
@@ -336,7 +336,7 @@ final class Human: Layer, Respondable, Localizable {
             setIndicatedResponder(at: event.location)
             isDown = true
             isDrag = false
-            dragAction = actionEditor.actionManager.actionWith(.drag, event) ?? defaultDragAction
+            dragAction = actionView.actionManager.actionWith(.drag, event) ?? defaultDragAction
             dragResponder = responder(with: indicatedLayer(with: event)) {
                 dragAction.drag?(self, $0, event) ?? false
             }
@@ -402,9 +402,9 @@ final class Human: Layer, Respondable, Localizable {
     func sendLookup(with event: TapEvent) {
         let p = event.location.integral
         let responder = self.responder(with: indicatedLayer(with: event))
-        let referenceEditor = ReferenceEditor(reference: responder.lookUp(with: event))
+        let referenceView = ReferenceView(reference: responder.lookUp(with: event))
         let panel = Panel(isUseHedding: true)
-        panel.contents = [referenceEditor]
+        panel.contents = [referenceView]
         panel.openPoint = p.integral
         panel.openViewPoint = point(from: event)
         panel.subIndicatedParent = vision
@@ -416,10 +416,10 @@ final class Human: Layer, Respondable, Localizable {
     }
     
     func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return copiedObjectEditor.copiedObject
+        return copiedObjectView.copiedObject
     }
     func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        return copiedObjectEditor.paste(copiedObject, with: event)
+        return copiedObjectView.paste(copiedObject, with: event)
     }
 }
 

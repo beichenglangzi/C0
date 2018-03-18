@@ -704,17 +704,17 @@ extension JoiningCell: ResponderExpression {
     }
 }
 
-final class CellEditor: Layer, Respondable {
-    static let name = Localization(english: "Cell Editor", japanese: "セルエディタ")
+final class CellView: Layer, Respondable {
+    static let name = Localization(english: "Cell View", japanese: "セル表示")
     
     var cell = Cell() {
         didSet {
-            isTranslucentLockEditor.selectionIndex = !cell.isTranslucentLock ? 0 : 1
+            isTranslucentLockView.selectedIndex = !cell.isTranslucentLock ? 0 : 1
         }
     }
     
     private let nameLabel = Label(text: Cell.name, font: .bold)
-    private let isTranslucentLockEditor = EnumEditor(
+    private let isTranslucentLockView = EnumView(
         names: [Localization(english: "Unlock", japanese: "ロックなし"),
                 Localization(english: "Translucent Lock", japanese: "半透明ロック")],
         cationIndex: 1
@@ -722,9 +722,9 @@ final class CellEditor: Layer, Respondable {
     
     override init() {
         super.init()
-        replace(children: [nameLabel, isTranslucentLockEditor])
+        replace(children: [nameLabel, isTranslucentLockView])
         
-        isTranslucentLockEditor.binding = { [unowned self] in
+        isTranslucentLockView.binding = { [unowned self] in
             self.setIsTranslucentLock(with: $0)
         }
     }
@@ -734,7 +734,7 @@ final class CellEditor: Layer, Respondable {
         return CGRect(x: 0,
                       y: 0,
                       width: nameLabel.frame.width
-                        + isTranslucentLockEditor.frame.width + padding * 3,
+                        + isTranslucentLockView.frame.width + padding * 3,
                       height: Layout.basicHeight + padding * 2)
     }
     override var bounds: CGRect {
@@ -746,40 +746,40 @@ final class CellEditor: Layer, Respondable {
         let padding = Layout.basicPadding, h = Layout.basicHeight
         nameLabel.frame.origin = CGPoint(x: padding,
                                          y: padding * 2)
-        isTranslucentLockEditor.frame = CGRect(x: nameLabel.frame.maxX + padding,
+        isTranslucentLockView.frame = CGRect(x: nameLabel.frame.maxX + padding,
                                                y: padding,
                                                width: bounds.width
                                                 - nameLabel.frame.width - padding * 3,
                                                height: h)
     }
     func updateWithCell() {
-        isTranslucentLockEditor.selectionIndex = !cell.isTranslucentLock ? 0 : 1
+        isTranslucentLockView.selectedIndex = !cell.isTranslucentLock ? 0 : 1
     }
     
     var disabledRegisterUndo = true
     
     struct Binding {
-        let cellEditor: CellEditor
+        let cellView: CellView
         let isTranslucentLock: Bool, oldIsTranslucentLock: Bool, inCell: Cell, type: Action.SendType
     }
     var setIsTranslucentLockHandler: ((Binding) -> ())?
     
     private var oldCell = Cell()
     
-    private func setIsTranslucentLock(with binding: EnumEditor.Binding) {
+    private func setIsTranslucentLock(with binding: EnumView.Binding) {
         if binding.type == .begin {
             oldCell = cell
         } else {
             cell.isTranslucentLock = binding.index == 1
         }
-        setIsTranslucentLockHandler?(Binding(cellEditor: self,
+        setIsTranslucentLockHandler?(Binding(cellView: self,
                                                    isTranslucentLock: binding.index == 1,
                                                    oldIsTranslucentLock: binding.oldIndex == 1,
                                                    inCell: oldCell,
                                                    type: binding.type))
     }
     
-    var copyHandler: ((CellEditor, KeyInputEvent) -> CopiedObject?)?
+    var copyHandler: ((CellView, KeyInputEvent) -> CopiedObject?)?
     func copy(with event: KeyInputEvent) -> CopiedObject? {
         if let copyHandler = copyHandler {
             return copyHandler(self, event)

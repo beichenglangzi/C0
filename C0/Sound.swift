@@ -300,8 +300,8 @@ final class SoundWaveformView: Layer {
  - 効果音編集
  - シーケンサー
  */
-final class SoundEditor: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Sound Editor", japanese: "サウンドエディタ")
+final class SoundView: Layer, Respondable, Localizable {
+    static let name = Localization(english: "Sound View", japanese: "サウンド表示")
     
     var locale = Locale.current {
         didSet {
@@ -340,7 +340,7 @@ final class SoundEditor: Layer, Respondable, Localizable {
     var disabledRegisterUndo = false
     
     struct Binding {
-        let soundEditor: SoundEditor, sound: Sound, oldSound: Sound, type: Action.SendType
+        let soundView: SoundView, sound: Sound, oldSound: Sound, type: Action.SendType
     }
     var setSoundHandler: ((Binding) -> ())?
     
@@ -373,10 +373,10 @@ final class SoundEditor: Layer, Respondable, Localizable {
     }
     private func set(_ sound: Sound, old oldSound: Sound) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldSound, old: sound) }
-        setSoundHandler?(Binding(soundEditor: self,
+        setSoundHandler?(Binding(soundView: self,
                                        sound: oldSound, oldSound: oldSound, type: .begin))
         self.sound = sound
-        setSoundHandler?(Binding(soundEditor: self,
+        setSoundHandler?(Binding(soundView: self,
                                        sound: sound, oldSound: oldSound, type: .end))
     }
 }

@@ -137,8 +137,8 @@ extension Transform: Interpolatable {
     }
 }
 
-final class TransformEditor: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Transform Editor", japanese: "トランスフォームエディタ")
+final class TransformView: Layer, Respondable, Localizable {
+    static let name = Localization(english: "Transform View", japanese: "トランスフォーム表示")
     
     var locale = Locale.current {
         didSet {
@@ -228,7 +228,7 @@ final class TransformEditor: Layer, Respondable, Localizable {
     var disabledRegisterUndo = true
     
     struct Binding {
-        let transformEditor: TransformEditor
+        let transformView: TransformView
         let transform: Transform, oldTransform: Transform, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
@@ -237,7 +237,7 @@ final class TransformEditor: Layer, Respondable, Localizable {
     private func setTransform(with obj: NumberSlider.Binding) {
         if obj.type == .begin {
             oldTransform = transform
-            binding?(Binding(transformEditor: self,
+            binding?(Binding(transformView: self,
                              transform: oldTransform, oldTransform: oldTransform, type: .begin))
         } else {
             switch obj.slider {
@@ -254,7 +254,7 @@ final class TransformEditor: Layer, Respondable, Localizable {
             default:
                 fatalError("No case")
             }
-            binding?(Binding(transformEditor: self,
+            binding?(Binding(transformView: self,
                              transform: transform, oldTransform: oldTransform, type: obj.type))
         }
     }
@@ -293,10 +293,10 @@ final class TransformEditor: Layer, Respondable, Localizable {
         registeringUndoManager?.registerUndo(withTarget: self) {
             $0.set(oldTransform, oldTransform: transform)
         }
-        binding?(Binding(transformEditor: self,
+        binding?(Binding(transformView: self,
                          transform: oldTransform, oldTransform: oldTransform, type: .begin))
         self.transform = transform
-        binding?(Binding(transformEditor: self,
+        binding?(Binding(transformView: self,
                          transform: transform, oldTransform: oldTransform, type: .end))
     }
 }
@@ -356,8 +356,8 @@ extension Wiggle: Referenceable {
     static let name = Localization(english: "Wiggle", japanese: "振動")
 }
 
-final class WiggleEditor: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Wiggle Editor", japanese: "振動エディタ")
+final class WiggleView: Layer, Respondable, Localizable {
+    static let name = Localization(english: "Wiggle View", japanese: "振動表示")
     
     var locale = Locale.current {
         didSet {
@@ -437,7 +437,7 @@ final class WiggleEditor: Layer, Respondable, Localizable {
     var disabledRegisterUndo = true
     
     struct Binding {
-        let wiggleEditor: WiggleEditor
+        let wiggleView: WiggleView
         let wiggle: Wiggle, oldWiggle: Wiggle, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
@@ -446,7 +446,7 @@ final class WiggleEditor: Layer, Respondable, Localizable {
     private func setWiggle(with obj: NumberSlider.Binding) {
         if obj.type == .begin {
             oldWiggle = wiggle
-            binding?(Binding(wiggleEditor: self,
+            binding?(Binding(wiggleView: self,
                              wiggle: oldWiggle, oldWiggle: oldWiggle, type: .begin))
         } else {
             switch obj.slider {
@@ -461,7 +461,7 @@ final class WiggleEditor: Layer, Respondable, Localizable {
             default:
                 fatalError("No case")
             }
-            binding?(Binding(wiggleEditor: self,
+            binding?(Binding(wiggleView: self,
                              wiggle: wiggle, oldWiggle: oldWiggle, type: obj.type))
         }
     }
@@ -499,8 +499,8 @@ final class WiggleEditor: Layer, Respondable, Localizable {
         registeringUndoManager?.registerUndo(withTarget: self) {
             $0.set(oldWiggle, oldWiggle: wiggle)
         }
-        binding?(Binding(wiggleEditor: self, wiggle: oldWiggle, oldWiggle: oldWiggle, type: .begin))
+        binding?(Binding(wiggleView: self, wiggle: oldWiggle, oldWiggle: oldWiggle, type: .begin))
         self.wiggle = wiggle
-        binding?(Binding(wiggleEditor: self, wiggle: wiggle, oldWiggle: oldWiggle, type: .end))
+        binding?(Binding(wiggleView: self, wiggle: wiggle, oldWiggle: oldWiggle, type: .end))
     }
 }
