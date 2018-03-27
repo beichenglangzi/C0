@@ -23,11 +23,13 @@ struct Font {
     static let `default` = Font(monospacedSize: 11)
     static let bold = Font(boldMonospacedSize: 11)
     static let italic = Font(italicMonospacedSize: 11)
+    static let smallBold = Font(boldMonospacedSize: 8)
     static let small = Font(monospacedSize: 8)
+    static let smallItalic = Font(italicMonospacedSize: 8)
     static let action = Font(boldMonospacedSize: 9)
     static let hedding0 = Font(boldMonospacedSize: 14)
     static let hedding1 = Font(boldMonospacedSize: 10)
-    static let speech = Font(boldMonospacedSize: 20)
+    static let subtitle = Font(boldMonospacedSize: 20)
     
     let name: String, size: CGFloat
     let ascent: CGFloat, descent: CGFloat, leading: CGFloat, ctFont: CTFont
@@ -100,20 +102,18 @@ struct Cursor: Equatable {
                 ctx.rotate(by: .pi / 2)
                 ctx.translateBy(x: -w / 2, y: -h / 2)
             }
-            ctx.addLines(
-                between: [
-                    CGPoint(x: d, y: d + halfHeight),
-                    CGPoint(x: d + aw, y: d + halfHeight * 2),
-                    CGPoint(x: d + aw, y: d + halfHeight + halfLineHeight),
-                    CGPoint(x: d + aw + lineHalfWidth * 2, y: d + halfHeight + halfLineHeight),
-                    CGPoint(x: d + aw + lineHalfWidth * 2, y: d + halfHeight * 2),
-                    CGPoint(x: d + aw * 2 + lineHalfWidth * 2, y: d + halfHeight),
-                    CGPoint(x: d + aw + lineHalfWidth * 2, y: d),
-                    CGPoint(x: d + aw + lineHalfWidth * 2, y: d + halfHeight - halfLineHeight),
-                    CGPoint(x: d + aw, y: d + halfHeight - halfLineHeight),
-                    CGPoint(x: d + aw, y: d)
-                ]
-            )
+            ctx.addLines(between: [CGPoint(x: d, y: d + halfHeight),
+                                   CGPoint(x: d + aw, y: d + halfHeight * 2),
+                                   CGPoint(x: d + aw, y: d + halfHeight + halfLineHeight),
+                                   CGPoint(x: d + aw + lineHalfWidth * 2,
+                                           y: d + halfHeight + halfLineHeight),
+                                   CGPoint(x: d + aw + lineHalfWidth * 2, y: d + halfHeight * 2),
+                                   CGPoint(x: d + aw * 2 + lineHalfWidth * 2, y: d + halfHeight),
+                                   CGPoint(x: d + aw + lineHalfWidth * 2, y: d),
+                                   CGPoint(x: d + aw + lineHalfWidth * 2,
+                                           y: d + halfHeight - halfLineHeight),
+                                   CGPoint(x: d + aw, y: d + halfHeight - halfLineHeight),
+                                   CGPoint(x: d + aw, y: d)])
             ctx.closePath()
             ctx.setLineJoin(.miter)
             ctx.setLineWidth(lineWidth)
@@ -263,11 +263,12 @@ final class C0Application: NSApplication {
     private var localToken: NSObjectProtocol?
     func applicationDidFinishLaunching(_ notification: Notification) {
         updateString(with: Locale.current)
-        localToken = NotificationCenter.default.addObserver(
-            forName: NSLocale.currentLocaleDidChangeNotification, object: nil, queue: nil
-        ) { [unowned self] _ in
+        let nc = NotificationCenter.default
+        let localeHandler: (Notification) -> Void = { [unowned self] _ in
             self.updateString(with: Locale.current)
         }
+        localToken = nc.addObserver(forName: NSLocale.currentLocaleDidChangeNotification,
+                                    object: nil, queue: nil, using: localeHandler)
     }
     deinit {
         if let localToken = localToken {
@@ -632,15 +633,13 @@ final class C0View: NSView, NSTextInputClient {
                          time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil)
     }
     func moveEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> MoveEvent {
-//        if sendType == .sending {
-//            Swift.print(nsEvent.subtype == .tabletPoint)
-//        }
         return MoveEvent(sendType: sendType, location: screenPoint(with: nsEvent),
                          time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil)
     }
     func dragEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> DragEvent {
         return DragEvent(sendType: sendType, location: screenPoint(with: nsEvent),
                          time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil,
+                         isPen: nsEvent.subtype == .tabletPoint,
                          pressure: nsEvent.pressure.cf)
     }
     func scrollEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> ScrollEvent {
@@ -917,10 +916,9 @@ extension NSImage {
                     ctx.setLineWidth(l)
                     ctx.addEllipse(in: CGRect(x: c - r, y: c - r, width: r * 2, height: r * 2))
                     ctx.drawPath(using: .fillStroke)
-                    let textFrame = TextFrame(
-                        string: "C0", font: Font(name: "Avenir Next Regular", size: fs),
-                        color: .locked
-                    )
+                    let textFrame = TextFrame(string: "C0",
+                                              font: Font(name: "Avenir Next Regular", size: fs),
+                                              color: .locked)
                     textFrame.drawWithCenterOfImageBounds(in: rect, in: ctx)
                     return true
                 }

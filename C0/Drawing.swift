@@ -138,7 +138,7 @@ extension Drawing: ResponderExpression {
         let imageBounds = self.imageBounds(withLineWidth: 1)
         let c = CGAffineTransform.centering(from: imageBounds, to: bounds.inset(by: 5))
         ctx.concatenate(c.affine)
-        draw(lineWidth: 0.5/c.scale, lineColor: Color.strokeLine, in: ctx)
-        drawRough(lineWidth: 0.5/c.scale, lineColor: Color.rough, in: ctx)
+        draw(lineWidth: 0.5 / c.scale, lineColor: Color.strokeLine, in: ctx)
+        drawRough(lineWidth: 0.5 / c.scale, lineColor: Color.rough, in: ctx)
     }
 }

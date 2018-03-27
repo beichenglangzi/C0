@@ -21,7 +21,6 @@ import Foundation
 
 /**
  # Issue
- - Bar設定
  - ノードトラック、ノード、カットの複数選択
  - 滑らかなスクロール
  - sceneを取り除く
@@ -29,10 +28,8 @@ import Foundation
  */
 final class Timeline: Layer, Respondable, Localizable {
     static let name = Localization(english: "Timeline", japanese: "タイムライン")
-    static let feature = Localization(
-        english: "Select time: Left and right scroll\nSelect animation: Up and down scroll",
-        japanese: "時間選択: 左右スクロール\nグループ選択: 上下スクロール"
-    )
+    static let feature = Localization(english: "Select time: Left and right scroll\nSelect animation: Up and down scroll",
+                                      japanese: "時間選択: 左右スクロール\nグループ選択: 上下スクロール")
     
     var locale = Locale.current {
         didSet {
@@ -97,7 +94,7 @@ final class Timeline: Layer, Respondable, Localizable {
     }
     private let timeHeight = defaultTimeHeight
     private let timeRulerHeight = 14.0.cf, tempoHeight = defaultSumKeyTimesHeight
-    private let speechHeight = 24.0.cf, soundHeight = 20.0.cf
+    private let subtitleHeight = 24.0.cf, soundHeight = 20.0.cf
     private let sumKeyTimesHeight = defaultSumKeyTimesHeight
     private let knobHalfHeight = 8.0.cf, subKnobHalfHeight = 4.0.cf, maxLineHeight = 3.0.cf
     private(set) var maxScrollX = 0.0.cf, cutHeight = 0.0.cf
@@ -140,6 +137,7 @@ final class Timeline: Layer, Respondable, Localizable {
     let beatsLayer = PathLayer()
     
     let keyframeView = KeyframeView(), nodeView = NodeView()
+    let tempoKeyframeView = KeyframeView(isSmall: true)
     
     init(frame: CGRect = CGRect(), description: Localization = Localization()) {
         tempoView.replace(children: [tempoAnimationView])
@@ -287,7 +285,7 @@ final class Timeline: Layer, Respondable, Localizable {
     func updateLayout() {
         let sp = Layout.basicPadding
         mainHeight = bounds.height - timeRulerHeight - sumKeyTimesHeight - sp * 2
-        cutHeight = mainHeight - tempoHeight - speechHeight - soundHeight
+        cutHeight = mainHeight - tempoHeight - subtitleHeight - soundHeight
         let midX = bounds.midX, leftWidth = Timeline.leftWidth
         let rightX = leftWidth
         timeRuler.frame = CGRect(x: rightX, y: bounds.height - timeRulerHeight - sp,
@@ -410,10 +408,10 @@ final class Timeline: Layer, Respondable, Localizable {
             cutViews.enumerated().forEach { $1.updateIndex($0) }
             
             var textViews = [Layer]()
-            cutViews.forEach { textViews += $0.speechTextViews as [Layer] }
+            cutViews.forEach { textViews += $0.subtitleTextViews as [Layer] }
             
             cutViewsClipView.replace(children: cutViews.reversed() as [Layer]
-                + cutViews.map { $0.speechAnimationView } as [Layer] + textViews as [Layer] + [soundWaveformView] as [Layer])
+                + cutViews.map { $0.subtitleAnimationView } as [Layer] + textViews as [Layer] + [soundWaveformView] as [Layer])
             updateCutViewPositions()
         }
     }
@@ -421,10 +419,11 @@ final class Timeline: Layer, Respondable, Localizable {
         let minX = localDeltaX
         _ = cutViews.reduce(minX) { x, cutView in
             cutView.frame.origin = CGPoint(x: x, y: 0)
-            cutView.speechAnimationView.frame.origin = CGPoint(x: x, y: cutView.frame.height)
-            _ = cutView.speechTextViews.reduce(x) {
+            
+            cutView.subtitleAnimationView.frame.origin = CGPoint(x: x, y: cutView.frame.height)
+            _ = cutView.subtitleTextViews.reduce(x) {
                 $1.frame.size = CGSize(width: 100, height: Layout.basicHeight)
-                $1.frame.origin = CGPoint(x: $0, y: cutView.frame.height + cutView.speechAnimationView.frame.height)
+                $1.frame.origin = CGPoint(x: $0, y: cutView.frame.height + cutView.subtitleAnimationView.frame.height)
                 return $0 + $1.frame.width
             }
             
@@ -455,10 +454,10 @@ final class Timeline: Layer, Respondable, Localizable {
         let minX = localDeltaX
         _ = cutViews.reduce(minX) { x, cutView in
             cutView.frame.origin = CGPoint(x: x, y: 0)
-            cutView.speechAnimationView.frame.origin = CGPoint(x: x, y: cutView.frame.height)
-            _ = cutView.speechTextViews.reduce(x) {
+            cutView.subtitleAnimationView.frame.origin = CGPoint(x: x, y: cutView.frame.height)
+            _ = cutView.subtitleTextViews.reduce(x) {
                 $1.frame.size = CGSize(width: 100, height: Layout.basicHeight)
-                $1.frame.origin = CGPoint(x: $0, y: cutView.frame.height + cutView.speechAnimationView.frame.height)
+                $1.frame.origin = CGPoint(x: $0, y: cutView.frame.height + cutView.subtitleAnimationView.frame.height)
                 return $0 + $1.frame.width
             }
             return x + cutView.frame.width
@@ -477,12 +476,12 @@ final class Timeline: Layer, Respondable, Localizable {
     }
     func bindedCutView(with cut: Cut, beginBaseTime: Beat = 0, height: CGFloat) -> CutView {
         let cutView = CutView(cut,
-                                  beginBaseTime: beginBaseTime,
-                                  baseWidth: baseWidth,
-                                  baseTimeInterval: baseTimeInterval,
-                                  knobHalfHeight: knobHalfHeight,
-                                  subKnobHalfHeight: subKnobHalfHeight,
-                                  maxLineWidth: maxLineHeight, height: height)
+                              beginBaseTime: beginBaseTime,
+                              baseWidth: baseWidth,
+                              baseTimeInterval: baseTimeInterval,
+                              knobHalfHeight: knobHalfHeight,
+                              subKnobHalfHeight: subKnobHalfHeight,
+                              maxLineWidth: maxLineHeight, height: height)
         
         cutView.animationViews.enumerated().forEach { (i, animationView) in
             let nodeAndTrack = cutView.cut.nodeAndTrack(atNodeAndTrackIndex: i)
@@ -520,6 +519,16 @@ final class Timeline: Layer, Respondable, Localizable {
                 self.tracksManager.updateWithTracks(isAlwaysUpdate: true)
                 self.setNodeAndTrackBinding?(self, cutView, obj.nodeAndTrack)
             }
+        }
+        cutView.subtitleKeyframeBinding = { [unowned self] _ in
+            var textViews = [Layer]()
+            self.cutViews.forEach { textViews += $0.subtitleTextViews as [Layer] }
+            self.cutViewsClipView.replace(children: self.cutViews.reversed() as [Layer]
+                + self.cutViews.map { $0.subtitleAnimationView } as [Layer] + textViews as [Layer] + [self.soundWaveformView] as [Layer])
+            self.updateWithScrollPosition()
+        }
+        cutView.subtitleBinding = { [unowned self] _ in
+            self.updateWithScrollPosition()
         }
         return cutView
     }
@@ -1501,12 +1510,12 @@ final class Timeline: Layer, Respondable, Localizable {
     func moveToPrevious() {
         let cut = scene.editCut
         let track = cut.editNode.editTrack
-        let loopFrameIndex = track.animation.loopedKeyframeIndex(withTime: cut.currentTime).loopFrameIndex
-        let loopFrame = track.animation.loopFrames[loopFrameIndex]
+        let lfi = track.animation.loopedKeyframeIndex(withTime: cut.currentTime).loopFrameIndex
+        let loopFrame = track.animation.loopFrames[lfi]
         if cut.currentTime - loopFrame.time > 0 {
             updateTime(withCutTime: loopFrame.time)
-        } else if loopFrameIndex - 1 >= 0 {
-            updateTime(withCutTime: track.animation.loopFrames[loopFrameIndex - 1].time)
+        } else if lfi - 1 >= 0 {
+            updateTime(withCutTime: track.animation.loopFrames[lfi - 1].time)
         } else if scene.editCutIndex - 1 >= 0 {
             self.editCutIndex -= 1
             updateTime(withCutTime: scene.editCut.editNode.editTrack.animation.lastLoopedKeyframeTime)
@@ -1515,9 +1524,9 @@ final class Timeline: Layer, Respondable, Localizable {
     func moveToNext() {
         let cut = scene.editCut
         let track = cut.editNode.editTrack
-        let loopFrameIndex = track.animation.loopedKeyframeIndex(withTime: cut.currentTime).loopFrameIndex
-        if loopFrameIndex + 1 <= track.animation.loopFrames.count - 1 {
-            let t = track.animation.loopFrames[loopFrameIndex + 1].time
+        let lfi = track.animation.loopedKeyframeIndex(withTime: cut.currentTime).loopFrameIndex
+        if lfi + 1 <= track.animation.loopFrames.count - 1 {
+            let t = track.animation.loopFrames[lfi + 1].time
             if t < track.animation.duration {
                 updateTime(withCutTime: t)
                 return
@@ -1660,8 +1669,7 @@ final class Ruler: Layer, Respondable {
             scroller.frame.origin = newValue
         }
     }
-//    var scrollFrame: CGRect {
-//    }
+    var scrollFrame = CGRect()
     
     var labels = [Label]() {
         didSet {

@@ -31,7 +31,7 @@ typealias Second = Double
 
 /**
  # Issue
- - 字幕
+ △ 字幕
  - 複数のサウンド
  - 変更通知
  */
@@ -56,6 +56,8 @@ final class Scene: NSObject, NSCoding {
     var reciprocalScale: CGFloat {
         return reciprocalViewScale / editNode.worldScale
     }
+    
+    var isHiddenSubtitles: Bool
     
     var sound: Sound
     
@@ -114,6 +116,7 @@ final class Scene: NSObject, NSCoding {
          colorSpace: ColorSpace = .sRGB,
          editMaterial: Material = Material(), materials: [Material] = [],
          isShownPrevious: Bool = false, isShownNext: Bool = false,
+         isHiddenSubtitles: Bool = false,
          sound: Sound = Sound(),
          tempoTrack: TempoTrack = TempoTrack(),
          cutTrack: CutTrack = CutTrack(),
@@ -129,6 +132,7 @@ final class Scene: NSObject, NSCoding {
         self.materials = materials
         self.isShownPrevious = isShownPrevious
         self.isShownNext = isShownNext
+        self.isHiddenSubtitles = isHiddenSubtitles
         self.sound = sound
         self.tempoTrack = tempoTrack
         self.cutTrack = cutTrack
@@ -141,7 +145,7 @@ final class Scene: NSObject, NSCoding {
     private enum CodingKeys: String, CodingKey {
         case
         name, frame, frameRate, baseTimeInterval, tempo, colorSpace,
-        editMaterial, materials, isShownPrevious, isShownNext, sound,
+        editMaterial, materials, isShownPrevious, isShownNext, isHiddenSubtitles, sound,
         tempoTrack, cutTrack, time,
         viewTransform
     }
@@ -160,6 +164,7 @@ final class Scene: NSObject, NSCoding {
         isShownNext = coder.decodeBool(forKey: CodingKeys.isShownNext.rawValue)
         viewTransform = coder.decodeDecodable(
             Transform.self, forKey: CodingKeys.viewTransform.rawValue) ?? Transform()
+        isHiddenSubtitles = coder.decodeBool(forKey: CodingKeys.isHiddenSubtitles.rawValue)
         sound = coder.decodeDecodable(Sound.self, forKey: CodingKeys.sound.rawValue) ?? Sound()
         tempoTrack = coder.decodeObject(
             forKey: CodingKeys.tempoTrack.rawValue) as? TempoTrack ?? TempoTrack()
@@ -180,6 +185,7 @@ final class Scene: NSObject, NSCoding {
         coder.encode(isShownPrevious, forKey: CodingKeys.isShownPrevious.rawValue)
         coder.encode(isShownNext, forKey: CodingKeys.isShownNext.rawValue)
         coder.encodeEncodable(viewTransform, forKey: CodingKeys.viewTransform.rawValue)
+        coder.encode(isHiddenSubtitles, forKey: CodingKeys.isHiddenSubtitles.rawValue)
         coder.encodeEncodable(sound, forKey: CodingKeys.sound.rawValue)
         coder.encode(tempoTrack, forKey: CodingKeys.tempoTrack.rawValue)
         coder.encode(cutTrack, forKey: CodingKeys.cutTrack.rawValue)
@@ -239,18 +245,18 @@ final class Scene: NSObject, NSCoding {
     }
     
     var vtt: Data? {
-        var speechTuples = [(time: Beat, duration: Beat, speech: Speech)]()
+        var subtitleTuples = [(time: Beat, duration: Beat, subtitle: Subtitle)]()
         cutTrack.cutItem.keyCuts.enumerated().forEach { (i, cut) in
             let cutTime = cutTrack.time(at: i)
-            let lfs = cut.speechTrack.animation.loopFrames
-            speechTuples += lfs.enumerated().map { (li, lf) in
-                let speech = cut.speechTrack.speechItem.keySpeechs[lf.index]
+            let lfs = cut.subtitleTrack.animation.loopFrames
+            subtitleTuples += lfs.enumerated().map { (li, lf) in
+                let subtitle = cut.subtitleTrack.subtitleItem.keySubtitles[lf.index]
                 let nextTime = li + 1 < lfs.count ?
-                    lfs[li + 1].time : cut.speechTrack.animation.duration
-                return (lf.time + cutTime, nextTime - lf.time, speech)
+                    lfs[li + 1].time : cut.subtitleTrack.animation.duration
+                return (lf.time + cutTime, nextTime - lf.time, subtitle)
             }
         }
-        return Speech.vtt(speechTuples, timeHandler: { secondTime(withBeatTime: $0) })
+        return Subtitle.vtt(subtitleTuples, timeHandler: { secondTime(withBeatTime: $0) })
     }
 }
 extension Scene: Copying {
@@ -272,7 +278,7 @@ extension Scene: Referenceable {
 
 /**
  # Issue
- - セルペースト表示
+ - セルをキャンバス外にペースト
  - Display P3サポート
  */
 final class SceneView: Layer, Respondable, Localizable {
@@ -337,31 +343,31 @@ final class SceneView: Layer, Respondable, Localizable {
                                        min: 1, max: 1000, valueInterval: 1, unit: " fps",
                                        description: Localization(english: "Frame rate",
                                                                  japanese: "フレームレート"))
-    let baseTimeIntervalSlider = NumberSlider(
-        frame: Layout.valueFrame,
-        min: 1, max: 1000, valueInterval: 1, unit: " cpb",
-        description: Localization(english: "Edit split count per beat",
-                                  japanese: "1ビートあたりの編集用分割数")
-    )
+    let baseTimeIntervalSlider =
+        NumberSlider(frame: Layout.valueFrame, min: 1, max: 1000, valueInterval: 1, unit: " cpb",
+                     description: Localization(english: "Edit split count per beat",
+                                               japanese: "1ビートあたりの編集用分割数"))
     let colorSpaceLabel = Label(text: Localization(", "))
     let colorSpaceView = EnumView(frame: SceneView.colorSpaceFrame,
-                                      names: [Localization("sRGB"), Localization("Display P3")],
-                                      description: Localization(english: "Color Space",
-                                                                japanese: "色空間"))
-    let isShownPreviousView = EnumView(
-        names: [Localization(english: "Hidden Previous", japanese: "前の表示なし"),
-                Localization(english: "Shown Previous", japanese: "前の表示あり")],
-        cationIndex: 1,
-        description: Localization(english: "Hide or Show line drawing of previous keyframe",
-                                  japanese: "前のキーフレームの表示切り替え")
-    )
-    let isShownNextView = EnumView(
-        names: [Localization(english: "Hidden Next", japanese: "次の表示なし"),
-                Localization(english: "Shown Next", japanese: "次の表示あり")],
-        cationIndex: 1,
-        description: Localization(english: "Hide or Show line drawing of next keyframe",
-                                  japanese: "次のキーフレームの表示切り替え")
-    )
+                                  names: [Localization("sRGB"), Localization("Display P3")],
+                                  description: Localization(english: "Color Space", japanese: "色空間"))
+    let isShownPreviousView =
+        EnumView(names: [Localization(english: "Hidden Previous", japanese: "前の表示なし"),
+                         Localization(english: "Shown Previous", japanese: "前の表示あり")],
+                 cationIndex: 1,
+                 description: Localization(english: "Hide or Show line drawing of previous keyframe",
+                                           japanese: "前のキーフレームの表示切り替え"))
+    let isShownNextView =
+        EnumView(names: [Localization(english: "Hidden Next", japanese: "次の表示なし"),
+                         Localization(english: "Shown Next", japanese: "次の表示あり")],
+                 cationIndex: 1,
+                 description: Localization(english: "Hide or Show line drawing of next keyframe",
+                                           japanese: "次のキーフレームの表示切り替え"))
+    let isHiddenSubtitlesView =
+        EnumView(names: [Localization(english: "Hidden Subtitles", japanese: "字幕表示なし"),
+                         Localization(english: "Shown Subtitles", japanese: "字幕表示あり")],
+                 cationIndex: 0,
+                 isSmall: true)
     
     let shapeLinesBox = PopupBox(frame: CGRect(x: 0, y: 0, width: 100.0, height: Layout.basicHeight),
                                  text: Localization(english: "Shape Lines", japanese: "図形の線"))
@@ -372,12 +378,14 @@ final class SceneView: Layer, Respondable, Localizable {
     let showAllBox = TextBox(name: Localization(english: "Unlock All Cells",
                                                 japanese: "すべてのセルのロックを解除"))
     let clipCellInSelectedBox = TextBox(name: Localization(english: "Clip Cell in Selected",
-                                                            japanese: "セルを選択の中へクリップ"))
+                                                           japanese: "セルを選択の中へクリップ"))
     let splitColorBox = TextBox(name: Localization(english: "Split Color", japanese: "カラーを分割"))
     let splitOtherThanColorBox = TextBox(name: Localization(english: "Split Material",
                                                             japanese: "マテリアルを分割"))
     
+    let subtitleView = SubtitleView(isSmall: true)
     let soundView = SoundView()
+    let effectView = EffectView()
     let transformView = TransformView()
     let wiggleView = WiggleView()
     
@@ -400,14 +408,17 @@ final class SceneView: Layer, Respondable, Localizable {
                            versionView,
                            rendererManager.popupBox, sizeView, frameRateSlider,
                            baseTimeIntervalSlider, isShownPreviousView, isShownNextView,
+                           isHiddenSubtitlesView,
                            soundView, timeline.tempoSlider, transformView, wiggleView,
                            timeline.nodeView,
-                           timeline.keyframeView,
-                           timeline.nodeBindingLineLayer,
+                           timeline.keyframeView, timeline.tempoKeyframeView,
+                           timeline.nodeBindingLineLayer, subtitleView,
                            shapeLinesBox, changeToDraftBox, removeDraftBox, swapDraftBox,
                            canvas.cellView, showAllBox, clipCellInSelectedBox,
-                           canvas.materialView, splitColorBox, splitOtherThanColorBox,
+                           canvas.materialView, materialManager.animationBox,
+                           splitColorBox, splitOtherThanColorBox,
                            canvas.editCellBindingLineLayer,
+                           effectView,
                            timeline, canvas, playerView])
         
         sceneDataModel.dataHandler = { [unowned self] in self.scene.differentialData }
@@ -461,46 +472,26 @@ final class SceneView: Layer, Respondable, Localizable {
                 self.sceneDataModel.isWrite = true
             }
         }
+        isHiddenSubtitlesView.binding = { [unowned self] in
+            self.scene.isHiddenSubtitles = $0.index == 0
+            if $0.type == .end && $0.index != $0.oldIndex {
+                self.sceneDataModel.isWrite = true
+            }
+        }
         
-        shapeLinesBox.panel.replace(
-            children: [
-                TextBox(name: Localization(english: "Append Triangle Lines",
-                                           japanese: "正三角形の線を追加"),
-                        isLeftAlignment: true,
-                        runHandler: { [unowned self] _ in
-                            self.canvas.appendTriangleLines()
-                            return true
-                }),
-                TextBox(name: Localization(english: "Append Square Lines",
-                                           japanese: "正方形の線を追加"),
-                        isLeftAlignment: true,
-                        runHandler: { [unowned self] _ in
-                            self.canvas.appendSquareLines()
-                            return true
-                }),
-                TextBox(name: Localization(english: "Append Pentagon Lines",
-                                           japanese: "正五角形の線を追加"),
-                        isLeftAlignment: true,
-                        runHandler: { [unowned self] _ in
-                            self.canvas.appendPentagonLines()
-                            return true
-                }),
-                TextBox(name: Localization(english: "Append Hexagon Lines",
-                                           japanese: "正六角形の線を追加"),
-                        isLeftAlignment: true,
-                        runHandler: { [unowned self] _ in
-                            self.canvas.appendHexagonLines()
-                            return true
-                }),
-                TextBox(name: Localization(english: "Append Circle Lines",
-                                           japanese: "円の線を追加"),
-                        isLeftAlignment: true,
-                        runHandler: { [unowned self] _ in
-                            self.canvas.appendCircleLines()
-                            return true
-                })
-            ]
-        )
+        let children = [TextBox(name: Localization(english: "Append Square Lines",
+                                                   japanese: "正方形の線を追加"),
+                                runHandler: { [unowned self] _ in self.canvas.appendSquareLines() }),
+                        TextBox(name: Localization(english: "Append Pentagon Lines",
+                                                   japanese: "正五角形の線を追加"),
+                                runHandler: { [unowned self] _ in self.canvas.appendPentagonLines() }),
+                        TextBox(name: Localization(english: "Append Hexagon Lines",
+                                                   japanese: "正六角形の線を追加"),
+                                runHandler: { [unowned self] _ in self.canvas.appendHexagonLines() }),
+                        TextBox(name: Localization(english: "Append Circle Lines",
+                                                   japanese: "円の線を追加"),
+                                runHandler: { [unowned self] _ in self.canvas.appendCircleLines() })]
+        shapeLinesBox.panel.replace(children: children)
         var minSize = CGSize()
         Layout.topAlignment(shapeLinesBox.panel.children, minSize: &minSize)
         shapeLinesBox.panel.frame.size = CGSize(width: minSize.width + Layout.basicPadding * 2,
@@ -535,11 +526,18 @@ final class SceneView: Layer, Respondable, Localizable {
             return true
         }
         
+        effectView.binding = { [unowned self] in
+            self.set($0.effect, old: $0.oldEffect, type: $0.type)
+        }
         transformView.binding = { [unowned self] in
             self.set($0.transform, old: $0.oldTransform, type: $0.type)
         }
         wiggleView.binding = { [unowned self] in
             self.set($0.wiggle, old: $0.oldWiggle, type: $0.type)
+        }
+        
+        subtitleView.binding = { [unowned self] in
+            self.set($0.subtitle, old: $0.oldSubtitle, type: $0.type)
         }
         
         timeline.tempoSlider.binding = { [unowned self] in
@@ -559,6 +557,10 @@ final class SceneView: Layer, Respondable, Localizable {
             self.canvas.cut = self.scene.editCut
             self.transformView.transform =
                 self.scene.editNode.editTrack.transformItem?.transform ?? Transform()
+            self.wiggleView.wiggle =
+                self.scene.editNode.editTrack.wiggleItem?.wiggle ?? Wiggle()
+            self.effectView.effect =
+                self.scene.editNode.editTrack.effectItem?.effect ?? Effect()
         }
         timeline.updateViewHandler = { [unowned self] in
             if $0.isCut {
@@ -570,11 +572,12 @@ final class SceneView: Layer, Respondable, Localizable {
             }
             if $0.isTransform {
                 self.transformView.transform =
-                    self.scene.editNode.editTrack.transformItem?.transform ??
-                    Transform()
+                    self.scene.editNode.editTrack.transformItem?.transform ?? Transform()
                 self.wiggleView.wiggle =
-                    self.scene.editNode.editTrack.wiggleItem?.wiggle ??
-                    Wiggle()
+                    self.scene.editNode.editTrack.wiggleItem?.wiggle ?? Wiggle()
+                self.effectView.effect =
+                    self.scene.editNode.editTrack.effectItem?.effect ?? Effect()
+                self.subtitleView.subtitle = self.scene.editCut.subtitleTrack.subtitleItem.subtitle
             }
         }
         timeline.setNodeAndTrackBinding = { [unowned self] timeline, cutView, nodeAndTrack in
@@ -600,6 +603,7 @@ final class SceneView: Layer, Respondable, Localizable {
             }
         }
         
+        canvas.bindHandler = { [unowned self] _, m, _ in self.materialManager.material = m }
         canvas.setTimeHandler = { [unowned self] _, time in self.timeline.time = time }
         canvas.updateSceneHandler = { [unowned self] _ in self.sceneDataModel.isWrite = true }
         canvas.setRoughLinesHandler = { [unowned self] _, _ in
@@ -684,7 +688,7 @@ final class SceneView: Layer, Respondable, Localizable {
         let h = buttonH + padding * 2
         
         let cs = SceneView.canvasSize, th = SceneView.timelineHeight
-        let inWidth = cs.width + SceneView.propertyWidth + padding
+        let inWidth = cs.width + SceneView.propertyWidth * 1.65 + padding
         let width = inWidth + padding * 2
         let height = h * 3 + th + cs.height + padding * 4
         let y = height - padding
@@ -700,38 +704,51 @@ final class SceneView: Layer, Respondable, Localizable {
         _ = Layout.leftAlignment(properties, minX: nameLabel.frame.maxX + padding,
                                  y: y - h, height: h)
         
-        Layout.autoHorizontalAlignment([isShownPreviousView, isShownNextView],
-                                       in: CGRect(x: baseTimeIntervalSlider.frame.maxX,
-                                                  y: y - h,
-                                                  width: width - baseTimeIntervalSlider.frame.maxX
-                                                    - padding,
-                                                  height: h))
+        let previousNextFrame = CGRect(x: baseTimeIntervalSlider.frame.maxX,
+                                       y: y - h,
+                                       width: width - baseTimeIntervalSlider.frame.maxX - padding,
+                                       height: h)
+        Layout.autoHorizontalAlignment([isShownPreviousView, isShownNextView], in: previousNextFrame)
         
         let trw = transformView.defaultBounds.width, ww = wiggleView.defaultBounds.width
         let tew = Layout.valueWidth
         soundView.frame = CGRect(x: padding,
-                                   y: y - h * 2 - padding,
-                                   width: inWidth - trw - ww - tew - padding * 2, height: h)
+                                 y: y - h * 2 - padding,
+                                 width: inWidth - trw - ww - tew - padding * 2, height: h)
         timeline.tempoSlider.frame = CGRect(x: soundView.frame.maxX + padding,
                                             y: y - h * 2 - padding,
                                             width: tew, height: h)
         transformView.frame = CGRect(x: timeline.tempoSlider.frame.maxX + padding,
-                                       y: y - h * 2 - padding,
-                                       width: trw, height: h)
+                                     y: y - h * 2 - padding,
+                                     width: trw, height: h)
         wiggleView.frame = CGRect(x: transformView.frame.maxX,
-                                    y: y - h * 2 - padding,
-                                    width: ww, height: h)
+                                  y: y - h * 2 - padding,
+                                  width: ww, height: h)
         
         let kh = 160.0.cf
         let propertyX = padding * 2 + cs.width, propertyMaxY = y - h - padding
         timeline.nodeView.frame = CGRect(x: propertyX,
-                                           y: propertyMaxY - h * 2,
-                                           width: SceneView.propertyWidth,
-                                           height: h)
+                                         y: propertyMaxY - h * 2,
+                                         width: SceneView.propertyWidth,
+                                         height: h)
         timeline.keyframeView.frame = CGRect(x: propertyX,
-                                               y: propertyMaxY - h * 2 - kh,
-                                               width: SceneView.propertyWidth,
-                                               height: kh)
+                                             y: propertyMaxY - h * 2 - kh,
+                                             width: SceneView.propertyWidth,
+                                             height: kh)
+        
+        timeline.tempoKeyframeView.frame = CGRect(x: propertyX + SceneView.propertyWidth,
+                                                  y: propertyMaxY - h * 5 - kh,
+                                                  width: SceneView.propertyWidth * 0.65,
+                                                  height: kh * 0.65)
+        
+        isHiddenSubtitlesView.frame = CGRect(x: propertyX + SceneView.propertyWidth,
+                                             y: propertyMaxY - h * 6 - kh,
+                                             width: SceneView.propertyWidth * 0.65, height: h)
+        
+        subtitleView.frame = CGRect(x: propertyX + SceneView.propertyWidth,
+                                    y: propertyMaxY - h * 7 - kh,
+                                    width: SceneView.propertyWidth * 0.65, height: h)
+        
         let ch = canvas.cellView.defaultBounds.height
         let mh = canvas.materialView.defaultBounds.height
         
@@ -754,30 +771,39 @@ final class SceneView: Layer, Respondable, Localizable {
         
         let canvasPropertyMaxY = propertyMaxY - h * 2 - buttonH * 4 - kh - padding * 2
         canvas.cellView.frame = CGRect(x: propertyX,
-                                         y: canvasPropertyMaxY - ch,
-                                         width: SceneView.propertyWidth,
-                                         height: ch)
+                                       y: canvasPropertyMaxY - ch,
+                                       width: SceneView.propertyWidth,
+                                       height: ch)
         showAllBox.frame = CGRect(x: propertyX,
                                   y: canvasPropertyMaxY - ch - buttonH,
                                   width: SceneView.propertyWidth,
                                   height: buttonH)
         clipCellInSelectedBox.frame = CGRect(x: propertyX,
-                                              y: canvasPropertyMaxY - ch - buttonH * 2,
-                                              width: SceneView.propertyWidth,
-                                              height: buttonH)
+                                             y: canvasPropertyMaxY - ch - buttonH * 2,
+                                             width: SceneView.propertyWidth,
+                                             height: buttonH)
         
         canvas.materialView.frame = CGRect(x: propertyX,
-                                             y: canvasPropertyMaxY - ch - buttonH * 2 - mh,
-                                             width: SceneView.propertyWidth,
-                                             height: mh)
+                                           y: canvasPropertyMaxY - ch - buttonH * 2 - mh,
+                                           width: SceneView.propertyWidth,
+                                           height: mh)
+        materialManager.animationBox.frame = CGRect(x: propertyX,
+                                                    y: canvasPropertyMaxY - ch - mh - buttonH * 3,
+                                                    width: SceneView.propertyWidth,
+                                                    height: buttonH)
         splitColorBox.frame = CGRect(x: propertyX,
-                                     y: canvasPropertyMaxY - ch - mh - buttonH * 3,
+                                     y: canvasPropertyMaxY - ch - mh - buttonH * 4,
                                      width: SceneView.propertyWidth,
                                      height: buttonH)
         splitOtherThanColorBox.frame = CGRect(x: propertyX,
-                                              y: canvasPropertyMaxY - ch - mh - buttonH * 4,
+                                              y: canvasPropertyMaxY - ch - mh - buttonH * 5,
                                               width: SceneView.propertyWidth,
                                               height: buttonH)
+        let eh = effectView.defaultBounds.height
+        effectView.frame = CGRect(x: propertyX + SceneView.propertyWidth,
+                                  y: y - h * 2 - padding - eh,
+                                  width: SceneView.propertyWidth,
+                                  height: eh)
         
         timeline.frame = CGRect(x: padding,
                                 y: y - h * 2 - th - padding * 2,
@@ -810,16 +836,21 @@ final class SceneView: Layer, Respondable, Localizable {
         colorSpaceView.selectedIndex = scene.colorSpace == .sRGB ? 0 : 1
         isShownPreviousView.selectedIndex = scene.isShownPrevious ? 1 : 0
         isShownNextView.selectedIndex = scene.isShownNext ? 1 : 0
+        isHiddenSubtitlesView.selectedIndex = scene.isHiddenSubtitles ? 0 : 1
         soundView.sound = scene.sound
         let sp = CGPoint(x: scene.frame.width, y: scene.frame.height)
         transformView.standardTranslation = sp
         wiggleView.standardAmplitude = sp
+        if let effect = scene.editNode.editTrack.effectItem?.effect {
+            effectView.effect = effect
+        }
         if let transform = scene.editNode.editTrack.transformItem?.transform {
             transformView.transform = transform
         }
         if let wiggle = scene.editNode.editTrack.wiggleItem?.wiggle {
             wiggleView.wiggle = wiggle
         }
+        subtitleView.subtitle = scene.editCut.subtitleTrack.subtitleItem.subtitle
         playerView.time = scene.secondTime(withBeatTime: scene.time)
         playerView.maxTime = scene.secondTime(withBeatTime: scene.duration)
     }
@@ -875,7 +906,7 @@ final class SceneView: Layer, Respondable, Localizable {
         case .end:
             guard let track = track,
                 let animationView = animationView, let cutView = cutView else {
-                        return
+                    return
             }
             if obj.keyframe != obj.oldKeyframe {
                 set(obj.keyframe, old: obj.oldKeyframe, at: keyframeIndex, in: track,
@@ -948,6 +979,86 @@ final class SceneView: Layer, Respondable, Localizable {
         sceneDataModel.isWrite = true
     }
     
+    private var isMadeEffectItem = false
+    private weak var oldEffectItem: EffectItem?
+    func set(_ effect: Effect, old oldEffect: Effect, type: Action.SendType) {
+        switch type {
+        case .begin:
+            let cutView = timeline.editCutView
+            let track = cutView.cut.editNode.editTrack
+            oldEffectItem = track.effectItem
+            if track.effectItem != nil {
+                isMadeEffectItem = false
+            } else {
+                let effectItem = EffectItem.empty(with: track.animation)
+                set(effectItem, in: track, in: cutView)
+                isMadeEffectItem = true
+            }
+            self.cutView = cutView
+            self.track = track
+            keyframeIndex = track.animation.editKeyframeIndex
+            
+            set(effect, at: keyframeIndex, in: track, in: cutView)
+        case .sending:
+            guard let track = track, let cutView = cutView else {
+                return
+            }
+            set(effect, at: keyframeIndex, in: track, in: cutView)
+        case .end:
+            guard let track = track, let cutView = cutView,
+                let effectItem = track.effectItem else {
+                    return
+            }
+            set(effect, at: keyframeIndex, in: track, in: cutView)
+            if effectItem.isEmpty {
+                if isMadeEffectItem {
+                    set(EffectItem?.none, in: track, in: cutView)
+                } else {
+                    set(EffectItem?.none, old: oldEffectItem, in: track, in: cutView, time: time)
+                }
+            } else {
+                if isMadeEffectItem {
+                    set(effectItem, old: oldEffectItem,
+                        in: track, in: cutView, time: scene.time)
+                }
+                if effect != oldEffect {
+                    set(effect, old: oldEffect, at: keyframeIndex,
+                        in: track, in: cutView, time: scene.time)
+                } else {
+                    set(oldEffect, at: keyframeIndex, in: track, in: cutView)
+                }
+            }
+        }
+    }
+    private func set(_ effectItem: EffectItem?, in track: NodeTrack, in cutView: CutView) {
+        track.effectItem = effectItem
+        cutView.updateChildren()
+    }
+    private func set(_ effectItem: EffectItem?, old oldEffectItem: EffectItem?,
+                     in track: NodeTrack, in cutView: CutView, time: Beat) {
+        registerUndo(time: time) {
+            $0.set(oldEffectItem, old: effectItem, in: track, in: cutView, time: $1)
+        }
+        set(effectItem, in: track, in: cutView)
+        sceneDataModel.isWrite = true
+    }
+    private func set(_ effect: Effect, at index: Int,
+                     in track: NodeTrack, in cutView: CutView) {
+        track.effectItem?.replace(effect, at: index)
+        track.updateInterpolation()
+        cutView.cut.editNode.updateEffect()
+        cutView.updateChildren()
+        canvas.setNeedsDisplay()
+    }
+    private func set(_ effect: Effect, old oldEffect: Effect,
+                     at index: Int, in track: NodeTrack, in cutView: CutView, time: Beat) {
+        registerUndo(time: time) {
+            $0.set(oldEffect, old: effect, at: index, in: track, in: cutView, time: $1)
+        }
+        set(effect, at: index, in: track, in: cutView)
+        sceneDataModel.isWrite = true
+    }
+    
     private var keyframeIndex = 0, isMadeTransformItem = false
     private weak var oldTransformItem: TransformItem?, track: NodeTrack?
     private weak var animationView: AnimationView?, cutView: CutView?
@@ -1016,6 +1127,7 @@ final class SceneView: Layer, Respondable, Localizable {
     private func set(_ transform: Transform, at index: Int,
                      in track: NodeTrack, in cutView: CutView) {
         track.transformItem?.replace(transform, at: index)
+        track.updateInterpolation()
         cutView.cut.editNode.updateTransform()
         cutView.updateChildren()
         canvas.setNeedsDisplay()
@@ -1096,6 +1208,7 @@ final class SceneView: Layer, Respondable, Localizable {
     private func set(_ wiggle: Wiggle, at index: Int,
                      in track: NodeTrack, in cutView: CutView) {
         track.replaceWiggle(wiggle, at: index)
+        track.updateInterpolation()
         cutView.cut.editNode.updateWiggle()
         canvas.setNeedsDisplay()
     }
@@ -1213,6 +1326,43 @@ final class SceneView: Layer, Respondable, Localizable {
         set(tempo, at: index, in: track)
         sceneDataModel.isWrite = true
     }
+    
+    private weak var oldSubtitleTrack: SubtitleTrack?
+    func set(_ subtitle: Subtitle, old oldSubtitle: Subtitle, type: Action.SendType) {
+        switch type {
+        case .begin:
+            let track = scene.editCut.subtitleTrack
+            oldSubtitleTrack = track
+            keyframeIndex = track.animation.editKeyframeIndex
+            set(subtitle, at: keyframeIndex, in: track)
+        case .sending:
+            guard let track = oldSubtitleTrack else {
+                return
+            }
+            set(subtitle, at: keyframeIndex, in: track)
+        case .end:
+            guard let track = oldSubtitleTrack else {
+                return
+            }
+            set(subtitle, at: keyframeIndex, in: track)
+            if subtitle != oldSubtitle {
+                set(subtitle, old: oldSubtitle, at: keyframeIndex, in: track, time: scene.time)
+            } else {
+                set(oldSubtitle, at: keyframeIndex, in: track)
+            }
+        }
+    }
+    private func set(_ subtitle: Subtitle, at index: Int, in track: SubtitleTrack) {
+        track.replace(subtitle, at: index)
+    }
+    private func set(_ subtitle: Subtitle, old oldSubtitle: Subtitle,
+                     at index: Int, in track: SubtitleTrack, time: Beat) {
+        registerUndo(time: time) {
+            $0.set(oldSubtitle, old: subtitle, at: index, in: track, time: $1)
+        }
+        set(subtitle, at: index, in: track)
+        sceneDataModel.isWrite = true
+    }
 }
 
 /**
@@ -1233,6 +1383,11 @@ final class SceneMaterialManager {
         }
     }
     
+    init() {
+        animationBox.deleteHandler = { [unowned self] _, _ in self.removeAnimation() }
+        animationBox.newHandler = { [unowned self] _, _ in self.appendAnimation() }
+    }
+    
     var material: Material {
         get {
             return sceneView.canvas.materialView.material
@@ -1241,20 +1396,19 @@ final class SceneMaterialManager {
             scene.editMaterial = newValue
             sceneView.canvas.materialView.material = newValue
             sceneView.sceneDataModel.isWrite = true
+            animationBox.label.localization = isAnimatedMaterial ?
+                Localization(english: "Material Animation", japanese: "マテリアルアニメーションあり") :
+                Localization(english: "None Material Animation", japanese: "マテリアルアニメーションなし")
+            let x = animationBox.isLeftAlignment ?
+                animationBox.leftPadding :
+                round((animationBox.frame.width - animationBox.label.frame.width) / 2)
+            let y = round((animationBox.frame.height - animationBox.label.frame.height) / 2)
+            animationBox.label.frame.origin = CGPoint(x: x, y: y)
         }
     }
     
     var undoManager: UndoManager? {
         return sceneView.undoManager
-    }
-    
-    var isAnimatedMaterial: Bool {
-        for materialItem in scene.editNode.editTrack.materialItems {
-            if materialItem.keyMaterials.contains(material) {
-                return true
-            }
-        }
-        return false
     }
     
     private struct ColorTuple {
@@ -1308,94 +1462,124 @@ final class SceneMaterialManager {
             return colorTuplesWith(cells: cut.cells, isSelected: useSelected, in: cut)
         }
     }
-    private func colorTuplesWith(cells: [Cell], isSelected: Bool,
-                                 in cut: Cut) -> [ColorTuple] {
+    private func colorTuplesWith(cells: [Cell], isSelected: Bool, in cut: Cut) -> [ColorTuple] {
         struct ColorCell {
             var color: Color, cells: [Cell]
         }
-        var colorDic = [UUID: ColorCell]()
+        var colors = [UUID: ColorCell]()
         for cell in cells {
-            if colorDic[cell.material.color.id] != nil {
-                colorDic[cell.material.color.id]?.cells.append(cell)
+            if colors[cell.material.color.id] != nil {
+                colors[cell.material.color.id]?.cells.append(cell)
             } else {
-                colorDic[cell.material.color.id] = ColorCell(color: cell.material.color, cells: [cell])
+                colors[cell.material.color.id] = ColorCell(color: cell.material.color, cells: [cell])
             }
         }
-        return colorDic.map {
+        return colors.map {
             ColorTuple(color: $0.value.color,
                        materialTuples: materialTuplesWith(cells: $0.value.cells,
                                                           isSelected: isSelected, in: cut))
         }
     }
     private func colorTuplesWith(color: Color, isSelected: Bool, in cuts: [Cut]) -> [ColorTuple] {
-        var materialTuples = [UUID: MaterialTuple]()
-        for cut in cuts {
+        let cutTuples: [CutTuple] = cuts.flatMap { cut in
             let cells = cut.cells.filter { $0.material.color == color }
-            if !cells.isEmpty {
-                let mts = materialTuplesWith(cells: cells, color: color,
-                                             isSelected: isSelected, in: cut)
-                for mt in mts {
-                    if materialTuples[mt.key] != nil {
-                        materialTuples[mt.key]?.cutTuples += mt.value.cutTuples
-                    } else {
-                        materialTuples[mt.key] = mt.value
+            
+            var materialItemTuples = [MaterialItemTuple]()
+            for track in cut.editNode.tracks {
+                for materialItem in track.materialItems {
+                    let indexes = materialItem.keyMaterials.enumerated().flatMap {
+                        $0.element.color == color ? $0.offset : nil
+                    }
+                    if !indexes.isEmpty {
+                        materialItemTuples.append(MaterialItemTuple(track: track,
+                                                                    materialItem: materialItem,
+                                                                    editIndexes: indexes))
                     }
                 }
             }
+            
+            return cells.isEmpty && materialItemTuples.isEmpty ?
+                nil : CutTuple(cut: cut, cells: cells, materialItemTuples: materialItemTuples)
         }
+        let materialTuples = SceneMaterialManager.materialTuples(with: cutTuples)
+        
         return materialTuples.isEmpty ?
             [] : [ColorTuple(color: color, materialTuples: materialTuples)]
+    }
+    private static func materialTuples(with cutTuples: [CutTuple]) -> [UUID: MaterialTuple] {
+        let materials = cutTuples.reduce(into: Set<Material>()) { materials, cutTuple in
+            cutTuple.cells.forEach { materials.insert($0.material) }
+            cutTuple.materialItemTuples.forEach { mit in
+                mit.editIndexes.forEach { materials.insert(mit.materialItem.keyMaterials[$0]) }
+            }
+        }
+        return materials.reduce(into: [UUID: MaterialTuple]()) { materialTuples, material in
+            let cutTuples: [CutTuple] = cutTuples.flatMap { cutTuple in
+                let cells = cutTuple.cells.filter { $0.material.id == material.id }
+                let mts: [MaterialItemTuple] = cutTuple.materialItemTuples.flatMap { mit in
+                    let indexes = mit.editIndexes.flatMap {
+                        mit.materialItem.keyMaterials[$0].id == material.id ? $0 : nil
+                    }
+                    return indexes.isEmpty ?
+                        nil :
+                        MaterialItemTuple(track: mit.track,
+                                          materialItem: mit.materialItem, editIndexes: indexes)
+                }
+                return cells.isEmpty && mts.isEmpty ?
+                    nil : CutTuple(cut: cutTuple.cut, cells: cells, materialItemTuples: mts)
+            }
+            materialTuples[material.id] = MaterialTuple(material: material, cutTuples: cutTuples)
+        }
     }
     
     private func materialTuplesWith(cells: [Cell], color: Color? = nil,
                                     isSelected: Bool, in cut: Cut) -> [UUID: MaterialTuple] {
-        var materialDic = [UUID: MaterialTuple]()
+        var materials = [UUID: MaterialTuple]()
         for cell in cells {
-            if materialDic[cell.material.id] != nil {
-                materialDic[cell.material.id]?.cutTuples[0].cells.append(cell)
+            if materials[cell.material.id] != nil {
+                materials[cell.material.id]?.cutTuples[0].cells.append(cell)
             } else {
                 let cutTuples = [CutTuple(cut: cut, cells: [cell], materialItemTuples: [])]
-                materialDic[cell.material.id] = MaterialTuple(material: cell.material,
-                                                              cutTuples: cutTuples)
+                materials[cell.material.id] = MaterialTuple(material: cell.material,
+                                                            cutTuples: cutTuples)
             }
         }
         
         for track in cut.editNode.tracks {
             for materialItem in track.materialItems {
                 if cells.contains(where: { materialItem.cells.contains($0) }) {
-                    let mits = MaterialItemTuple.materialItemTuples(
-                        with: materialItem, isSelected: isSelected, in: track)
+                    let mits = MaterialItemTuple.materialItemTuples(with: materialItem,
+                                                                    isSelected: isSelected, in: track)
                     for mit in mits {
                         if let color = color {
                             if mit.value.material.color != color {
                                 continue
                             }
                         }
-                        if materialDic[mit.key] != nil {
-                            materialDic[mit.key]?.cutTuples[0]
+                        if materials[mit.key] != nil {
+                            materials[mit.key]?.cutTuples[0]
                                 .materialItemTuples.append(mit.value.itemTupe)
                         } else {
                             let materialItemTuples = [mit.value.itemTupe]
                             let cutTuples = [CutTuple(cut: cut, cells: [],
                                                       materialItemTuples: materialItemTuples)]
-                            materialDic[mit.key] = MaterialTuple(material: mit.value.material,
-                                                                 cutTuples: cutTuples)
+                            materials[mit.key] = MaterialTuple(material: mit.value.material,
+                                                               cutTuples: cutTuples)
                         }
                     }
                 }
             }
         }
         
-        return materialDic
+        return materials
     }
     private func materialTuplesWith(material: Material?, useSelected: Bool = false,
-                                    in cut: Cut,
-                                    _ cuts: [Cut]) -> [UUID: MaterialTuple] {
+                                    in editCut: Cut, _ cuts: [Cut]) -> [UUID: MaterialTuple] {
         if useSelected {
-            let allSelectedCells = cut.editNode.allSelectedCellItemsWithNoEmptyGeometry
+            let allSelectedCells = editCut.editNode.allSelectedCellItemsWithNoEmptyGeometry
             if !allSelectedCells.isEmpty {
                 return materialTuplesWith(cells: allSelectedCells.map { $0.cell },
-                                          isSelected: useSelected, in: cut)
+                                          isSelected: useSelected, in: editCut)
             }
         }
         if let material = material {
@@ -1423,7 +1607,7 @@ final class SceneMaterialManager {
             return cutTuples.isEmpty ? [:] : [material.id: MaterialTuple(material: material,
                                                                          cutTuples: cutTuples)]
         } else {
-            return materialTuplesWith(cells: cut.cells, isSelected: useSelected, in: cut)
+            return materialTuplesWith(cells: editCut.cells, isSelected: useSelected, in: editCut)
         }
     }
     
@@ -1467,28 +1651,40 @@ final class SceneMaterialManager {
                 cell.material = material
             }
             for materialItemTuple in cutTuple.materialItemTuples {
-                var keyMaterials = materialItemTuple.materialItem.keyMaterials
-                materialItemTuple.editIndexes.forEach { keyMaterials[$0] = material }
-                materialItemTuple.track.set(keyMaterials, in: materialItemTuple.materialItem)
-                materialItemTuple.materialItem.cells.forEach { $0.material = material }
+                set(material, editIndexes: materialItemTuple.editIndexes,
+                    in: materialItemTuple.materialItem, materialItemTuple.track)
             }
         }
     }
     private func _set(_ material: Material, in materialTuple: MaterialTuple) {
         for cutTuple in materialTuple.cutTuples {
             _set(material, old: materialTuple.material, in: cutTuple.cells, cutTuple.cut)
+            
+            for materialItemTuple in cutTuple.materialItemTuples {
+                _set(material, old: materialTuple.material,
+                     editIndexes: materialItemTuple.editIndexes,
+                     in: materialItemTuple.materialItem, materialItemTuple.track, cutTuple.cut)
+            }
         }
     }
     
-    private func append(_ materialItem: MaterialItem, in track: NodeTrack, _ cut: Cut) {
-        undoManager?.registerUndo(withTarget: self) { $0.remove(materialItem, in: track, cut) }
-        track.append(materialItem)
-        sceneView.sceneDataModel.isWrite = true
+    private func set(_ material: Material, editIndexes: [Int],
+                     in materialItem: MaterialItem, _ track: NodeTrack) {
+        var keyMaterials = materialItem.keyMaterials
+        editIndexes.forEach { keyMaterials[$0] = material }
+        track.set(keyMaterials, in: materialItem)
+        track.updateInterpolation()
     }
-    private func remove(_ materialItem: MaterialItem, in track: NodeTrack, _ cut: Cut) {
-        undoManager?.registerUndo(withTarget: self) { $0.append(materialItem, in: track, cut) }
-        track.remove(materialItem)
+    private func _set(_ material: Material, old oldMaterial: Material, editIndexes: [Int],
+                      in materialItem: MaterialItem, _ track: NodeTrack, _ cut: Cut) {
+        undoManager?.registerUndo(withTarget: self) {
+            $0._set(oldMaterial, old: material, editIndexes: editIndexes, in: materialItem, track, cut)
+        }
+        set(material, editIndexes: editIndexes, in: materialItem, track)
         sceneView.sceneDataModel.isWrite = true
+        if cut === sceneView.canvas.cut {
+            sceneView.canvas.setNeedsDisplay()
+        }
     }
     
     func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
@@ -1547,7 +1743,6 @@ final class SceneMaterialManager {
             
             _set(material, old: self.material)
         }
-        
     }
     func paste(_ material: Material, withSelected selectedMaterial: Material, useSelected: Bool) {
         let materialTuples = materialTuplesWith(material: selectedMaterial,
@@ -1755,20 +1950,48 @@ final class SceneMaterialManager {
         }
     }
     
-    private func changeAnimation(with binding: EnumView.Binding) {
-        let isAnimation = self.isAnimatedMaterial
-        if binding.index == 0 && !isAnimation {
-            let cut =  scene.editCut
-            let track = cut.editNode.editTrack
-            let keyMaterials = track.emptyKeyMaterials(with: material)
-            let cells = cut.cells.filter { $0.material == material }
-            append(MaterialItem(material: material, cells: cells, keyMaterials: keyMaterials),
-                   in: track, cut)
-        } else if isAnimation {
-            let cut = scene.editCut
-            let track = cut.editNode.editTrack
-            remove(track.materialItems[track.materialItems.count - 1],
-                   in: cut.editNode.editTrack, cut)
+    let animationBox = TextBox()
+    
+    var isAnimatedMaterial: Bool {
+        for materialItem in scene.editNode.editTrack.materialItems {
+            if materialItem.keyMaterials.contains(material) {
+                return true
+            }
         }
+        return false
+    }
+    
+    func appendAnimation() -> Bool {
+        guard !isAnimatedMaterial else {
+            return false
+        }
+        let cut =  scene.editCut
+        let track = cut.editNode.editTrack
+        let keyMaterials = track.emptyKeyMaterials(with: material)
+        let cells = cut.cells.filter { $0.material == material }
+        append(MaterialItem(material: material, cells: cells, keyMaterials: keyMaterials),
+               in: track, cut)
+        return true
+    }
+    func removeAnimation() -> Bool {
+        guard isAnimatedMaterial else {
+            return false
+        }
+        let cut = scene.editCut
+        let track = cut.editNode.editTrack
+        remove(track.materialItems[track.materialItems.count - 1],
+               in: cut.editNode.editTrack, cut)
+        return true
+    }
+    
+    private func append(_ materialItem: MaterialItem, in track: NodeTrack, _ cut: Cut) {
+        undoManager?.registerUndo(withTarget: self) { $0.remove(materialItem, in: track, cut) }
+        track.append(materialItem)
+        sceneView.sceneDataModel.isWrite = true
+    }
+    private func remove(_ materialItem: MaterialItem, in track: NodeTrack, _ cut: Cut) {
+        undoManager?.registerUndo(withTarget: self) { $0.append(materialItem, in: track, cut) }
+        track.remove(materialItem)
+        sceneView.sceneDataModel.isWrite = true
     }
 }

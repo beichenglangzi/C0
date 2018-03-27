@@ -24,7 +24,7 @@ import Foundation
  - sceneViewを取り除く
  */
 final class Human: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Human", japanese: "人間")
+    static let name = Localization(english: "Human", japanese: "ヒューマン")
     
     var locale = Locale.current {
         didSet {
@@ -42,8 +42,8 @@ final class Human: Layer, Respondable, Localizable {
     }
     var preference = Preference() {
         didSet {
-            actionView.isHiddenView.selectedIndex = preference.isHiddenAction ? 0 : 1
-            actionView.isHiddenActions = preference.isHiddenAction
+            actionManagerView.isHiddenView.selectedIndex = preference.isHiddenAction ? 0 : 1
+            actionManagerView.isHiddenActions = preference.isHiddenAction
             updateLayout()
         }
     }
@@ -75,7 +75,7 @@ final class Human: Layer, Respondable, Localizable {
     }
     
     let vision = Vision()
-    let copiedObjectView = CopiedObjectView(), actionView = ActionView()
+    let copiedObjectView = CopiedObjectView(), actionManagerView = ActionManagerView()
     let world = Box()
     var editTextView: TextView? {
         if let editTextView = indicatedResponder as? TextView {
@@ -86,7 +86,7 @@ final class Human: Layer, Respondable, Localizable {
     }
     let sceneView = SceneView()
     
-    var actionWidth = ActionView.defaultWidth {
+    var actionWidth = ActionManagerView.defaultWidth {
         didSet {
             updateLayout()
         }
@@ -112,7 +112,7 @@ final class Human: Layer, Respondable, Localizable {
         }
         world.isClipped = true
         world.replace(children: [sceneView])
-        vision.replace(children: [copiedObjectView, actionView, world])
+        vision.replace(children: [copiedObjectView, actionManagerView, world])
         indicatedResponder = vision
         
         super.init()
@@ -120,7 +120,7 @@ final class Human: Layer, Respondable, Localizable {
                               directoryWithDataModels: [preferenceDataModel, worldDataModel])
         editQuasimode = EditQuasimode.move
         
-        actionView.isHiddenActionBinding = { [unowned self] in
+        actionManagerView.isHiddenActionBinding = { [unowned self] in
             self.preference.isHiddenAction = $0
             self.updateLayout()
             self.preferenceDataModel.isWrite = true
@@ -130,53 +130,30 @@ final class Human: Layer, Respondable, Localizable {
     
     private func updateLayout() {
         let padding = Layout.basicPadding
+        let preferenceY = fieldOfVision.height - actionManagerView.frame.height - padding
+        actionManagerView.frame = CGRect(x: padding,
+                                         y: preferenceY,
+                                         width: actionWidth,
+                                         height: actionManagerView.frame.height)
+        copiedObjectView.frame = CGRect(x: padding + actionWidth,
+                                        y: fieldOfVision.height - copyViewHeight - padding,
+                                        width: fieldOfVision.width - actionWidth - padding * 2,
+                                        height: copyViewHeight)
         if preference.isHiddenAction {
-            actionView.frame = CGRect(
-                x: padding,
-                y: fieldOfVision.height - actionView.frame.height - padding,
-                width: actionWidth,
-                height: actionView.frame.height
-            )
-            copiedObjectView.frame = CGRect(
-                x: padding + actionWidth,
-                y: fieldOfVision.height - copyViewHeight - padding,
-                width: fieldOfVision.width - actionWidth - padding * 2,
-                height: copyViewHeight
-            )
-            world.frame = CGRect(
-                x: padding,
-                y: padding,
-                width: vision.frame.width - padding * 2,
-                height: vision.frame.height - copyViewHeight - padding * 2
-            )
+            world.frame = CGRect(x: padding,
+                                 y: padding,
+                                 width: vision.frame.width - padding * 2,
+                                 height: vision.frame.height - copyViewHeight - padding * 2)
         } else {
-            actionView.frame = CGRect(
-                x: padding,
-                y: fieldOfVision.height - actionView.frame.height - padding,
-                width: actionWidth,
-                height: actionView.frame.height
-            )
-            copiedObjectView.frame = CGRect(
-                x: padding + actionWidth,
-                y: fieldOfVision.height - copyViewHeight - padding,
-                width: fieldOfVision.width - actionWidth - padding * 2,
-                height: copyViewHeight
-            )
-            world.frame = CGRect(
-                x: padding + actionWidth,
-                y: padding,
-                width: vision.frame.width - (padding * 2 + actionWidth),
-                height: vision.frame.height - copyViewHeight - padding * 2
-            )
+            world.frame = CGRect(x: padding + actionWidth,
+                                 y: padding,
+                                 width: vision.frame.width - (padding * 2 + actionWidth),
+                                 height: vision.frame.height - copyViewHeight - padding * 2)
         }
-        world.bounds.origin = CGPoint(
-            x: -round((world.frame.width / 2)),
-            y: -round((world.frame.height / 2))
-        )
-        sceneView.frame.origin = CGPoint(
-            x: -round(sceneView.frame.width / 2),
-            y: -round(sceneView.frame.height / 2)
-        )
+        world.bounds.origin = CGPoint(x: -round((world.frame.width / 2)),
+                                      y: -round((world.frame.height / 2)))
+        sceneView.frame.origin = CGPoint(x: -round(sceneView.frame.width / 2),
+                                         y: -round(sceneView.frame.height / 2))
     }
     override var contentsScale: CGFloat {
         didSet {
@@ -217,8 +194,8 @@ final class Human: Layer, Respondable, Localizable {
                         editTextView.unmarkText()
                     }
                     setEditTextView?((self,
-                                        indicatedResponder as? TextView,
-                                        oldValue as? TextView))
+                                      indicatedResponder as? TextView,
+                                      oldValue as? TextView))
                 }
             }
         }
@@ -273,7 +250,7 @@ final class Human: Layer, Respondable, Localizable {
     private var oldQuasimodeAction = Action()
     private weak var oldQuasimodeResponder: Respondable?
     func sendEditQuasimode(with event: Event) {
-        let quasimodeAction = actionView.actionManager.actionWith(.drag, event) ?? Action()
+        let quasimodeAction = actionManagerView.actionManager.actionWith(.drag, event) ?? Action()
         if !isDown {
             if editQuasimode != quasimodeAction.editQuasimode {
                 editQuasimode = quasimodeAction.editQuasimode
@@ -295,9 +272,10 @@ final class Human: Layer, Respondable, Localizable {
                 return false
             }
             isKey = true
-            keyAction = actionView.actionManager.actionWith(.keyInput, event) ?? Action()
+            keyAction = actionManagerView.actionManager.actionWith(.keyInput, event) ?? Action()
             if let editTextView = editTextView, keyAction.canTextKeyInput() {
                 self.keyTextView = editTextView
+                _ = keyAction.keyInput?(self, editTextView, event)
                 return true
             } else if keyAction != Action() {
                 _ = responder(with: indicatedLayer(with: event)) {
@@ -336,7 +314,7 @@ final class Human: Layer, Respondable, Localizable {
             setIndicatedResponder(at: event.location)
             isDown = true
             isDrag = false
-            dragAction = actionView.actionManager.actionWith(.drag, event) ?? defaultDragAction
+            dragAction = actionManagerView.actionManager.actionWith(.drag, event) ?? defaultDragAction
             dragResponder = responder(with: indicatedLayer(with: event)) {
                 dragAction.drag?(self, $0, event) ?? false
             }
@@ -424,7 +402,7 @@ final class Human: Layer, Respondable, Localizable {
 }
 
 final class Vision: Layer, Respondable {
-    static let name = Localization(english: "Vision", japanese: "視界")
+    static let name = Localization(english: "Vision", japanese: "ビジョン")
     var rootCursorPoint = CGPoint()
     override var cursorPoint: CGPoint {
         return rootCursorPoint

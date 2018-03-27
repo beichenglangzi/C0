@@ -94,33 +94,31 @@ final class KeyframeView: Layer, Respondable {
         }
     }
     
-    let nameLabel = Label(text: Keyframe.name, font: .bold)
-    let easingView = EasingView()
-    let interpolationView = EnumView(
-        names: [Localization(english: "Spline", japanese: "スプライン"),
-                Localization(english: "Bound", japanese: "バウンド"),
-                Localization(english: "Linear", japanese: "リニア"),
-                Localization(english: "Step", japanese: "補間なし")],
-        description: Localization(
-            english: "\"Bound\": Uses \"Spline\" without interpolation on previous, Not previous and next: Use \"Linear\"",
-            japanese: "バウンド: 前方側の補間をしないスプライン補間, 前後が足りない場合: リニア補間を使用"
-        )
-    )
-    let loopView = EnumView(
-        names: [Localization(english: "No Loop", japanese: "ループなし"),
-                Localization(english: "Began Loop", japanese: "ループ開始"),
-                Localization(english: "Ended Loop", japanese: "ループ終了")],
-        description: Localization(
-            english: "Loop from \"Began Loop\" keyframe to \"Ended Loop\" keyframe on \"Ended Loop\" keyframe",
-            japanese: "「ループ開始」キーフレームから「ループ終了」キーフレームの間を「ループ終了」キーフレーム上でループ"
-        )
-    )
-    let labelView = EnumView(
-        names: [Localization(english: "Main Label", japanese: "メインラベル"),
-                Localization(english: "Sub Label", japanese: "サブラベル")]
-    )
+    var isSmall: Bool
+    let nameLabel: Label
+    let easingView: EasingView
+    let interpolationView: EnumView, loopView: EnumView, labelView: EnumView
     
-    override init() {
+    init(isSmall: Bool = false) {
+        nameLabel = Label(text: Keyframe.name, font: isSmall ? .smallBold : .bold)
+        easingView = EasingView(isSmall: isSmall)
+        let interporationDescription = Localization(english: "\"Bound\": Uses \"Spline\" without interpolation on previous, Not previous and next: Use \"Linear\"",
+                                                    japanese: "バウンド: 前方側の補間をしないスプライン補間, 前後が足りない場合: リニア補間を使用")
+        interpolationView = EnumView(names: [Localization(english: "Spline", japanese: "スプライン"),
+                                             Localization(english: "Bound", japanese: "バウンド"),
+                                             Localization(english: "Linear", japanese: "リニア"),
+                                             Localization(english: "Step", japanese: "補間なし")],
+                                     description: interporationDescription, isSmall: isSmall)
+        let loopDescription = Localization(english: "Loop from \"Began Loop\" keyframe to \"Ended Loop\" keyframe on \"Ended Loop\" keyframe",
+                                           japanese: "「ループ開始」キーフレームから「ループ終了」キーフレームの間を「ループ終了」キーフレーム上でループ")
+        loopView = EnumView(names: [Localization(english: "No Loop", japanese: "ループなし"),
+                                    Localization(english: "Began Loop", japanese: "ループ開始"),
+                                    Localization(english: "Ended Loop", japanese: "ループ終了")],
+                            description: loopDescription, isSmall: isSmall)
+        labelView = EnumView(names: [Localization(english: "Main Label", japanese: "メインラベル"),
+                                     Localization(english: "Sub Label", japanese: "サブラベル")],
+                             isSmall: isSmall)
+        self.isSmall = isSmall
         super.init()
         replace(children: [nameLabel, easingView, interpolationView, loopView, labelView])
         interpolationView.binding = { [unowned self] in self.setKeyframe(with: $0) }
@@ -135,8 +133,8 @@ final class KeyframeView: Layer, Respondable {
         }
     }
     private func updateLayout() {
-        let padding = Layout.basicPadding
-        let w = bounds.width - padding * 2, h = Layout.basicHeight
+        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
+        let w = bounds.width - padding * 2, h = isSmall ? Layout.smallHeight : Layout.basicHeight
         var y = bounds.height - nameLabel.frame.height - padding
         nameLabel.frame.origin = CGPoint(x: padding, y: y)
         y -= h + padding

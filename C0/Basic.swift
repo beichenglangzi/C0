@@ -140,8 +140,10 @@ extension URL: ResponderExpression {
 final class LockTimer {
     private var count = 0
     private(set) var wait = false
-    func begin(endDuration: Second, beginHandler: () -> Void, endHandler: @escaping () -> Void) {
+    func begin(endDuration: Second, beginHandler: () -> Void,
+               waitHandler: () -> Void, endHandler: @escaping () -> Void) {
         if wait {
+            waitHandler()
             count += 1
         } else {
             beginHandler()
@@ -279,7 +281,7 @@ final class ObjectView: Layer, Respondable, Localizable {
     }
 }
 final class CopiedObjectView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Copied Object View", japanese: "コピーオブジェクト表示")
+    static let name = Localization(english: "Copy Manager View", japanese: "コピー管理表示")
     
     var locale = Locale.current {
         didSet {

@@ -644,10 +644,8 @@ extension CGPath {
 
 extension CGContext {
     static func bitmap(with size: CGSize,
-                       colorSpace: CGColorSpace? = CGColorSpace(name: CGColorSpace.sRGB)
-        ) -> CGContext? {
-        
-        guard let colorSpace = colorSpace else {
+                       _ cs: CGColorSpace? = CGColorSpace(name: CGColorSpace.sRGB)) -> CGContext? {
+        guard let colorSpace = cs else {
             return nil
         }
         return CGContext(data: nil, width: Int(size.width), height: Int(size.height),
@@ -703,7 +701,7 @@ extension CGContext {
             filter?.setValue(Float(blurRadius), forKey: kCIInputRadiusKey)
             if let outputImage = filter?.outputImage {
                 cictx.draw(outputImage,
-                           in: ctx.boundingBoxOfClipPath, from: outputImage.extent)
+                           in: ctx.boundingBoxOfClipPath, from: CGRect(origin: CGPoint(), size: image.size))
             }
         }
     }

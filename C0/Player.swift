@@ -116,19 +116,17 @@ final class Player: Layer, Respondable {
             }
         }
     }
+    var allowableDelayTime = Second(0.1)
     private func updatePlayTime() {
         playFrameTime += 1
-        
-        let newTime: Beat = {
-            if let audioPlayer = audioPlayer, !scene.sound.isHidden {
-                let audioFrameTime = scene.frameTime(withSecondTime: audioPlayer.currentTime)
-                if abs(playFrameTime - audioFrameTime) > scene.frameRate {
-                    return scene.basedBeatTime(withSecondTime: audioPlayer.currentTime)
-                }
+        if let audioPlayer = audioPlayer, !scene.sound.isHidden {
+            let playTime = scene.secondTime(withFrameTime: playFrameTime)
+            let audioTime = Second(audioPlayer.currentTime)
+            if abs(playTime - audioTime) > allowableDelayTime {
+                playFrameTime = scene.frameTime(withSecondTime: audioTime)
             }
-            return scene.beatTime(withFrameTime: playFrameTime)
-        } ()
-        
+        }
+        let newTime = scene.beatTime(withFrameTime: playFrameTime)
         update(withTime: newTime)
     }
     private func updateBinding() {

@@ -107,8 +107,7 @@ final class EasingView: Layer, Respondable {
         }
     }
     
-    private let xLabel = Label(text: Localization("t"), font: .italic)
-    private let yLabel = Label(text: Localization("t'"), font: .italic)
+    private let xLabel: Label, yLabel: Label
     private let controlLine: PathLayer = {
         let controlLine = PathLayer()
         controlLine.lineColor = .content
@@ -137,7 +136,9 @@ final class EasingView: Layer, Respondable {
         }
     }
     
-    init(frame: CGRect = CGRect(), description: Localization = Localization()) {
+    init(frame: CGRect = CGRect(), description: Localization = Localization(), isSmall: Bool = false) {
+        xLabel = Label(text: Localization("t"), font: isSmall ? .smallItalic : .italic)
+        yLabel = Label(text: Localization("t'"), font: isSmall ? .smallItalic : .italic)
         super.init()
         instanceDescription = description
         replace(children: [xLabel, yLabel, controlLine, easingLine, axis, cp0View, cp1View])

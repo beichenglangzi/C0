@@ -626,24 +626,18 @@ extension CGPoint: Interpolatable {
     }
     static func firstMonospline(_ f1: CGPoint, _ f2: CGPoint, _ f3: CGPoint,
                                 with ms: Monospline) -> CGPoint {
-        return CGPoint(
-            x: CGFloat.firstMonospline(f1.x, f2.x, f3.x, with: ms),
-            y: CGFloat.firstMonospline(f1.y, f2.y, f3.y, with: ms)
-        )
+        return CGPoint(x: CGFloat.firstMonospline(f1.x, f2.x, f3.x, with: ms),
+                       y: CGFloat.firstMonospline(f1.y, f2.y, f3.y, with: ms))
     }
     static func monospline(_ f0: CGPoint, _ f1: CGPoint, _ f2: CGPoint, _ f3: CGPoint,
                            with ms: Monospline) -> CGPoint {
-        return CGPoint(
-            x: CGFloat.monospline(f0.x, f1.x, f2.x, f3.x, with: ms),
-            y: CGFloat.monospline(f0.y, f1.y, f2.y, f3.y, with: ms)
-        )
+        return CGPoint(x: CGFloat.monospline(f0.x, f1.x, f2.x, f3.x, with: ms),
+                       y: CGFloat.monospline(f0.y, f1.y, f2.y, f3.y, with: ms))
     }
     static func lastMonospline(_ f0: CGPoint, _ f1: CGPoint, _ f2: CGPoint,
                               with ms: Monospline) -> CGPoint {
-        return CGPoint(
-            x: CGFloat.lastMonospline(f0.x, f1.x, f2.x, with: ms),
-            y: CGFloat.lastMonospline(f0.y, f1.y, f2.y, with: ms)
-        )
+        return CGPoint(x: CGFloat.lastMonospline(f0.x, f1.x, f2.x, with: ms),
+                       y: CGFloat.lastMonospline(f0.y, f1.y, f2.y, with: ms))
     }
 }
 extension CGPoint: Referenceable {
@@ -1039,7 +1033,7 @@ struct Monospline {
     }
 }
 
-struct RotateRect: Codable {
+struct RotatedRect: Codable {
     let centerPoint: CGPoint, size: CGSize, angle: CGFloat
     init(convexHullPoints chps: [CGPoint]) {
         guard !chps.isEmpty else {
@@ -1097,8 +1091,8 @@ struct RotateRect: Codable {
         return CGPoint(x: size.width / 2, y: size.height / 2).applying(affineTransform)
     }
 }
-extension RotateRect: Equatable {
-    static func ==(lhs: RotateRect, rhs: RotateRect) -> Bool {
+extension RotatedRect: Equatable {
+    static func ==(lhs: RotatedRect, rhs: RotatedRect) -> Bool {
         return lhs.centerPoint == rhs.centerPoint
             && lhs.size == rhs.size && lhs.angle == lhs.angle
     }
@@ -1128,33 +1122,6 @@ extension CGPoint {
             ap = bp
         } while ap != firstP
         return chps
-    }
-    static func rotatedBoundingBox(withConvexHullPoints chps: [CGPoint]
-        ) -> (centerPoint: CGPoint, size: CGSize, angle: CGFloat) {
-        
-        guard !chps.isEmpty else {
-            fatalError()
-        }
-        guard chps.count > 1 else {
-            return (chps[0], CGSize(), 0.0)
-        }
-        var minArea = CGFloat.infinity, minAngle = 0.0.cf, minBounds = CGRect()
-        for (i, p) in chps.enumerated() {
-            let nextP = chps[i == chps.count - 1 ? 0 : i + 1]
-            let angle = p.tangential(nextP)
-            let affine = CGAffineTransform(rotationAngle: -angle)
-            let ps = chps.map { $0.applying(affine) }
-            let bounds = boundingBox(with: ps)
-            let area = bounds.width * bounds.height
-            if area < minArea {
-                minArea = area
-                minAngle = angle
-                minBounds = bounds
-            }
-        }
-        let centerPoint = CGPoint(x: minBounds.midX, y: minBounds.midY)
-            .applying(CGAffineTransform(rotationAngle: minAngle))
-        return (centerPoint, minBounds.size, minAngle)
     }
     static func boundingBox(with points: [CGPoint]) -> CGRect {
         guard points.count > 1 else {

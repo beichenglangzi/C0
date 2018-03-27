@@ -92,8 +92,8 @@ struct Color: Codable {
     static let strokeLine = Color(white: 0)
     
     static let playBorder = Color(white: 0.4)
-    static let speechBorder = Color(white: 0)
-    static let speechFill = white
+    static let subtitleBorder = Color(white: 0)
+    static let subtitleFill = white
     
     static let rgbRed = Color(red: 1, green: 0, blue: 0)
     static let rgbOrange = Color(red: 1, green: 0.5, blue: 0)
@@ -778,12 +778,11 @@ struct ColorCircle {
         ctx.translateBy(x: bounds.midX, y: bounds.midY)
         ctx.rotate(by: .pi / 6 - deltaAngle / 2)
         for i in 0 ..< splitCount {
-            ctx.setFillColor(
-                Color(hue: revisionHue(withHue: Double(i) / Double(splitCount)),
-                      saturation: 1,
-                      brightness: 1,
-                      colorSpace: colorSpace).cgColor
-            )
+            let color = Color(hue: revisionHue(withHue: Double(i) / Double(splitCount)),
+                              saturation: 1,
+                              brightness: 1,
+                              colorSpace: colorSpace)
+            ctx.setFillColor(color.cgColor)
             ctx.addLines(between: points)
             ctx.fillPath()
             ctx.rotate(by: deltaAngle)

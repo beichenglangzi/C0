@@ -21,7 +21,6 @@ import Foundation
 
 /**
  # Issue
- - セルのトラック間移動
  - 複数セルの重なり判定（複数のセルの上からセルを追加するときにもcontains判定が有効なように修正）
  - セルに文字を実装
  - 文字から口パク生成アクション
@@ -105,7 +104,8 @@ final class Cell: NSObject, NSCoding {
     }
     var imageBounds: CGRect {
         return geometry.path.isEmpty ?
-            CGRect() : geometry.path.boundingBoxOfPath.inset(by: -material.lineWidth)
+            CGRect() : Line.visibleImageBoundsWith(imageBounds: geometry.path.boundingBoxOfPath,
+                                                   lineWidth: material.lineWidth * 2)
     }
     var isEditable: Bool {
         return !isLocked && !isHidden && !isTranslucentLock
@@ -714,11 +714,11 @@ final class CellView: Layer, Respondable {
     }
     
     private let nameLabel = Label(text: Cell.name, font: .bold)
-    private let isTranslucentLockView = EnumView(
-        names: [Localization(english: "Unlock", japanese: "ロックなし"),
-                Localization(english: "Translucent Lock", japanese: "半透明ロック")],
-        cationIndex: 1
-    )
+    private let isTranslucentLockView = EnumView(names: [Localization(english: "Unlock",
+                                                                      japanese: "ロックなし"),
+                                                         Localization(english: "Translucent Lock",
+                                                                      japanese: "半透明ロック")],
+                                                 cationIndex: 1)
     
     override init() {
         super.init()

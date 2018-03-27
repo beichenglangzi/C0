@@ -397,6 +397,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         drawingItem.step(f0)
         cellItems.forEach { $0.step(f0) }
         materialItems.forEach { $0.step(f0) }
+        effectItem?.step(f0)
         transformItem?.step(f0)
         wiggleItem?.step(f0)
     }
@@ -404,6 +405,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         drawingItem.linear(f0, f1, t: t)
         cellItems.forEach { $0.linear(f0, f1, t: t) }
         materialItems.forEach { $0.linear(f0, f1, t: t) }
+        effectItem?.linear(f0, f1, t: t)
         transformItem?.linear(f0, f1, t: t)
         wiggleItem?.linear(f0, f1, t: t)
     }
@@ -411,6 +413,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         drawingItem.firstMonospline(f1, f2, f3, with: ms)
         cellItems.forEach { $0.firstMonospline(f1, f2, f3, with: ms) }
         materialItems.forEach { $0.firstMonospline(f1, f2, f3, with: ms) }
+        effectItem?.firstMonospline(f1, f2, f3, with: ms)
         transformItem?.firstMonospline(f1, f2, f3, with: ms)
         wiggleItem?.firstMonospline(f1, f2, f3, with: ms)
     }
@@ -418,6 +421,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         drawingItem.monospline(f0, f1, f2, f3, with: ms)
         cellItems.forEach { $0.monospline(f0, f1, f2, f3, with: ms) }
         materialItems.forEach { $0.monospline(f0, f1, f2, f3, with: ms) }
+        effectItem?.monospline(f0, f1, f2, f3, with: ms)
         transformItem?.monospline(f0, f1, f2, f3, with: ms)
         wiggleItem?.monospline(f0, f1, f2, f3, with: ms)
     }
@@ -425,6 +429,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         drawingItem.lastMonospline(f0, f1, f2, with: ms)
         cellItems.forEach { $0.lastMonospline(f0, f1, f2, with: ms) }
         materialItems.forEach { $0.lastMonospline(f0, f1, f2, with: ms) }
+        effectItem?.lastMonospline(f0, f1, f2, with: ms)
         transformItem?.lastMonospline(f0, f1, f2, with: ms)
         wiggleItem?.lastMonospline(f0, f1, f2, with: ms)
     }
@@ -456,6 +461,21 @@ final class NodeTrack: NSObject, Track, NSCoding {
         cellItems.forEach { check(keyCount: $0.keyGeometries.count) }
         self.cellItems = cellItems
     }
+    func move(_ cellItem: CellItem, keyGeometries: [Geometry], from track: NodeTrack) {
+        track.remove(cellItem)
+        cellItem.keyGeometries = keyGeometries
+        append(cellItem)
+    }
+    
+    func alignedKeyGeometries(_ keyGeometries: [Geometry]) -> [Geometry] {
+        if keyGeometries.count > animation.keyframes.count {
+            return Array(keyGeometries[..<animation.keyframes.count])
+        } else {
+            let count = animation.keyframes.count - keyGeometries.count
+            let geometries = (0..<count).map { _ in Geometry() }
+            return keyGeometries + geometries
+        }
+    }
     
     private(set) var materialItems: [MaterialItem]
     func append(_ materialItem: MaterialItem) {
@@ -472,8 +492,16 @@ final class NodeTrack: NSObject, Track, NSCoding {
         self.materialItems = materialItems
     }
     
-    var speechItem: SpeechItem?
+    var subtitleItem: SubtitleItem?
     var soundItem: SoundItem?
+    
+    var effectItem: EffectItem? {
+        didSet {
+            if let effectItem = effectItem {
+                check(keyCount: effectItem.keyEffects.count)
+            }
+        }
+    }
     
     var transformItem: TransformItem? {
         didSet {
@@ -686,7 +714,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
     
     struct KeyframeValues: KeyframeValue {
         var drawing: Drawing, geometries: [Geometry], materials: [Material]
-        var transform: Transform?, wiggle: Wiggle?
+        var effect: Effect?, transform: Transform?, wiggle: Wiggle?
     }
     func insert(_ keyframe: Keyframe, _ kv: KeyframeValues, at index: Int) {
         guard kv.geometries.count <= cellItems.count
@@ -695,10 +723,15 @@ final class NodeTrack: NSObject, Track, NSCoding {
         }
         animation.keyframes.insert(keyframe, at: index)
         drawingItem.keyDrawings.insert(kv.drawing, at: index)
-        cellItems.enumerated().forEach { $0.element.keyGeometries.insert(kv.geometries[$0.offset],
-                                                                         at: index) }
-        materialItems.enumerated().forEach { $0.element.keyMaterials.insert(kv.materials[$0.offset],
-                                                                            at: index) }
+        cellItems.enumerated().forEach {
+            $0.element.keyGeometries.insert(kv.geometries[$0.offset], at: index)
+        }
+        materialItems.enumerated().forEach {
+            $0.element.keyMaterials.insert(kv.materials[$0.offset], at: index)
+        }
+        if let effect = kv.effect {
+            effectItem?.keyEffects.insert(effect, at: index)
+        }
         if let transform = kv.transform {
             transformItem?.keyTransforms.insert(transform, at: index)
         }
@@ -712,6 +745,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         drawingItem.keyDrawings.remove(at: index)
         cellItems.forEach { $0.keyGeometries.remove(at: index) }
         materialItems.forEach { $0.keyMaterials.remove(at: index) }
+        effectItem?.keyEffects.remove(at: index)
         transformItem?.keyTransforms.remove(at: index)
         wiggleItem?.keyWiggles.remove(at: index)
         updateKeyPhases()
@@ -722,7 +756,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         }
         drawingItem.keyDrawings = keyDrawings
     }
-    func set(_ keyGeometries: [Geometry], in cellItem: CellItem, isSetGeometryInCell: Bool  = true) {
+    func set(_ keyGeometries: [Geometry], in cellItem: CellItem, isSetGeometryInCell: Bool = true) {
         guard keyGeometries.count == animation.keyframes.count else {
             fatalError()
         }
@@ -731,7 +765,21 @@ final class NodeTrack: NSObject, Track, NSCoding {
         }
         cellItem.keyGeometries = keyGeometries
     }
-    func set(_ keyTransforms: [Transform], isSetTransformInItem: Bool  = true) {
+    func set(_ keyEffects: [Effect], isSetEffectInItem: Bool = true) {
+        guard let effectItem = effectItem else {
+            return
+        }
+        guard keyEffects.count == animation.keyframes.count else {
+            fatalError()
+        }
+        if isSetEffectInItem,
+            let i = effectItem.keyEffects.index(of: effectItem.effect) {
+            
+            effectItem.effect = keyEffects[i]
+        }
+        effectItem.keyEffects = keyEffects
+    }
+    func set(_ keyTransforms: [Transform], isSetTransformInItem: Bool = true) {
         guard let transformItem = transformItem else {
             return
         }
@@ -745,7 +793,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         }
         transformItem.keyTransforms = keyTransforms
     }
-    func set(_ keyWiggles: [Wiggle], isSetWiggleInItem: Bool  = true) {
+    func set(_ keyWiggles: [Wiggle], isSetWiggleInItem: Bool = true) {
         guard let wiggleItem = wiggleItem else {
             return
         }
@@ -774,6 +822,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         let materials = materialItems.map { $0.material }
         return KeyframeValues(drawing: drawingItem.drawing,
                               geometries: geometries, materials: materials,
+                              effect: effectItem?.effect,
                               transform: transformItem?.transform, wiggle: wiggleItem?.wiggle)
     }
     func keyframeItemValues(at index: Int) -> KeyframeValues {
@@ -781,6 +830,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         let materials = materialItems.map { $0.keyMaterials[index] }
         return KeyframeValues(drawing: drawingItem.keyDrawings[index],
                               geometries: geometries, materials: materials,
+                              effect: effectItem?.keyEffects[index],
                               transform: transformItem?.keyTransforms[index],
                               wiggle: wiggleItem?.keyWiggles[index])
     }
@@ -790,6 +840,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
          isHidden: Bool = false, selectedCellItems: [CellItem] = [],
          drawingItem: DrawingItem = DrawingItem(), cellItems: [CellItem] = [],
          materialItems: [MaterialItem] = [],
+         effectItem: EffectItem? = nil,
          transformItem: TransformItem? = nil, wiggleItem: WiggleItem? = nil) {
         
         self.animation = animation
@@ -800,6 +851,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         self.drawingItem = drawingItem
         self.cellItems = cellItems
         self.materialItems = materialItems
+        self.effectItem = effectItem
         self.transformItem = transformItem
         self.wiggleItem = wiggleItem
         id = UUID()
@@ -808,6 +860,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
     private init(animation: Animation, name: String, time: Beat,
                  isHidden: Bool, selectedCellItems: [CellItem],
                  drawingItem: DrawingItem, cellItems: [CellItem], materialItems: [MaterialItem],
+                 effectItem: EffectItem?,
                  transformItem: TransformItem?, wiggleItem: WiggleItem?, keyPhases: [CGFloat]) {
         self.animation = animation
         self.name = name
@@ -817,6 +870,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         self.drawingItem = drawingItem
         self.cellItems = cellItems
         self.materialItems = materialItems
+        self.effectItem = effectItem
         self.transformItem = transformItem
         self.wiggleItem = wiggleItem
         self.keyPhases = keyPhases
@@ -827,7 +881,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
     private enum CodingKeys: String, CodingKey {
         case
         animation, name, time, duration, isHidden, selectedCellItems,
-        drawingItem, cellItems, materialItems, transformItem, wiggleItem, keyPhases, id
+        drawingItem, cellItems, materialItems, effectItem, transformItem, wiggleItem, keyPhases, id
     }
     init?(coder: NSCoder) {
         animation = coder.decodeDecodable(
@@ -835,7 +889,6 @@ final class NodeTrack: NSObject, Track, NSCoding {
         name = coder.decodeObject(forKey: CodingKeys.name.rawValue) as? String ?? ""
         time = coder.decodeDecodable(Beat.self, forKey: CodingKeys.time.rawValue) ?? 0
         isHidden = coder.decodeBool(forKey: CodingKeys.isHidden.rawValue)
-        
         drawingItem = coder.decodeObject(
             forKey: CodingKeys.drawingItem.rawValue) as? DrawingItem ?? DrawingItem()
         cellItems = coder.decodeObject(forKey: CodingKeys.cellItems.rawValue) as? [CellItem] ?? []
@@ -843,6 +896,8 @@ final class NodeTrack: NSObject, Track, NSCoding {
             forKey: CodingKeys.selectedCellItems.rawValue) as? [CellItem] ?? []
         materialItems = coder.decodeObject(
             forKey: CodingKeys.materialItems.rawValue) as? [MaterialItem] ?? []
+        effectItem = coder.decodeDecodable(
+            EffectItem.self, forKey: CodingKeys.effectItem.rawValue)
         transformItem = coder.decodeDecodable(
             TransformItem.self, forKey: CodingKeys.transformItem.rawValue)
         wiggleItem = coder.decodeDecodable(WiggleItem.self, forKey: CodingKeys.wiggleItem.rawValue)
@@ -867,6 +922,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         coder.encode(cellItems, forKey: CodingKeys.cellItems.rawValue)
         coder.encode(selectedCellItems, forKey: CodingKeys.selectedCellItems.rawValue)
         coder.encode(materialItems, forKey: CodingKeys.materialItems.rawValue)
+        coder.encodeEncodable(effectItem, forKey: CodingKeys.effectItem.rawValue)
         coder.encodeEncodable(transformItem, forKey: CodingKeys.transformItem.rawValue)
         coder.encodeEncodable(wiggleItem, forKey: CodingKeys.wiggleItem.rawValue)
         coder.encode(keyPhases, forKey: CodingKeys.keyPhases.rawValue)
@@ -887,6 +943,14 @@ final class NodeTrack: NSObject, Track, NSCoding {
     func cellItem(with cell: Cell) -> CellItem? {
         for cellItem in cellItems {
             if cellItem.cell == cell {
+                return cellItem
+            }
+        }
+        return nil
+    }
+    func cellItem(withCellID id: UUID) -> CellItem? {
+        for cellItem in cellItems {
+            if cellItem.cell.id == id {
                 return cellItem
             }
         }
@@ -931,7 +995,16 @@ final class NodeTrack: NSObject, Track, NSCoding {
         return true
     }
     func emptyKeyMaterials(with material: Material) -> [Material] {
-        return animation.keyframes.map { _ in material }
+        return animation.keyframes.map { _ in material.withNewID() }
+    }
+    
+    func keyMaterial(with cell: Cell) -> Material {
+        for materialItem in materialItems {
+            if materialItem.cells.contains(cell) {
+                return materialItem.keyMaterials[animation.editKeyframeIndex]
+            }
+        }
+        return cell.material
     }
     
     func snapCells(with cell: Cell) -> [Cell] {
@@ -1137,6 +1210,7 @@ extension NodeTrack: Copying {
                          drawingItem: copier.copied(drawingItem),
                          cellItems: cellItems.map { copier.copied($0) },
                          materialItems: materialItems.map { copier.copied($0) },
+                         effectItem: effectItem != nil ? copier.copied(effectItem!) : nil,
                          transformItem: transformItem != nil ? copier.copied(transformItem!) : nil,
                          wiggleItem: wiggleItem != nil ? copier.copied(wiggleItem!) : nil,
                          keyPhases: keyPhases)
@@ -1401,6 +1475,72 @@ extension MaterialItem: Copying {
 }
 extension MaterialItem: Referenceable {
     static let name = Localization(english: "Material Item", japanese: "マテリアルアイテム")
+}
+
+final class EffectItem: TrackItem, Codable {
+    var effect: Effect
+    fileprivate(set) var keyEffects: [Effect]
+    func replace(_ effect: Effect, at i: Int) {
+        if keyEffects[i] == self.effect {
+            self.effect = effect
+        }
+        keyEffects[i] = effect
+    }
+    var drawEffect: Effect
+    
+    func step(_ f0: Int) {
+        effect = keyEffects[f0]
+        drawEffect = keyEffects[f0]
+    }
+    func linear(_ f0: Int, _ f1: Int, t: CGFloat) {
+        effect = keyEffects[f0]
+        drawEffect = Effect.linear(keyEffects[f0], keyEffects[f1], t: t)
+    }
+    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
+        effect = keyEffects[f1]
+        drawEffect = Effect.firstMonospline(keyEffects[f1], keyEffects[f2],
+                                            keyEffects[f3], with: ms)
+    }
+    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
+        effect = keyEffects[f1]
+        drawEffect = Effect.monospline(keyEffects[f0], keyEffects[f1],
+                                       keyEffects[f2], keyEffects[f3], with: ms)
+    }
+    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
+        effect = keyEffects[f1]
+        drawEffect = Effect.lastMonospline(keyEffects[f0], keyEffects[f1],
+                                           keyEffects[f2], with: ms)
+    }
+    
+    init(effect: Effect = Effect(), keyEffects: [Effect] = [Effect()]) {
+        self.effect = effect
+        self.drawEffect = effect
+        self.keyEffects = keyEffects
+    }
+    
+    static func empty(with animation: Animation) -> EffectItem {
+        let effectItem =  EffectItem()
+        let effects = animation.keyframes.map { _ in Effect() }
+        effectItem.keyEffects = effects
+        effectItem.effect = effects[animation.editKeyframeIndex]
+        return effectItem
+    }
+    var isEmpty: Bool {
+        for t in keyEffects {
+            if !t.isEmpty {
+                return false
+            }
+        }
+        return true
+    }
+}
+extension EffectItem: Copying {
+    func copied(from copier: Copier) -> EffectItem {
+        return EffectItem(effect: effect, keyEffects: keyEffects)
+    }
+}
+extension EffectItem: Referenceable {
+    static let name = Localization(english: "Effect Item", japanese: "エフェクトアイテム")
 }
 
 final class TransformItem: TrackItem, Codable {

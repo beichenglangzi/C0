@@ -110,8 +110,8 @@ struct Sound {
         var outputBuffer = [UInt8]()
         outputBuffer.reserveCapacity(Int(outputBufferSize))
         let audioBuffer = AudioBuffer(mNumberChannels: channelsPerFrame,
-                                       mDataByteSize: outputBufferSize,
-                                       mData: &outputBuffer)
+                                      mDataByteSize: outputBufferSize,
+                                      mData: &outputBuffer)
         var abl = AudioBufferList(mNumberBuffers: channelsPerFrame, mBuffers: audioBuffer)
         
         var samples = [Float](), frameCount = UInt32(subSamplesCount)
@@ -122,9 +122,7 @@ struct Sound {
                                                                count: Int(abl.mNumberBuffers))
                 let capacity = Int(buffers[0].mDataByteSize / floatSize)
                 if let subSamples = buffers[0].mData?.bindMemory(to: Float.self, capacity: capacity) {
-                    for i in 0 ..< capacity {
-                        samples.append(subSamples[i])
-                    }
+                    (0 ..< capacity).forEach { samples.append(subSamples[$0]) }
                 }
             }
         }
@@ -374,9 +372,9 @@ final class SoundView: Layer, Respondable, Localizable {
     private func set(_ sound: Sound, old oldSound: Sound) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldSound, old: sound) }
         setSoundHandler?(Binding(soundView: self,
-                                       sound: oldSound, oldSound: oldSound, type: .begin))
+                                 sound: oldSound, oldSound: oldSound, type: .begin))
         self.sound = sound
         setSoundHandler?(Binding(soundView: self,
-                                       sound: sound, oldSound: oldSound, type: .end))
+                                 sound: sound, oldSound: oldSound, type: .end))
     }
 }

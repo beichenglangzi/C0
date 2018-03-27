@@ -42,6 +42,14 @@ final class Material: NSObject, NSCoding {
                 return Localization(english: "Subtract", japanese: "減算")
             }
         }
+        static var displayStrings: [Localization] {
+            return [normal.displayString,
+                    lineless.displayString,
+                    blur.displayString,
+                    luster.displayString,
+                    add.displayString,
+                    subtract.displayString]
+        }
     }
     
     let type: MaterialType
@@ -202,6 +210,63 @@ extension Material.MaterialType {
     }
 }
 
+extension Slider {
+    static var opacityView: Slider {
+        return Slider(value: 1, defaultValue: 1, min: 0, max: 1,
+                      description: Localization(english: "Opacity", japanese: "不透明度"))
+    }
+    private static func opacitySliderLayers(with bounds: CGRect, padding: CGFloat) -> [Layer] {
+        let checkerWidth = 5.0.cf
+        let frame = CGRect(x: padding, y: bounds.height / 2 - checkerWidth,
+                           width: bounds.width - padding * 2, height: checkerWidth * 2)
+        
+        let backgroundLayer = GradientLayer()
+        backgroundLayer.gradient = Gradient(colors: [.subContent, .content],
+                                            locations: [0, 1],
+                                            startPoint: CGPoint(x: 0, y: 0),
+                                            endPoint: CGPoint(x: 1, y: 0))
+        backgroundLayer.frame = frame
+        
+        let checkerboardLayer = PathLayer()
+        checkerboardLayer.fillColor = .content
+        checkerboardLayer.path = CGPath.checkerboard(with: CGSize(square: checkerWidth), in: frame)
+        
+        return [backgroundLayer, checkerboardLayer]
+    }
+    func updateOpacityLayers(withFrame frame: CGRect) {
+        if self.frame != frame {
+            self.frame = frame
+            backgroundLayers = Slider.opacitySliderLayers(with: frame, padding: padding)
+        }
+    }
+}
+extension Slider {
+    static func widthViewWith(min: CGFloat, max: CGFloat, exp: CGFloat,
+                              description: Localization) -> Slider {
+        return Slider(min: min, max: max, exp: exp, description: description)
+    }
+    private static func widthLayer(with bounds: CGRect, padding: CGFloat) -> Layer {
+        let shapeLayer = PathLayer()
+        shapeLayer.fillColor = .content
+        shapeLayer.path = {
+            let path = CGMutablePath(), halfWidth = 5.0.cf
+            path.addLines(between: [CGPoint(x: padding,y: bounds.height / 2),
+                                    CGPoint(x: bounds.width - padding,
+                                            y: bounds.height / 2 - halfWidth),
+                                    CGPoint(x: bounds.width - padding,
+                                            y: bounds.height / 2 + halfWidth)])
+            return path
+        } ()
+        return shapeLayer
+    }
+    func updateLineWidthLayers(withFrame frame: CGRect) {
+        if self.frame != frame {
+            self.frame = frame
+            backgroundLayers = [Slider.widthLayer(with: frame, padding: padding)]
+        }
+    }
+}
+
 /**
  # Issue
  - 「線の強さ」を追加
@@ -232,61 +297,17 @@ final class MaterialView: Layer, Respondable, Localizable {
     static let defaultWidth = 140.0.cf
     
     private let nameLabel = Label(text: Material.name, font: .bold)
-    
-    private let typeView = EnumView(names: [Material.MaterialType.normal.displayString,
-                                                Material.MaterialType.lineless.displayString,
-                                                Material.MaterialType.blur.displayString,
-                                                Material.MaterialType.luster.displayString,
-                                                Material.MaterialType.add.displayString,
-                                                Material.MaterialType.subtract.displayString],
-                                        description: Localization(english: "Type", japanese: "タイプ"))
+    private let typeView = EnumView(names: Material.MaterialType.displayStrings,
+                                    description: Localization(english: "Type", japanese: "タイプ"))
     private let colorView = ColorView()
-    
-    private let lineWidthView = Slider(min: Material.defaultLineWidth, max: 500, exp: 3,
-                                         description: Localization(english: "Line Width",
-                                                                   japanese: "線の太さ"))
-    private static func lineWidthLayer(with bounds: CGRect, padding: CGFloat) -> Layer {
-        let shapeLayer = PathLayer()
-        shapeLayer.fillColor = .content
-        shapeLayer.path = {
-            let path = CGMutablePath(), halfWidth = 5.0.cf
-            path.addLines(between: [CGPoint(x: padding,y: bounds.height / 2),
-                                    CGPoint(x: bounds.width - padding,
-                                            y: bounds.height / 2 - halfWidth),
-                                    CGPoint(x: bounds.width - padding,
-                                            y: bounds.height / 2 + halfWidth)])
-            return path
-        } ()
-        return shapeLayer
-    }
-    
-    private let opacityView = Slider(value: 1, defaultValue: 1, min: 0, max: 1,
-                                       description: Localization(english: "Opacity",
-                                                                 japanese: "不透明度"))
-    private static func opacitySliderLayers(with bounds: CGRect, padding: CGFloat) -> [Layer] {
-        let checkerWidth = 5.0.cf
-        let frame = CGRect(x: padding, y: bounds.height / 2 - checkerWidth,
-                           width: bounds.width - padding * 2, height: checkerWidth * 2)
-        
-        let backgroundLayer = GradientLayer()
-        backgroundLayer.gradient = Gradient(colors: [.subContent, .content],
-                                            locations: [0, 1],
-                                            startPoint: CGPoint(x: 0, y: 0),
-                                            endPoint: CGPoint(x: 1, y: 0))
-        backgroundLayer.frame = frame
-        
-        let checkerboardLayer = PathLayer()
-        checkerboardLayer.fillColor = .content
-        checkerboardLayer.path = CGPath.checkerboard(with: CGSize(square: checkerWidth), in: frame)
-        
-        return [backgroundLayer, checkerboardLayer]
-    }
-    
+    private let lineWidthView = Slider.widthViewWith(min: Material.defaultLineWidth, max: 500, exp: 3,
+                                                     description: Localization(english: "Line Width",
+                                                                               japanese: "線の太さ"))
+    private let opacityView = Slider.opacityView
     private let lineColorLabel = Label(text: Localization(english: "Line Color:",
                                                           japanese: "線のカラー:"))
     private let lineColorView = ColorView(hLineWidth: 2,
-                                              inPadding: 4, outPadding: 4,
-                                              slPadding: 4, knobRadius: 4)
+                                          inPadding: 4, outPadding: 4, slPadding: 4, knobRadius: 4)
     
     override init() {
         material = defaultMaterial
@@ -326,14 +347,10 @@ final class MaterialView: Layer, Respondable, Localizable {
         lineColorLabel.frame.origin = CGPoint(x: padding + leftWidth - lineColorLabel.frame.width,
                                               y: padding * 2)
         lineColorView.frame = CGRect(x: padding + leftWidth, y: padding, width: h * 3, height: h * 3)
-        lineWidthView.frame = CGRect(x: padding, y: padding + h * 2, width: leftWidth, height: h)
-        let lineWidthLayer = MaterialView.lineWidthLayer(with: lineWidthView.bounds,
-                                                           padding: lineWidthView.padding)
-        lineWidthView.backgroundLayers = [lineWidthLayer]
-        opacityView.frame = CGRect(x: padding, y: padding + h, width: leftWidth, height: h)
-        let opacitySliderLayers = MaterialView.opacitySliderLayers(with: opacityView.bounds,
-                                                                     padding: opacityView.padding)
-        opacityView.backgroundLayers = opacitySliderLayers
+        let lineWidthFrame = CGRect(x: padding, y: padding + h * 2, width: leftWidth, height: h)
+        lineWidthView.updateLineWidthLayers(withFrame: lineWidthFrame)
+        let opacityFrame = CGRect(x: padding, y: padding + h, width: leftWidth, height: h)
+        opacityView.updateOpacityLayers(withFrame: opacityFrame)
     }
     
     private func materialType(withIndex index: Int) -> Material.MaterialType {

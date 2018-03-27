@@ -220,12 +220,16 @@ final class Node: NSObject, NSCoding {
     var time: Beat {
         didSet {
             tracks.forEach { $0.time = time }
+            updateEffect()
             updateTransform()
             updateWiggle()
             children.forEach { $0.time = time }
         }
     }
     
+    func updateEffect() {
+        effect = Node.effectWith(time: time, tracks)
+    }
     func updateTransform() {
         transform = Node.transformWith(time: time, tracks: tracks)
     }
@@ -314,9 +318,19 @@ final class Node: NSObject, NSCoding {
         }
     }
     
-    var transform: Transform, wiggle: Wiggle, wigglePhase: CGFloat = 0
+    var effect: Effect, transform: Transform, wiggle: Wiggle, wigglePhase: CGFloat = 0
     
-    var material: Material
+    static func effectWith(time: Beat, _ tracks: [NodeTrack]) -> Effect {
+        var effect = Effect()
+        tracks.forEach {
+            if let e = $0.effectItem?.drawEffect {
+                effect.blur += e.blur
+                effect.opacity *= e.opacity
+                effect.blendType = e.blendType
+            }
+        }
+        return effect
+    }
     static func transformWith(time: Beat, tracks: [NodeTrack]) -> Transform {
         var translation = CGPoint(), scale = CGPoint(), rotation = 0.0.cf, count = 0
         tracks.forEach {
@@ -356,9 +370,9 @@ final class Node: NSObject, NSCoding {
     init(name: String = "", parent: Node? = nil, children: [Node] = [Node](),
          isHidden: Bool = false,
          rootCell: Cell = Cell(material: Material(color: .background)),
+         effect: Effect = Effect(),
          transform: Transform = Transform(),
          wiggle: Wiggle = Wiggle(), wigglePhase: CGFloat = 0.0,
-         material: Material = Material(),
          tracks: [NodeTrack] = [NodeTrack()], editTrackIndex: Int = 0,
          time: Beat = 0, duration: Beat = 1) {
         
@@ -372,10 +386,10 @@ final class Node: NSObject, NSCoding {
         self.children = children
         self.isHidden = isHidden
         self.rootCell = rootCell
+        self.effect = effect
         self.transform = transform
         self.wiggle = wiggle
         self.wigglePhase = wigglePhase
-        self.material = material
         self.tracks = tracks
         self.editTrackIndex = editTrackIndex
         self.time = time
@@ -386,7 +400,7 @@ final class Node: NSObject, NSCoding {
     
     private enum CodingKeys: String, CodingKey {
         case
-        name, key, children, isHidden, rootCell, transform, wiggle, wigglePhase,
+        name, key, children, isHidden, rootCell, effect, transform, wiggle, wigglePhase,
         material, tracks, editTrackIndex, selectedTrackIndexes, time
     }
     init?(coder: NSCoder) {
@@ -397,12 +411,12 @@ final class Node: NSObject, NSCoding {
         children = coder.decodeObject(forKey: CodingKeys.children.rawValue) as? [Node] ?? []
         isHidden = coder.decodeBool(forKey: CodingKeys.isHidden.rawValue)
         rootCell = coder.decodeObject(forKey: CodingKeys.rootCell.rawValue) as? Cell ?? Cell()
+        effect = coder.decodeDecodable(Effect.self, forKey: CodingKeys.effect.rawValue) ?? Effect()
         transform = coder.decodeDecodable(
             Transform.self, forKey: CodingKeys.transform.rawValue) ?? Transform()
         wiggle = coder.decodeDecodable(
             Wiggle.self, forKey: CodingKeys.wiggle.rawValue) ?? Wiggle()
         wigglePhase = coder.decodeDouble(forKey: CodingKeys.wigglePhase.rawValue).cf
-        material = coder.decodeObject(forKey: CodingKeys.material.rawValue) as? Material ?? Material()
         tracks = coder.decodeObject(forKey: CodingKeys.tracks.rawValue) as? [NodeTrack] ?? []
         editTrackIndex = coder.decodeInteger(forKey: CodingKeys.editTrackIndex.rawValue)
         selectedTrackIndexes = coder.decodeObject(forKey: CodingKeys.selectedTrackIndexes.rawValue)
@@ -417,10 +431,10 @@ final class Node: NSObject, NSCoding {
         coder.encode(children, forKey: CodingKeys.children.rawValue)
         coder.encode(isHidden, forKey: CodingKeys.isHidden.rawValue)
         coder.encode(rootCell, forKey: CodingKeys.rootCell.rawValue)
+        coder.encodeEncodable(effect, forKey: CodingKeys.effect.rawValue)
         coder.encodeEncodable(transform, forKey: CodingKeys.transform.rawValue)
         coder.encodeEncodable(wiggle, forKey: CodingKeys.wiggle.rawValue)
         coder.encode(wigglePhase.d, forKey: CodingKeys.wigglePhase.rawValue)
-        coder.encode(material, forKey: CodingKeys.material.rawValue)
         coder.encode(tracks, forKey: CodingKeys.tracks.rawValue)
         coder.encode(editTrackIndex, forKey: CodingKeys.editTrackIndex.rawValue)
         coder.encode(selectedTrackIndexes, forKey: CodingKeys.selectedTrackIndexes.rawValue)
@@ -531,6 +545,14 @@ final class Node: NSObject, NSCoding {
             }
         }
         fatalError()
+    }
+    func trackAndCellItem(withCellID id: UUID) -> (track: NodeTrack, cellItem: CellItem)? {
+        for track in tracks {
+            if let cellItem = track.cellItem(withCellID: id) {
+                return (track, cellItem)
+            }
+        }
+        return nil
     }
     func cellItem(with cell: Cell) -> CellItem {
         for track in tracks {
@@ -771,34 +793,38 @@ final class Node: NSObject, NSCoding {
         
         ctx.concatenate(transform.affineTransform)
         
-        if material.opacity != 1 || !(material.type == .normal ||
-            material.type == .lineless) || !isEdited {
-            
+        if effect.opacity != 1 || effect.blendType != .normal || effect.blur > 0 || !isEdited {
             ctx.saveGState()
-            ctx.setAlpha(!isEdited ? 0.2 * material.opacity : material.opacity)
-            ctx.setBlendMode(material.type.blendMode)
-            if material.type == .blur || material.type == .luster
-                || material.type == .add || material.type == .subtract {
-                
-                if let bctx = CGContext.bitmap(with: ctx.boundingBoxOfClipPath.size) {
+            ctx.setAlpha(!isEdited ? 0.2 * effect.opacity : effect.opacity)
+            ctx.setBlendMode(effect.blendType.blendMode)
+            if effect.blur > 0 {
+                let invertCTM = ctx.ctm
+                let bBounds = ctx.boundingBoxOfClipPath.inset(by: -effect.blur).applying(invertCTM)
+                if let bctx = CGContext.bitmap(with: bBounds.size) {
+                    bctx.translateBy(x: -effect.blur, y: -effect.blur)
+                    bctx.concatenate(ctx.ctm)
                     _draw(scene: scene, viewType: viewType,
                           reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
                           scale: inViewScale, rotation: inViewRotation, in: bctx)
-                    children.forEach { $0.draw(scene: scene, viewType: viewType,
-                                               scale: inScale, rotation: inRotation,
-                                               viewScale: inViewScale, viewRotation: inViewRotation,
-                                               in: bctx) }
-                    bctx.drawBlur(withBlurRadius: material.lineWidth, to: ctx)
+                    children.forEach {
+                        $0.draw(scene: scene, viewType: viewType,
+                                scale: inScale, rotation: inRotation,
+                                viewScale: inViewScale, viewRotation: inViewRotation,
+                                in: bctx)
+                    }
+                    bctx.drawBlur(withBlurRadius: effect.blur, to: ctx)
                 }
             } else {
                 ctx.beginTransparencyLayer(auxiliaryInfo: nil)
                 _draw(scene: scene, viewType: viewType,
                       reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
                       scale: inViewScale, rotation: inViewRotation, in: ctx)
-                children.forEach { $0.draw(scene: scene, viewType: viewType,
-                                           scale: inScale, rotation: inRotation,
-                                           viewScale: inViewScale, viewRotation: inViewRotation,
-                                           in: ctx) }
+                children.forEach {
+                    $0.draw(scene: scene, viewType: viewType,
+                            scale: inScale, rotation: inRotation,
+                            viewScale: inViewScale, viewRotation: inViewRotation,
+                            in: ctx)
+                }
                 ctx.endTransparencyLayer()
             }
             ctx.restoreGState()
@@ -806,10 +832,12 @@ final class Node: NSObject, NSCoding {
             _draw(scene: scene, viewType: viewType,
                   reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
                   scale: inViewScale, rotation: inViewRotation, in: ctx)
-            children.forEach { $0.draw(scene: scene, viewType: viewType,
-                                       scale: inScale, rotation: inRotation,
-                                       viewScale: inViewScale, viewRotation: inViewRotation,
-                                       in: ctx) }
+            children.forEach {
+                $0.draw(scene: scene, viewType: viewType,
+                        scale: inScale, rotation: inRotation,
+                        viewScale: inViewScale, viewRotation: inViewRotation,
+                        in: ctx)
+            }
         }
     }
     
@@ -934,20 +962,17 @@ final class Node: NSObject, NSCoding {
                 if viewType == .editPoint || viewType == .editVertex {
                     editTrack.drawTransparentCellLines(withReciprocalScale: rScale, in: ctx)
                 }
-                editTrack.drawPreviousNext(
-                    isShownPrevious: scene.isShownPrevious, isShownNext: scene.isShownNext,
-                    time: time, reciprocalScale: rScale, in: ctx
-                )
+                editTrack.drawPreviousNext(isShownPrevious: scene.isShownPrevious,
+                                           isShownNext: scene.isShownNext,
+                                           time: time, reciprocalScale: rScale, in: ctx)
             }
             
             for track in tracks {
                 if !track.isHidden {
-                    track.drawSelectedCells(
-                        opacity: 0.75 * (track != editTrack ? 0.5 : 1),
-                        color: .selected,
-                        subColor: .subSelected,
-                        reciprocalScale: rScale,  in: ctx
-                    )
+                    track.drawSelectedCells(opacity: 0.75 * (track != editTrack ? 0.5 : 1),
+                                            color: .selected,
+                                            subColor: .subSelected,
+                                            reciprocalScale: rScale,  in: ctx)
                     
                     let drawing = track.drawingItem.drawing
                     let selectedLineIndexes = drawing.selectedLineIndexes
@@ -1034,10 +1059,8 @@ final class Node: NSObject, NSCoding {
         ctx.setLineWidth(1)
         if !wiggle.isEmpty {
             let amplitude = wiggle.amplitude
-            drawCameraBorder(
-                bounds: cameraFrame.insetBy(dx: -amplitude.x, dy: -amplitude.y),
-                inColor: Color.cameraBorder, outColor: Color.cutSubBorder
-            )
+            drawCameraBorder(bounds: cameraFrame.insetBy(dx: -amplitude.x, dy: -amplitude.y),
+                             inColor: Color.cameraBorder, outColor: Color.cutSubBorder)
         }
         let track = editTrack
         func drawPreviousNextCamera(t: Transform, color: Color) {
@@ -1219,11 +1242,9 @@ final class Node: NSObject, NSCoding {
         
         let r = lineEditPointRadius * reciprocalAllScale, lw = 0.5 * reciprocalAllScale
         for v in capPointDic {
-            v.key.draw(
-                radius: r, lineWidth: lw,
-                inColor: v.value ? .controlPointJointIn : .controlPointCapIn,
-                outColor: .controlPointOut, in: ctx
-            )
+            v.key.draw(radius: r, lineWidth: lw,
+                       inColor: v.value ? .controlPointJointIn : .controlPointCapIn,
+                       outColor: .controlPointOut, in: ctx)
         }
     }
     
@@ -1308,15 +1329,15 @@ final class Node: NSObject, NSCoding {
     
     struct EditTransform: Equatable {
         static let centerRatio = 0.25.cf
-        let rotateRect: RotateRect, anchorPoint: CGPoint
+        let rotatedRect: RotatedRect, anchorPoint: CGPoint
         let point: CGPoint, oldPoint: CGPoint, isCenter: Bool
         func with(_ point: CGPoint) -> EditTransform {
-            return EditTransform(rotateRect: rotateRect, anchorPoint: anchorPoint,
+            return EditTransform(rotatedRect: rotatedRect, anchorPoint: anchorPoint,
                                  point: point, oldPoint: oldPoint, isCenter: isCenter)
         }
         static func ==(lhs: EditTransform, rhs: EditTransform) -> Bool {
             return
-                lhs.rotateRect == rhs.rotateRect && lhs.anchorPoint == rhs.anchorPoint
+                lhs.rotatedRect == rhs.rotatedRect && lhs.anchorPoint == rhs.anchorPoint
                     && lhs.point == rhs.point && lhs.oldPoint == lhs.oldPoint
                     && lhs.isCenter == rhs.isCenter
         }
@@ -1356,16 +1377,18 @@ final class Node: NSObject, NSCoding {
     }
     func drawWarp(with et: EditTransform, reciprocalAllScale: CGFloat, in ctx: CGContext) {
         if et.isCenter {
-            drawLine(firstPoint: et.rotateRect.midXMinYPoint, lastPoint: et.rotateRect.midXMaxYPoint,
+            drawLine(firstPoint: et.rotatedRect.midXMinYPoint,
+                     lastPoint: et.rotatedRect.midXMaxYPoint,
                      reciprocalAllScale: reciprocalAllScale, in: ctx)
-            drawLine(firstPoint: et.rotateRect.minXMidYPoint, lastPoint: et.rotateRect.maxXMidYPoint,
+            drawLine(firstPoint: et.rotatedRect.minXMidYPoint,
+                     lastPoint: et.rotatedRect.maxXMidYPoint,
                      reciprocalAllScale: reciprocalAllScale, in: ctx)
         } else {
             drawLine(firstPoint: et.anchorPoint, lastPoint: et.point,
                      reciprocalAllScale: reciprocalAllScale, in: ctx)
         }
         
-        drawRotateRect(with: et, reciprocalAllScale: reciprocalAllScale, in: ctx)
+        drawRotatedRect(with: et, reciprocalAllScale: reciprocalAllScale, in: ctx)
         et.anchorPoint.draw(radius: lineEditPointRadius * reciprocalAllScale,
                             lineWidth: reciprocalAllScale, in: ctx)
     }
@@ -1381,21 +1404,21 @@ final class Node: NSObject, NSCoding {
         drawCircleWith(radius: et.point.distance(et.anchorPoint), anchorPoint: et.anchorPoint,
                        reciprocalAllScale: reciprocalAllScale, in: ctx)
         
-        drawRotateRect(with: et, reciprocalAllScale: reciprocalAllScale, in: ctx)
+        drawRotatedRect(with: et, reciprocalAllScale: reciprocalAllScale, in: ctx)
         et.anchorPoint.draw(radius: lineEditPointRadius * reciprocalAllScale,
                             lineWidth: reciprocalAllScale, in: ctx)
     }
-    func drawRotateRect(with et: EditTransform, reciprocalAllScale: CGFloat, in ctx: CGContext) {
+    func drawRotatedRect(with et: EditTransform, reciprocalAllScale: CGFloat, in ctx: CGContext) {
         ctx.setLineWidth(reciprocalAllScale)
         ctx.setStrokeColor(Color.camera.cgColor)
         ctx.saveGState()
-        ctx.concatenate(et.rotateRect.affineTransform)
-        let w = et.rotateRect.size.width * EditTransform.centerRatio
-        let h = et.rotateRect.size.height * EditTransform.centerRatio
-        ctx.stroke(CGRect(x: (et.rotateRect.size.width - w) / 2,
-                          y: (et.rotateRect.size.height - h) / 2, width: w, height: h))
+        ctx.concatenate(et.rotatedRect.affineTransform)
+        let w = et.rotatedRect.size.width * EditTransform.centerRatio
+        let h = et.rotatedRect.size.height * EditTransform.centerRatio
+        ctx.stroke(CGRect(x: (et.rotatedRect.size.width - w) / 2,
+                          y: (et.rotatedRect.size.height - h) / 2, width: w, height: h))
         ctx.stroke(CGRect(x: 0, y: 0,
-                          width: et.rotateRect.size.width, height: et.rotateRect.size.height))
+                          width: et.rotatedRect.size.width, height: et.rotatedRect.size.height))
         ctx.restoreGState()
     }
     
@@ -1430,9 +1453,9 @@ extension Node: Copying {
         let node = Node(name: name,
                         parent: nil, children: children.map { copier.copied($0) },
                         rootCell: copier.copied(rootCell),
+                        effect: effect,
                         transform: transform,
                         wiggle: wiggle, wigglePhase: wigglePhase,
-                        material: material,
                         tracks: tracks.map { copier.copied($0) },
                         editTrackIndex: editTrackIndex,
                         time: time)
@@ -1442,6 +1465,88 @@ extension Node: Copying {
 }
 extension Node: Referenceable {
     static let name = Localization(english: "Node", japanese: "ノード")
+}
+
+struct Effect: Codable {
+    enum BlendType: Int8, Codable {
+        case normal, add, subtract
+        var blendMode: CGBlendMode {
+            switch self {
+            case .normal:
+                return .normal
+            case .add:
+                return .plusLighter
+            case .subtract:
+                return .plusDarker
+            }
+        }
+        var displayString: Localization {
+            switch self {
+            case .normal:
+                return Localization(english: "Normal", japanese: "通常")
+            case .add:
+                return Localization(english: "Add", japanese: "加算")
+            case .subtract:
+                return Localization(english: "Subtract", japanese: "減算")
+            }
+        }
+        static var displayStrings: [Localization] {
+            return [normal.displayString,
+                    add.displayString,
+                    subtract.displayString]
+        }
+    }
+    var blur = 0.0.cf, opacity = 1.0.cf, blendType = BlendType.normal
+    var isEmpty: Bool {
+        return self == Effect()
+    }
+    func with(blur: CGFloat) -> Effect {
+        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+    }
+    func with(opacity: CGFloat) -> Effect {
+        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+    }
+    func with(_ blendType: BlendType) -> Effect {
+        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+    }
+}
+extension Effect: Equatable {
+    static func ==(lhs: Effect, rhs: Effect) -> Bool {
+        return lhs.blur == rhs.blur && lhs.opacity == rhs.opacity && lhs.blendType == rhs.blendType
+    }
+}
+extension Effect: Referenceable {
+    static let name = Localization(english: "Effect", japanese: "エフェクト")
+}
+extension Effect: Interpolatable {
+    static func linear(_ f0: Effect, _ f1: Effect, t: CGFloat) -> Effect {
+        let blur = CGFloat.linear(f0.blur, f1.blur, t: t)
+        let opacity = CGFloat.linear(f0.opacity, f1.opacity, t: t)
+        let blendType = f0.blendType
+        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+    }
+    static func firstMonospline(_ f1: Effect, _ f2: Effect, _ f3: Effect,
+                                with ms: Monospline) -> Effect {
+        let blur = CGFloat.firstMonospline(f1.blur, f2.blur, f3.blur, with: ms)
+        let opacity = CGFloat.firstMonospline(f1.opacity, f2.opacity, f3.opacity, with: ms)
+        let blendType = f1.blendType
+        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+    }
+    static func monospline(_ f0: Effect, _ f1: Effect, _ f2: Effect, _ f3: Effect,
+                           with ms: Monospline) -> Effect {
+        let blur = CGFloat.monospline(f0.blur, f1.blur, f2.blur, f3.blur, with: ms)
+        let opacity = CGFloat.monospline(f0.opacity, f1.opacity,
+                                         f2.opacity, f3.opacity, with: ms)
+        let blendType = f1.blendType
+        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+    }
+    static func lastMonospline(_ f0: Effect, _ f1: Effect, _ f2: Effect,
+                               with ms: Monospline) -> Effect {
+        let blur = CGFloat.lastMonospline(f0.blur, f1.blur, f2.blur, with: ms)
+        let opacity = CGFloat.lastMonospline(f0.opacity, f1.opacity, f2.opacity, with: ms)
+        let blendType = f1.blendType
+        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+    }
 }
 
 /**
@@ -1458,11 +1563,9 @@ final class NodeView: Layer, Respondable {
     }
     
     private let nameLabel = Label(text: Node.name, font: .bold)
-    private let isHiddenView = EnumView(names: [Localization(english: "Hidden",
-                                                                 japanese: "表示なし"),
-                                                    Localization(english: "Shown",
-                                                                 japanese: "表示あり")],
-                                            cationIndex: 0)
+    private let isHiddenView = EnumView(names: [Localization(english: "Hidden", japanese: "表示なし"),
+                                                Localization(english: "Shown", japanese: "表示あり")],
+                                        cationIndex: 0)
     override init() {
         super.init()
         replace(children: [nameLabel, isHiddenView])
@@ -1719,5 +1822,159 @@ final class TracksManager {
             }
         }
         return true
+    }
+}
+
+final class EffectView: Layer, Respondable, Localizable {
+    static let name = Localization(english: "Effect View", japanese: "エフェクト表示")
+    
+    var locale = Locale.current {
+        didSet {
+            updateLayout()
+        }
+    }
+    
+    var effect: Effect {
+        didSet {
+            if effect != oldValue {
+                updateWithEffect()
+            }
+        }
+    }
+    var defaultEffect = Effect()
+    
+    static let defaultWidth = 140.0.cf
+    
+    private let nameLabel = Label(text: Effect.name, font: .bold)
+    private let blurLabel = Label(text: Localization(english: "Blur:", japanese: "ブラー:"))
+    private let blurView = Slider.widthViewWith(min: 0, max: 500, exp: 3,
+                                                description: Localization(english: "Blur",
+                                                                          japanese: "ブラー"))
+    private let opacityLabel = Label(text: Localization(english: "Opacity:", japanese: "不透明度:"))
+    private let opacityView = Slider.opacityView
+    private let blendTypeView = EnumView(names: Effect.BlendType.displayStrings,
+                                    description: Localization(english: "Type", japanese: "タイプ"))
+    
+    override init() {
+        effect = defaultEffect
+        super.init()
+        replace(children: [nameLabel,
+                           blurLabel, blurView,
+                           opacityLabel, opacityView,
+                           blendTypeView])
+        
+        blurView.binding = { [unowned self] in self.setEffect(with: $0) }
+        opacityView.binding = { [unowned self] in self.setEffect(with: $0) }
+        blendTypeView.binding = { [unowned self] in self.setEffect(with: $0) }
+    }
+    
+    override var defaultBounds: CGRect {
+        return CGRect(x: 0, y: 0,
+                      width: EffectView.defaultWidth,
+                      height: nameLabel.frame.height + Layout.basicHeight * 3
+                        + Layout.basicPadding * 2)
+    }
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    func updateLayout() {
+        let padding = Layout.basicPadding, h = Layout.basicHeight
+        let cw = bounds.width - padding * 2
+        let rightWidth = cw - h * 3
+        let leftWidth = cw - rightWidth
+        nameLabel.frame.origin = CGPoint(x: padding, y: padding + h * 3)
+        blendTypeView.frame = CGRect(x: padding, y: padding + h * 2, width: cw, height: h)
+        blurLabel.frame.origin = CGPoint(x: padding + leftWidth - blurLabel.frame.width,
+                                         y: padding * 2 + h)
+        let blurFrame = CGRect(x: bounds.width - rightWidth - padding, y: padding + h,
+                               width: rightWidth, height: h)
+        blurView.updateLineWidthLayers(withFrame: blurFrame)
+        opacityLabel.frame.origin = CGPoint(x: padding + leftWidth - opacityLabel.frame.width,
+                                            y: padding * 2)
+        let opacityFrame = CGRect(x: bounds.width - rightWidth - padding, y: padding,
+                                  width: rightWidth, height: h)
+        opacityView.updateOpacityLayers(withFrame: opacityFrame)
+    }
+    private func updateWithEffect() {
+        blurView.value = effect.blur
+        opacityView.value = effect.opacity
+        blendTypeView.selectedIndex = index(with: effect.blendType)
+    }
+    
+    private func blendType(withIndex index: Int) -> Effect.BlendType {
+        return Effect.BlendType(rawValue: Int8(index)) ?? .normal
+    }
+    private func index(with type: Effect.BlendType) -> Int {
+        return Int(type.rawValue)
+    }
+    
+    var disabledRegisterUndo = true
+    
+    struct Binding {
+        let view: EffectView
+        let effect: Effect, oldEffect: Effect, type: Action.SendType
+    }
+    var binding: ((Binding) -> ())?
+    
+    private var oldEffect = Effect()
+    private func setEffect(with obj: Slider.Binding) {
+        if obj.type == .begin {
+            oldEffect = effect
+            binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
+        } else {
+            switch obj.slider {
+            case blurView:
+                effect = effect.with(blur: obj.value)
+            case opacityView:
+                effect = effect.with(opacity: obj.value)
+            default:
+                fatalError("No case")
+            }
+            binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: obj.type))
+        }
+    }
+    private func setEffect(with obj: EnumView.Binding) {
+        if obj.type == .begin {
+            oldEffect = effect
+            binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
+        } else {
+            effect = effect.with(blendType(withIndex: obj.index))
+            binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: obj.type))
+        }
+    }
+    
+    func copy(with event: KeyInputEvent) -> CopiedObject? {
+        return CopiedObject(objects: [effect])
+    }
+    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
+        for object in copiedObject.objects {
+            if let effect = object as? Effect {
+                guard effect != self.effect else {
+                    continue
+                }
+                set(effect, old: self.effect)
+                return true
+            }
+        }
+        return false
+    }
+    func delete(with event: KeyInputEvent) -> Bool {
+        let effect = defaultEffect
+        guard effect != self.effect else {
+            return false
+        }
+        set(effect, old: self.effect)
+        return true
+    }
+    
+    private func set(_ effect: Effect, old oldEffect: Effect) {
+        registeringUndoManager?.registerUndo(withTarget: self) {
+            $0.set(oldEffect, old: effect)
+        }
+        binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
+        self.effect = effect
+        binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: .end))
     }
 }

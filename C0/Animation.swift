@@ -52,7 +52,7 @@ struct Animation: Codable {
     private(set) var isInterpolated = false
     private(set) var editKeyframeIndex = 0
     private(set) var editLoopframeIndex = 0
-
+    
     var selectedKeyframeIndexes: [Int]
     
     init(keyframes: [Keyframe] = [Keyframe()], duration: Beat = 1,
@@ -154,10 +154,10 @@ struct Animation: Codable {
         let k1 = keyframes[lf1.index]
         guard interTime > 0 && timeResult.duration > 0
             && li1 + 1 < loopFrames.count && k1.interpolation != .none else {
-            
-            isInterpolated = false
-            animatable.step(lf1.index)
-            return
+                
+                isInterpolated = false
+                animatable.step(lf1.index)
+                return
         }
         let lf2 = loopFrames[li1 + 1]
         guard lf1.time != lf2.time else {
@@ -364,7 +364,7 @@ final class AnimationView: Layer, Respondable {
         let kh = label == .main ? knobHalfHeight : subKnobHalfHeight
         let knob = DiscreteKnob()
         knob.frame = CGRect(x: p.x - baseWidth / 2, y: p.y - kh,
-                             width: baseWidth, height: kh * 2)
+                            width: baseWidth, height: kh * 2)
         knob.fillColor = fillColor
         knob.lineColor = lineColor
         return knob
@@ -438,18 +438,18 @@ final class AnimationView: Layer, Respondable {
             if !isSmall {
                 let keyLineColor = lineColorHandler(li.index)
                 let keyLine = AnimationView.keyLineWith(keyframe,
-                                                          lineColor: keyLineColor,
-                                                          baseWidth: baseWidth,
-                                                          lineWidth: lineWidth,
-                                                          maxLineWidth: maxLineWidth,
-                                                          position: position, width: width)
+                                                        lineColor: keyLineColor,
+                                                        baseWidth: baseWidth,
+                                                        lineWidth: lineWidth,
+                                                        maxLineWidth: maxLineWidth,
+                                                        position: position, width: width)
                 keyLines.append(keyLine)
                 
                 let knobLine = AnimationView.knobLine(from: position,
-                                                        lineColor: keyLineColor,
-                                                        baseWidth: baseWidth,
-                                                        lineHeight: height - 2,
-                                                        with: keyframe.interpolation)
+                                                      lineColor: keyLineColor,
+                                                      baseWidth: baseWidth,
+                                                      lineHeight: height - 2,
+                                                      with: keyframe.interpolation)
                 keyLines.append(knobLine)
                 
                 if li.loopCount > 0 {
@@ -484,12 +484,12 @@ final class AnimationView: Layer, Respondable {
                 let lineColor = ((li.time + beginBaseTime) / baseTimeInterval).isInteger ?
                     Color.border : Color.warning
                 let knob = AnimationView.knob(from: position,
-                                                fillColor: fillColor,
-                                                lineColor: lineColor,
-                                                baseWidth: baseWidth,
-                                                knobHalfHeight: khh,
-                                                subKnobHalfHeight: skhh,
-                                                with: keyframe.label)
+                                              fillColor: fillColor,
+                                              lineColor: lineColor,
+                                              baseWidth: baseWidth,
+                                              knobHalfHeight: khh,
+                                              subKnobHalfHeight: skhh,
+                                              with: keyframe.label)
                 knobs.append(knob)
             }
             
@@ -523,12 +523,12 @@ final class AnimationView: Layer, Respondable {
         let durationLineColor = ((animation.duration + beginBaseTime) / baseTimeInterval).isInteger ?
             Color.border : Color.warning
         let durationKnob = AnimationView.knob(from: CGPoint(x: maxX, y: midY),
-                                                fillColor: durationFillColor,
-                                                lineColor: durationLineColor,
-                                                baseWidth: baseWidth,
-                                                knobHalfHeight: khh,
-                                                subKnobHalfHeight: skhh,
-                                                with: .main)
+                                              fillColor: durationFillColor,
+                                              lineColor: durationLineColor,
+                                              baseWidth: baseWidth,
+                                              knobHalfHeight: khh,
+                                              subKnobHalfHeight: skhh,
+                                              with: .main)
         knobs.append(durationKnob)
         
         self.knobs = knobs
@@ -735,7 +735,7 @@ final class AnimationView: Layer, Respondable {
     }
     
     var disabledRegisterUndo = true
-
+    
     enum SetKeyframeType {
         case insert, remove, replace
     }
@@ -858,16 +858,16 @@ final class AnimationView: Layer, Respondable {
         isUseUpdateChildren = false
         let oldAnimation = animation
         setKeyframeHandler?(SetKeyframeBinding(animationView: self,
-                                                     keyframe: keyframe, index: index,
-                                                     setType: .replace,
-                                                     animation: oldAnimation,
-                                                     oldAnimation: oldAnimation, type: .begin))
+                                               keyframe: keyframe, index: index,
+                                               setType: .replace,
+                                               animation: oldAnimation,
+                                               oldAnimation: oldAnimation, type: .begin))
         animation.keyframes[index] = keyframe
         setKeyframeHandler?(SetKeyframeBinding(animationView: self,
-                                                     keyframe: keyframe, index: index,
-                                                     setType: .replace,
-                                                     animation: animation,
-                                                     oldAnimation: oldAnimation, type: .end))
+                                               keyframe: keyframe, index: index,
+                                               setType: .replace,
+                                               animation: animation,
+                                               oldAnimation: oldAnimation, type: .end))
         isUseUpdateChildren = true
         updateChildren()
     }
@@ -878,16 +878,16 @@ final class AnimationView: Layer, Respondable {
         isUseUpdateChildren = false
         let oldAnimation = animation
         setKeyframeHandler?(SetKeyframeBinding(animationView: self,
-                                                     keyframe: keyframe, index: index,
-                                                     setType: .insert,
-                                                     animation: oldAnimation,
-                                                     oldAnimation: oldAnimation, type: .begin))
+                                               keyframe: keyframe, index: index,
+                                               setType: .insert,
+                                               animation: oldAnimation,
+                                               oldAnimation: oldAnimation, type: .begin))
         animation.keyframes.insert(keyframe, at: index)
         setKeyframeHandler?(SetKeyframeBinding(animationView: self,
-                                                     keyframe: keyframe, index: index,
-                                                     setType: .insert,
-                                                     animation: animation,
-                                                     oldAnimation: oldAnimation, type: .end))
+                                               keyframe: keyframe, index: index,
+                                               setType: .insert,
+                                               animation: animation,
+                                               oldAnimation: oldAnimation, type: .end))
         isUseUpdateChildren = true
         updateChildren()
     }
@@ -898,18 +898,18 @@ final class AnimationView: Layer, Respondable {
         isUseUpdateChildren = false
         let oldAnimation = animation
         setKeyframeHandler?(SetKeyframeBinding(animationView: self,
-                                                     keyframe: oldAnimation.keyframes[index],
-                                                     index: index,
-                                                     setType: .remove,
-                                                     animation: oldAnimation,
-                                                     oldAnimation: oldAnimation, type: .begin))
+                                               keyframe: oldAnimation.keyframes[index],
+                                               index: index,
+                                               setType: .remove,
+                                               animation: oldAnimation,
+                                               oldAnimation: oldAnimation, type: .begin))
         animation.keyframes.remove(at: index)
         setKeyframeHandler?(SetKeyframeBinding(animationView: self,
-                                                     keyframe: oldAnimation.keyframes[index],
-                                                     index: index,
-                                                     setType: .remove,
-                                                     animation: animation,
-                                                     oldAnimation: oldAnimation, type: .end))
+                                               keyframe: oldAnimation.keyframes[index],
+                                               index: index,
+                                               setType: .remove,
+                                               animation: animation,
+                                               oldAnimation: oldAnimation, type: .end))
         isUseUpdateChildren = true
         updateChildren()
     }
@@ -1186,13 +1186,13 @@ final class AnimationView: Layer, Respondable {
                                          type: .begin))
         case .sending:
             selectedLayer?.frame = CGRect(origin: selectObject.startPoint,
-                                           size: CGSize(width: p.x - selectObject.startPoint.x,
-                                                        height: p.y - selectObject.startPoint.y))
+                                          size: CGSize(width: p.x - selectObject.startPoint.x,
+                                                       height: p.y - selectObject.startPoint.y))
             
             isUseUpdateChildren = false
             animation.selectedKeyframeIndexes = selectedIndex(at: p,
-                                                                with: selectObject,
-                                                                isDeselect: isDeselect)
+                                                              with: selectObject,
+                                                              isDeselect: isDeselect)
             selectHandler?(SelectBinding(animationView: self,
                                          selectedIndexes: animation.selectedKeyframeIndexes,
                                          oldSelectedIndexes: selectObject.oldAnimation.selectedKeyframeIndexes,
@@ -1203,7 +1203,7 @@ final class AnimationView: Layer, Respondable {
             updateChildren()
         case .end:
             let newIndexes = selectedIndex(at: p,
-                                            with: selectObject, isDeselect: isDeselect)
+                                           with: selectObject, isDeselect: isDeselect)
             if selectObject.oldAnimation.selectedKeyframeIndexes != newIndexes {
                 registeringUndoManager?.registerUndo(withTarget: self) { [so = selectObject] in
                     $0.set(selectedIndexes: so.oldAnimation.selectedKeyframeIndexes,
@@ -1241,7 +1241,7 @@ final class AnimationView: Layer, Respondable {
             Array(startIndex < endIndex ? (startIndex ... endIndex) : (endIndex ... startIndex))
     }
     private func selectedIndex(at point: CGPoint,
-                                with selectObject: SelectObject, isDeselect: Bool) -> [Int] {
+                               with selectObject: SelectObject, isDeselect: Bool) -> [Int] {
         let selectedIndexes = indexes(at: point, with: selectObject)
         let oldIndexes = selectObject.oldAnimation.selectedKeyframeIndexes
         return isDeselect ?
@@ -1257,17 +1257,17 @@ final class AnimationView: Layer, Respondable {
         isUseUpdateChildren = false
         let oldAnimation = animation
         selectHandler?(SelectBinding(animationView: self,
-                                           selectedIndexes: oldSelectedIndexes,
-                                           oldSelectedIndexes: oldSelectedIndexes,
-                                           animation: animation, oldAnimation: animation,
-                                           type: .begin))
+                                     selectedIndexes: oldSelectedIndexes,
+                                     oldSelectedIndexes: oldSelectedIndexes,
+                                     animation: animation, oldAnimation: animation,
+                                     type: .begin))
         animation.selectedKeyframeIndexes = selectedIndexes
         selectHandler?(SelectBinding(animationView: self,
-                                           selectedIndexes: animation.selectedKeyframeIndexes,
-                                           oldSelectedIndexes: oldSelectedIndexes,
-                                           animation: animation,
-                                           oldAnimation: oldAnimation,
-                                           type: .end))
+                                     selectedIndexes: animation.selectedKeyframeIndexes,
+                                     oldSelectedIndexes: oldSelectedIndexes,
+                                     animation: animation,
+                                     oldAnimation: oldAnimation,
+                                     type: .end))
         isUseUpdateChildren = true
         updateChildren()
     }

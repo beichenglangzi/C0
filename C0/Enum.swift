@@ -44,11 +44,12 @@ final class EnumView: Layer, Respondable, Localizable {
     } ()
     init(frame: CGRect = CGRect(), names: [Localization] = [],
          selectedIndex: Int = 0, cationIndex: Int? = nil,
-         description: Localization = Localization()) {
+         description: Localization = Localization(), isSmall: Bool = false) {
         
-        self.menu = Menu(names: names, knobPaddingWidth: knobPaddingWidth, width: frame.width)
+        self.menu = Menu(names: names,
+                         knobPaddingWidth: knobPaddingWidth, width: frame.width, isSmall: isSmall)
         self.cationIndex = cationIndex
-        self.label = Label(color: .locked)
+        self.label = Label(font: isSmall ? .small : .default, color: .locked)
         
         super.init()
         instanceDescription = description
@@ -231,8 +232,7 @@ final class Menu: Layer, Respondable, Localizable {
             }
             let selectedLabel = items[selectedIndex]
             selectedLayer.frame = selectedLabel.frame
-            selectedKnob.position = CGPoint(x: knobPaddingWidth / 2,
-                                             y: selectedLabel.frame.midY)
+            selectedKnob.position = CGPoint(x: knobPaddingWidth / 2, y: selectedLabel.frame.midY)
         }
     }
     
@@ -265,6 +265,7 @@ final class Menu: Layer, Respondable, Localizable {
             updateItems()
         }
     }
+    var isSmall: Bool
     private(set) var items = [TextBox]()
     private func updateItems() {
         if names.isEmpty {
@@ -278,7 +279,7 @@ final class Menu: Layer, Respondable, Localizable {
                 y -= menuHeight
                 return TextBox(frame: CGRect(x: 0, y: y, width: width, height: menuHeight),
                                name: $0,
-                               isLeftAlignment: true,
+                               isSmall: isSmall,
                                leftPadding: knobPaddingWidth)
             }
             let path = CGMutablePath()
@@ -295,18 +296,19 @@ final class Menu: Layer, Respondable, Localizable {
             lineLayer.path = path
             let selectedLabel = items[selectedIndex]
             selectedLayer.frame = selectedLabel.frame
-            selectedKnob.position = CGPoint(x: knobPaddingWidth / 2,
-                                             y: selectedLabel.frame.midY)
+            selectedKnob.position = CGPoint(x: knobPaddingWidth / 2, y: selectedLabel.frame.midY)
             frame.size = CGSize(width: width, height: h)
             self.items = items
             replace(children: items + [lineLayer, selectedKnob, selectedLayer])
         }
     }
     
-    init(names: [Localization] = [], knobPaddingWidth: CGFloat = 18.0.cf, width: CGFloat) {
+    init(names: [Localization] = [],
+         knobPaddingWidth: CGFloat = 18.0.cf, width: CGFloat, isSmall: Bool = false) {
         self.names = names
         self.knobPaddingWidth = knobPaddingWidth
         self.width = width
+        self.isSmall = isSmall
         super.init()
         fillColor = .background
         updateItems()

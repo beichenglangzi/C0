@@ -9,7 +9,7 @@ Modeless Animatable Tool
 あることを行う方法が一通りしかなく、モードが存在せず、オブジェクト指向に従った非タスク的な設計
 
 ### シンプル
-多機能ではなく、単純なアクションを組み合わせて工夫することによって創造を行う設計
+アクションを組み合わせて工夫することによって創造を行う設計
 
 ### 自由
 人が道具に対して方法を強制させるわけでもなく、道具が人に方法を強制させるわけでもない設計
@@ -36,6 +36,11 @@ Modeless Animatable Tool
 
 ## 開発者
 S ([Twitter](https://twitter.com/smdls), [Youtube](https://www.youtube.com/channel/UCQ6kzSlb5Zi6-EvsGcZuDAw), メール: <smdls001@gmail.com>)
+
+## 開発環境
+- macOS 10.13.3
+- Xcode 9.2
+- Swift 4.0.3
 
 ## ライセンス
 [GNU General Public License v3.0](License.md)

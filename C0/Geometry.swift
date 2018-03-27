@@ -236,9 +236,10 @@ final class Geometry: NSObject, NSCoding {
         }
     }
     
-    func nearestBezier(with point: CGPoint
-        )-> (lineIndex: Int, bezierIndex: Int, t: CGFloat, minDistance²: CGFloat)? {
-        
+    struct NearestBezier {
+        let lineIndex: Int, bezierIndex: Int, t: CGFloat, minDistance²: CGFloat
+    }
+    func nearestBezier(with point: CGPoint)-> NearestBezier? {
         guard !lines.isEmpty else {
             return nil
         }
@@ -254,7 +255,8 @@ final class Geometry: NSObject, NSCoding {
                 }
             }
         }
-        return (minLineIndex, minBezierIndex, minT, minD²)
+        return NearestBezier(lineIndex: minLineIndex, bezierIndex: minBezierIndex,
+                             t: minT, minDistance²: minD²)
     }
     func nearestPathLineIndex(at p: CGPoint) -> Int {
         var minD = CGFloat.infinity, minIndex = 0

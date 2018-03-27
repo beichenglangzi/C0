@@ -87,18 +87,16 @@ final class TextBox: Layer, Respondable {
     let label: Label
     let highlight = HighlightLayer()
     
-    init(frame: CGRect = CGRect(), name: Localization = Localization(),
+    init(frame: CGRect = CGRect(), name: Localization = Localization(), isSmall: Bool = false,
          isLeftAlignment: Bool = true, leftPadding: CGFloat = Layout.basicPadding,
          runHandler: ((TextBox) -> (Bool))? = nil) {
         
         self.runHandler = runHandler
-        self.label = Label(text: name, color: .locked)
+        self.label = Label(text: name, font: isSmall ? .small : .default, color: .locked)
         self.isLeftAlignment = isLeftAlignment
         self.leftPadding = leftPadding
-        label.frame.origin = CGPoint(
-            x: isLeftAlignment ? leftPadding : round((frame.width - label.frame.width) / 2),
-            y: round((frame.height - label.frame.height) / 2)
-        )
+        let x = isLeftAlignment ? leftPadding : round((frame.width - label.frame.width) / 2)
+        label.frame.origin = CGPoint(x: x, y: round((frame.height - label.frame.height) / 2))
         
         super.init()
         self.frame = frame
@@ -125,15 +123,23 @@ final class TextBox: Layer, Respondable {
         }
     }
     func updateChildren() {
-        label.frame.origin = CGPoint(
-            x: isLeftAlignment ? leftPadding : round((frame.width - label.frame.width) / 2),
-            y: round((frame.height - label.frame.height) / 2)
-        )
+        let x = isLeftAlignment ? leftPadding : round((frame.width - label.frame.width) / 2)
+        let y = round((frame.height - label.frame.height) / 2)
+        label.frame.origin = CGPoint(x: x, y: y)
         highlight.frame = bounds.inset(by: 0.5)
     }
     
     func copy(with event: KeyInputEvent) -> CopiedObject? {
         return CopiedObject(objects: [label.string])
+    }
+    
+    var deleteHandler: ((TextBox, KeyInputEvent) -> (Bool))?
+    func delete(with event: KeyInputEvent) -> Bool {
+        return deleteHandler?(self, event) ?? false
+    }
+    var newHandler: ((TextBox, KeyInputEvent) -> (Bool))?
+    func new(with event: KeyInputEvent) -> Bool {
+        return newHandler?(self, event) ?? false
     }
     
     var runHandler: ((TextBox) -> (Bool))?

@@ -19,240 +19,6 @@
 
 import Foundation
 
-struct ActionManager {
-    var actions = [
-        Action(
-            name: Localization(english: "Undo", japanese: "取り消す"),
-            quasimode: [.command], key: .z,
-            keyInput: { (setter, getter, event) in getter.undo() }
-        ),
-        Action(
-            name: Localization(english: "Redo", japanese: "やり直す"),
-            quasimode: [.command, .shift], key: .z,
-            keyInput: { (setter, getter, event) in getter.redo() }
-        ),
-        Action(),
-        Action(
-            name: Localization(english: "Cut", japanese: "カット"),
-            quasimode: [.command], key: .x,
-            keyInput: { (setter, getter, event) in
-                let copiedObject = getter.copy(with: event)
-                if let copiedObject = copiedObject, getter.delete(with: event) {
-                    return setter.paste(copiedObject, with: event)
-                } else {
-                    return false
-                }
-            }
-        ),
-        Action(
-            name: Localization(english: "Copy", japanese: "コピー"),
-            quasimode: [.command], key: .c,
-            keyInput: {
-                if let copyObject = $1.copy(with: $2) {
-                    return $0.paste(copyObject, with: $2)
-                } else {
-                    return false
-                }
-            }
-        ),
-        Action(
-            name: Localization(english: "Paste", japanese: "ペースト"),
-            quasimode: [.command], key: .v,
-            keyInput: {
-                if let copyObject = $0.copy(with: $2) {
-                    return $1.paste(copyObject, with: $2)
-                } else {
-                    return false
-                }
-            }
-        ),
-        Action(
-            name: Localization(english: "New", japanese: "新規"),
-            quasimode: [.command], key: .d,
-            keyInput: { $1.new(with: $2) }
-        ),
-        Action(),
-        Action(
-            name: Localization(english: "Indicate", japanese: "指し示す"),
-            gesture: .moveCursor
-        ),
-        Action(
-            name: Localization(english: "Select", japanese: "選択"),
-            quasimode: [.command], editQuasimode: .select,
-            drag: { $1.select(with: $2) }
-        ),
-        Action(
-            name: Localization(english: "Deselect", japanese: "選択解除"),
-            quasimode: [.command, .shift], editQuasimode: .deselect,
-            drag: { $1.deselect(with: $2) }
-        ),
-        Action(
-            name: Localization(english: "Select All", japanese: "すべて選択"),
-            quasimode: [.command], key: .a,
-            keyInput: { $1.selectAll(with: $2) }
-        ),
-        Action(
-            name: Localization(english: "Deselect All", japanese: "すべて選択解除"),
-            quasimode: [.command, .shift], key: .a,
-            keyInput: { $1.deselectAll(with: $2) }
-        ),
-        Action(
-            name: Localization(english: "Bind", japanese: "バインド"),
-            gesture: .rightClick, drag: { $1.bind(with: $2) }
-        ),
-        Action(),
-        Action(
-            name: Localization(english: "Run", japanese: "実行"),
-            gesture: .click
-        ),
-        Action(),
-        Action(
-            name: Localization(english: "Move", japanese: "移動"),
-            drag: { $1.move(with: $2) }
-        ),
-        Action(
-            name: Localization(english: "Transform", japanese: "変形"),
-            quasimode: [.option], editQuasimode: .transform,
-            drag: { $1.transform(with: $2) }
-        ),
-        Action(
-            name: Localization(english: "Warp", japanese: "歪曲"),
-            quasimode: [.option, .shift], editQuasimode: .warp,
-            drag: { $1.warp(with: $2) }
-        ),
-        Action(),
-        Action(
-            name: Localization(english: "Insert Edit Point", japanese: "編集点を追加"),
-            quasimode: [.control], key: .d,
-            keyInput: { $1.insertPoint(with: $2) }
-        ),
-        Action(
-            name: Localization(english: "Remove Edit Point", japanese: "編集点を削除"),
-            quasimode: [.control], key: .x,
-            keyInput: { $1.removePoint(with: $2) }
-        ),
-        Action(
-            name: Localization(english: "Move Edit Point", japanese: "編集点を移動"),
-            quasimode: [.control], editQuasimode: .movePoint,
-            drag: { $1.movePoint(with: $2) }
-        ),
-        Action(
-            name: Localization(english: "Move Vertex", japanese: "頂点を移動"),
-            quasimode: [.control, .shift], editQuasimode: .moveVertex,
-            drag: { $1.moveVertex(with: $2) }
-        ),
-        Action(),
-        Action(
-            name: Localization(english: "Stroke (Canvas Only)",
-                               japanese: "ストローク (キャンバスのみ)"),
-            gesture: .drag, drag: { $1.move(with: $2) }
-        ),
-        Action(
-            name: Localization(english: "Lasso Erase", japanese: "囲み消し"),
-            quasimode: [.shift], editQuasimode: .lassoErase,
-            drag: { $1.lassoErase(with: $2) }
-        ),
-        Action(
-            name: Localization(english: "Move (Canvas Only)", japanese: "移動 (キャンバスのみ)"),
-            quasimode: [.command, .option], editQuasimode: .stroke,
-            drag: { $1.moveInStrokable(with: $2) }
-        ),
-        Action(
-            name: Localization(english: "Move Z", japanese: "Z移動"),
-            quasimode: [.control, .option], editQuasimode: .moveZ,
-            drag: { $1.moveZ(with: $2) }
-        ),
-        Action(),
-        Action(
-            name: Localization(english: "Scroll", japanese: "スクロール"),
-            description: Localization(
-                english: "Depends on system preference.", japanese: "OSの環境設定に依存"
-            ),
-            gesture: .scroll
-        ),
-        Action(
-            name: Localization(english: "Zoom", japanese: "ズーム"),
-            description: Localization(
-                english: "Depends on system preference.",
-                japanese: "OSの環境設定に依存"
-            ),
-            gesture: .pinch
-        ),
-        Action(
-            name: Localization(english: "Rotate", japanese: "回転"),
-            description: Localization(
-                english: "Depends on system preference.", japanese: "OSの環境設定に依存"
-            ),
-            gesture: .rotate
-        ),
-        Action(
-            name: Localization(english: "Reset View", japanese: "表示を初期化"),
-            description: Localization(
-                english: "Depends on system preference.", japanese: "OSの環境設定に依存"
-            ),
-            gesture: .doubleTap
-        ),
-        Action(),
-        Action(
-            name: Localization(english: "Look Up", japanese: "調べる"),
-            description: Localization(
-                english: "Depends on system preference.", japanese: "OSの環境設定に依存"
-            ),
-            gesture: .tap
-        )
-    ]
-    
-    private(set) var moveActions = [Action]()
-    private(set) var keyActions = [Action](), dragActions = [Action]()
-    private(set) var clickActions = [Action](), rightClickActions = [Action]()
-    private(set) var scrollActions = [Action](), pinchActions = [Action]()
-    private(set) var rotateActions = [Action](), tapActions = [Action]()
-    init() {
-        actions.forEach {
-            switch $0.gesture {
-            case .keyInput:
-                keyActions.append($0)
-            case .click:
-                clickActions.append($0)
-            case .rightClick:
-                rightClickActions.append($0)
-            case .drag:
-                dragActions.append($0)
-            default:
-                break
-            }
-        }
-    }
-    
-    func actionWith(_ gesture: Action.Gesture, _ event: Event) -> Action? {
-        func action(with actions: [Action]) -> Action? {
-            for action in actions {
-                if action.canSend(with: event) {
-                    return action
-                }
-            }
-            return nil
-        }
-        switch gesture {
-        case .keyInput:
-            if let action = action(with: keyActions) {
-                return action
-            } else {
-                return Action(quasimode: event.quasimode, key: event.key,
-                              keyInput: { $1.keyInput(with: $2) })
-            }
-        case .click:
-            return action(with: clickActions)
-        case .rightClick:
-            return action(with: rightClickActions)
-        case .drag:
-            return action(with: dragActions)
-        default:
-            return nil
-        }
-    }
-}
-
 /**
  # Issue
  - トラックパッドの環境設定を無効化または表示反映
@@ -268,8 +34,8 @@ struct Action {
                 return intersection(quasimode).isEmpty ? "" : name
             }
             return string(.shift, "shift")
-                .union(string(.option, "option"))
                 .union(string(.control, "control"))
+                .union(string(.option, "option"))
                 .union(string(.command, "command"))
         }
     }
@@ -292,6 +58,7 @@ struct Action {
         case
         none, keyInput, moveCursor, click, rightClick,
         drag, scroll, pinch, rotate, tap, doubleTap, penDrag
+        
         var displayString: Localization {
             switch self {
             case .none, .keyInput:
@@ -381,7 +148,7 @@ struct Action {
         if let key = key {
             return event.key == key && contains(with: quasimode)
         } else {
-            return contains(with: quasimode)
+            return contains(with: quasimode)// && (event.isPen ? gesture == .penDrag : true)
         }
     }
 }
@@ -391,7 +158,178 @@ extension Action: Equatable {
     }
 }
 
-final class ActionView: Layer, Respondable, Localizable {
+struct ActionManager {
+    var actions: [Action] = {
+        let cutHandler: (Respondable, Respondable, KeyInputEvent) -> (Bool) = {
+            let copiedObject = $1.copy(with: $2)
+            if let copiedObject = copiedObject, $1.delete(with: $2) {
+                return $0.paste(copiedObject, with: $2)
+            } else {
+                return false
+            }
+        }
+        let copyHandler: (Respondable, Respondable, KeyInputEvent) -> (Bool) = {
+            if let copyObject = $1.copy(with: $2) {
+                return $0.paste(copyObject, with: $2)
+            } else {
+                return false
+            }
+        }
+        let pasteHandler: (Respondable, Respondable, KeyInputEvent) -> (Bool) = {
+            if let copyObject = $0.copy(with: $2) {
+                return $1.paste(copyObject, with: $2)
+            } else {
+                return false
+            }
+        }
+        return [Action(name: Localization(english: "Undo", japanese: "取り消す"),
+                       quasimode: [.command], key: .z,
+                       keyInput: { (setter, getter, event) in getter.undo() }),
+                Action(name: Localization(english: "Redo", japanese: "やり直す"),
+                       quasimode: [.command, .shift], key: .z,
+                       keyInput: { (setter, getter, event) in getter.redo() }),
+                Action(),
+                Action(name: Localization(english: "Cut", japanese: "カット"),
+                       quasimode: [.command], key: .x,
+                       keyInput: cutHandler),
+                Action(name: Localization(english: "Copy", japanese: "コピー"),
+                       quasimode: [.command], key: .c,
+                       keyInput: copyHandler),
+                Action(name: Localization(english: "Paste", japanese: "ペースト"),
+                       quasimode: [.command], key: .v,
+                       keyInput: pasteHandler),
+                Action(name: Localization(english: "New", japanese: "新規"),
+                       quasimode: [.command], key: .d,
+                       keyInput: { $1.new(with: $2) }),
+                Action(),
+                Action(name: Localization(english: "Indicate", japanese: "指し示す"),
+                       gesture: .moveCursor),
+                Action(name: Localization(english: "Select", japanese: "選択"),
+                       quasimode: [.command], editQuasimode: .select,
+                       drag: { $1.select(with: $2) }),
+                Action(name: Localization(english: "Deselect", japanese: "選択解除"),
+                       quasimode: [.command, .shift], editQuasimode: .deselect,
+                       drag: { $1.deselect(with: $2) }),
+                Action(name: Localization(english: "Select All", japanese: "すべて選択"),
+                       quasimode: [.command], key: .a,
+                       keyInput: { $1.selectAll(with: $2) }),
+                Action(name: Localization(english: "Deselect All", japanese: "すべて選択解除"),
+                       quasimode: [.command, .shift], key: .a,
+                       keyInput: { $1.deselectAll(with: $2) }),
+                Action(name: Localization(english: "Bind", japanese: "バインド"),
+                       gesture: .rightClick, drag: { $1.bind(with: $2) }),
+                Action(),
+                Action(name: Localization(english: "Run", japanese: "実行"),
+                       gesture: .click),
+                Action(),
+                Action(name: Localization(english: "Move", japanese: "移動"),
+                       drag: { $1.move(with: $2) }),
+                Action(name: Localization(english: "Transform", japanese: "変形"),
+                       quasimode: [.option], editQuasimode: .transform,
+                       drag: { $1.transform(with: $2) }),
+                Action(name: Localization(english: "Warp", japanese: "歪曲"),
+                       quasimode: [.option, .shift], editQuasimode: .warp,
+                       drag: { $1.warp(with: $2) }),
+                Action(name: Localization(english: "Move Z", japanese: "Z移動"),
+                       quasimode: [.option, .control], editQuasimode: .moveZ,
+                       drag: { $1.moveZ(with: $2) }),
+                Action(),
+                Action(name: Localization(english: "Stroke", japanese: "ストローク"),
+//                       editQuasimode: .stroke,
+//                       gesture: .penDrag,
+                       drag: { $1.stroke(with: $2) }),
+                Action(name: Localization(english: "Lasso Erase", japanese: "囲み消し"),
+                       quasimode: [.shift], editQuasimode: .lassoErase,
+                       drag: { $1.lassoErase(with: $2) }),
+                Action(),
+                Action(name: Localization(english: "Remove Edit Point", japanese: "編集点を削除"),
+                       quasimode: [.control], key: .x,
+                       keyInput: { $1.removePoint(with: $2) }),
+                Action(name: Localization(english: "Insert Edit Point", japanese: "編集点を追加"),
+                       quasimode: [.control], key: .d,
+                       keyInput: { $1.insertPoint(with: $2) }),
+                Action(name: Localization(english: "Move Edit Point", japanese: "編集点を移動"),
+                       quasimode: [.control], editQuasimode: .movePoint,
+                       drag: { $1.movePoint(with: $2) }),
+                Action(name: Localization(english: "Move Vertex", japanese: "頂点を移動"),
+                       quasimode: [.control, .shift], editQuasimode: .moveVertex,
+                       drag: { $1.moveVertex(with: $2) }),
+                Action(),
+                Action(name: Localization(english: "Scroll", japanese: "スクロール"),
+                       description: Localization(english: "Depends on system preference.",
+                                                 japanese: "OSの環境設定に依存"),
+                       gesture: .scroll),
+                Action(name: Localization(english: "Zoom", japanese: "ズーム"),
+                       description: Localization(english: "Depends on system preference.",
+                                                 japanese: "OSの環境設定に依存"),
+                       gesture: .pinch),
+                Action(name: Localization(english: "Rotate", japanese: "回転"),
+                       description: Localization(english: "Depends on system preference.",
+                                                 japanese: "OSの環境設定に依存"),
+                       gesture: .rotate),
+                Action(name: Localization(english: "Reset View", japanese: "表示を初期化"),
+                       description: Localization(english: "Depends on system preference.",
+                                                 japanese: "OSの環境設定に依存"),
+                       gesture: .doubleTap),
+                Action(),
+                Action(name: Localization(english: "Look Up", japanese: "調べる"),
+                       description: Localization(english: "Depends on system preference.",
+                                                 japanese: "OSの環境設定に依存"),
+                       gesture: .tap)]
+    } ()
+    
+    private(set) var moveActions = [Action]()
+    private(set) var keyActions = [Action](), dragActions = [Action]()
+    private(set) var clickActions = [Action](), rightClickActions = [Action]()
+    private(set) var scrollActions = [Action](), pinchActions = [Action]()
+    private(set) var rotateActions = [Action](), tapActions = [Action]()
+    init() {
+        actions.forEach {
+            switch $0.gesture {
+            case .keyInput:
+                keyActions.append($0)
+            case .click:
+                clickActions.append($0)
+            case .rightClick:
+                rightClickActions.append($0)
+            case .drag, .penDrag:
+                dragActions.append($0)
+            default:
+                break
+            }
+        }
+    }
+    
+    func actionWith(_ gesture: Action.Gesture, _ event: Event) -> Action? {
+        func action(with actions: [Action]) -> Action? {
+            for action in actions {
+                if action.canSend(with: event) {
+                    return action
+                }
+            }
+            return nil
+        }
+        switch gesture {
+        case .keyInput:
+            if let action = action(with: keyActions) {
+                return action
+            } else {
+                return Action(quasimode: event.quasimode, key: event.key,
+                              keyInput: { $1.keyInput(with: $2) })
+            }
+        case .click:
+            return action(with: clickActions)
+        case .rightClick:
+            return action(with: rightClickActions)
+        case .drag:
+            return action(with: dragActions)
+        default:
+            return nil
+        }
+    }
+}
+
+final class ActionManagerView: Layer, Respondable, Localizable {
     static let name = Localization(english: "Action Manager View", japanese: "アクション管理表示")
     
     var locale = Locale.current {
@@ -407,7 +345,7 @@ final class ActionView: Layer, Respondable, Localizable {
     let nameLabel = Label(text: Localization(english: "Action Manager", japanese: "アクション管理"),
                           font: .bold)
     let isHiddenView = EnumView(names: [Localization(english: "Hidden", japanese: "表示なし"),
-                                            Localization(english: "Shown", japanese: "表示あり")])
+                                        Localization(english: "Shown", japanese: "表示あり")])
     var isHiddenActions = false {
         didSet {
             guard isHiddenActions != oldValue else {
@@ -425,21 +363,21 @@ final class ActionView: Layer, Respondable, Localizable {
             actionItems = []
             nameLabel.frame.origin = CGPoint(x: padding, y: padding * 2)
             isHiddenView.frame = CGRect(x: nameLabel.frame.width + padding * 2,
-                                          y: padding,
-                                          width: 80.0,
-                                          height: Layout.basicHeight)
+                                        y: padding,
+                                        width: 80.0,
+                                        height: Layout.basicHeight)
             replace(children: [nameLabel, isHiddenView])
             frame.size = CGSize(width: actionWidth, height: Layout.basicHeight + padding * 2)
         } else {
-            let aaf = ActionView.actionItemsAndFrameWith(actionManager: actionManager,
-                                                           actionWidth: actionWidth - padding * 2,
-                                                           minY: padding)
+            let aaf = ActionManagerView.actionItemsAndFrameWith(actionManager: actionManager,
+                                                                actionWidth: actionWidth - padding * 2,
+                                                                minY: padding)
             self.actionItems = aaf.actionItems
             nameLabel.frame.origin = CGPoint(x: padding,
-                                               y: aaf.size.height + padding * 3)
+                                             y: aaf.size.height + padding * 3)
             isHiddenView.frame = CGRect(x: nameLabel.frame.width + padding * 2,
-                                          y: aaf.size.height + padding * 2,
-                                          width: 80.0, height: Layout.basicHeight)
+                                        y: aaf.size.height + padding * 2,
+                                        width: 80.0, height: Layout.basicHeight)
             replace(children: [nameLabel, isHiddenView] + actionItems)
             frame.size = CGSize(width: actionWidth,
                                 height: aaf.size.height + Layout.basicHeight + padding * 3)
@@ -458,7 +396,7 @@ final class ActionView: Layer, Respondable, Localizable {
     
     var isHiddenActionBinding: ((Bool) -> (Void))? = nil
     
-    var actionWidth = ActionView.defaultWidth, commandFont = Font.action
+    var actionWidth = ActionManagerView.defaultWidth, commandFont = Font.action
     
     static func actionItemsAndFrameWith(actionManager: ActionManager,
                                         actionWidth: CGFloat,
@@ -517,6 +455,12 @@ protocol Event {
     var time: Double { get }
     var quasimode: Action.Quasimode { get }
     var key: Action.Key? { get }
+    var isPen: Bool { get }
+}
+extension Event {
+    var isPen: Bool {
+        return false
+    }
 }
 struct BasicEvent: Event {
     let sendType: Action.SendType, location: CGPoint, time: Second
@@ -535,7 +479,7 @@ struct KeyInputEvent: Event {
 }
 struct DragEvent: Event {
     let sendType: Action.SendType, location: CGPoint, time: Second
-    let quasimode: Action.Quasimode, key: Action.Key?
+    let quasimode: Action.Quasimode, key: Action.Key?, isPen: Bool
     let pressure: CGFloat
 }
 typealias ClickEvent = DragEvent

@@ -290,19 +290,23 @@ final class TextView: DrawLayer, Respondable, Localizable {
         guard !isLocked else {
             return false
         }
+        let beginHandler: () -> () = { [unowned self] in
+            self.oldText = self.string
+            self.binding?(Binding(view: self,
+                                  text: self.oldText, oldText: self.oldText, type: .begin))
+        }
+        let waitHandler: () -> () = { [unowned self] in
+            self.binding?(Binding(view: self,
+                                  text: self.string, oldText: self.oldText, type: .sending))
+        }
+        let endHandler: () -> () = { [unowned self] in
+            self.binding?(Binding(view: self,
+                                  text: self.string, oldText: self.oldText, type: .end))
+        }
         timer.begin(endDuration: 1,
-                    beginHandler:
-            { [unowned self] in
-                print("Begin")
-                self.oldText = self.string
-                self.draw()
-            },
-                    endHandler:
-            { [unowned self] in
-                print("End")
-                self.draw()
-            }
-        )
+                    beginHandler: beginHandler,
+                    waitHandler: waitHandler,
+                    endHandler: endHandler)
         return true
     }
     
@@ -436,9 +440,6 @@ final class TextView: DrawLayer, Respondable, Localizable {
     func insertText(_ string: Any, replacementRange: NSRange) {
         let replaceRange = replacementRange.location != NSNotFound ?
             replacementRange : (markedRange.location != NSNotFound ? markedRange : selectedRange)
-        
-        print("Insert")
-        
         if let attString = string as? NSAttributedString {
             let range = NSRange(location: replaceRange.location, length: attString.length)
             backingStore.replaceCharacters(in: replaceRange, with: attString)

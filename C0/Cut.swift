@@ -224,7 +224,7 @@ final class Cut: NSObject, NSCoding {
         }
     }
     
-    let speechTrack: SpeechTrack
+    let subtitleTrack: SubtitleTrack
     
     var currentTime: Beat {
         didSet {
@@ -233,20 +233,20 @@ final class Cut: NSObject, NSCoding {
     }
     func updateWithTime() {
         rootNode.time = currentTime
-        speechTrack.time = currentTime
+        subtitleTrack.time = currentTime
     }
     var duration: Beat {
         didSet {
-            speechTrack.replace(duration: duration)
+            subtitleTrack.replace(duration: duration)
         }
     }
     
     init(rootNode: Node = Node(tracks: [NodeTrack(animation: Animation(duration: 0))]),
          editNode: Node = Node(name: Localization(english: "Node 0",
                                                   japanese: "ノード0").currentString),
-         speechTrack: SpeechTrack = SpeechTrack(),
+         subtitleTrack: SubtitleTrack = SubtitleTrack(),
          currentTime: Beat = 0) {
-       
+        
         editNode.editTrack.name = Localization(english: "Track 0", japanese: "トラック0").currentString
         if rootNode.children.isEmpty {
             let node = Node(name: Localization(english: "Root", japanese: "ルート").currentString)
@@ -256,10 +256,10 @@ final class Cut: NSObject, NSCoding {
         }
         self.rootNode = rootNode
         self.editNode = editNode
-        self.speechTrack = speechTrack
+        self.subtitleTrack = subtitleTrack
         self.currentTime = currentTime
         self.duration = rootNode.maxDuration
-        speechTrack.replace(duration: duration)
+        subtitleTrack.replace(duration: duration)
         rootNode.time = currentTime
         rootNode.isEdited = true
         editNode.isEdited = true
@@ -267,15 +267,15 @@ final class Cut: NSObject, NSCoding {
     }
     
     private enum CodingKeys: String, CodingKey {
-        case rootNode, editNode, speechTrack, time, duration
+        case rootNode, editNode, subtitleTrack, time, duration
     }
     init?(coder: NSCoder) {
         rootNode = coder.decodeObject(forKey: CodingKeys.rootNode.rawValue) as? Node ?? Node()
         editNode = coder.decodeObject(forKey: CodingKeys.editNode.rawValue) as? Node ?? Node()
         rootNode.isEdited = true
         editNode.isEdited = true
-        speechTrack = coder.decodeObject(
-            forKey: CodingKeys.speechTrack.rawValue) as? SpeechTrack ?? SpeechTrack()
+        subtitleTrack = coder.decodeObject(
+            forKey: CodingKeys.subtitleTrack.rawValue) as? SubtitleTrack ?? SubtitleTrack()
         currentTime = coder.decodeDecodable(Beat.self, forKey: CodingKeys.time.rawValue) ?? 0
         duration = coder.decodeDecodable(Beat.self, forKey: CodingKeys.duration.rawValue) ?? 0
         super.init()
@@ -283,7 +283,7 @@ final class Cut: NSObject, NSCoding {
     func encode(with coder: NSCoder) {
         coder.encode(rootNode, forKey: CodingKeys.rootNode.rawValue)
         coder.encode(editNode, forKey: CodingKeys.editNode.rawValue)
-        coder.encode(speechTrack, forKey: CodingKeys.speechTrack.rawValue)
+        coder.encode(subtitleTrack, forKey: CodingKeys.subtitleTrack.rawValue)
         coder.encodeEncodable(currentTime, forKey: CodingKeys.time.rawValue)
         coder.encodeEncodable(duration, forKey: CodingKeys.duration.rawValue)
     }
@@ -303,7 +303,9 @@ final class Cut: NSObject, NSCoding {
                           scale: 1, rotation: 0,
                           viewScale: 1, viewRotation: 0,
                           in: ctx)
-            speechTrack.speechItem.speech.draw(bounds: scene.frame, in: ctx)
+            if !scene.isHiddenSubtitles {
+                subtitleTrack.drawSubtitle.draw(bounds: scene.frame, in: ctx)
+            }
             ctx.restoreGState()
         } else {
             ctx.saveGState()
@@ -332,7 +334,7 @@ final class Cut: NSObject, NSCoding {
             let borderWidth = 2.0.cf
             drawBorderWith(bounds: bounds, width: borderWidth * 2, color: .warning, in: ctx)
             let textLine = TextFrame(string: "\(Int(scene.viewTransform.rotation * 180 / (.pi)))°",
-                                     font: .bold, color: .warning)
+                font: .bold, color: .warning)
             let sb = textLine.typographicBounds.insetBy(dx: -10, dy: -2).integral
             textLine.draw(in: CGRect(x: bounds.minX + (bounds.width - sb.width) / 2,
                                      y: bounds.minY + bounds.height - sb.height - borderWidth,
@@ -488,7 +490,7 @@ final class Cut: NSObject, NSCoding {
 extension Cut: Copying {
     func copied(from copier: Copier) -> Cut {
         return Cut(rootNode: copier.copied(rootNode), editNode: copier.copied(editNode),
-                   speechTrack: copier.copied(speechTrack),
+                   subtitleTrack: copier.copied(subtitleTrack),
                    currentTime: currentTime)
     }
 }
@@ -511,8 +513,8 @@ final class CutView: Layer, Respondable {
     }
     private(set) var animationViews: [AnimationView]
     
-    let speechAnimationView: AnimationView
-    var speechTextViews = [TextView]()
+    let subtitleAnimationView: AnimationView
+    var subtitleTextViews = [TextView]()
     
     func animationView(with nodeAndTrack: Cut.NodeAndTrack) -> AnimationView {
         let index = cut.nodeAndTrackIndex(with: nodeAndTrack)
@@ -563,16 +565,16 @@ final class CutView: Layer, Respondable {
         }
     }
     static func animationView(with track: Track, beginBaseTime: Beat,
-                                baseTimeInterval: Beat, isSmall: Bool) -> AnimationView {
+                              baseTimeInterval: Beat, isSmall: Bool) -> AnimationView {
         return AnimationView(track.animation,
-                               beginBaseTime: beginBaseTime,
-                               baseTimeInterval: baseTimeInterval,
-                               isSmall: isSmall)
+                             beginBaseTime: beginBaseTime,
+                             baseTimeInterval: baseTimeInterval,
+                             isSmall: isSmall)
     }
     func newAnimationView(with track: NodeTrack, node: Node, isSmall: Bool) -> AnimationView {
         let animationView = CutView.animationView(with: track, beginBaseTime: beginBaseTime,
-                                                        baseTimeInterval: baseTimeInterval,
-                                                        isSmall: isSmall)
+                                                  baseTimeInterval: baseTimeInterval,
+                                                  isSmall: isSmall)
         animationView.frame.size.width = frame.width
         bind(in: animationView, from: node, from: track)
         return animationView
@@ -581,8 +583,8 @@ final class CutView: Layer, Respondable {
         var animationViews = [AnimationView]()
         CutView.tracks(with: node) { (node, track, index) in
             let animationView = CutView.animationView(with: track, beginBaseTime: beginBaseTime,
-                                                            baseTimeInterval: baseTimeInterval,
-                                                            isSmall: false)
+                                                      baseTimeInterval: baseTimeInterval,
+                                                      isSmall: false)
             animationView.frame.size.width = frame.width
             bind(in: animationView, from: node, from: track)
             animationViews.append(animationView)
@@ -612,8 +614,8 @@ final class CutView: Layer, Respondable {
         CutView.tracks(with: cut) { (node, track, index) in
             let isEdit = node === editNode && track == editNode.editTrack
             let animationView = AnimationView(track.animation,
-                                                  baseTimeInterval: baseTimeInterval,
-                                                  isSmall: !isEdit)
+                                              baseTimeInterval: baseTimeInterval,
+                                              isSmall: !isEdit)
             animationViews.append(animationView)
             if isEdit {
                 editAnimationView = animationView
@@ -622,10 +624,10 @@ final class CutView: Layer, Respondable {
         self.animationViews = animationViews
         self.editAnimationView = editAnimationView
         
-        speechAnimationView = CutView.animationView(with: cut.speechTrack,
-                                                          beginBaseTime: beginBaseTime,
-                                                          baseTimeInterval: baseTimeInterval,
-                                                          isSmall: true)
+        subtitleAnimationView = CutView.animationView(with: cut.subtitleTrack,
+                                                    beginBaseTime: beginBaseTime,
+                                                    baseTimeInterval: baseTimeInterval,
+                                                    isSmall: true)
         
         super.init()
         clipView.replace(children: animationViews)
@@ -634,43 +636,68 @@ final class CutView: Layer, Respondable {
         updateLayout()
         updateWithDuration()
         
-        speechTextViews = cut.speechTrack.speechItem.keySpeechs.enumerated().map { (i, speech) in
+        let subtitleItem = cut.subtitleTrack.subtitleItem
+        subtitleTextViews = subtitleItem.keySubtitles.enumerated().map { (i, subtitle) in
             let textView = TextView()
             textView.isLocked = false
-            textView.string = speech.string
+            textView.string = subtitle.string
             textView.noIndicatedLineColor = .border
             textView.indicatedLineColor = .indicated
             textView.fillColor = nil
             textView.binding = {
-                cut.speechTrack.replace(Speech(string: $0.text), at: i)
+                cut.subtitleTrack.replace(Subtitle(string: $0.text, isConnectedWithPrevious: false),
+                                          at: i)
             }
             return textView
         }
-        speechAnimationView.setKeyframeHandler = { [unowned self] ab in
+        subtitleAnimationView.setKeyframeHandler = { [unowned self] ab in
             guard ab.type == .end else {
                 return
             }
             switch ab.setType {
             case .insert:
-                let speech = Speech()
+                let subtitle = Subtitle()
                 let textView = TextView()
                 textView.isLocked = false
                 textView.noIndicatedLineColor = .border
                 textView.indicatedLineColor = .indicated
                 textView.fillColor = nil
-                textView.string = speech.string
+                textView.string = subtitle.string
                 textView.binding = {
-                    cut.speechTrack.replace(Speech(string: $0.text), at: ab.index)
+                    cut.subtitleTrack.replace(Subtitle(string: $0.text,
+                                                       isConnectedWithPrevious: false),
+                                              at: ab.index)
                 }
-                cut.speechTrack.insert(ab.keyframe,
-                                       SpeechTrack.KeyframeValues(speech: speech), at: ab.index)
-                self.speechTextViews.insert(textView, at: ab.index)
+                cut.subtitleTrack.insert(ab.keyframe,
+                                         SubtitleTrack.KeyframeValues(subtitle: subtitle),
+                                         at: ab.index)
+                self.subtitleTextViews.insert(textView, at: ab.index)
+                self.subtitleKeyframeBinding?(SubtitleKeyframeBinding(cutView: self,
+                                                                      keyframe: ab.keyframe,
+                                                                      subtitle: subtitle,
+                                                                      index: ab.index,
+                                                                      setType: ab.setType,
+                                                                      animation: ab.animation,
+                                                                      oldAnimation: ab.oldAnimation,
+                                                                      type: ab.type))
             case .remove:
-                cut.speechTrack.removeKeyframe(at: ab.index)
-                self.speechTextViews.remove(at: ab.index)
+                let subtitle = cut.subtitleTrack.subtitleItem.keySubtitles[ab.index]
+                cut.subtitleTrack.removeKeyframe(at: ab.index)
+                self.subtitleTextViews.remove(at: ab.index)
+                self.subtitleKeyframeBinding?(SubtitleKeyframeBinding(cutView: self,
+                                                                      keyframe: ab.keyframe,
+                                                                      subtitle: subtitle,
+                                                                      index: ab.index,
+                                                                      setType: ab.setType,
+                                                                      animation: ab.animation,
+                                                                      oldAnimation: ab.oldAnimation,
+                                                                      type: ab.type))
             case .replace:
                 break
             }
+        }
+        subtitleAnimationView.slideHandler = {
+            cut.subtitleTrack.replace($0.animation.keyframes)
         }
         
         animationViews.enumerated().forEach { (i, animationView) in
@@ -678,6 +705,18 @@ final class CutView: Layer, Respondable {
             bind(in: animationView, from: nodeAndTrack.node, from: nodeAndTrack.track)
         }
     }
+    
+    struct SubtitleBinding {
+        let cutView: CutView
+        let subtitle: Subtitle, oldSubtitle: Subtitle, type: Action.SendType
+    }
+    var subtitleBinding: ((SubtitleBinding) -> ())?
+    struct SubtitleKeyframeBinding {
+        let cutView: CutView
+        let keyframe: Keyframe, subtitle: Subtitle, index: Int, setType: AnimationView.SetKeyframeType
+        let animation: Animation, oldAnimation: Animation, type: Action.SendType
+    }
+    var subtitleKeyframeBinding: ((SubtitleKeyframeBinding) -> ())?
     
     func bind(in animationView: AnimationView, from node: Node, from track: NodeTrack) {
         animationView.splitKeyframeLabelHandler = { (keyframe, _) in
@@ -764,7 +803,7 @@ final class CutView: Layer, Respondable {
     func updateWithDuration() {
         frame.size.width = x(withTime: cut.duration)
         animationViews.forEach { $0.frame.size.width = frame.width }
-        speechAnimationView.frame.size.width = frame.width
+        subtitleAnimationView.frame.size.width = frame.width
     }
     func updateIfChangedEditTrack() {
         editAnimationView.animation = cut.editNode.editTrack.animation

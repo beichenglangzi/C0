@@ -187,10 +187,9 @@ struct Bezier2: Equatable, Codable {
         intersections(other, &results, 0, 1, 0, 1, isFlipped: false)
         return results
     }
-    private func intersections(
-        _ other: Bezier2, _ results: inout [BezierIntersection],
-        _ min0: CGFloat, _ max0: CGFloat, _ min1: CGFloat, _ max1: CGFloat, isFlipped: Bool
-        ) {
+    private func intersections(_ other: Bezier2, _ results: inout [BezierIntersection],
+                               _ min0: CGFloat, _ max0: CGFloat, _ min1: CGFloat, _ max1: CGFloat,
+                               isFlipped: Bool) {
         let aabb0 = AABB(self), aabb1 = AABB(other)
         if !aabb0.intersects(aabb1) {
             return
