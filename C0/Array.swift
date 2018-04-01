@@ -355,13 +355,13 @@ final class ArrayView: Layer, Respondable {
     func delete(with event: KeyInputEvent) -> Bool {
         return deleteHandler?(self, event) ?? false
     }
-    var copyHandler: ((ArrayView, KeyInputEvent) -> (CopiedObject))?
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
+    var copyHandler: ((ArrayView, KeyInputEvent) -> (CopyManager))?
+    func copy(with event: KeyInputEvent) -> CopyManager? {
         return copyHandler?(self, event)
     }
-    var pasteHandler: ((ArrayView, CopiedObject, KeyInputEvent) -> (Bool))?
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        return pasteHandler?(self, copiedObject, event) ?? false
+    var pasteHandler: ((ArrayView, CopyManager, KeyInputEvent) -> (Bool))?
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        return pasteHandler?(self, copyManager, event) ?? false
     }
     var newHandler: ((ArrayView, KeyInputEvent) -> (Bool))?
     func new(with event: KeyInputEvent) -> Bool {

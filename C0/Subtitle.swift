@@ -333,8 +333,14 @@ extension Subtitle: Referenceable {
     static let name = Localization(english: "Subtitle", japanese: "字幕")
 }
 
-final class SubtitleView: Layer, Respondable {
+final class SubtitleView: Layer, Respondable, Localizable {
     static let name = Localization(english: "Subtitle View", japanese: "字幕表示")
+    
+    var locale = Locale.current {
+        didSet {
+            updateLayout()
+        }
+    }
     
     var subtitle = Subtitle() {
         didSet {
@@ -342,9 +348,11 @@ final class SubtitleView: Layer, Respondable {
         }
     }
     
+    var isSmall: Bool
     private let nameLabel: Label
     private let isConnectedWithPreviousView: EnumView
     init(isSmall: Bool = false) {
+        self.isSmall = isSmall
         nameLabel = Label(text: Subtitle.name, font: isSmall ? .smallBold : .bold)
         isConnectedWithPreviousView = EnumView(names: [
             Localization(english: "No Connected With Previous", japanese: "前と結合なし"),
@@ -364,11 +372,13 @@ final class SubtitleView: Layer, Respondable {
         }
     }
     private func updateLayout() {
-        let padding = Layout.basicPadding
-        nameLabel.frame.origin = CGPoint(x: padding, y: padding * 2)
+        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
+        nameLabel.frame.origin = CGPoint(x: padding,
+                                         y: bounds.height - nameLabel.frame.height - padding)
+        let icpw = bounds.width - nameLabel.frame.width - padding * 3
+        let icph = isSmall ? Layout.smallHeight : Layout.basicHeight
         isConnectedWithPreviousView.frame = CGRect(x: nameLabel.frame.maxX + padding, y: padding,
-                                                   width: bounds.width - nameLabel.frame.width - padding * 3,
-                                                   height: Layout.basicHeight)
+                                                   width: icpw, height: icph)
     }
     func updateWithSubtitle() {
         isConnectedWithPreviousView.selectedIndex = subtitle.isConnectedWithPrevious ? 1 : 0
@@ -397,7 +407,7 @@ final class SubtitleView: Layer, Respondable {
                               type: binding.type))
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [subtitle])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [subtitle])
     }
 }

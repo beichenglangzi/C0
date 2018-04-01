@@ -217,11 +217,11 @@ final class KeyframeView: Layer, Respondable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [keyframe])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [keyframe])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let keyframe = object as? Keyframe {
                 guard keyframe.equalOption(other: self.keyframe) else {
                     continue

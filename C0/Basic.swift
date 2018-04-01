@@ -20,10 +20,10 @@
 import Foundation
 
 struct Layout {
-    static let smallPadding = 1.0.cf, basicPadding = 3.0.cf, basicLargePadding = 14.0.cf
+    static let smallPadding = 2.0.cf, basicPadding = 3.0.cf, basicLargePadding = 14.0.cf
     static let basicHeight = Font.default.ceilHeight(withPadding: 1) + basicPadding * 2
     static let smallHeight = Font.small.ceilHeight(withPadding: 1) + smallPadding * 2
-    static let valueWidth = 58.cf
+    static let valueWidth = 56.cf
     static let valueFrame = CGRect(x: 0, y: basicPadding, width: valueWidth, height: basicHeight)
     
     static func centered(_ layers: [Layer],
@@ -41,7 +41,6 @@ struct Layout {
     }
     static func leftAlignment(_ responders: [Layer], minX: CGFloat = basicPadding,
                               y: CGFloat = 0, height: CGFloat, paddingWidth: CGFloat = 0) -> CGSize {
-        
         let width = responders.reduce(minX) { x, layer in
             layer.frame.origin = CGPoint(x: x, y: y + round((height - layer.frame.height) / 2))
             return x + layer.frame.width + paddingWidth
@@ -133,7 +132,8 @@ extension URL: Referenceable {
 }
 extension URL: ResponderExpression {
     func responder(withBounds bounds: CGRect) -> Responder {
-        return lastPathComponent.responder(withBounds: bounds)
+        let thumbnailView = lastPathComponent.responder(withBounds: bounds)
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
     }
 }
 
@@ -186,179 +186,51 @@ final class Weak<T: AnyObject> {
     }
 }
 
-protocol Copying: class {
-    var copied: Self { get }
-    func copied(from copier: Copier) -> Self
-}
-extension Copying {
-    var copied: Self {
-        return Copier().copied(self)
-    }
-    func copied(from copier: Copier) -> Self {
-        return self
-    }
-}
-final class Copier {
-    var userInfo = [String: Any]()
-    func copied<T: Copying>(_ object: T) -> T {
-        let key = String(describing: T.self)
-        let oim: ObjectIdentifierManager<T>
-        if let o = userInfo[key] as? ObjectIdentifierManager<T> {
-            oim = o
-        } else {
-            oim = ObjectIdentifierManager<T>()
-            userInfo[key] = oim
-        }
-        let objectID = ObjectIdentifier(object)
-        if let copiedObject = oim.objects[objectID] {
-            return copiedObject
-        } else {
-            let copiedObject = object.copied(from: self)
-            oim.objects[objectID] = copiedObject
-            return copiedObject
-        }
-    }
-}
-private final class ObjectIdentifierManager<T> {
-    var objects = [ObjectIdentifier: T]()
-}
-
-protocol Copiable {
-    var copied: Self { get }
-}
-struct CopiedObject {
-    var objects: [Any]
-    init(objects: [Any] = []) {
-        self.objects = objects
-    }
-}
 final class ObjectView: Layer, Respondable, Localizable {
     static let name = Localization(english: "Object View", japanese: "オブジェクト表示")
     
     var locale = Locale.current {
         didSet {
-            updateFrameWith(origin: frame.origin,
-                            thumbnailWidth: thumbnailWidth, height: frame.height)
+            updateLayout()
         }
     }
     
     let object: Any
     
-    static let thumbnailWidth = 40.0.cf
-    let thumbnailView: Layer, label: Label, thumbnailWidth: CGFloat
-    init(object: Any, origin: CGPoint,
-         thumbnailWidth: CGFloat = ObjectView.thumbnailWidth, height: CGFloat) {
-        
+    let nameLabel: Label, thumbnailView: Layer
+    init(object: Any, thumbnailView: Layer?, minFrame: CGRect, thumbnailWidth: CGFloat = 40.0) {
         self.object = object
         if let reference = object as? Referenceable {
-            self.label = Label(text: type(of: reference).name, font: .bold)
+            nameLabel = Label(text: type(of: reference).name, font: .bold)
         } else {
-            self.label = Label(text: Localization(String(describing: type(of: object))), font: .bold)
+            nameLabel = Label(text: Localization(String(describing: type(of: object))), font: .bold)
         }
-        self.thumbnailWidth = thumbnailWidth
-        let thumbnailBounds = CGRect(x: 0, y: 0, width: thumbnailWidth, height: 0)
-        self.thumbnailView = (object as? ResponderExpression)?
-            .responder(withBounds: thumbnailBounds) ?? Box()
+        self.thumbnailView = thumbnailView ?? Box()
         
         super.init()
+        let width = max(minFrame.width, nameLabel.frame.width + thumbnailWidth)
+        self.frame = CGRect(origin: minFrame.origin,
+                            size: CGSize(width: width, height: minFrame.height))
         instanceDescription = (object as? Referenceable)?.valueDescription ?? Localization()
-        replace(children: [label, thumbnailView])
-        updateFrameWith(origin: origin, thumbnailWidth: thumbnailWidth, height: height)
+        replace(children: [nameLabel, self.thumbnailView])
+        updateLayout()
     }
-    func updateFrameWith(origin: CGPoint, thumbnailWidth: CGFloat, height: CGFloat) {
-        let thumbnailHeight = height - Layout.basicPadding * 2
-        let thumbnailSize = CGSize(width: thumbnailWidth, height: thumbnailHeight)
-        let width = label.frame.width + thumbnailSize.width + Layout.basicPadding * 3
-        frame = CGRect(x: origin.x, y: origin.y, width: width, height: height)
-        label.frame.origin = CGPoint(x: Layout.basicPadding, y: Layout.basicPadding)
-        self.thumbnailView.frame = CGRect(x: label.frame.maxX + Layout.basicPadding,
-                                            y: Layout.basicPadding,
-                                            width: thumbnailSize.width,
-                                            height: thumbnailSize.height)
-    }
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [object])
-    }
-}
-final class CopiedObjectView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Copy Manager View", japanese: "コピー管理表示")
-    
-    var locale = Locale.current {
+    override var bounds: CGRect {
         didSet {
-            noneLabel.locale = locale
-            updateChildren()
+            updateLayout()
         }
     }
-    
-    var rootUndoManager = UndoManager()
-    override var undoManager: UndoManager? {
-        return rootUndoManager
-    }
-    
-    var changeCount = 0
-    
-    var objectViews = [ObjectView]() {
-        didSet {
-            let padding = Layout.basicPadding
-            nameLabel.frame.origin = CGPoint(x: padding, y: padding * 2)
-            if objectViews.isEmpty {
-                replace(children: [nameLabel, versionView, versionCommaLabel, noneLabel])
-                let cs = [versionView, Padding(), versionCommaLabel, noneLabel]
-                _ = Layout.leftAlignment(cs, minX: nameLabel.frame.maxX + padding,
-                                         height: frame.height)
-            } else {
-                replace(children: [nameLabel, versionView, versionCommaLabel] + objectViews)
-                let cs = [versionView, Padding(), versionCommaLabel] + objectViews as [Layer]
-                _ = Layout.leftAlignment(cs, minX: nameLabel.frame.maxX + padding,
-                                         height: frame.height)
-            }
-        }
-    }
-    let nameLabel = Label(text: Localization(english: "Copy Manager", japanese: "コピー管理"),
-                          font: .bold)
-    let versionView = VersionView()
-    let versionCommaLabel = Label(text: Localization(english: "Copied:", japanese: "コピー済み:"))
-    let noneLabel = Label(text: Localization(english: "Empty", japanese: "空"))
-    override init() {
-        versionView.frame = CGRect(x: 0, y: 0, width: 120, height: Layout.basicHeight)
-        versionView.rootUndoManager = rootUndoManager
-        super.init()
-        isClipped = true
-        replace(children: [nameLabel, versionView, versionCommaLabel, noneLabel])
-    }
-    var copiedObject = CopiedObject() {
-        didSet {
-            changeCount += 1
-            updateChildren()
-        }
-    }
-    func updateChildren() {
+    func updateLayout() {
         let padding = Layout.basicPadding
-        var origin = CGPoint(x: padding, y: padding)
-        objectViews = copiedObject.objects.map { object in
-            let objectView = ObjectView(object: object, origin: origin,
-                                            height: frame.height - padding * 2)
-            origin.x += objectView.frame.width + padding
-            return objectView
-        }
+        nameLabel.frame.origin = CGPoint(x: padding,
+                                         y: bounds.height - nameLabel.frame.height - padding)
+        thumbnailView.frame = CGRect(x: nameLabel.frame.maxX + padding,
+                                     y: padding,
+                                     width: bounds.width - nameLabel.frame.width - padding * 3,
+                                     height: bounds.height - padding * 2)
     }
-    
-    func delete(with event: KeyInputEvent) -> Bool {
-        guard !copiedObject.objects.isEmpty else {
-            return false
-        }
-        setCopiedObject(CopiedObject(), oldCopiedObject: copiedObject)
-        return true
-    }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        setCopiedObject(copiedObject, oldCopiedObject: self.copiedObject)
-        return true
-    }
-    private func setCopiedObject(_ copiedObject: CopiedObject, oldCopiedObject: CopiedObject) {
-        undoManager?.registerUndo(withTarget: self) {
-            $0.setCopiedObject(oldCopiedObject, oldCopiedObject: copiedObject)
-        }
-        self.copiedObject = copiedObject
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [object])
     }
 }
 
@@ -418,11 +290,11 @@ final class DiscreteSizeView: Layer, Respondable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [size])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [size])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let size = object as? CGSize {
                 guard size != self.size else {
                     continue
@@ -523,11 +395,11 @@ final class PointView: Layer, Respondable {
     
     var disabledRegisterUndo = false
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [point])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [point])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let point = object as? CGPoint {
                 guard point != self.point else {
                     continue

@@ -61,8 +61,8 @@ extension Undoable {
 }
 
 protocol Editable {
-    func copy(with event: KeyInputEvent) -> CopiedObject?
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool
+    func copy(with event: KeyInputEvent) -> CopyManager?
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool
     func delete(with event: KeyInputEvent) -> Bool
     func new(with event: KeyInputEvent) -> Bool
     func moveCursor(with event: MoveEvent) -> Bool
@@ -72,10 +72,10 @@ protocol Editable {
     func lookUp(with event: TapEvent) -> Referenceable?
 }
 extension Editable {
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
+    func copy(with event: KeyInputEvent) -> CopyManager? {
         return nil
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
         return false
     }
     func delete(with event: KeyInputEvent) -> Bool {

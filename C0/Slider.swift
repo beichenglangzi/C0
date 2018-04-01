@@ -76,13 +76,13 @@ final class Slider: Layer, Respondable, Slidable {
             update()
         }
     }
-    var padding = 8.0.cf {
+    var padding: CGFloat {
         didSet {
             update()
         }
     }
     
-    let knob = Knob()
+    let knob: Knob
     var backgroundLayers = [Layer]() {
         didSet {
             replace(children: backgroundLayers + [knob])
@@ -94,7 +94,7 @@ final class Slider: Layer, Respondable, Slidable {
          min: CGFloat = 0, max: CGFloat = 1,
          isInverted: Bool = false, isVertical: Bool = false,
          exp: CGFloat = 1, valueInterval: CGFloat = 0,
-         description: Localization = Localization()) {
+         description: Localization = Localization(), isSmall: Bool = false) {
         
         self.value = value.clip(min: min, max: max)
         self.defaultValue = defaultValue
@@ -104,6 +104,8 @@ final class Slider: Layer, Respondable, Slidable {
         self.isVertical = isVertical
         self.exp = exp
         self.valueInterval = valueInterval
+        padding = isSmall ? 6.0.cf : 8.0.cf
+        knob = isSmall ? Knob(radius: 4) : Knob()
         
         super.init()
         instanceDescription = description
@@ -181,11 +183,11 @@ final class Slider: Layer, Respondable, Slidable {
         set(value, oldValue: self.value)
         return true
     }
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [String(value.d)])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [String(value.d)])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let string = object as? String {
                 if let value = Double(string)?.cf {
                     guard value != self.value else {
@@ -277,7 +279,7 @@ final class NumberSlider: Layer, Respondable, Slidable {
     
     private var knobLineFrame = CGRect()
     private let labelPaddingX = Layout.basicPadding, knobY = 3.5.cf
-    private var valueX = 2.0.cf
+    private var valueX = 1.0.cf
     
     private let knob = DiscreteKnob(CGSize(square: 6), lineWidth: 1)
     private let lineLayer: Layer = {
@@ -382,14 +384,14 @@ final class NumberSlider: Layer, Respondable, Slidable {
         set(value, oldValue: self.value)
         return true
     }
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [String(value.d)])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [String(value.d)])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
         guard !isLocked else {
             return false
         }
-        for object in copiedObject.objects {
+        for object in copyManager.copiedObjects {
             if let string = object as? String {
                 if let v = Double(string)?.cf {
                     let value = v.clip(min: minValue, max: maxValue)

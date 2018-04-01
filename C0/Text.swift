@@ -42,10 +42,7 @@ extension String: Referenceable {
 }
 extension String: ResponderExpression {
     func responder(withBounds bounds: CGRect) -> Responder {
-        let label = Label(frame: bounds, text: Localization(self), font: .small, isSizeToFit: false)
-        label.noIndicatedLineColor = .border
-        label.indicatedLineColor = .indicated
-        return label
+        return Label(frame: bounds, text: Localization(self), font: .small, isSizeToFit: false)
     }
 }
 
@@ -162,7 +159,7 @@ final class TextView: DrawLayer, Respondable, Localizable {
             self.frame = frame
         }
         bounds = CGRect(origin: CGPoint(x: -padding, y: -padding), size: self.frame.size)
-        noIndicatedLineColor = nil
+        noIndicatedLineColor = Color(white: 0.85)
         indicatedLineColor = .noBorderIndicated
     }
     
@@ -256,17 +253,17 @@ final class TextView: DrawLayer, Respondable, Localizable {
         return true
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
+    func copy(with event: KeyInputEvent) -> CopyManager? {
         guard let backingStore = backingStore.copy() as? NSAttributedString else {
             return nil
         }
-        return CopiedObject(objects: [backingStore.string])
+        return CopyManager(copiedObjects: [backingStore.string])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
         guard !isLocked else {
             return false
         }
-        for object in copiedObject.objects {
+        for object in copyManager.copiedObjects {
             if let string = object as? String {
                 let oldText = string
                 binding?(Binding(view: self, text: oldText, oldText: oldText, type: .begin))

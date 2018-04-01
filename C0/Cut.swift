@@ -136,7 +136,7 @@ final class CutTrack: NSObject, Track, NSCoding {
             return 0
         }
         for i in 1 ..< cutItem.keyCuts.count {
-            if time <= cutItem.keyCuts[i].currentTime {
+            if time <= animation.keyframes[i].time {
                 return i - 1
             }
         }
@@ -242,15 +242,14 @@ final class Cut: NSObject, NSCoding {
     }
     
     init(rootNode: Node = Node(tracks: [NodeTrack(animation: Animation(duration: 0))]),
-         editNode: Node = Node(name: Localization(english: "Node 0",
-                                                  japanese: "ノード0").currentString),
+         editNode: Node = Node(name: "0"),
          subtitleTrack: SubtitleTrack = SubtitleTrack(),
          currentTime: Beat = 0) {
         
-        editNode.editTrack.name = Localization(english: "Track 0", japanese: "トラック0").currentString
+        editNode.editTrack.name = "0"
         if rootNode.children.isEmpty {
-            let node = Node(name: Localization(english: "Root", japanese: "ルート").currentString)
-            node.editTrack.name = Localization(english: "Track 0", japanese: "トラック0").currentString
+            let node = Node(name: "0")
+            node.editTrack.name = "0"
             node.children.append(editNode)
             rootNode.children.append(node)
         }
@@ -729,7 +728,7 @@ final class CutView: Layer, Respondable {
             track.transformItem != nil ? .camera : .content
         }
         animationView.knobColorHandler = {
-            track.drawingItem.keyDrawings[$0].roughLines.isEmpty ? .knob : .timelineRough
+            track.drawingItem.keyDrawings[$0].draftLines.isEmpty ? .knob : .timelineDraft
         }
     }
     
@@ -915,13 +914,13 @@ final class CutView: Layer, Respondable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [cut.copied])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [cut.copied])
     }
     
-    var pasteHandler: ((CutView, CopiedObject) -> (Bool))?
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        return pasteHandler?(self, copiedObject) ?? false
+    var pasteHandler: ((CutView, CopyManager) -> (Bool))?
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        return pasteHandler?(self, copyManager) ?? false
     }
     
     var deleteHandler: ((CutView) -> (Bool))?

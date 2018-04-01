@@ -34,7 +34,7 @@ final class Human: Layer, Respondable, Localizable {
         }
     }
     
-    static let effectiveFieldOfView = tan(.pi * (30.0 / 2.0) / 180.0) / tan(.pi * (20.0 / 2.0) / 180.0)
+    static let effectiveFieldOfView = tan(.pi * (30.0 / 2) / 180) / tan(.pi * (20.0 / 2) / 180)
     static let basicEffectiveFieldOfView = Q(152, 100)
     
     struct Preference: Codable {
@@ -75,7 +75,7 @@ final class Human: Layer, Respondable, Localizable {
     }
     
     let vision = Vision()
-    let copiedObjectView = CopiedObjectView(), actionManagerView = ActionManagerView()
+    let copyManagerView = CopyManagerView(), actionManagerView = ActionManagerView()
     let world = Box()
     var editTextView: TextView? {
         if let editTextView = indicatedResponder as? TextView {
@@ -112,7 +112,7 @@ final class Human: Layer, Respondable, Localizable {
         }
         world.isClipped = true
         world.replace(children: [sceneView])
-        vision.replace(children: [copiedObjectView, actionManagerView, world])
+        vision.replace(children: [copyManagerView, actionManagerView, world])
         indicatedResponder = vision
         
         super.init()
@@ -135,7 +135,7 @@ final class Human: Layer, Respondable, Localizable {
                                          y: preferenceY,
                                          width: actionWidth,
                                          height: actionManagerView.frame.height)
-        copiedObjectView.frame = CGRect(x: padding + actionWidth,
+        copyManagerView.frame = CGRect(x: padding + actionWidth,
                                         y: fieldOfVision.height - copyViewHeight - padding,
                                         width: fieldOfVision.width - actionWidth - padding * 2,
                                         height: copyViewHeight)
@@ -172,31 +172,30 @@ final class Human: Layer, Respondable, Localizable {
     var setEditTextView: (((human: Human, textView: TextView?, oldValue: TextView?)) -> ())?
     var indicatedResponder: Respondable {
         didSet {
-            if indicatedResponder !== oldValue {
-                var allParents = [Layer]()
-                if let indicatedLayer = indicatedResponder as? Layer {
-                    indicatedLayer.allSubIndicatedParentsAndSelf { allParents.append($0) }
-                }
-                if let oldIndicatedLayer = oldValue as? Layer {
-                    oldIndicatedLayer.allSubIndicatedParentsAndSelf { responder in
-                        if let index = allParents.index(where: { $0 === responder }) {
-                            allParents.remove(at: index)
-                        } else {
-                            responder.isSubIndicated = false
-                        }
+            guard indicatedResponder !== oldValue else {
+                return
+            }
+            var allParents = [Layer]()
+            if let indicatedLayer = indicatedResponder as? Layer {
+                indicatedLayer.allSubIndicatedParentsAndSelf { allParents.append($0) }
+            }
+            if let oldIndicatedLayer = oldValue as? Layer {
+                oldIndicatedLayer.allSubIndicatedParentsAndSelf { responder in
+                    if let index = allParents.index(where: { $0 === responder }) {
+                        allParents.remove(at: index)
+                    } else {
+                        responder.isSubIndicated = false
                     }
                 }
-                allParents.forEach { $0.isSubIndicated = true }
-                oldValue.isIndicated = false
-                indicatedResponder.isIndicated = true
-                if indicatedResponder is TextView || oldValue is TextView {
-                    if let editTextView = oldValue as? TextView {
-                        editTextView.unmarkText()
-                    }
-                    setEditTextView?((self,
-                                      indicatedResponder as? TextView,
-                                      oldValue as? TextView))
+            }
+            allParents.forEach { $0.isSubIndicated = true }
+            oldValue.isIndicated = false
+            indicatedResponder.isIndicated = true
+            if indicatedResponder is TextView || oldValue is TextView {
+                if let editTextView = oldValue as? TextView {
+                    editTextView.unmarkText()
                 }
+                setEditTextView?((self, indicatedResponder as? TextView, oldValue as? TextView))
             }
         }
     }
@@ -219,11 +218,9 @@ final class Human: Layer, Respondable, Localizable {
                    handler: (Respondable) -> (Bool) = { _ in true }) -> Respondable {
         var responder: Respondable?
         beginLayer.allParentsAndSelf { (layer, stop) in
-            if let r = layer as? Respondable {
-                if handler(r) {
-                    responder = r
-                    stop = true
-                }
+            if let r = layer as? Respondable, handler(r) {
+                responder = r
+                stop = true
             }
         }
         return responder ?? vision
@@ -393,11 +390,11 @@ final class Human: Layer, Respondable, Localizable {
         setIndicatedResponder(at: event.location)
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return copiedObjectView.copiedObject
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return copyManagerView.copyManager
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        return copiedObjectView.paste(copiedObject, with: event)
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        return copyManagerView.paste(copyManager, with: event)
     }
 }
 

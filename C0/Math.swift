@@ -222,7 +222,8 @@ extension RationalNumber: Referenceable {
 }
 extension RationalNumber: ResponderExpression {
     func responder(withBounds bounds: CGRect) -> Responder {
-        return description.responder(withBounds: bounds)
+        let thumbnailView = description.responder(withBounds: bounds)
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
     }
 }
 extension RationalNumber: CustomStringConvertible {

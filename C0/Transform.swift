@@ -187,14 +187,21 @@ final class TransformView: Layer, Respondable, Localizable {
         thetaSlider.binding = { [unowned self] in self.setTransform(with: $0) }
     }
     
+    var isHorizontal = false
     override var defaultBounds: CGRect {
-        let children = [nameLabel, Padding(),
-                        xLabel, xSlider, Padding(), yLabel, ySlider, Padding(),
-                        zLabel, zSlider, Padding(), thetaLabel, thetaSlider]
-        return CGRect(x: 0,
-                      y: 0,
-                      width: Layout.leftAlignmentWidth(children) + Layout.basicPadding,
-                      height: Layout.basicHeight)
+        if isHorizontal {
+            let children = [nameLabel, Padding(),
+                            xLabel, xSlider, Padding(), yLabel, ySlider, Padding(),
+                            zLabel, zSlider, Padding(), thetaLabel, thetaSlider]
+            return CGRect(x: 0,
+                          y: 0,
+                          width: Layout.leftAlignmentWidth(children) + Layout.basicPadding,
+                          height: Layout.basicHeight)
+        } else {
+            let w = MaterialView.defaultWidth + Layout.basicPadding * 2
+            let h = Layout.basicHeight * 2 + nameLabel.frame.height + Layout.basicPadding * 3
+            return CGRect(x: 0, y: 0, width: w, height: h)
+        }
     }
     override var bounds: CGRect {
         didSet {
@@ -202,10 +209,28 @@ final class TransformView: Layer, Respondable, Localizable {
         }
     }
     func updateLayout() {
-        let children = [nameLabel, Padding(),
-                        xLabel, xSlider, Padding(), yLabel, ySlider, Padding(),
-                        zLabel, zSlider, Padding(), thetaLabel, thetaSlider]
-        _ = Layout.leftAlignment(children, height: frame.height)
+        if isHorizontal {
+            let children = [nameLabel, Padding(),
+                            xLabel, xSlider, Padding(), yLabel, ySlider, Padding(),
+                            zLabel, zSlider, Padding(), thetaLabel, thetaSlider]
+            _ = Layout.leftAlignment(children, height: frame.height)
+        } else {
+            var y = bounds.height - Layout.basicPadding - nameLabel.frame.height
+            nameLabel.frame.origin = CGPoint(x: Layout.basicPadding, y: y)
+            y -= Layout.basicHeight + Layout.basicPadding
+            _ = Layout.leftAlignment([xLabel, xSlider, Padding(), yLabel, ySlider],
+                                     y: y, height: Layout.basicHeight)
+            y -= Layout.basicHeight
+            _ = Layout.leftAlignment([zLabel, zSlider, Padding(), thetaLabel, thetaSlider],
+                                     y: y, height: Layout.basicHeight)
+            if ySlider.frame.maxX < thetaSlider.frame.maxX {
+                ySlider.frame.origin.x = thetaSlider.frame.minX
+                yLabel.frame.origin.x = ySlider.frame.minX - yLabel.frame.width
+            } else {
+                thetaSlider.frame.origin.x = ySlider.frame.minX
+                thetaLabel.frame.origin.x = thetaSlider.frame.minX - thetaLabel.frame.width
+            }
+        }
     }
     private func updateWithTransform() {
         xSlider.value = transform.translation.x / standardTranslation.x
@@ -259,14 +284,14 @@ final class TransformView: Layer, Respondable, Localizable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [transform])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [transform])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
         guard !isLocked else {
             return false
         }
-        for object in copiedObject.objects {
+        for object in copyManager.copiedObjects {
             if let transform = object as? Transform {
                 guard transform != self.transform else {
                     continue
@@ -375,15 +400,16 @@ final class WiggleView: Layer, Respondable, Localizable {
     
     private let nameLabel = Label(text: Wiggle.name, font: .bold)
     private let xLabel = Label(text: Localization("x:"))
-    private let yLabel = Label(text: Localization("y:"))
     private let xSlider = NumberSlider(frame: Layout.valueFrame,
                                        min: 0, max: 1000, valueInterval: 0.01,
                                        description: Localization(english: "Amplitude x",
                                                                  japanese: "振幅 x"))
+    private let yLabel = Label(text: Localization("y:"))
     private let ySlider = NumberSlider(frame: Layout.valueFrame,
                                        min: 0, max: 1000, valueInterval: 0.01,
                                        description: Localization(english: "Amplitude y",
                                                                  japanese: "振幅 y"))
+    private let frequencyLabel = Label(text: Localization("ƒ:"))
     private let frequencySlider = NumberSlider(frame: Layout.valueFrame,
                                                min: 0.1, max: 100000, valueInterval: 0.1, unit: " rpb",
                                                description: Localization(english: "Frequency",
@@ -393,7 +419,8 @@ final class WiggleView: Layer, Respondable, Localizable {
         frequencySlider.value = wiggle.frequency
         
         super.init()
-        replace(children: [nameLabel, xLabel, xSlider, yLabel, ySlider, frequencySlider])
+        replace(children: [nameLabel, xLabel, xSlider, yLabel, ySlider,
+                           frequencyLabel, frequencySlider])
         
         xSlider.binding = { [unowned self] in self.setWiggle(with: $0) }
         ySlider.binding = { [unowned self] in self.setWiggle(with: $0) }
@@ -408,13 +435,20 @@ final class WiggleView: Layer, Respondable, Localizable {
         }
     }
     
+    var isHorizontal = false
     override var defaultBounds: CGRect {
-        let children = [nameLabel, Padding(), xLabel, xSlider, Padding(),
-                        yLabel, ySlider, frequencySlider]
-        return CGRect(x: 0,
-                      y: 0,
-                      width: Layout.leftAlignmentWidth(children) + Layout.basicPadding,
-                      height: Layout.basicHeight)
+        if isHorizontal {
+            let children = [nameLabel, Padding(), xLabel, xSlider, Padding(),
+                            yLabel, ySlider, frequencyLabel, frequencySlider]
+            return CGRect(x: 0,
+                          y: 0,
+                          width: Layout.leftAlignmentWidth(children) + Layout.basicPadding,
+                          height: Layout.basicHeight)
+        } else {
+            let w = MaterialView.defaultWidth + Layout.basicPadding * 2
+            let h = Layout.basicHeight * 2 + Layout.basicPadding * 2
+            return CGRect(x: 0, y: 0, width: w, height: h)
+        }
     }
     override var bounds: CGRect {
         didSet {
@@ -422,9 +456,25 @@ final class WiggleView: Layer, Respondable, Localizable {
         }
     }
     private func updateLayout() {
-        let children = [nameLabel, Padding(), xLabel, xSlider, Padding(),
-                        yLabel, ySlider, frequencySlider]
-        _ = Layout.leftAlignment(children, height: frame.height)
+        if isHorizontal {
+            let children = [nameLabel, Padding(), xLabel, xSlider, Padding(),
+                            yLabel, ySlider, frequencySlider]
+            _ = Layout.leftAlignment(children, height: frame.height)
+        } else {
+            var y = bounds.height - Layout.basicPadding - nameLabel.frame.height
+            nameLabel.frame.origin = CGPoint(x: Layout.basicPadding, y: y)
+            y = bounds.height - Layout.basicPadding - Layout.basicHeight
+            _ = Layout.leftAlignment([frequencyLabel, frequencySlider],
+                                     y: y, height: Layout.basicHeight)
+            y -= Layout.basicHeight
+            _ = Layout.leftAlignment([xLabel, xSlider, Padding(), yLabel, ySlider],
+                                     y: y, height: Layout.basicHeight)
+            if ySlider.frame.maxX < bounds.width - Layout.basicPadding {
+                ySlider.frame.origin.x = bounds.width - Layout.basicPadding - ySlider.frame.width
+            }
+            frequencySlider.frame.origin.x = ySlider.frame.minX
+            frequencyLabel.frame.origin.x = frequencySlider.frame.minX - frequencyLabel.frame.width
+        }
     }
     private func updateWithWiggle() {
         xSlider.value = 10 * wiggle.amplitude.x / standardAmplitude.x
@@ -466,14 +516,14 @@ final class WiggleView: Layer, Respondable, Localizable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [wiggle])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [wiggle])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) {
         guard !isLocked else {
             return
         }
-        for object in copiedObject.objects {
+        for object in copyManager.copiedObjects {
             if let wiggle = object as? Wiggle {
                 guard wiggle != self.wiggle else {
                     continue

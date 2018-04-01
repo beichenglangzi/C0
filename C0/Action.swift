@@ -161,9 +161,9 @@ extension Action: Equatable {
 struct ActionManager {
     var actions: [Action] = {
         let cutHandler: (Respondable, Respondable, KeyInputEvent) -> (Bool) = {
-            let copiedObject = $1.copy(with: $2)
-            if let copiedObject = copiedObject, $1.delete(with: $2) {
-                return $0.paste(copiedObject, with: $2)
+            let copyManager = $1.copy(with: $2)
+            if let copyManager = copyManager, $1.delete(with: $2) {
+                return $0.paste(copyManager, with: $2)
             } else {
                 return false
             }
@@ -234,9 +234,7 @@ struct ActionManager {
                        quasimode: [.option, .control], editQuasimode: .moveZ,
                        drag: { $1.moveZ(with: $2) }),
                 Action(),
-                Action(name: Localization(english: "Stroke", japanese: "ストローク"),
-//                       editQuasimode: .stroke,
-//                       gesture: .penDrag,
+                Action(name: Localization(english: "Stroke", japanese: "ストローク (キャンバスのみ)"),
                        drag: { $1.stroke(with: $2) }),
                 Action(name: Localization(english: "Lasso Erase", japanese: "囲み消し"),
                        quasimode: [.shift], editQuasimode: .lassoErase,
@@ -360,27 +358,29 @@ final class ActionManagerView: Layer, Respondable, Localizable {
     func updateChildren() {
         let padding = Layout.basicPadding
         if isHiddenActions {
+            let h = Layout.basicHeight + padding * 2
             actionItems = []
-            nameLabel.frame.origin = CGPoint(x: padding, y: padding * 2)
+            nameLabel.frame.origin = CGPoint(x: padding, y: h - padding - nameLabel.frame.height)
             isHiddenView.frame = CGRect(x: nameLabel.frame.width + padding * 2,
                                         y: padding,
-                                        width: 80.0,
+                                        width: actionWidth - nameLabel.frame.width - padding * 3,
                                         height: Layout.basicHeight)
             replace(children: [nameLabel, isHiddenView])
-            frame.size = CGSize(width: actionWidth, height: Layout.basicHeight + padding * 2)
+            frame.size = CGSize(width: actionWidth, height: h)
         } else {
             let aaf = ActionManagerView.actionItemsAndFrameWith(actionManager: actionManager,
                                                                 actionWidth: actionWidth - padding * 2,
                                                                 minY: padding)
+            let h = aaf.size.height + Layout.basicHeight + padding * 3
             self.actionItems = aaf.actionItems
             nameLabel.frame.origin = CGPoint(x: padding,
-                                             y: aaf.size.height + padding * 3)
+                                             y: h - padding - nameLabel.frame.height)
             isHiddenView.frame = CGRect(x: nameLabel.frame.width + padding * 2,
                                         y: aaf.size.height + padding * 2,
-                                        width: 80.0, height: Layout.basicHeight)
+                                        width: actionWidth - nameLabel.frame.width - padding * 3,
+                                        height: Layout.basicHeight)
             replace(children: [nameLabel, isHiddenView] + actionItems)
-            frame.size = CGSize(width: actionWidth,
-                                height: aaf.size.height + Layout.basicHeight + padding * 3)
+            frame.size = CGSize(width: actionWidth, height: h)
         }
     }
     

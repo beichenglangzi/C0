@@ -28,8 +28,8 @@ import Foundation
  */
 final class Timeline: Layer, Respondable, Localizable {
     static let name = Localization(english: "Timeline", japanese: "タイムライン")
-    static let feature = Localization(english: "Select time: Left and right scroll\nSelect animation: Up and down scroll",
-                                      japanese: "時間選択: 左右スクロール\nグループ選択: 上下スクロール")
+    static let feature = Localization(english: "Select time: Left and right scroll\nSelect track: Up and down scroll",
+                                      japanese: "時間選択: 左右スクロール\nトラック選択: 上下スクロール")
     
     var locale = Locale.current {
         didSet {
@@ -47,10 +47,9 @@ final class Timeline: Layer, Respondable, Localizable {
             tempoSlider.value = scene.tempoTrack.tempoItem.tempo
             tempoAnimationView.animation = scene.tempoTrack.animation
             tempoAnimationView.frame.size.width = maxScrollX
-            
             soundWaveformView.tempoTrack = scene.tempoTrack
             soundWaveformView.sound = scene.sound
-            
+            baseTimeIntervalSlider.value = scene.baseTimeInterval.q.cf
             updateWith(time: scene.time, scrollPoint: _scrollPoint)
         }
     }
@@ -102,6 +101,9 @@ final class Timeline: Layer, Respondable, Localizable {
     static let leftWidth = 80.0.cf
     let timeLabel = Label(text: Localization("0 b"), font: .small,
                           frameAlignment: .right, alignment: .right)
+    let baseTimeIntervalLabel = Label(text: Localization("0 cpb"), font: .small,
+                                      frameAlignment: .right, alignment: .right)
+    
     let timeRuler = Ruler()
     
     let tempoSlider = NumberSlider(frame: CGRect(x: 0, y: 0,
@@ -113,10 +115,15 @@ final class Timeline: Layer, Respondable, Localizable {
     let soundWaveformView = SoundWaveformView()
     let nodeTreeView = NodeTreeManager()
     let tracksManager = TracksManager()
-    let cutViewsClipView = Box()
+    let cutViewsBox = Box()
     let sumLabel = Label(text: Localization(english: "Sum:", japanese: "合計:"), font: .small)
     let sumKeyTimesView = AnimationView(height: defaultSumKeyTimesHeight)
-    let sumKeyTimesCliper = Box()
+    let sumKeyTimesBox = Box()
+    let baseTimeIntervalSlider =
+        NumberSlider(frame: Layout.valueFrame, min: 1, max: 1000, valueInterval: 1, unit: " cpb",
+                     description: Localization(english: "Edit split count per beat",
+                                               japanese: "1ビートあたりの編集用分割数"))
+    
     let timeLayer: Layer = {
         let layer = Layer()
         layer.fillColor = .editing
@@ -136,7 +143,7 @@ final class Timeline: Layer, Respondable, Localizable {
     
     let beatsLayer = PathLayer()
     
-    let keyframeView = KeyframeView(), nodeView = NodeView()
+    let keyframeView = KeyframeView(), nodeView = NodeView(isSmall: true)
     let tempoKeyframeView = KeyframeView(isSmall: true)
     
     init(frame: CGRect = CGRect(), description: Localization = Localization()) {
@@ -145,11 +152,11 @@ final class Timeline: Layer, Respondable, Localizable {
         tempoAnimationView.isEdit = true
         tempoAnimationView.isSmall = false
         tempoAnimationView.smallHeight = tempoHeight
-        cutViewsClipView.isClipped = true
-        sumKeyTimesCliper.isClipped = true
+        cutViewsBox.isClipped = true
+        sumKeyTimesBox.isClipped = true
         sumKeyTimesView.isEdit = true
         sumKeyTimesView.smallHeight = sumKeyTimesHeight
-        sumKeyTimesCliper.append(child: sumKeyTimesView)
+        sumKeyTimesBox.append(child: sumKeyTimesView)
         timeRuler.isClipped = true
         beatsLayer.isClipped = true
         beatsLayer.fillColor = .subContent
@@ -157,17 +164,16 @@ final class Timeline: Layer, Respondable, Localizable {
         
         super.init()
         instanceDescription = description
-        replace(children: [timeLayer, timeLabel, beatsLayer, sumLabel, sumKeyTimesCliper, timeRuler,
-                           tempoView,
+        replace(children: [timeLayer, timeLabel, beatsLayer, sumLabel, sumKeyTimesBox, timeRuler,
+                           tempoView, baseTimeIntervalLabel,
                            nodeTreeView.nodesView, tracksManager.tracksView,
-                           cutViewsClipView])
+                           cutViewsBox])
         if !frame.isEmpty {
             self.frame = frame
         }
         
         tempoView.moveHandler = { [unowned self] in
-            if ($1.sendType == .begin &&
-                self.tempoAnimationView.frame.maxX <= $0.point(from: $1).x) ||
+            if ($1.sendType == .begin && self.tempoAnimationView.frame.maxX <= $0.point(from: $1).x) ||
                 $1.sendType != .begin {
 
                 return self.tempoAnimationView.move(with: $1)
@@ -175,7 +181,7 @@ final class Timeline: Layer, Respondable, Localizable {
                 return false
             }
         }
-        cutViewsClipView.moveHandler = { [unowned self] in
+        cutViewsBox.moveHandler = { [unowned self] in
             if let lastView = self.cutViews.last {
                 if ($1.sendType == .begin && lastView.frame.maxX <= $0.point(from: $1).x) ||
                     $1.sendType != .begin {
@@ -212,7 +218,7 @@ final class Timeline: Layer, Respondable, Localizable {
         tempoView.bindHandler = { [unowned self] _, _ in
             return self.bindKeyframe(bindingKeyframeType: .tempo)
         }
-        cutViewsClipView.bindHandler = { [unowned self] _, _ in
+        cutViewsBox.bindHandler = { [unowned self] _, _ in
             return self.bindKeyframe(bindingKeyframeType: .cut)
         }
         
@@ -290,7 +296,7 @@ final class Timeline: Layer, Respondable, Localizable {
         let rightX = leftWidth
         timeRuler.frame = CGRect(x: rightX, y: bounds.height - timeRulerHeight - sp,
                                  width: bounds.width - rightX - sp, height: timeRulerHeight)
-        timeLabel.frame.origin = CGPoint(x: rightX - timeLabel.frame.width,
+        timeLabel.frame.origin = CGPoint(x: rightX - timeLabel.frame.width - Layout.smallPadding,
                                          y: bounds.height - timeRulerHeight
                                             - Layout.basicPadding + Layout.smallPadding)
         tempoView.frame = CGRect(x: rightX,
@@ -303,17 +309,19 @@ final class Timeline: Layer, Respondable, Localizable {
         nodeTreeView.nodesView.frame = CGRect(x: sp, y: sumKeyTimesHeight + sp + tracksHeight,
                                                   width: leftWidth - sp,
                                                   height: cutHeight - tracksHeight)
-        cutViewsClipView.frame = CGRect(x: rightX, y: sumKeyTimesHeight + sp,
+        cutViewsBox.frame = CGRect(x: rightX, y: sumKeyTimesHeight + sp,
                                             width: bounds.width - rightX - sp,
                                             height: mainHeight - tempoHeight)
         sumLabel.frame.origin = CGPoint(x: rightX - sumLabel.frame.width,
                                         y: sp + (sumKeyTimesHeight - sumLabel.frame.height) / 2)
-        sumKeyTimesCliper.frame = CGRect(x: rightX, y: sp,
+        sumKeyTimesBox.frame = CGRect(x: rightX, y: sp,
                                           width: bounds.width - rightX - sp, height: sumKeyTimesHeight)
         timeLayer.frame = CGRect(x: midX - baseWidth / 2, y: 0,
                                  width: baseWidth, height: bounds.height)
         beatsLayer.frame = CGRect(x: rightX, y: 0,
                                   width: bounds.width - rightX, height: bounds.height)
+        let bx = sp + (sumKeyTimesHeight - baseTimeIntervalLabel.frame.height) / 2
+        baseTimeIntervalLabel.frame.origin = CGPoint(x: sp, y: bx)
     }
     
     private var _scrollPoint = CGPoint(), _intervalScrollPoint = CGPoint()
@@ -381,7 +389,8 @@ final class Timeline: Layer, Respondable, Localizable {
             let animation = cutItem.editNode.editTrack.animation
             let t = cutItem.currentTime >= animation.duration ?
                 animation.duration : animation.editKeyframe.time
-            editedKeyframeTime = scene.cutTrack.animation.keyframes[scene.cutTrack.animation.editLoopframeIndex].time + t
+            let cutAnimation = scene.cutTrack.animation
+            editedKeyframeTime = cutAnimation.keyframes[cutAnimation.editLoopframeIndex].time + t
             tempoSlider.value = scene.tempoTrack.tempoItem.tempo
         }
         if isCut {
@@ -410,7 +419,7 @@ final class Timeline: Layer, Respondable, Localizable {
             var textViews = [Layer]()
             cutViews.forEach { textViews += $0.subtitleTextViews as [Layer] }
             
-            cutViewsClipView.replace(children: cutViews.reversed() as [Layer]
+            cutViewsBox.replace(children: cutViews.reversed() as [Layer]
                 + cutViews.map { $0.subtitleAnimationView } as [Layer] + textViews as [Layer] + [soundWaveformView] as [Layer])
             updateCutViewPositions()
         }
@@ -443,7 +452,7 @@ final class Timeline: Layer, Respondable, Localizable {
             
             return x + cutView.frame.width
         }
-        soundWaveformView.frame.origin = CGPoint(x: minX, y: cutViewsClipView.frame.height - soundWaveformView.frame.height)
+        soundWaveformView.frame.origin = CGPoint(x: minX, y: cutViewsBox.frame.height - soundWaveformView.frame.height)
         tempoAnimationView.frame.origin = CGPoint(x: minX, y: 0)
         sumKeyTimesView.frame.origin.x = minX
         updateBeats()
@@ -489,7 +498,7 @@ final class Timeline: Layer, Respondable, Localizable {
         }
         cutView.pasteHandler = { [unowned self] in
             if let index = self.cutViews.index(of: $0) {
-                for object in $1.objects {
+                for object in $1.copiedObjects {
                     if let cut = object as? Cut {
                         self.paste(cut, at: index + 1)
                         return true
@@ -523,7 +532,7 @@ final class Timeline: Layer, Respondable, Localizable {
         cutView.subtitleKeyframeBinding = { [unowned self] _ in
             var textViews = [Layer]()
             self.cutViews.forEach { textViews += $0.subtitleTextViews as [Layer] }
-            self.cutViewsClipView.replace(children: self.cutViews.reversed() as [Layer]
+            self.cutViewsBox.replace(children: self.cutViews.reversed() as [Layer]
                 + self.cutViews.map { $0.subtitleAnimationView } as [Layer] + textViews as [Layer] + [self.soundWaveformView] as [Layer])
             self.updateWithScrollPosition()
         }
@@ -568,10 +577,14 @@ final class Timeline: Layer, Respondable, Localizable {
         let minSecond = Int(floor(scene.secondTime(withBeatTime: minTime)))
         let maxSecond = Int(ceil(scene.secondTime(withBeatTime: maxTime)))
         guard minSecond < maxSecond else {
+            timeRuler.labels = []
             return
         }
         timeRuler.scrollPosition.x = localDeltaX
-        timeRuler.labels = (minSecond ... maxSecond).map {
+        timeRuler.labels = (minSecond ... maxSecond).flatMap {
+            guard !(maxSecond - minSecond > Int(bounds.width / 40) && $0 % 5 != 0) else {
+                return nil
+            }
             let timeLabel = Timeline.timeLabel(withSecound: $0)
             timeLabel.fillColor = nil
             let secondX = x(withTime: scene.basedBeatTime(withSecondTime: Second($0)))
@@ -636,6 +649,10 @@ final class Timeline: Layer, Respondable, Localizable {
     
     let beatsLineWidth = 1.0.cf, barLineWidth = 3.0.cf, beatsPerBar = 0
     func updateBeats() {
+        guard baseTimeInterval < 1 else {
+            beatsLayer.path = nil
+            return
+        }
         let minX = localDeltaX
         let minTime = time(withLocalX: convertToLocalX(bounds.minX + Timeline.leftWidth))
         let maxTime = time(withLocalX: convertToLocalX(bounds.maxX))
@@ -794,6 +811,10 @@ final class Timeline: Layer, Respondable, Localizable {
             soundWaveformView.baseTimeInterval = baseTimeInterval
             cutViews.forEach { $0.baseTimeInterval = baseTimeInterval }
             updateCutViewPositions()
+            baseTimeIntervalLabel.localization = Localization("\(baseTimeInterval.inversed!) cpb")
+            
+            scene.baseTimeInterval = baseTimeInterval
+            sceneDataModel?.isWrite = true
         }
     }
     
@@ -837,8 +858,8 @@ final class Timeline: Layer, Respondable, Localizable {
         updateView(isCut: true, isTransform: false, isKeyframe: false)
     }
     
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let cut = object as? Cut {
                 let localX = convertToLocalX(point(from: event).x)
                 let index = cutIndex(withLocalX: localX)
@@ -942,8 +963,8 @@ final class Timeline: Layer, Respondable, Localizable {
         node.editTrack.name = Localization(english: "Track 0", japanese: "トラック0").currentString
         return append(node, in: editCutView)
     }
-    func pasteFromNodesView(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func pasteFromNodesView(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let node = object as? Node {
                 return append(node, in: editCutView)
             }
@@ -1039,8 +1060,8 @@ final class Timeline: Layer, Respondable, Localizable {
         set(editTrackIndex: trackIndex, oldEditTrackIndex: node.editTrackIndex,
             in: node, in: cutView, time: time)
     }
-    func pasteFromTracksView(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func pasteFromTracksView(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let track = object as? NodeTrack {
                 return append(track, in: editCutView)
             }
@@ -1150,7 +1171,7 @@ final class Timeline: Layer, Respondable, Localizable {
             moveAnimationViews = []
             cutView.animationViews.forEach {
                 let s = $0.movingKeyframeIndex(atTime: time)
-                if s.isSolution {
+                if s.isSolution && (s.index != nil ? s.index! > 0 : true) {
                     moveAnimationViews.append(($0, s.index))
                 }
             }
@@ -1161,7 +1182,7 @@ final class Timeline: Layer, Respondable, Localizable {
             
             moveAnimationViews.forEach {
                 _ = $0.animationView.move(withDeltaTime: obj.deltaTime,
-                                            keyframeIndex: $0.keyframeIndex, sendType: obj.type)
+                                          keyframeIndex: $0.keyframeIndex, sendType: obj.type)
             }
         case .sending:
             moveAnimationViews.forEach {
@@ -1623,22 +1644,42 @@ final class Timeline: Layer, Respondable, Localizable {
         }
     }
     
+    private var baseTimeIntervalOldTime = Second(0)
+    private var floatBaseTimeInterval = 0.0.cf, beginBaseTimeInterval = Beat(1)
     func zoom(with event: PinchEvent) -> Bool {
-        zoom(at: point(from: event)) {
-            baseWidth = (baseWidth * (event.magnification * 2.5 + 1))
-                .clip(min: 1, max: Timeline.defautBaseWidth)
+        switch event.sendType {
+        case .begin:
+            baseTimeIntervalOldTime = scene.secondTime(withBeatTime: scene.time)
+            beginBaseTimeInterval = baseTimeInterval
+            floatBaseTimeInterval = 0
+        case .sending, .end:
+            floatBaseTimeInterval += event.magnification * 40
+            if beginBaseTimeInterval.q == 1 {
+                let p = beginBaseTimeInterval.p - Int(floatBaseTimeInterval)
+                baseTimeInterval = p < 1 ? Beat(1, 2 - p) : Beat(p)
+            } else {
+                let q = beginBaseTimeInterval.q + Int(floatBaseTimeInterval)
+                baseTimeInterval = q < 1 ? Beat(2 - q) : Beat(1, q)
+            }
+            updateWith(time: time, scrollPoint: CGPoint(x: x(withTime: time), y: 0),
+                       isIntervalScroll: false)
+            updateWithTime()
         }
+//        zoom(at: point(from: event)) {
+//            baseWidth = (baseWidth * (event.magnification * 2.5 + 1))
+//                .clip(min: 1, max: Timeline.defautBaseWidth)
+//        }
         return true
     }
-    func resetView(with event: DoubleTapEvent) -> Bool {
-        guard baseWidth != Timeline.defautBaseWidth else {
-            return false
-        }
-        zoom(at: point(from: event)) {
-            baseWidth = Timeline.defautBaseWidth
-        }
-        return true
-    }
+//    func resetView(with event: DoubleTapEvent) -> Bool {
+//        guard baseWidth != Timeline.defautBaseWidth else {
+//            return false
+//        }
+//        zoom(at: point(from: event)) {
+//            baseWidth = Timeline.defautBaseWidth
+//        }
+//        return true
+//    }
     func zoom(at p: CGPoint, handler: () -> ()) {
         handler()
         _scrollPoint.x = x(withTime: time)

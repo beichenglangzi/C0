@@ -97,12 +97,12 @@ final class Canvas: DrawLayer, Respondable {
     
     override var editQuasimode: EditQuasimode {
         didSet {
-//            switch editQuasimode {
-//            case .stroke, .move, .movePoint, .moveVertex, .moveZ, .lassoErase:
-//                cursor = .stroke
-//            default:
-//                cursor = .arrow
-//            }
+            switch editQuasimode {
+            case .move, .stroke, .lassoErase, .select, .deselect:
+                cursor = .stroke
+            default:
+                cursor = .arrow
+            }
             updateViewType()
             updateEditView(with: convertToCurrentLocal(cursorPoint))
         }
@@ -455,7 +455,7 @@ final class Canvas: DrawLayer, Respondable {
         undoManager?.registerUndo(withTarget: self) { [oldTime = time] in handler($0, oldTime) }
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
+    func copy(with event: KeyInputEvent) -> CopyManager? {
         let p = convertToCurrentLocal(point(from: event))
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         switch ict.type {
@@ -463,32 +463,32 @@ final class Canvas: DrawLayer, Respondable {
             let copySelectedLines = cut.editNode.editTrack.drawingItem.drawing.editLines
             if !copySelectedLines.isEmpty {
                 let drawing = Drawing(lines: copySelectedLines)
-                return CopiedObject(objects: [drawing.copied])
+                return CopyManager(copiedObjects: [drawing.copied])
             }
         case .indicated, .selected:
             if !ict.selectedLineIndexes.isEmpty {
                 let copySelectedLines = cut.editNode.editTrack.drawingItem.drawing.editLines
                 let drawing = Drawing(lines: copySelectedLines)
-                return CopiedObject(objects: [drawing.copied])
+                return CopyManager(copiedObjects: [drawing.copied])
             } else {
                 let cell = cut.editNode.rootCell.intersection(ict.cellItems.map { $0.cell },
                                                               isNewID: false)
                 let material = ict.cellItems[0].cell.material
-                return CopiedObject(objects: [JoiningCell(cell), material])
+                return CopyManager(copiedObjects: [JoiningCell(cell), material])
             }
         }
-        return CopiedObject()
+        return CopyManager()
     }
-    func copyCell() -> CopiedObject? {
+    func copyCell() -> CopyManager? {
         guard let editCell = editCell else {
             return nil
         }
         let cells = cut.editNode.selectedCells(with: editCell)
         let cell = cut.editNode.rootCell.intersection(cells, isNewID: true)
-        return CopiedObject(objects: [cell.copied])
+        return CopyManager(copiedObjects: [cell.copied])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let color = object as? Color {
                 return paste(color, with: event)
             } else if let material = object as? Material {
@@ -1105,14 +1105,14 @@ final class Canvas: DrawLayer, Respondable {
         }
     }
     
-    func changeToRough() {
+    func changeToDraft() {
         let inNode = cut.editNode
         let indexes = inNode.editTrack.animation.selectedKeyframeIndexes.sorted()
         let i = inNode.editTrack.animation.editKeyframeIndex
         (indexes.contains(i) ? indexes : [i]).forEach {
             let drawing = inNode.editTrack.drawingItem.keyDrawings[$0]
-            if !drawing.roughLines.isEmpty || !drawing.lines.isEmpty {
-                setRoughLines(drawing.editLines, old: drawing.roughLines,
+            if !drawing.draftLines.isEmpty || !drawing.lines.isEmpty {
+                setDraftLines(drawing.editLines, old: drawing.draftLines,
                               in: drawing, inNode, time: time)
                 set(drawing.uneditLines, old: drawing.lines, in: drawing, inNode, time: time)
                 if !drawing.selectedLineIndexes.isEmpty {
@@ -1122,44 +1122,44 @@ final class Canvas: DrawLayer, Respondable {
             }
         }
     }
-    func removeRough() {
+    func removeDraft() {
         let inNode = cut.editNode
         let indexes = inNode.editTrack.animation.selectedKeyframeIndexes.sorted()
         let i = inNode.editTrack.animation.editKeyframeIndex
         (indexes.contains(i) ? indexes : [i]).forEach {
             let drawing = inNode.editTrack.drawingItem.keyDrawings[$0]
-            if !drawing.roughLines.isEmpty {
-                setRoughLines([], old: drawing.roughLines, in: drawing, inNode, time: time)
+            if !drawing.draftLines.isEmpty {
+                setDraftLines([], old: drawing.draftLines, in: drawing, inNode, time: time)
             }
         }
     }
-    func swapRough() {
+    func exchangeWithDraft() {
         let inNode = cut.editNode
         let indexes = inNode.editTrack.animation.selectedKeyframeIndexes.sorted()
         let i = inNode.editTrack.animation.editKeyframeIndex
         (indexes.contains(i) ? indexes : [i]).forEach {
             let drawing = inNode.editTrack.drawingItem.keyDrawings[$0]
-            if !drawing.roughLines.isEmpty || !drawing.lines.isEmpty {
+            if !drawing.draftLines.isEmpty || !drawing.lines.isEmpty {
                 if !drawing.selectedLineIndexes.isEmpty {
                     setSelectedLineIndexes([], oldLineIndexes: drawing.selectedLineIndexes,
                                             in: drawing, inNode, time: time)
                 }
-                let newLines = drawing.roughLines, newRoughLines = drawing.lines
-                setRoughLines(newRoughLines, old: drawing.roughLines,
+                let newLines = drawing.draftLines, newDraftLines = drawing.lines
+                setDraftLines(newDraftLines, old: drawing.draftLines,
                               in: drawing, inNode, time: time)
                 set(newLines, old: drawing.lines, in: drawing, inNode, time: time)
             }
         }
     }
-    var setRoughLinesHandler: ((Canvas, Drawing) -> ())? = nil
-    private func setRoughLines(_ lines: [Line], old oldLines: [Line],
+    var setDraftLinesHandler: ((Canvas, Drawing) -> ())? = nil
+    private func setDraftLines(_ lines: [Line], old oldLines: [Line],
                                in drawing: Drawing, _ node: Node, time: Beat) {
-        registerUndo { $0.setRoughLines(oldLines, old: lines, in: drawing, node, time: $1) }
+        registerUndo { $0.setDraftLines(oldLines, old: lines, in: drawing, node, time: $1) }
         self.time = time
-        drawing.roughLines = lines
+        drawing.draftLines = lines
         node.differentialDataModel.isWrite = true
         setNeedsDisplay()
-        setRoughLinesHandler?(self, drawing)
+        setDraftLinesHandler?(self, drawing)
     }
     private func set(_ lines: [Line], old oldLines: [Line],
                           in drawing: Drawing, _ node: Node, time: Beat) {
@@ -1288,7 +1288,7 @@ final class Canvas: DrawLayer, Respondable {
         return cell.intersects(bounds.applying(currentTransform.inverted()))
     }
     
-    let materialView = MaterialView(), cellView = CellView()
+    let materialView = MaterialView(), cellView = CellView(isSmall: true)
     func bind(with event: RightClickEvent) -> Bool {
         let p = convertToCurrentLocal(point(from: event))
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
@@ -1311,10 +1311,11 @@ final class Canvas: DrawLayer, Respondable {
     }
     
     func updateEditCellBindingLine() {
-        let maxX = cellView.frame.minX
+        let maxX = materialView.frame.minX
         let width = maxX - frame.maxX, midY = frame.midY
         if let editCell = editCell, !editCell.isEmpty && isVisible(editCell) {
-            let path = CGPath(rect: CGRect(x: frame.maxX, y: midY - bindingLineHeight / 2,
+            let path = CGPath(rect: CGRect(x: frame.maxX,
+                                           y: midY - bindingLineHeight / 2,
                                            width: width,
                                            height: bindingLineHeight), transform: nil)
             editCellBindingLineLayer.fillColor = .border
@@ -1437,7 +1438,7 @@ final class Canvas: DrawLayer, Respondable {
         
         var join = Join()
         struct Join {
-            var lowAngle = 1.1 * (.pi / 2.0).cf, angle = 1.5 * (.pi / 2.0).cf
+            var lowAngle = 0.8 * (.pi / 2.0).cf, angle = 1.5 * (.pi / 2.0).cf
             func joinControlWith(_ line: Line, lastControl lc: Line.Control) -> Line.Control? {
                 guard line.controls.count >= 4 else {
                     return nil
@@ -1462,7 +1463,7 @@ final class Canvas: DrawLayer, Respondable {
         
         var interval = Interval()
         struct Interval {
-            var minSpeed = 60.0.cf, maxSpeed = 1000.0.cf, exp = 2.0.cf, minTime = 0.4, maxTime = 0.04
+            var minSpeed = 100.0.cf, maxSpeed = 1500.0.cf, exp = 2.0.cf, minTime = 0.1, maxTime = 0.03
             var minDistance = 1.45.cf, maxDistance = 1.5.cf
             func speedTWith(distance: CGFloat, deltaTime: Double, scale: CGFloat) -> CGFloat {
                 let speed = ((distance / scale) / deltaTime.cf).clip(min: minSpeed, max: maxSpeed)
@@ -1528,9 +1529,9 @@ final class Canvas: DrawLayer, Respondable {
         }
     }
     private var stroker = Stroker()
-    func move(with event: DragEvent) -> Bool {
-        return stroke(with: event)
-    }
+//    func move(with event: DragEvent) -> Bool {
+//        return stroke(with: event)
+//    }
     func stroke(with event: DragEvent) -> Bool {
         return stroke(with: event, isAppendLine: true)
     }
@@ -1567,7 +1568,8 @@ final class Canvas: DrawLayer, Respondable {
                 / stroker.temps.count.cf
             let lc = Line.Control(point: p, pressure: lPressure)
             
-            if let jc = stroker.join.joinControlWith(line, lastControl: lc.mid(stroker.temps[stroker.temps.count - 2].control)) {
+            let mlc = lc.mid(stroker.temps[stroker.temps.count - 2].control)
+            if let jc = stroker.join.joinControlWith(line, lastControl: mlc) {
                 line = line.withInsert(jc, at: line.controls.count - 2)
                 set(line, updateBounds: line.strokeLastBoundingBox)
                 stroker.temps = [Stroker.Temp(control: lc, speed: speed)]
@@ -2344,9 +2346,9 @@ final class Canvas: DrawLayer, Respondable {
 //    func moveInStrokable(with event: DragEvent) -> Bool {
 //        return move(with: event, type: .move)
 //    }
-//    func move(with event: DragEvent) -> Bool {
-//        return move(with: event, type: .move)
-//    }
+    func move(with event: DragEvent) -> Bool {
+        return move(with: event, type: .move)
+    }
     func transform(with event: DragEvent) -> Bool {
         return move(with: event, type: .transform)
     }

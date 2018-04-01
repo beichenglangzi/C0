@@ -71,10 +71,14 @@ final class Player: Layer, Respondable {
     private var oldPlayTime = Beat(0), oldTimestamp = 0.0
     var isPlaying = false {
         didSet {
+            guard isPlaying != oldValue else {
+                return
+            }
             if isPlaying {
                 playCut = scene.editCut.copied
                 oldPlayCut = scene.editCut
                 oldPlayTime = scene.editCut.currentTime
+                playDrawCount = 0
                 oldTimestamp = CFAbsoluteTimeGetCurrent()
                 let t = scene.time
                 playIntSecond = t.integralPart
@@ -105,10 +109,16 @@ final class Player: Layer, Respondable {
     }
     var isPause = false {
         didSet {
+            guard isPause != oldValue else {
+                return
+            }
             if isPause {
                 timer.stop()
                 audioPlayer?.pause()
             } else {
+                playDrawCount = 0
+                oldTimestamp = CFAbsoluteTimeGetCurrent()
+                playFrameRate = scene.frameRate
                 timer.begin(interval: 1 / Second(scene.frameRate),
                             tolerance: 0.1 / Second(scene.frameRate),
                             handler: { [unowned self] in self.updatePlayTime() })
@@ -226,8 +236,8 @@ final class Player: Layer, Respondable {
     }
 }
 
-final class PlayerView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Player View", japanese: "プレイヤー表示")
+final class SeekBar: Layer, Respondable, Localizable {
+    static let name = Localization(english: "Seek Bar", japanese: "シークバー")
     
     var locale = Locale.current {
         didSet {
@@ -235,17 +245,14 @@ final class PlayerView: Layer, Respondable, Localizable {
         }
     }
     
-    private let timeLabelWidth = 45.0.cf, sliderWidth = 300.0.cf
-    let playLabel = Label(text: Localization(english: "Play by Indicated", japanese: "指し示して再生"),
-                          color: .locked)
+    let timeLabel = Label(text: Localization("00:00"), color: .locked)
+    let frameRateLabel = Label(text: Localization("00 fps"), color: .locked)
     let slider = Slider(min: 0, max: 1,
                         description: Localization(english: "Play Time", japanese: "再生時間"))
-    let timeLabel = Label(text: Localization("00:00"), color: .locked)
-    let frameRateLabel = Label(text: Localization("-- fps"), color: .locked)
     
     override init() {
         super.init()
-        replace(children: [playLabel, slider, timeLabel, frameRateLabel])
+        replace(children: [timeLabel, frameRateLabel, slider])
         
         slider.disabledRegisterUndo = true
         slider.binding = { [unowned self] in
@@ -266,19 +273,14 @@ final class PlayerView: Layer, Respondable, Localizable {
         let sliderY = round((frame.height - height) / 2)
         let labelHeight = Layout.basicHeight - padding * 2
         let labelY = round((frame.height - labelHeight) / 2)
-        playLabel.frame.origin = CGPoint(x: Layout.basicPadding, y: labelY)
         
-        var x = bounds.width - timeLabelWidth - padding
-        frameRateLabel.frame.origin = CGPoint(x: x, y: labelY)
-        x -= timeLabelWidth
-        timeLabel.frame.origin = CGPoint(x: x, y: labelY)
-        x -= padding
-        
-        let sliderWidth = x - playLabel.frame.maxX - padding
-        slider.frame = CGRect(x: playLabel.frame.maxX + padding, y: sliderY,
-                              width: sliderWidth, height: height)
-        slider.backgroundLayers = [PlayerView.sliderLayer(with: slider.bounds,
-                                                            padding: slider.padding)]
+        timeLabel.frame.origin = CGPoint(x: padding, y: labelY)
+        frameRateLabel.frame.origin = CGPoint(x: bounds.width - frameRateLabel.frame.width - padding,
+                                              y: labelY)
+        let sliderWidth = frameRateLabel.frame.minX - timeLabel.frame.maxX - padding * 2
+        slider.frame = CGRect(x: timeLabel.frame.maxX + padding,
+                              y: sliderY, width: sliderWidth, height: height)
+        slider.backgroundLayers = [SeekBar.sliderLayer(with: slider.bounds, padding: slider.padding)]
     }
     static func sliderLayer(with bounds: CGRect, padding: CGFloat) -> Layer {
         let layer = PathLayer()
@@ -291,8 +293,8 @@ final class PlayerView: Layer, Respondable, Localizable {
     
     override var isSubIndicated: Bool {
         didSet {
-            isPlayingBinding?(isSubIndicated)
             isPlaying = isSubIndicated
+            isPlayingBinding?(isSubIndicated)
         }
     }
     var isPlayingBinding: ((Bool) -> (Void))? = nil
@@ -314,7 +316,11 @@ final class PlayerView: Layer, Respondable, Localizable {
             guard second != oldValue else {
                 return
             }
+            let oldBounds = timeLabel.bounds
             timeLabel.string = minuteSecondString(withSecond: second, frameRate: Int(frameRate))
+            if oldBounds.size != timeLabel.bounds.size {
+                updateLayout()
+            }
         }
     }
     func minuteSecondString(withSecond s: Int, frameRate: FPS) -> String {
@@ -326,7 +332,7 @@ final class PlayerView: Layer, Respondable, Localizable {
             return String(format: "00:%02d", s)
         }
     }
-    var playFrameRate = 1 {
+    var playFrameRate = 0 {
         didSet {
             updateWithFrameRate()
         }
@@ -338,7 +344,11 @@ final class PlayerView: Layer, Respondable, Localizable {
         }
     }
     private func updateWithFrameRate() {
-        frameRateLabel.string = playFrameRate == 0 ? "-- fps" : "\(playFrameRate) fps"
+        let oldBounds = frameRateLabel.bounds
+        frameRateLabel.string = String(format: "%02d fps", playFrameRate)
         frameRateLabel.textFrame.color = playFrameRate < frameRate ? .warning : .locked
+        if oldBounds.size != frameRateLabel.bounds.size {
+            updateLayout()
+        }
     }
 }

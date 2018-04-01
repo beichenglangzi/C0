@@ -190,10 +190,10 @@ extension Material: Interpolatable {
 }
 extension Material: ResponderExpression {
     func responder(withBounds bounds: CGRect) -> Responder {
-        let responder = Box()
-        responder.bounds = bounds
-        responder.fillColor = color
-        return responder
+        let thumbnailView = Box()
+        thumbnailView.bounds = bounds
+        thumbnailView.fillColor = color
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
     }
 }
 
@@ -211,12 +211,13 @@ extension Material.MaterialType {
 }
 
 extension Slider {
-    static var opacityView: Slider {
+    static func opacityView(isSmall: Bool = false) -> Slider {
         return Slider(value: 1, defaultValue: 1, min: 0, max: 1,
-                      description: Localization(english: "Opacity", japanese: "不透明度"))
+                      description: Localization(english: "Opacity", japanese: "不透明度"),
+                      isSmall: isSmall)
     }
-    private static func opacitySliderLayers(with bounds: CGRect, padding: CGFloat) -> [Layer] {
-        let checkerWidth = 5.0.cf
+    private static func opacitySliderLayers(with bounds: CGRect,
+                                            checkerWidth: CGFloat, padding: CGFloat) -> [Layer] {
         let frame = CGRect(x: padding, y: bounds.height / 2 - checkerWidth,
                            width: bounds.width - padding * 2, height: checkerWidth * 2)
         
@@ -236,20 +237,22 @@ extension Slider {
     func updateOpacityLayers(withFrame frame: CGRect) {
         if self.frame != frame {
             self.frame = frame
-            backgroundLayers = Slider.opacitySliderLayers(with: frame, padding: padding)
+            backgroundLayers = Slider.opacitySliderLayers(with: frame,
+                                                          checkerWidth: knob.radius, padding: padding)
         }
     }
 }
 extension Slider {
     static func widthViewWith(min: CGFloat, max: CGFloat, exp: CGFloat,
-                              description: Localization) -> Slider {
-        return Slider(min: min, max: max, exp: exp, description: description)
+                              description: Localization, isSmall: Bool = false) -> Slider {
+        return Slider(min: min, max: max, exp: exp, description: description, isSmall: isSmall)
     }
-    private static func widthLayer(with bounds: CGRect, padding: CGFloat) -> Layer {
+    private static func widthLayer(with bounds: CGRect,
+                                   halfWidth: CGFloat, padding: CGFloat) -> Layer {
         let shapeLayer = PathLayer()
         shapeLayer.fillColor = .content
         shapeLayer.path = {
-            let path = CGMutablePath(), halfWidth = 5.0.cf
+            let path = CGMutablePath()
             path.addLines(between: [CGPoint(x: padding,y: bounds.height / 2),
                                     CGPoint(x: bounds.width - padding,
                                             y: bounds.height / 2 - halfWidth),
@@ -262,7 +265,8 @@ extension Slider {
     func updateLineWidthLayers(withFrame frame: CGRect) {
         if self.frame != frame {
             self.frame = frame
-            backgroundLayers = [Slider.widthLayer(with: frame, padding: padding)]
+            backgroundLayers = [Slider.widthLayer(with: frame,
+                                                  halfWidth: knob.radius, padding: padding)]
         }
     }
 }
@@ -303,7 +307,7 @@ final class MaterialView: Layer, Respondable, Localizable {
     private let lineWidthView = Slider.widthViewWith(min: Material.defaultLineWidth, max: 500, exp: 3,
                                                      description: Localization(english: "Line Width",
                                                                                japanese: "線の太さ"))
-    private let opacityView = Slider.opacityView
+    private let opacityView = Slider.opacityView()
     private let lineColorLabel = Label(text: Localization(english: "Line Color:",
                                                           japanese: "線のカラー:"))
     private let lineColorView = ColorView(hLineWidth: 2,
@@ -526,11 +530,11 @@ final class MaterialView: Layer, Respondable, Localizable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [material])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [material])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let material = object as? Material {
                 guard material.id != self.material.id else {
                     continue

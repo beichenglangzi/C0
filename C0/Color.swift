@@ -53,9 +53,9 @@ struct Color: Codable {
     
     static let moveZ = Color(red: 1, green: 0, blue: 0)
     
-    static let rough = Color(red: 0, green: 0.5, blue: 1, alpha: 0.15)
-    static let subRough = Color(red: 0, green: 0.5, blue: 1, alpha: 0.1)
-    static let timelineRough = Color(red: 1, green: 1, blue: 0.2)
+    static let draft = Color(red: 0, green: 0.5, blue: 1, alpha: 0.15)
+    static let subDraft = Color(red: 0, green: 0.5, blue: 1, alpha: 0.1)
+    static let timelineDraft = Color(red: 1, green: 1, blue: 0.2)
     
     static let previous = Color(red: 1, green: 0, blue: 0, alpha: 0.1)
     static let previousSkin = previous.with(alpha: 1)
@@ -437,10 +437,10 @@ extension Color {
 }
 extension Color: ResponderExpression {
     func responder(withBounds bounds: CGRect) -> Responder {
-        let layer = Box()
-        layer.bounds = bounds
-        layer.fillColor = self
-        return layer
+        let thumbnailView = Box()
+        thumbnailView.bounds = bounds
+        thumbnailView.fillColor = self
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
     }
 }
 extension CGColor {
@@ -611,11 +611,11 @@ final class ColorView: Layer, Respondable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [color])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [color])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let color = object as? Color {
                 let oldColor = self.color
                 guard color != oldColor else {

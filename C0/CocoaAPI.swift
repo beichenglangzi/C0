@@ -369,6 +369,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
         let windowController = storyboard
             .instantiateController(withIdentifier: identifier) as! NSWindowController
         addWindowController(windowController)
+        window.acceptsMouseMovedEvents = true
         view = windowController.contentViewController!.view as! C0View
         
         let isWriteHandler: (DataModel, Bool) -> Void = { [unowned self] (dataModel, isWrite) in
@@ -396,7 +397,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
         view.human.sceneView.sceneDataModel.didChangeIsWriteHandler = isWriteHandler
         preferenceDataModel.didChangeIsWriteHandler = isWriteHandler
         
-        view.human.copiedObjectView.copiedObject = copiedObject(with: NSPasteboard.general)
+        view.human.copyManagerView.copyManager = copyManager(with: NSPasteboard.general)
     }
     private func setupWindow(with preference: C0Preference) {
         window.setFrame(preference.windowFrame, display: false)
@@ -431,43 +432,43 @@ final class C0Document: NSDocument, NSWindowDelegate {
         preferenceDataModel.isWrite = true
     }
     
-    var oldChangeCountWithCopiedObject = 0
+    var oldChangeCountWithCopyManager = 0
     var oldChangeCountWithPsteboard = NSPasteboard.general.changeCount
     func windowDidBecomeMain(_ notification: Notification) {
         let pasteboard = NSPasteboard.general
         if pasteboard.changeCount != oldChangeCountWithPsteboard {
             oldChangeCountWithPsteboard = pasteboard.changeCount
-            view.human.copiedObjectView.copiedObject = copiedObject(with: pasteboard)
-            oldChangeCountWithCopiedObject = view.human.copiedObjectView.changeCount
+            view.human.copyManagerView.copyManager = copyManager(with: pasteboard)
+            oldChangeCountWithCopyManager = view.human.copyManagerView.changeCount
         }
     }
     func windowDidResignMain(_ notification: Notification) {
-        if oldChangeCountWithCopiedObject != view.human.copiedObjectView.changeCount {
-            oldChangeCountWithCopiedObject = view.human.copiedObjectView.changeCount
+        if oldChangeCountWithCopyManager != view.human.copyManagerView.changeCount {
+            oldChangeCountWithCopyManager = view.human.copyManagerView.changeCount
             let pasteboard = NSPasteboard.general
-            setCopiedObject(view.human.copiedObjectView.copiedObject, in: pasteboard)
+            setCopyManager(view.human.copyManagerView.copyManager, in: pasteboard)
             oldChangeCountWithPsteboard = pasteboard.changeCount
         }
     }
-    func copiedObject(with pasteboard: NSPasteboard) -> CopiedObject {
-        var copiedObject = CopiedObject()
+    func copyManager(with pasteboard: NSPasteboard) -> CopyManager {
+        var copyManager = CopyManager()
         func append(with data: Data, type: NSPasteboard.PasteboardType) {
             if let object = C0DynamicCoder.decode(from: data, forKey: type.rawValue) {
-                copiedObject.objects.append(object)
+                copyManager.copiedObjects.append(object)
             }
         }
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self],
                                              options: nil) as? [URL], !urls.isEmpty {
-            urls.forEach { copiedObject.objects.append($0) }
+            urls.forEach { copyManager.copiedObjects.append($0) }
         }
          if let string = pasteboard.string(forType: .string) {
-            copiedObject.objects.append(string)
+            copyManager.copiedObjects.append(string)
         } else if let types = pasteboard.types {
             for type in types {
                 if let data = pasteboard.data(forType: type) {
                     append(with: data, type: type)
                 } else if let string = pasteboard.string(forType: .string) {
-                    copiedObject.objects.append(string)
+                    copyManager.copiedObjects.append(string)
                 }
             }
         } else if let items = pasteboard.pasteboardItems {
@@ -476,21 +477,21 @@ final class C0Document: NSDocument, NSWindowDelegate {
                     if let data = item.data(forType: type) {
                         append(with: data, type: type)
                     } else if let string = item.string(forType: .string) {
-                        copiedObject.objects.append(string)
+                        copyManager.copiedObjects.append(string)
                     }
                 }
             }
         }
-        return copiedObject
+        return copyManager
     }
-    func setCopiedObject(_ copiedObject: CopiedObject, in pasteboard: NSPasteboard) {
-        guard !copiedObject.objects.isEmpty else {
+    func setCopyManager(_ copyManager: CopyManager, in pasteboard: NSPasteboard) {
+        guard !copyManager.copiedObjects.isEmpty else {
             pasteboard.clearContents()
             return
         }
         var strings = [String]()
         var typesAndDatas = [(type: NSPasteboard.PasteboardType, data: Data)]()
-        for object in copiedObject.objects {
+        for object in copyManager.copiedObjects {
             if let string = object as? String {
                 strings.append(string)
             } else {
@@ -589,17 +590,6 @@ final class C0View: NSView, NSTextInputClient {
         }
     }
     
-    func createTrackingArea() {
-        let options: NSTrackingArea.Options = [.activeInKeyWindow,
-                                               .mouseMoved, .mouseEnteredAndExited]
-        addTrackingArea(NSTrackingArea(rect: bounds, options: options, owner: self))
-    }
-    override func updateTrackingAreas() {
-        trackingAreas .forEach { removeTrackingArea($0) }
-        createTrackingArea()
-        super.updateTrackingAreas()
-    }
-    
     func updateFrame() {
         human.fieldOfVision = bounds.size
     }
@@ -690,14 +680,11 @@ final class C0View: NSView, NSTextInputClient {
         }
     }
     
-    override func mouseEntered(with event: NSEvent) {
-        human.sendMoveCursor(with: moveEventWith(.begin, event))
+    override func cursorUpdate(with event: NSEvent) {
+        human.sendMoveCursor(with: moveEventWith(.sending, event))
         if human.indicatedResponder.cursor.nsCursor != NSCursor.current {
             human.indicatedResponder.cursor.nsCursor.set()
         }
-    }
-    override func mouseExited(with event: NSEvent) {
-        human.sendMoveCursor(with: moveEventWith(.end, event))
     }
     override func mouseMoved(with event: NSEvent) {
         human.sendMoveCursor(with: moveEventWith(.sending, event))

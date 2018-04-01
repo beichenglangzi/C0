@@ -74,12 +74,12 @@ extension Easing: Referenceable {
 }
 extension Easing: ResponderExpression {
     func responder(withBounds bounds: CGRect) -> Responder {
-        let responder = DrawingBox()
-        responder.drawBlock = { [unowned responder] ctx in
-            self.draw(with: responder.bounds, in: ctx)
+        let thumbnailView = DrawingBox()
+        thumbnailView.drawBlock = { [unowned thumbnailView] ctx in
+            self.draw(with: thumbnailView.bounds, in: ctx)
         }
-        responder.bounds = bounds
-        return responder
+        thumbnailView.bounds = bounds
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
     }
     func draw(with bounds: CGRect, in ctx: CGContext) {
         let path = self.path(in: bounds.inset(by: 5))
@@ -215,11 +215,11 @@ final class EasingView: Layer, Respondable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [easing])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [easing])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let easing = object as? Easing {
                 guard easing != self.easing else {
                     continue

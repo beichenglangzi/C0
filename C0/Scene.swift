@@ -38,12 +38,8 @@ typealias Second = Double
 final class Scene: NSObject, NSCoding {
     var name: String
     var frame: CGRect, frameRate: FPS, baseTimeInterval: Beat
-    var colorSpace: ColorSpace {
-        didSet {
-            self.materials = materials.map { $0.with($0.color.with(colorSpace: colorSpace)) }
-        }
-    }
-    var editMaterial: Material, materials: [Material]
+    var colorSpace: ColorSpace
+    var editMaterial: Material
     var isShownPrevious: Bool, isShownNext: Bool
     
     var viewTransform: Transform {
@@ -114,7 +110,7 @@ final class Scene: NSObject, NSCoding {
          frame: CGRect = CGRect(x: -288, y: -162, width: 576, height: 324), frameRate: FPS = 24,
          baseTimeInterval: Beat = Beat(1, 24),
          colorSpace: ColorSpace = .sRGB,
-         editMaterial: Material = Material(), materials: [Material] = [],
+         editMaterial: Material = Material(),
          isShownPrevious: Bool = false, isShownNext: Bool = false,
          isHiddenSubtitles: Bool = false,
          sound: Sound = Sound(),
@@ -129,7 +125,6 @@ final class Scene: NSObject, NSCoding {
         self.baseTimeInterval = baseTimeInterval
         self.colorSpace = colorSpace
         self.editMaterial = editMaterial
-        self.materials = materials
         self.isShownPrevious = isShownPrevious
         self.isShownNext = isShownNext
         self.isHiddenSubtitles = isHiddenSubtitles
@@ -159,7 +154,6 @@ final class Scene: NSObject, NSCoding {
             rawValue: Int8(coder.decodeInt32(forKey: CodingKeys.colorSpace.rawValue))) ?? .sRGB
         editMaterial = coder.decodeObject(
             forKey: CodingKeys.editMaterial.rawValue) as? Material ?? Material()
-        materials = coder.decodeObject(forKey: CodingKeys.materials.rawValue) as? [Material] ?? []
         isShownPrevious = coder.decodeBool(forKey: CodingKeys.isShownPrevious.rawValue)
         isShownNext = coder.decodeBool(forKey: CodingKeys.isShownNext.rawValue)
         viewTransform = coder.decodeDecodable(
@@ -181,7 +175,6 @@ final class Scene: NSObject, NSCoding {
         coder.encodeEncodable(baseTimeInterval, forKey: CodingKeys.baseTimeInterval.rawValue)
         coder.encode(Int32(colorSpace.rawValue), forKey: CodingKeys.colorSpace.rawValue)
         coder.encode(editMaterial, forKey: CodingKeys.editMaterial.rawValue)
-        coder.encode(materials, forKey: CodingKeys.materials.rawValue)
         coder.encode(isShownPrevious, forKey: CodingKeys.isShownPrevious.rawValue)
         coder.encode(isShownNext, forKey: CodingKeys.isShownNext.rawValue)
         coder.encodeEncodable(viewTransform, forKey: CodingKeys.viewTransform.rawValue)
@@ -262,7 +255,7 @@ final class Scene: NSObject, NSCoding {
 extension Scene: Copying {
     func copied(from copier: Copier) -> Scene {
         return Scene(frame: frame, frameRate: frameRate,
-                     editMaterial: editMaterial, materials: materials,
+                     editMaterial: editMaterial,
                      isShownPrevious: isShownPrevious, isShownNext: isShownNext,
                      sound: sound,
                      tempoTrack: tempoTrack.copied,
@@ -274,7 +267,6 @@ extension Scene: Copying {
 extension Scene: Referenceable {
     static let name = Localization(english: "Scene", japanese: "シーン")
 }
-
 
 /**
  # Issue
@@ -296,7 +288,7 @@ final class SceneView: Layer, Respondable, Localizable {
         }
     }
     
-    static let sceneViewKey = "sceneView", sceneKey = "scene"
+    static let sceneViewKey = "sceneView", sceneKey = "scene"//X sceneView
     var sceneDataModel = DataModel(key: SceneView.sceneKey)
     override var dataModel: DataModel? {
         didSet {
@@ -326,31 +318,36 @@ final class SceneView: Layer, Respondable, Localizable {
         }
     }
     
-    static let colorSpaceWidth = 82.cf
+    static let colorSpaceWidth = 82.0.cf
     static let colorSpaceFrame = CGRect(x: 0, y: Layout.basicPadding,
                                         width: colorSpaceWidth, height: Layout.basicHeight)
     static let rendererWidth = 80.0.cf, undoWidth = 120.0.cf
     static let canvasSize = CGSize(width: 730, height: 480)
     static let propertyWidth = MaterialView.defaultWidth + Layout.basicPadding * 2
     static let buttonsWidth = 120.0.cf, timelineWidth = 430.0.cf
-    static let timelineTextBoxesWidth = 142.0.cf, timelineHeight = 170.0.cf
+    static let timelineTextBoxesWidth = 142.0.cf, timelineHeight = 190.0.cf
     
     let nameLabel = Label(text: Scene.name, font: .bold)
     let versionView = VersionView()
+    
+    let timeline = Timeline()
+    let canvas = Canvas()
+    let seekBar = SeekBar()
+    
     let rendererManager = RendererManager()
     let sizeView = DiscreteSizeView()
     let frameRateSlider = NumberSlider(frame: Layout.valueFrame,
                                        min: 1, max: 1000, valueInterval: 1, unit: " fps",
                                        description: Localization(english: "Frame rate",
                                                                  japanese: "フレームレート"))
-    let baseTimeIntervalSlider =
-        NumberSlider(frame: Layout.valueFrame, min: 1, max: 1000, valueInterval: 1, unit: " cpb",
-                     description: Localization(english: "Edit split count per beat",
-                                               japanese: "1ビートあたりの編集用分割数"))
-    let colorSpaceLabel = Label(text: Localization(", "))
     let colorSpaceView = EnumView(frame: SceneView.colorSpaceFrame,
                                   names: [Localization("sRGB"), Localization("Display P3")],
                                   description: Localization(english: "Color Space", japanese: "色空間"))
+    let isHiddenSubtitlesView =
+        EnumView(names: [Localization(english: "Hidden Subtitles", japanese: "字幕表示なし"),
+                         Localization(english: "Shown Subtitles", japanese: "字幕表示あり")],
+                 cationIndex: 0, isSmall: true)
+    
     let isShownPreviousView =
         EnumView(names: [Localization(english: "Hidden Previous", japanese: "前の表示なし"),
                          Localization(english: "Shown Previous", japanese: "前の表示あり")],
@@ -363,37 +360,25 @@ final class SceneView: Layer, Respondable, Localizable {
                  cationIndex: 1,
                  description: Localization(english: "Hide or Show line drawing of next keyframe",
                                            japanese: "次のキーフレームの表示切り替え"))
-    let isHiddenSubtitlesView =
-        EnumView(names: [Localization(english: "Hidden Subtitles", japanese: "字幕表示なし"),
-                         Localization(english: "Shown Subtitles", japanese: "字幕表示あり")],
-                 cationIndex: 0,
-                 isSmall: true)
     
-    let shapeLinesBox = PopupBox(frame: CGRect(x: 0, y: 0, width: 100.0, height: Layout.basicHeight),
-                                 text: Localization(english: "Shape Lines", japanese: "図形の線"))
-    let changeToDraftBox = TextBox(name: Localization(english: "Change to Draft", japanese: "下書き化"))
-    let removeDraftBox = TextBox(name: Localization(english: "Remove Draft", japanese: "下書きを削除"))
-    let swapDraftBox = TextBox(name: Localization(english: "Swap Draft", japanese: "下書きと交換"))
-    
-    let showAllBox = TextBox(name: Localization(english: "Unlock All Cells",
-                                                japanese: "すべてのセルのロックを解除"))
-    let clipCellInSelectedBox = TextBox(name: Localization(english: "Clip Cell in Selected",
-                                                           japanese: "セルを選択の中へクリップ"))
-    let splitColorBox = TextBox(name: Localization(english: "Split Color", japanese: "カラーを分割"))
-    let splitOtherThanColorBox = TextBox(name: Localization(english: "Split Material",
-                                                            japanese: "マテリアルを分割"))
-    
-    let subtitleView = SubtitleView(isSmall: true)
     let soundView = SoundView()
-    let effectView = EffectView()
+    let drawingView = DrawingView()
+    let materialManager = SceneMaterialManager()
     let transformView = TransformView()
     let wiggleView = WiggleView()
+    let subtitleView = SubtitleView(isSmall: true)
+    let effectView = EffectView(isSmall: true)
     
-    let timeline = Timeline()
-    let canvas = Canvas()
-    let playerView = PlayerView()
-    
-    let materialManager = SceneMaterialManager()
+    let showAllBox = TextBox(name: Localization(english: "Unlock All Cells",
+                                                japanese: "すべてのセルのロックを解除"),
+                             isSmall: true)
+    let clipCellInSelectedBox = TextBox(name: Localization(english: "Clip Cell in Selected",
+                                                           japanese: "セルを選択の中へクリップ"),
+                                        isSmall: true)
+    let splitColorBox = TextBox(name: Localization(english: "Split Color", japanese: "カラーを分割"),
+                                isSmall: true)
+    let splitOtherThanColorBox = TextBox(name: Localization(english: "Split Material",
+                                                            japanese: "マテリアルを分割"), isSmall: true)
     
     override init() {
         super.init()
@@ -404,26 +389,23 @@ final class SceneView: Layer, Respondable, Localizable {
         timeline.sceneDataModel = sceneDataModel
         canvas.sceneDataModel = sceneDataModel
         
-        replace(children: [nameLabel,
+        replace(children: [//nameLabel,
                            versionView,
                            rendererManager.popupBox, sizeView, frameRateSlider,
-                           baseTimeIntervalSlider, isShownPreviousView, isShownNextView,
-                           isHiddenSubtitlesView,
-                           soundView, timeline.tempoSlider, transformView, wiggleView,
-                           timeline.nodeView,
-                           timeline.keyframeView, timeline.tempoKeyframeView,
-                           timeline.nodeBindingLineLayer, subtitleView,
-                           shapeLinesBox, changeToDraftBox, removeDraftBox, swapDraftBox,
+                           isShownPreviousView, isShownNextView, soundView,
+                           timeline.keyframeView,
+                           drawingView, canvas.materialView, transformView, wiggleView,
+                           timeline.tempoSlider, timeline.tempoKeyframeView,
+                           isHiddenSubtitlesView, subtitleView,
+                           timeline.nodeView, effectView,
                            canvas.cellView, showAllBox, clipCellInSelectedBox,
-                           canvas.materialView, materialManager.animationBox,
                            splitColorBox, splitOtherThanColorBox,
-                           canvas.editCellBindingLineLayer,
-                           effectView,
-                           timeline, canvas, playerView])
+                           timeline, canvas, seekBar])
         
         sceneDataModel.dataHandler = { [unowned self] in self.scene.differentialData }
         
         versionView.rootUndoManager = rootUndoManager
+        
         rendererManager.progressesEdgeLayer = self
         sizeView.binding = { [unowned self] in
             self.scene.frame = CGRect(origin: CGPoint(x: -$0.size.width / 2,
@@ -442,7 +424,15 @@ final class SceneView: Layer, Respondable, Localizable {
                 self.sceneDataModel.isWrite = true
             }
         }
-        baseTimeIntervalSlider.binding = { [unowned self] in
+        colorSpaceView.binding = { [unowned self] in
+            self.scene.colorSpace = $0.index == 0 ? .sRGB : .displayP3
+            self.canvas.setNeedsDisplay()
+            if $0.type == .end && $0.index != $0.oldIndex {
+                self.sceneDataModel.isWrite = true
+            }
+        }
+        
+        timeline.baseTimeIntervalSlider.binding = { [unowned self] in
             if $0.type == .begin {
                 self.baseTimeIntervalOldTime = self.scene.secondTime(withBeatTime: self.scene.time)
             }
@@ -453,13 +443,7 @@ final class SceneView: Layer, Respondable, Localizable {
                 self.sceneDataModel.isWrite = true
             }
         }
-        colorSpaceView.binding = { [unowned self] in
-            self.scene.colorSpace = $0.index == 0 ? .sRGB : .displayP3
-            self.canvas.setNeedsDisplay()
-            if $0.type == .end && $0.index != $0.oldIndex {
-                self.sceneDataModel.isWrite = true
-            }
-        }
+        
         isShownPreviousView.binding = { [unowned self] in
             self.canvas.isShownPrevious = $0.index == 1
             if $0.type == .end && $0.index != $0.oldIndex {
@@ -479,6 +463,17 @@ final class SceneView: Layer, Respondable, Localizable {
             }
         }
         
+        soundView.setSoundHandler = { [unowned self] in
+            self.scene.sound = $0.sound
+            self.timeline.soundWaveformView.sound = $0.sound
+            if $0.type == .end && $0.sound != $0.oldSound {
+                self.sceneDataModel.isWrite = true
+            }
+            if self.scene.sound.url == nil && self.canvas.player.audioPlayer?.isPlaying ?? false {
+                self.canvas.player.audioPlayer?.stop()
+            }
+        }
+        
         let children = [TextBox(name: Localization(english: "Append Square Lines",
                                                    japanese: "正方形の線を追加"),
                                 runHandler: { [unowned self] _ in self.canvas.appendSquareLines() }),
@@ -491,22 +486,35 @@ final class SceneView: Layer, Respondable, Localizable {
                         TextBox(name: Localization(english: "Append Circle Lines",
                                                    japanese: "円の線を追加"),
                                 runHandler: { [unowned self] _ in self.canvas.appendCircleLines() })]
-        shapeLinesBox.panel.replace(children: children)
-        var minSize = CGSize()
-        Layout.topAlignment(shapeLinesBox.panel.children, minSize: &minSize)
-        shapeLinesBox.panel.frame.size = CGSize(width: minSize.width + Layout.basicPadding * 2,
-                                                height: minSize.height + Layout.basicPadding * 2)
-        changeToDraftBox.runHandler = { [unowned self] _ in
-            self.canvas.changeToRough()
+        drawingView.shapeLinesBox.panel.replace(children: children)
+        drawingView.changeToDraftBox.runHandler = { [unowned self] _ in
+            self.canvas.changeToDraft()
             return true
         }
-        removeDraftBox.runHandler = { [unowned self] _ in
-            self.canvas.removeRough()
+        drawingView.removeDraftBox.runHandler = { [unowned self] _ in
+            self.canvas.removeDraft()
             return true
         }
-        swapDraftBox.runHandler = { [unowned self] _ in
-            self.canvas.swapRough()
+        drawingView.exchangeWithDraftBox.runHandler = { [unowned self] _ in
+            self.canvas.exchangeWithDraft()
             return true
+        }
+        
+        effectView.binding = { [unowned self] in
+            self.set($0.effect, old: $0.oldEffect, type: $0.type)
+        }
+        drawingView.binding = { [unowned self] in
+            self.set($0.drawing, old: $0.oldDrawing, type: $0.type)
+        }
+        transformView.binding = { [unowned self] in
+            self.set($0.transform, old: $0.oldTransform, type: $0.type)
+        }
+        wiggleView.binding = { [unowned self] in
+            self.set($0.wiggle, old: $0.oldWiggle, type: $0.type)
+        }
+        
+        subtitleView.binding = { [unowned self] in
+            self.set($0.subtitle, old: $0.oldSubtitle, type: $0.type)
         }
         
         showAllBox.runHandler = { [unowned self] _ in
@@ -526,20 +534,6 @@ final class SceneView: Layer, Respondable, Localizable {
             return true
         }
         
-        effectView.binding = { [unowned self] in
-            self.set($0.effect, old: $0.oldEffect, type: $0.type)
-        }
-        transformView.binding = { [unowned self] in
-            self.set($0.transform, old: $0.oldTransform, type: $0.type)
-        }
-        wiggleView.binding = { [unowned self] in
-            self.set($0.wiggle, old: $0.oldWiggle, type: $0.type)
-        }
-        
-        subtitleView.binding = { [unowned self] in
-            self.set($0.subtitle, old: $0.oldSubtitle, type: $0.type)
-        }
-        
         timeline.tempoSlider.binding = { [unowned self] in
             self.set(BPM($0.value), old: BPM($0.oldValue), type: $0.type)
         }
@@ -551,16 +545,18 @@ final class SceneView: Layer, Respondable, Localizable {
             }
         }
         timeline.setSceneDurationHandler = { [unowned self] in
-            self.playerView.maxTime = self.scene.secondTime(withBeatTime: $1)
+            self.seekBar.maxTime = self.scene.secondTime(withBeatTime: $1)
         }
         timeline.setEditCutItemIndexHandler = { [unowned self] _, _ in
             self.canvas.cut = self.scene.editCut
+            self.drawingView.drawing = self.scene.editNode.editTrack.drawingItem.drawing
             self.transformView.transform =
                 self.scene.editNode.editTrack.transformItem?.transform ?? Transform()
             self.wiggleView.wiggle =
                 self.scene.editNode.editTrack.wiggleItem?.wiggle ?? Wiggle()
             self.effectView.effect =
                 self.scene.editNode.editTrack.effectItem?.effect ?? Effect()
+            self.subtitleView.subtitle = self.scene.editCut.subtitleTrack.subtitleItem.subtitle
         }
         timeline.updateViewHandler = { [unowned self] in
             if $0.isCut {
@@ -571,6 +567,7 @@ final class SceneView: Layer, Respondable, Localizable {
                 self.canvas.setNeedsDisplay()
             }
             if $0.isTransform {
+                self.drawingView.drawing = self.scene.editNode.editTrack.drawingItem.drawing
                 self.transformView.transform =
                     self.scene.editNode.editTrack.transformItem?.transform ?? Transform()
                 self.wiggleView.wiggle =
@@ -606,18 +603,14 @@ final class SceneView: Layer, Respondable, Localizable {
         canvas.bindHandler = { [unowned self] _, m, _ in self.materialManager.material = m }
         canvas.setTimeHandler = { [unowned self] _, time in self.timeline.time = time }
         canvas.updateSceneHandler = { [unowned self] _ in self.sceneDataModel.isWrite = true }
-        canvas.setRoughLinesHandler = { [unowned self] _, _ in
+        canvas.setDraftLinesHandler = { [unowned self] _, _ in
             self.timeline.editCutView.updateChildren()
         }
         canvas.setContentsScaleHandler = { [unowned self] _, contentsScale in
             self.rendererManager.rendingContentScale = contentsScale
         }
-        canvas.pasteColorBinding = { [unowned self] in
-            self.materialManager.paste($1, in: $2)
-        }
-        canvas.pasteMaterialBinding = { [unowned self] in
-            self.materialManager.paste($1, in: $2)
-        }
+        canvas.pasteColorBinding = { [unowned self] in self.materialManager.paste($1, in: $2) }
+        canvas.pasteMaterialBinding = { [unowned self] in self.materialManager.paste($1, in: $2) }
         
         canvas.cellView.setIsTranslucentLockHandler = { [unowned self] in
             self.setIsTranslucentLockInCell(with: $0)
@@ -627,23 +620,21 @@ final class SceneView: Layer, Respondable, Localizable {
             self.canvas.materialViewType = isEditing ?
                 .preview : (materialditor.isSubIndicated ? .selected : .none)
         }
-        canvas.materialView.isSubIndicatedBinding = {
-            [unowned self] (materialView, isSubIndicated) in
-            
-            self.canvas.materialViewType = materialView.isEditing ?
+        canvas.materialView.isSubIndicatedBinding = { [unowned self] (view, isSubIndicated) in
+            self.canvas.materialViewType = view.isEditing ?
                 .preview : (isSubIndicated ? .selected : .none)
         }
         
         canvas.player.didSetTimeHandler = { [unowned self] in
-            self.playerView.time = self.scene.secondTime(withBeatTime: $0)
+            self.seekBar.time = self.scene.secondTime(withBeatTime: $0)
         }
         canvas.player.didSetPlayFrameRateHandler = { [unowned self] in
             if !self.canvas.player.isPause {
-                self.playerView.playFrameRate = $0
+                self.seekBar.playFrameRate = $0
             }
         }
         
-        playerView.timeBinding = { [unowned self] in
+        seekBar.timeBinding = { [unowned self] in
             switch $1 {
             case .begin:
                 self.canvas.player.isPause = true
@@ -654,27 +645,16 @@ final class SceneView: Layer, Respondable, Localizable {
             }
             self.canvas.player.currentPlaySecond = $0
         }
-        playerView.isPlayingBinding = { [unowned self] in
+        seekBar.isPlayingBinding = { [unowned self] in
             if $0 {
-                self.playerView.maxTime = self.scene.secondTime(withBeatTime: self.scene.duration)
-                self.playerView.time = self.scene.secondTime(withBeatTime: self.scene.time)
-                self.playerView.frameRate = self.scene.frameRate
+                self.seekBar.maxTime = self.scene.secondTime(withBeatTime: self.scene.duration)
+                self.seekBar.time = self.scene.secondTime(withBeatTime: self.scene.time)
+                self.seekBar.frameRate = self.scene.frameRate
                 self.canvas.play()
             } else {
-                self.playerView.time = self.scene.secondTime(withBeatTime: self.scene.time)
-                self.playerView.frameRate = 0
+                self.seekBar.time = self.scene.secondTime(withBeatTime: self.scene.time)
+                self.seekBar.frameRate = 0
                 self.canvas.player.stop()
-            }
-        }
-        
-        soundView.setSoundHandler = { [unowned self] in
-            self.scene.sound = $0.sound
-            self.timeline.soundWaveformView.sound = $0.sound
-            if $0.type == .end && $0.sound != $0.oldSound {
-                self.sceneDataModel.isWrite = true
-            }
-            if self.scene.sound.url == nil && self.canvas.player.audioPlayer?.isPlaying ?? false {
-                self.canvas.player.audioPlayer?.stop()
             }
         }
         
@@ -683,135 +663,118 @@ final class SceneView: Layer, Respondable, Localizable {
     }
     
     private func updateLayout() {
-        let padding = Layout.basicPadding
-        let buttonH = Layout.basicHeight
+        let padding = Layout.basicPadding, sPadding = Layout.smallPadding, buttonH = Layout.basicHeight
         let h = buttonH + padding * 2
-        
         let cs = SceneView.canvasSize, th = SceneView.timelineHeight
-        let inWidth = cs.width + SceneView.propertyWidth * 1.65 + padding
+        let spw = ceil(SceneView.propertyWidth * 8 / 11)
+        let inWidth = cs.width + SceneView.propertyWidth + sPadding + spw + padding
         let width = inWidth + padding * 2
-        let height = h * 3 + th + cs.height + padding * 4
+        let height = th + cs.height + h + padding * 2
         let y = height - padding
-        versionView.frame.size = CGSize(width: SceneView.undoWidth, height: buttonH)
-        rendererManager.popupBox.frame.size = CGSize(width: SceneView.rendererWidth,
-                                                     height: buttonH)
         
-        nameLabel.frame.origin = CGPoint(x: padding, y: y - h + padding * 2)
-        let properties: [Layer] = [versionView, Padding(), rendererManager.popupBox, sizeView,
-                                   frameRateSlider, Padding(),
-                                   baseTimeIntervalSlider]
-        properties.forEach { $0.frame.size.height = h }
-        _ = Layout.leftAlignment(properties, minX: nameLabel.frame.maxX + padding,
-                                 y: y - h, height: h)
+//        nameLabel.frame.origin = CGPoint(x: padding, y: y - h + padding * 2)
+//        versionView.frame.size = CGSize(width: SceneView.undoWidth, height: buttonH)
+//        rendererManager.popupBox.frame.size = CGSize(width: SceneView.rendererWidth, height: buttonH)
+//        let properties: [Layer] = [versionView, Padding(),
+//                                   rendererManager.popupBox, sizeView, frameRateSlider]
+//        properties.forEach { $0.frame.size.height = h }
+//        _ = Layout.leftAlignment(properties, minX: nameLabel.frame.maxX + padding, y: y - h, height: h)
+//        let pnx = frameRateSlider.frame.maxX + padding, soundWidth = 200.0.cf
         
-        let previousNextFrame = CGRect(x: baseTimeIntervalSlider.frame.maxX,
-                                       y: y - h,
-                                       width: width - baseTimeIntervalSlider.frame.maxX - padding,
-                                       height: h)
-        Layout.autoHorizontalAlignment([isShownPreviousView, isShownNextView], in: previousNextFrame)
+        var ty = y
+        ty -= th
+        timeline.frame = CGRect(x: padding, y: ty, width: cs.width, height: th)
+        ty -= cs.height
+        canvas.frame = CGRect(x: padding, y: ty, width: cs.width, height: cs.height)
+        ty -= h
+        seekBar.frame = CGRect(x: padding, y: ty, width: cs.width, height: h)
         
-        let trw = transformView.defaultBounds.width, ww = wiggleView.defaultBounds.width
-        let tew = Layout.valueWidth
-        soundView.frame = CGRect(x: padding,
-                                 y: y - h * 2 - padding,
-                                 width: inWidth - trw - ww - tew - padding * 2, height: h)
-        timeline.tempoSlider.frame = CGRect(x: soundView.frame.maxX + padding,
-                                            y: y - h * 2 - padding,
-                                            width: tew, height: h)
-        transformView.frame = CGRect(x: timeline.tempoSlider.frame.maxX + padding,
-                                     y: y - h * 2 - padding,
-                                     width: trw, height: h)
-        wiggleView.frame = CGRect(x: transformView.frame.maxX,
-                                  y: y - h * 2 - padding,
-                                  width: ww, height: h)
+        let px = padding * 2 + cs.width, pw = SceneView.propertyWidth, propertyMaxY = y - buttonH
+        var py = propertyMaxY
+        let kh = 150.0.cf
         
-        let kh = 160.0.cf
-        let propertyX = padding * 2 + cs.width, propertyMaxY = y - h - padding
-        timeline.nodeView.frame = CGRect(x: propertyX,
-                                         y: propertyMaxY - h * 2,
-                                         width: SceneView.propertyWidth,
-                                         height: h)
-        timeline.keyframeView.frame = CGRect(x: propertyX,
-                                             y: propertyMaxY - h * 2 - kh,
-                                             width: SceneView.propertyWidth,
-                                             height: kh)
+        Layout.autoHorizontalAlignment([isShownPreviousView, isShownNextView],
+                                       in: CGRect(x: px, y: y - buttonH,
+                                                  width: pw + spw + sPadding, height: buttonH))
         
-        timeline.tempoKeyframeView.frame = CGRect(x: propertyX + SceneView.propertyWidth,
-                                                  y: propertyMaxY - h * 5 - kh,
-                                                  width: SceneView.propertyWidth * 0.65,
-                                                  height: kh * 0.65)
-        
-        isHiddenSubtitlesView.frame = CGRect(x: propertyX + SceneView.propertyWidth,
-                                             y: propertyMaxY - h * 6 - kh,
-                                             width: SceneView.propertyWidth * 0.65, height: h)
-        
-        subtitleView.frame = CGRect(x: propertyX + SceneView.propertyWidth,
-                                    y: propertyMaxY - h * 7 - kh,
-                                    width: SceneView.propertyWidth * 0.65, height: h)
-        
-        let ch = canvas.cellView.defaultBounds.height
+        py -= padding
+        py -= kh
+        timeline.keyframeView.frame = CGRect(x: px, y: py, width: pw, height: kh)
+        py -= padding
+        let dh = drawingView.defaultBounds.height
+        py -= dh
+        drawingView.frame = CGRect(x: px, y: py, width:pw, height: dh)
+        py -= padding
         let mh = canvas.materialView.defaultBounds.height
+        py -= mh
+        canvas.materialView.frame = CGRect(x: px, y: py, width:pw, height: mh)
+        py -= padding
+        let trb = transformView.defaultBounds
+        py -= trb.height
+        transformView.frame = CGRect(x: px, y: py, width: trb.width, height: trb.height)
+        py -= padding
+        let wb = wiggleView.defaultBounds
+        py -= wb.height
+        wiggleView.frame = CGRect(x: px, y: py, width: wb.width, height: wb.height)
         
-        shapeLinesBox.frame = CGRect(x: propertyX,
-                                     y: propertyMaxY - h * 2 - buttonH - kh - padding,
-                                     width: SceneView.propertyWidth,
-                                     height: buttonH)
-        changeToDraftBox.frame = CGRect(x: propertyX,
-                                        y: propertyMaxY - h * 2 - buttonH * 2 - kh - padding,
-                                        width: SceneView.propertyWidth,
-                                        height: buttonH)
-        removeDraftBox.frame = CGRect(x: propertyX,
-                                      y: propertyMaxY - h * 2 - buttonH * 3 - kh - padding,
-                                      width: SceneView.propertyWidth,
-                                      height: buttonH)
-        swapDraftBox.frame = CGRect(x: propertyX,
-                                    y: propertyMaxY - h * 2 - buttonH * 4 - kh - padding,
-                                    width: SceneView.propertyWidth,
-                                    height: buttonH)
+        let spx = px + SceneView.propertyWidth + sPadding, sh = Layout.smallHeight
+        let sph = sh + Layout.smallPadding * 2
+        var spy = propertyMaxY
+//        let tew = Layout.valueWidth
+//        spy -= sPadding
+        spy -= padding
+        spy -= buttonH
+        versionView.frame = CGRect(x: spx, y: spy,
+                                   width: spw, height: buttonH)
+        spy -= sPadding
+        spy -= sph
+        rendererManager.popupBox.frame = CGRect(x: spx, y: spy,
+                                                width: spw, height: sph)
+        spy -= sph
+        sizeView.frame = CGRect(x: spx, y: spy,
+                                width: spw, height: sph)
+        spy -= sph
+        frameRateSlider.frame = CGRect(x: spx, y: spy,
+                                       width: spw, height: sph)
+//        let properties: [Layer] = [versionView, Padding(),
+//                                   rendererManager.popupBox, sizeView, frameRateSlider]
+//        properties.forEach { $0.frame.size.height = h }
+//        _ = Layout.leftAlignment(properties, minX: nameLabel.frame.maxX + padding, y: y - h, height: h)
+        spy -= sh
+        isHiddenSubtitlesView.frame = CGRect(x: spx, y: spy, width: spw, height: sh)
         
-        let canvasPropertyMaxY = propertyMaxY - h * 2 - buttonH * 4 - kh - padding * 2
-        canvas.cellView.frame = CGRect(x: propertyX,
-                                       y: canvasPropertyMaxY - ch,
-                                       width: SceneView.propertyWidth,
-                                       height: ch)
-        showAllBox.frame = CGRect(x: propertyX,
-                                  y: canvasPropertyMaxY - ch - buttonH,
-                                  width: SceneView.propertyWidth,
-                                  height: buttonH)
-        clipCellInSelectedBox.frame = CGRect(x: propertyX,
-                                             y: canvasPropertyMaxY - ch - buttonH * 2,
-                                             width: SceneView.propertyWidth,
-                                             height: buttonH)
-        
-        canvas.materialView.frame = CGRect(x: propertyX,
-                                           y: canvasPropertyMaxY - ch - buttonH * 2 - mh,
-                                           width: SceneView.propertyWidth,
-                                           height: mh)
-        materialManager.animationBox.frame = CGRect(x: propertyX,
-                                                    y: canvasPropertyMaxY - ch - mh - buttonH * 3,
-                                                    width: SceneView.propertyWidth,
-                                                    height: buttonH)
-        splitColorBox.frame = CGRect(x: propertyX,
-                                     y: canvasPropertyMaxY - ch - mh - buttonH * 4,
-                                     width: SceneView.propertyWidth,
-                                     height: buttonH)
-        splitOtherThanColorBox.frame = CGRect(x: propertyX,
-                                              y: canvasPropertyMaxY - ch - mh - buttonH * 5,
-                                              width: SceneView.propertyWidth,
-                                              height: buttonH)
+        spy -= sph
+        soundView.frame = CGRect(x: spx, y: spy, width: spw, height: sph)
+        spy -= sPadding
+        spy -= sph
+        timeline.tempoSlider.frame = CGRect(x: spx, y: spy, width: spw, height: sph)
+        let tkh = ceil(kh * 0.6)
+        spy -= tkh
+        timeline.tempoKeyframeView.frame = CGRect(x: spx, y: spy, width: spw, height: tkh)
+        spy -= sPadding
+        spy -= sph
+        subtitleView.frame = CGRect(x: spx, y: spy, width: spw, height: sph)
+        spy -= sPadding
+        spy -= sph
+        timeline.nodeView.frame = CGRect(x: spx, y: spy, width: spw, height: sph)
+        spy -= sPadding
         let eh = effectView.defaultBounds.height
-        effectView.frame = CGRect(x: propertyX + SceneView.propertyWidth,
-                                  y: y - h * 2 - padding - eh,
-                                  width: SceneView.propertyWidth,
-                                  height: eh)
+        spy -= eh
+        effectView.frame = CGRect(x: spx, y: spy, width: spw, height: eh)
+        spy -= sPadding
+        let ch = canvas.cellView.defaultBounds.height
+        spy -= ch
+        canvas.cellView.frame = CGRect(x: spx, y: spy, width: spw, height: ch)
         
-        timeline.frame = CGRect(x: padding,
-                                y: y - h * 2 - th - padding * 2,
-                                width: cs.width, height: SceneView.timelineHeight)
-        canvas.frame = CGRect(x: padding,
-                              y: y - h * 2 - th - cs.height - padding * 2,
-                              width: cs.width, height: cs.height)
-        playerView.frame = CGRect(x: padding, y: padding, width: cs.width, height: h)
+        spy -= sPadding
+        spy -= sh
+        showAllBox.frame = CGRect(x: spx, y: spy, width: spw, height: sh)
+        spy -= sh
+        clipCellInSelectedBox.frame = CGRect(x: spx, y: spy, width: spw, height: sh)
+        spy -= sh
+        splitColorBox.frame = CGRect(x: spx, y: spy, width: spw, height: sh)
+        spy -= sh
+        splitOtherThanColorBox.frame = CGRect(x: spx, y: spy, width: spw, height: sh)
         
         let timeBindingPath = CGMutablePath()
         timeBindingPath.move(to: CGPoint(x: timeline.frame.midX, y: timeline.frame.maxY))
@@ -832,7 +795,6 @@ final class SceneView: Layer, Respondable, Localizable {
         canvas.scene = scene
         sizeView.size = scene.frame.size
         frameRateSlider.value = scene.frameRate.cf
-        baseTimeIntervalSlider.value = scene.baseTimeInterval.q.cf
         colorSpaceView.selectedIndex = scene.colorSpace == .sRGB ? 0 : 1
         isShownPreviousView.selectedIndex = scene.isShownPrevious ? 1 : 0
         isShownNextView.selectedIndex = scene.isShownNext ? 1 : 0
@@ -844,6 +806,7 @@ final class SceneView: Layer, Respondable, Localizable {
         if let effect = scene.editNode.editTrack.effectItem?.effect {
             effectView.effect = effect
         }
+        drawingView.drawing = scene.editNode.editTrack.drawingItem.drawing
         if let transform = scene.editNode.editTrack.transformItem?.transform {
             transformView.transform = transform
         }
@@ -851,12 +814,12 @@ final class SceneView: Layer, Respondable, Localizable {
             wiggleView.wiggle = wiggle
         }
         subtitleView.subtitle = scene.editCut.subtitleTrack.subtitleItem.subtitle
-        playerView.time = scene.secondTime(withBeatTime: scene.time)
-        playerView.maxTime = scene.secondTime(withBeatTime: scene.duration)
+        seekBar.time = scene.secondTime(withBeatTime: scene.time)
+        seekBar.maxTime = scene.secondTime(withBeatTime: scene.duration)
     }
     
     func update(withTime time: Beat) {
-        playerView.time = scene.secondTime(withBeatTime: time)
+        seekBar.time = scene.secondTime(withBeatTime: time)
     }
     
     var time: Beat {
@@ -867,7 +830,7 @@ final class SceneView: Layer, Respondable, Localizable {
             if newValue != time {
                 timeline.time = newValue
                 sceneDataModel.isWrite = true
-                playerView.time = scene.secondTime(withBeatTime: newValue)
+                seekBar.time = scene.secondTime(withBeatTime: newValue)
                 canvas.updateEditCellBindingLine()
             }
         }
@@ -1207,7 +1170,7 @@ final class SceneView: Layer, Respondable, Localizable {
     }
     private func set(_ wiggle: Wiggle, at index: Int,
                      in track: NodeTrack, in cutView: CutView) {
-        track.replaceWiggle(wiggle, at: index)
+        track.replace(wiggle, at: index)
         track.updateInterpolation()
         cutView.cut.editNode.updateWiggle()
         canvas.setNeedsDisplay()
@@ -1324,6 +1287,46 @@ final class SceneView: Layer, Respondable, Localizable {
             $0.set(oldTempo, old: tempo, at: index, in: track, time: $1)
         }
         set(tempo, at: index, in: track)
+        sceneDataModel.isWrite = true
+    }
+    
+    private var oldNode: Node?
+    func set(_ drawing: Drawing, old oldDrawing: Drawing, type: Action.SendType) {
+        switch type {
+        case .begin:
+            let track = scene.editCut.editNode.editTrack
+            oldNode = scene.editNode
+            self.track = track
+            keyframeIndex = track.animation.editKeyframeIndex
+            set(drawing, at: keyframeIndex, in: track)
+        case .sending:
+            guard let track = track else {
+                return
+            }
+            set(drawing, at: keyframeIndex, in: track)
+        case .end:
+            guard let track = track, let oldNode = oldNode else {
+                return
+            }
+            set(drawing, at: keyframeIndex, in: track)
+            if drawing != oldDrawing {
+                set(drawing, old: oldDrawing, at: keyframeIndex, in: track, oldNode, time: scene.time)
+            } else {
+                set(oldDrawing, at: keyframeIndex, in: track)
+            }
+        }
+    }
+    private func set(_ drawing: Drawing, at index: Int, in track: NodeTrack) {
+        track.replace(drawing, at: index)
+        canvas.setNeedsDisplay()
+    }
+    private func set(_ drawing: Drawing, old oldDrawing: Drawing,
+                     at index: Int, in track: NodeTrack, _ node: Node, time: Beat) {
+        registerUndo(time: time) {
+            $0.set(oldDrawing, old: drawing, at: index, in: track, node, time: $1)
+        }
+        set(drawing, at: index, in: track)
+        node.differentialDataModel.isWrite = true
         sceneDataModel.isWrite = true
     }
     
@@ -1687,8 +1690,8 @@ final class SceneMaterialManager {
         }
     }
     
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let material = object as? Material {
                 paste(material, withSelected: self.material, useSelected: false)
                 return true

@@ -34,11 +34,11 @@ final class Box: Layer, Respondable {
     
     var canPasteImage = false
     let minPasteImageWidth = 400.0.cf
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
         var isChanged = false
         if canPasteImage {
             let p = self.point(from: event)
-            for object in copiedObject.objects {
+            for object in copyManager.copiedObjects {
                 if let url = object as? URL {
                     append(child: makeImageView(url: url, position: p))
                     isChanged = true
@@ -88,14 +88,14 @@ final class TextBox: Layer, Respondable {
     let highlight = HighlightLayer()
     
     init(frame: CGRect = CGRect(), name: Localization = Localization(), isSmall: Bool = false,
-         isLeftAlignment: Bool = true, leftPadding: CGFloat = Layout.basicPadding,
+         isLeftAlignment: Bool = true, leftPadding: CGFloat? = nil,
          runHandler: ((TextBox) -> (Bool))? = nil) {
         
+        self.leftPadding = leftPadding ?? (isSmall ? Layout.smallPadding : Layout.basicPadding)
         self.runHandler = runHandler
         self.label = Label(text: name, font: isSmall ? .small : .default, color: .locked)
         self.isLeftAlignment = isLeftAlignment
-        self.leftPadding = leftPadding
-        let x = isLeftAlignment ? leftPadding : round((frame.width - label.frame.width) / 2)
+        let x = isLeftAlignment ? self.leftPadding : round((frame.width - label.frame.width) / 2)
         label.frame.origin = CGPoint(x: x, y: round((frame.height - label.frame.height) / 2))
         
         super.init()
@@ -129,8 +129,8 @@ final class TextBox: Layer, Respondable {
         highlight.frame = bounds.inset(by: 0.5)
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [label.string])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [label.string])
     }
     
     var deleteHandler: ((TextBox, KeyInputEvent) -> (Bool))?
@@ -182,9 +182,12 @@ final class PopupBox: Layer, Respondable, Localizable {
         return arrowLayer
     } ()
     
+    var isSmall: Bool
     let label: Label
-    init(frame: CGRect, text: Localization, panel: Panel = Panel(isUseHedding: false)) {
-        label = Label(text: text, color: .locked)
+    init(frame: CGRect, text: Localization, panel: Panel = Panel(isUseHedding: false),
+         isSmall: Bool = false) {
+        self.isSmall = isSmall
+        label = Label(text: text, font: isSmall ? .small : .default, color: .locked)
         label.frame.origin = CGPoint(x: round((frame.width - label.frame.width) / 2),
                                      y: round((frame.height - label.frame.height) / 2))
         self.panel = panel

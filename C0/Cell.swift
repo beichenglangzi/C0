@@ -648,12 +648,12 @@ extension Cell: Referenceable {
 }
 extension Cell: ResponderExpression {
     func responder(withBounds bounds: CGRect) -> Responder {
-        let responder = DrawingBox()
-        responder.drawBlock = { [unowned self, unowned responder] ctx in
-            self.draw(with: responder.bounds, in: ctx)
+        let thumbnailView = DrawingBox()
+        thumbnailView.drawBlock = { [unowned self, unowned thumbnailView] ctx in
+            self.draw(with: thumbnailView.bounds, in: ctx)
         }
-        responder.bounds = bounds
-        return responder
+        thumbnailView.bounds = bounds
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
     }
     func draw(with bounds: CGRect, in ctx: CGContext) {
         var imageBounds = CGRect()
@@ -700,12 +700,23 @@ extension JoiningCell: Referenceable {
 }
 extension JoiningCell: ResponderExpression {
     func responder(withBounds bounds: CGRect) -> Responder {
-        return cell.responder(withBounds: bounds)
+        let thumbnailView = DrawingBox()
+        thumbnailView.drawBlock = { [unowned cell, unowned thumbnailView] ctx in
+            cell.draw(with: thumbnailView.bounds, in: ctx)
+        }
+        thumbnailView.bounds = bounds
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
     }
 }
 
-final class CellView: Layer, Respondable {
+final class CellView: Layer, Respondable, Localizable {
     static let name = Localization(english: "Cell View", japanese: "セル表示")
+    
+    var locale = Locale.current {
+        didSet {
+            updateLayout()
+        }
+    }
     
     var cell = Cell() {
         didSet {
@@ -713,29 +724,28 @@ final class CellView: Layer, Respondable {
         }
     }
     
-    private let nameLabel = Label(text: Cell.name, font: .bold)
-    private let isTranslucentLockView = EnumView(names: [Localization(english: "Unlock",
-                                                                      japanese: "ロックなし"),
-                                                         Localization(english: "Translucent Lock",
-                                                                      japanese: "半透明ロック")],
-                                                 cationIndex: 1)
+    var isSmall: Bool
+    private let nameLabel: Label
+    private let isTranslucentLockView: EnumView
     
-    override init() {
+    init(isSmall: Bool = false) {
+        self.isSmall = isSmall
+        nameLabel = Label(text: Cell.name, font: isSmall ? .smallBold : .bold)
+        isTranslucentLockView = EnumView(names: [Localization(english: "Unlock", japanese: "ロックなし"),
+                                                 Localization(english: "Translucent Lock",
+                                                              japanese: "半透明ロック")],
+                                         cationIndex: 1, isSmall: isSmall)
         super.init()
         replace(children: [nameLabel, isTranslucentLockView])
         
-        isTranslucentLockView.binding = { [unowned self] in
-            self.setIsTranslucentLock(with: $0)
-        }
+        isTranslucentLockView.binding = { [unowned self] in self.setIsTranslucentLock(with: $0) }
     }
     
     override var defaultBounds: CGRect {
-        let padding = Layout.basicPadding
-        return CGRect(x: 0,
-                      y: 0,
-                      width: nameLabel.frame.width
-                        + isTranslucentLockView.frame.width + padding * 3,
-                      height: Layout.basicHeight + padding * 2)
+        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
+        let h = isSmall ? Layout.smallHeight : Layout.basicHeight
+        let tlw = nameLabel.frame.width + isTranslucentLockView.frame.width + padding * 3
+        return CGRect(x: 0, y: 0, width: tlw, height: h + padding * 2)
     }
     override var bounds: CGRect {
         didSet {
@@ -743,14 +753,13 @@ final class CellView: Layer, Respondable {
         }
     }
     private func updateLayout() {
-        let padding = Layout.basicPadding, h = Layout.basicHeight
+        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
+        let h = isSmall ? Layout.smallHeight : Layout.basicHeight
+        let tlw = bounds.width - nameLabel.frame.width - padding * 3
         nameLabel.frame.origin = CGPoint(x: padding,
-                                         y: padding * 2)
-        isTranslucentLockView.frame = CGRect(x: nameLabel.frame.maxX + padding,
-                                               y: padding,
-                                               width: bounds.width
-                                                - nameLabel.frame.width - padding * 3,
-                                               height: h)
+                                         y: bounds.height - nameLabel.frame.height - padding)
+        isTranslucentLockView.frame = CGRect(x: nameLabel.frame.maxX + padding, y: padding,
+                                             width: tlw, height: h)
     }
     func updateWithCell() {
         isTranslucentLockView.selectedIndex = !cell.isTranslucentLock ? 0 : 1
@@ -773,18 +782,18 @@ final class CellView: Layer, Respondable {
             cell.isTranslucentLock = binding.index == 1
         }
         setIsTranslucentLockHandler?(Binding(cellView: self,
-                                                   isTranslucentLock: binding.index == 1,
-                                                   oldIsTranslucentLock: binding.oldIndex == 1,
-                                                   inCell: oldCell,
-                                                   type: binding.type))
+                                             isTranslucentLock: binding.index == 1,
+                                             oldIsTranslucentLock: binding.oldIndex == 1,
+                                             inCell: oldCell,
+                                             type: binding.type))
     }
     
-    var copyHandler: ((CellView, KeyInputEvent) -> CopiedObject?)?
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
+    var copyHandler: ((CellView, KeyInputEvent) -> CopyManager?)?
+    func copy(with event: KeyInputEvent) -> CopyManager? {
         if let copyHandler = copyHandler {
             return copyHandler(self, event)
         } else {
-            return CopiedObject(objects: [cell.copied])
+            return CopyManager(copiedObjects: [cell.copied])
         }
     }
 }

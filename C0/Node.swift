@@ -785,7 +785,6 @@ final class Node: NSObject, NSCoding {
               scale: CGFloat, rotation: CGFloat,
               viewScale: CGFloat, viewRotation: CGFloat,
               in ctx: CGContext) {
-        
         let inScale = scale * transform.scale.x, inRotation = rotation + transform.rotation
         let inViewScale = viewScale * transform.scale.x
         let inViewRotation = viewRotation + transform.rotation
@@ -845,7 +844,6 @@ final class Node: NSObject, NSCoding {
                        reciprocalScale: CGFloat, reciprocalAllScale: CGFloat,
                        scale: CGFloat, rotation: CGFloat,
                        in ctx: CGContext) {
-        
         let isEdit = !isEdited ? false :
             (viewType != .preview && viewType != .editMaterial && viewType != .changingMaterial)
         moveWithWiggle: if viewType == .preview && !wiggle.isEmpty {
@@ -919,7 +917,6 @@ final class Node: NSObject, NSCoding {
                   strokeLine: Line?, strokeLineWidth: CGFloat, strokeLineColor: Color,
                   reciprocalViewScale: CGFloat, scale: CGFloat, rotation: CGFloat,
                   in ctx: CGContext) {
-
         let worldScale = self.worldScale
         let rScale = 1 / worldScale
         let rAllScale = reciprocalViewScale / worldScale
@@ -1467,94 +1464,14 @@ extension Node: Referenceable {
     static let name = Localization(english: "Node", japanese: "ノード")
 }
 
-struct Effect: Codable {
-    enum BlendType: Int8, Codable {
-        case normal, add, subtract
-        var blendMode: CGBlendMode {
-            switch self {
-            case .normal:
-                return .normal
-            case .add:
-                return .plusLighter
-            case .subtract:
-                return .plusDarker
-            }
-        }
-        var displayString: Localization {
-            switch self {
-            case .normal:
-                return Localization(english: "Normal", japanese: "通常")
-            case .add:
-                return Localization(english: "Add", japanese: "加算")
-            case .subtract:
-                return Localization(english: "Subtract", japanese: "減算")
-            }
-        }
-        static var displayStrings: [Localization] {
-            return [normal.displayString,
-                    add.displayString,
-                    subtract.displayString]
-        }
-    }
-    var blur = 0.0.cf, opacity = 1.0.cf, blendType = BlendType.normal
-    var isEmpty: Bool {
-        return self == Effect()
-    }
-    func with(blur: CGFloat) -> Effect {
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
-    }
-    func with(opacity: CGFloat) -> Effect {
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
-    }
-    func with(_ blendType: BlendType) -> Effect {
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
-    }
-}
-extension Effect: Equatable {
-    static func ==(lhs: Effect, rhs: Effect) -> Bool {
-        return lhs.blur == rhs.blur && lhs.opacity == rhs.opacity && lhs.blendType == rhs.blendType
-    }
-}
-extension Effect: Referenceable {
-    static let name = Localization(english: "Effect", japanese: "エフェクト")
-}
-extension Effect: Interpolatable {
-    static func linear(_ f0: Effect, _ f1: Effect, t: CGFloat) -> Effect {
-        let blur = CGFloat.linear(f0.blur, f1.blur, t: t)
-        let opacity = CGFloat.linear(f0.opacity, f1.opacity, t: t)
-        let blendType = f0.blendType
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
-    }
-    static func firstMonospline(_ f1: Effect, _ f2: Effect, _ f3: Effect,
-                                with ms: Monospline) -> Effect {
-        let blur = CGFloat.firstMonospline(f1.blur, f2.blur, f3.blur, with: ms)
-        let opacity = CGFloat.firstMonospline(f1.opacity, f2.opacity, f3.opacity, with: ms)
-        let blendType = f1.blendType
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
-    }
-    static func monospline(_ f0: Effect, _ f1: Effect, _ f2: Effect, _ f3: Effect,
-                           with ms: Monospline) -> Effect {
-        let blur = CGFloat.monospline(f0.blur, f1.blur, f2.blur, f3.blur, with: ms)
-        let opacity = CGFloat.monospline(f0.opacity, f1.opacity,
-                                         f2.opacity, f3.opacity, with: ms)
-        let blendType = f1.blendType
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
-    }
-    static func lastMonospline(_ f0: Effect, _ f1: Effect, _ f2: Effect,
-                               with ms: Monospline) -> Effect {
-        let blur = CGFloat.lastMonospline(f0.blur, f1.blur, f2.blur, with: ms)
-        let opacity = CGFloat.lastMonospline(f0.opacity, f1.opacity, f2.opacity, with: ms)
-        let blendType = f1.blendType
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
-    }
-}
-
-/**
- # Issue
- - ぼかし、透明度設定
- */
-final class NodeView: Layer, Respondable {
+final class NodeView: Layer, Respondable, Localizable {
     static let name = Localization(english: "Node View", japanese: "ノード表示")
+    
+    var locale = Locale.current {
+        didSet {
+            updateLayout()
+        }
+    }
     
     var node = Node() {
         didSet {
@@ -1562,11 +1479,15 @@ final class NodeView: Layer, Respondable {
         }
     }
     
-    private let nameLabel = Label(text: Node.name, font: .bold)
-    private let isHiddenView = EnumView(names: [Localization(english: "Hidden", japanese: "表示なし"),
-                                                Localization(english: "Shown", japanese: "表示あり")],
-                                        cationIndex: 0)
-    override init() {
+    var isSmall: Bool
+    private let nameLabel: Label
+    private let isHiddenView: EnumView
+    init(isSmall: Bool = false) {
+        self.isSmall = isSmall
+        nameLabel = Label(text: Node.name, font: isSmall ? .smallBold : .bold)
+        isHiddenView = EnumView(names: [Localization(english: "Hidden", japanese: "表示なし"),
+                                        Localization(english: "Shown", japanese: "表示あり")],
+                                cationIndex: 0, isSmall: isSmall)
         super.init()
         replace(children: [nameLabel, isHiddenView])
         
@@ -1579,11 +1500,12 @@ final class NodeView: Layer, Respondable {
         }
     }
     private func updateLayout() {
-        let padding = Layout.basicPadding
-        nameLabel.frame.origin = CGPoint(x: padding, y: padding * 2)
+        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
+        nameLabel.frame.origin = CGPoint(x: padding,
+                                         y: bounds.height - nameLabel.frame.height - padding)
         isHiddenView.frame = CGRect(x: nameLabel.frame.maxX + padding, y: padding,
-                                      width: bounds.width - nameLabel.frame.width - padding * 3,
-                                      height: Layout.basicHeight)
+                                    width: bounds.width - nameLabel.frame.width - padding * 3,
+                                    height: isSmall ? Layout.smallHeight : Layout.basicHeight)
     }
     func updateWithNode() {
         isHiddenView.selectedIndex = node.isHidden ? 0 : 1
@@ -1610,8 +1532,8 @@ final class NodeView: Layer, Respondable {
                                     type: binding.type))
     }
     
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [node.copied])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [node.copied])
     }
 }
 
@@ -1632,7 +1554,7 @@ final class NodeTreeManager {
             return i - 2
         }
         nodesView.copyHandler = { [unowned self] _, _ in
-            return CopiedObject(objects: [self.cut.editNode.copied])
+            return CopyManager(copiedObjects: [self.cut.editNode.copied])
         }
         nodesView.moveHandler = { [unowned self] in return self.moveNode(with: $1) }
     }
@@ -1753,7 +1675,7 @@ final class TracksManager {
             return Localization(tracks[$0].name)
         }
         tracksView.copyHandler = { [unowned self] _, _ in
-            return CopiedObject(objects: [self.node.editTrack.copied])
+            return CopyManager(copiedObjects: [self.node.editTrack.copied])
         }
         tracksView.moveHandler = { [unowned self] in return self.moveTrack(with: $1) }
     }
@@ -1822,159 +1744,5 @@ final class TracksManager {
             }
         }
         return true
-    }
-}
-
-final class EffectView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Effect View", japanese: "エフェクト表示")
-    
-    var locale = Locale.current {
-        didSet {
-            updateLayout()
-        }
-    }
-    
-    var effect: Effect {
-        didSet {
-            if effect != oldValue {
-                updateWithEffect()
-            }
-        }
-    }
-    var defaultEffect = Effect()
-    
-    static let defaultWidth = 140.0.cf
-    
-    private let nameLabel = Label(text: Effect.name, font: .bold)
-    private let blurLabel = Label(text: Localization(english: "Blur:", japanese: "ブラー:"))
-    private let blurView = Slider.widthViewWith(min: 0, max: 500, exp: 3,
-                                                description: Localization(english: "Blur",
-                                                                          japanese: "ブラー"))
-    private let opacityLabel = Label(text: Localization(english: "Opacity:", japanese: "不透明度:"))
-    private let opacityView = Slider.opacityView
-    private let blendTypeView = EnumView(names: Effect.BlendType.displayStrings,
-                                    description: Localization(english: "Type", japanese: "タイプ"))
-    
-    override init() {
-        effect = defaultEffect
-        super.init()
-        replace(children: [nameLabel,
-                           blurLabel, blurView,
-                           opacityLabel, opacityView,
-                           blendTypeView])
-        
-        blurView.binding = { [unowned self] in self.setEffect(with: $0) }
-        opacityView.binding = { [unowned self] in self.setEffect(with: $0) }
-        blendTypeView.binding = { [unowned self] in self.setEffect(with: $0) }
-    }
-    
-    override var defaultBounds: CGRect {
-        return CGRect(x: 0, y: 0,
-                      width: EffectView.defaultWidth,
-                      height: nameLabel.frame.height + Layout.basicHeight * 3
-                        + Layout.basicPadding * 2)
-    }
-    override var bounds: CGRect {
-        didSet {
-            updateLayout()
-        }
-    }
-    func updateLayout() {
-        let padding = Layout.basicPadding, h = Layout.basicHeight
-        let cw = bounds.width - padding * 2
-        let rightWidth = cw - h * 3
-        let leftWidth = cw - rightWidth
-        nameLabel.frame.origin = CGPoint(x: padding, y: padding + h * 3)
-        blendTypeView.frame = CGRect(x: padding, y: padding + h * 2, width: cw, height: h)
-        blurLabel.frame.origin = CGPoint(x: padding + leftWidth - blurLabel.frame.width,
-                                         y: padding * 2 + h)
-        let blurFrame = CGRect(x: bounds.width - rightWidth - padding, y: padding + h,
-                               width: rightWidth, height: h)
-        blurView.updateLineWidthLayers(withFrame: blurFrame)
-        opacityLabel.frame.origin = CGPoint(x: padding + leftWidth - opacityLabel.frame.width,
-                                            y: padding * 2)
-        let opacityFrame = CGRect(x: bounds.width - rightWidth - padding, y: padding,
-                                  width: rightWidth, height: h)
-        opacityView.updateOpacityLayers(withFrame: opacityFrame)
-    }
-    private func updateWithEffect() {
-        blurView.value = effect.blur
-        opacityView.value = effect.opacity
-        blendTypeView.selectedIndex = index(with: effect.blendType)
-    }
-    
-    private func blendType(withIndex index: Int) -> Effect.BlendType {
-        return Effect.BlendType(rawValue: Int8(index)) ?? .normal
-    }
-    private func index(with type: Effect.BlendType) -> Int {
-        return Int(type.rawValue)
-    }
-    
-    var disabledRegisterUndo = true
-    
-    struct Binding {
-        let view: EffectView
-        let effect: Effect, oldEffect: Effect, type: Action.SendType
-    }
-    var binding: ((Binding) -> ())?
-    
-    private var oldEffect = Effect()
-    private func setEffect(with obj: Slider.Binding) {
-        if obj.type == .begin {
-            oldEffect = effect
-            binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
-        } else {
-            switch obj.slider {
-            case blurView:
-                effect = effect.with(blur: obj.value)
-            case opacityView:
-                effect = effect.with(opacity: obj.value)
-            default:
-                fatalError("No case")
-            }
-            binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: obj.type))
-        }
-    }
-    private func setEffect(with obj: EnumView.Binding) {
-        if obj.type == .begin {
-            oldEffect = effect
-            binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
-        } else {
-            effect = effect.with(blendType(withIndex: obj.index))
-            binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: obj.type))
-        }
-    }
-    
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [effect])
-    }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
-            if let effect = object as? Effect {
-                guard effect != self.effect else {
-                    continue
-                }
-                set(effect, old: self.effect)
-                return true
-            }
-        }
-        return false
-    }
-    func delete(with event: KeyInputEvent) -> Bool {
-        let effect = defaultEffect
-        guard effect != self.effect else {
-            return false
-        }
-        set(effect, old: self.effect)
-        return true
-    }
-    
-    private func set(_ effect: Effect, old oldEffect: Effect) {
-        registeringUndoManager?.registerUndo(withTarget: self) {
-            $0.set(oldEffect, old: effect)
-        }
-        binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
-        self.effect = effect
-        binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: .end))
     }
 }

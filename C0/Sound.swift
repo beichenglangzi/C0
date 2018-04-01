@@ -318,8 +318,6 @@ final class SoundView: Layer, Respondable, Localizable {
     let soundLabel = Label(text: Localization(english: "Empty", japanese: "空"))
     
     override init() {
-        soundLabel.noIndicatedLineColor = .border
-        soundLabel.indicatedLineColor = .indicated
         super.init()
         isClipped = true
         replace(children: [nameLabel, soundLabel])
@@ -349,14 +347,14 @@ final class SoundView: Layer, Respondable, Localizable {
         set(Sound(), old: self.sound)
         return true
     }
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
+    func copy(with event: KeyInputEvent) -> CopyManager? {
         guard let url = sound.url else {
-            return CopiedObject(objects: [sound])
+            return CopyManager(copiedObjects: [sound])
         }
-        return CopiedObject(objects: [sound, url])
+        return CopyManager(copiedObjects: [sound, url])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let url = object as? URL, url.isConforms(uti: kUTTypeAudio as String) {
                 var sound = Sound()
                 sound.url = url

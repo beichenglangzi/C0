@@ -806,8 +806,12 @@ final class NodeTrack: NSObject, Track, NSCoding {
         wiggleItem.keyWiggles = keyWiggles
         updateKeyPhases()
     }
-    func replaceWiggle(_ wiggle: Wiggle, at i: Int) {
+    func replace(_ wiggle: Wiggle, at i: Int) {
         wiggleItem?.replace(wiggle, at: i)
+        updateKeyPhases()
+    }
+    func replace(_ drawing: Drawing, at i: Int) {
+        drawingItem.replace(drawing, at: i)
         updateKeyPhases()
     }
     
@@ -1235,6 +1239,12 @@ protocol TrackItem {
 final class DrawingItem: NSObject, TrackItem, NSCoding {
     var drawing: Drawing, color: Color, lineWidth: CGFloat
     fileprivate(set) var keyDrawings: [Drawing]
+    func replace(_ drawing: Drawing, at i: Int) {
+        if keyDrawings[i] == self.drawing {
+            self.drawing = drawing
+        }
+        keyDrawings[i] = drawing
+    }
     
     func step(_ f0: Int) {
         drawing = keyDrawings[f0]

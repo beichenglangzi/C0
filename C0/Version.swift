@@ -38,11 +38,8 @@ final class VersionView: Layer, Respondable, Localizable {
             let nc = NotificationCenter.default
             
             undoGroupToken = nc.addObserver(forName: .NSUndoManagerDidCloseUndoGroup,
-                                            object: rootUndoManager, queue: nil)
-            { [unowned self] notification in
-                if let undoManager = notification.object as? UndoManager,
-                    undoManager == self.rootUndoManager {
-                    
+                                            object: rootUndoManager, queue: nil) { [unowned self] in
+                if let undoManager = $0.object as? UndoManager, undoManager == self.rootUndoManager {
                     if undoManager.groupingLevel == 0 {
                         self.undoCount += 1
                         self.allCount = self.undoCount
@@ -52,22 +49,16 @@ final class VersionView: Layer, Respondable, Localizable {
             }
             
             undoToken = nc.addObserver(forName: .NSUndoManagerDidUndoChange,
-                                       object: rootUndoManager, queue: nil)
-            { [unowned self] notification in
-                if let undoManager = notification.object as? UndoManager,
-                    undoManager == self.rootUndoManager {
-                    
+                                       object: rootUndoManager, queue: nil) { [unowned self] in
+                if let undoManager = $0.object as? UndoManager, undoManager == self.rootUndoManager {
                     self.undoCount -= 1
                     self.updateLabel()
                 }
             }
             
             redoToken = nc.addObserver(forName: .NSUndoManagerDidRedoChange,
-                                       object: rootUndoManager, queue: nil)
-            { [unowned self] notification in
-                if let undoManager = notification.object as? UndoManager,
-                    undoManager == self.rootUndoManager {
-                    
+                                       object: rootUndoManager, queue: nil) { [unowned self] in
+                if let undoManager = $0.object as? UndoManager, undoManager == self.rootUndoManager {
                     self.undoCount += 1
                     self.updateLabel()
                 }
@@ -92,13 +83,7 @@ final class VersionView: Layer, Respondable, Localizable {
     let allCountLabel = Label(text: Localization("0"))
     let currentCountLabel = Label(color: .warning)
     override init() {
-        allCountLabel.noIndicatedLineColor = .border
-        allCountLabel.indicatedLineColor = .indicated
-        currentCountLabel.noIndicatedLineColor = .border
-        currentCountLabel.indicatedLineColor = .indicated
-        
-        _ = Layout.leftAlignment([nameLabel, Padding(), allCountLabel],
-                                 height: Layout.basicHeight)
+        _ = Layout.leftAlignment([nameLabel, Padding(), allCountLabel], height: Layout.basicHeight)
         super.init()
         isClipped = true
         replace(children: [nameLabel, allCountLabel])

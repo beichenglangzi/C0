@@ -36,7 +36,7 @@ final class EnumView: Layer, Respondable, Localizable {
     }
     
     let label: Label
-    let knob = DiscreteKnob(CGSize(width: 8, height: 8), lineWidth: 1)
+    let knob: DiscreteKnob
     private let lineLayer: PathLayer = {
         let lineLayer = PathLayer()
         lineLayer.fillColor = .content
@@ -46,11 +46,14 @@ final class EnumView: Layer, Respondable, Localizable {
          selectedIndex: Int = 0, cationIndex: Int? = nil,
          description: Localization = Localization(), isSmall: Bool = false) {
         
+        knobPaddingWidth = isSmall ? 12.0 : 16.0
         self.menu = Menu(names: names,
                          knobPaddingWidth: knobPaddingWidth, width: frame.width, isSmall: isSmall)
         self.cationIndex = cationIndex
         self.label = Label(font: isSmall ? .small : .default, color: .locked)
-        
+        self.knob = isSmall ?
+            DiscreteKnob(CGSize(square: 6), lineWidth: 1) :
+            DiscreteKnob(CGSize(square: 8), lineWidth: 1)
         super.init()
         instanceDescription = description
         self.frame = frame
@@ -98,11 +101,11 @@ final class EnumView: Layer, Respondable, Localizable {
         set(index: index, oldIndex: oldIndex)
         return true
     }
-    func copy(with event: KeyInputEvent) -> CopiedObject? {
-        return CopiedObject(objects: [String(selectedIndex)])
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [String(selectedIndex)])
     }
-    func paste(_ copiedObject: CopiedObject, with event: KeyInputEvent) -> Bool {
-        for object in copiedObject.objects {
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
             if let string = object as? String, let index = Int(string) {
                 let oldIndex = selectedIndex
                 guard index != oldIndex else {
@@ -161,6 +164,17 @@ final class EnumView: Layer, Respondable, Localizable {
             }
         case .end:
             let index = self.index(withY: -(p.y - beginPoint.y))
+            guard isDrag else {
+                if index != oldIndex {
+                    selectedIndex = index
+                }
+                binding?(Binding(enumView: self, index: index, oldIndex: oldIndex, type: .end))
+                label.isHidden = false
+                lineLayer.isHidden = false
+                knob.isHidden = false
+                closeMenu(animate: false)
+                return true
+            }
             if index != selectedIndex {
                 selectedIndex = index
             }
@@ -186,7 +200,7 @@ final class EnumView: Layer, Respondable, Localizable {
     }
     var cationIndex: Int?
     
-    var knobPaddingWidth = 16.0.cf
+    var knobPaddingWidth: CGFloat
     private var oldFontColor: Color?
     var selectedIndex = 0 {
         didSet {
@@ -241,7 +255,7 @@ final class Menu: Layer, Respondable, Localizable {
             updateItems()
         }
     }
-    var menuHeight = Layout.basicHeight {
+    var menuHeight: CGFloat {
         didSet {
             updateItems()
         }
@@ -258,7 +272,7 @@ final class Menu: Layer, Respondable, Localizable {
         lineLayer.fillColor = .content
         return lineLayer
     } ()
-    let selectedKnob = DiscreteKnob(CGSize(width: 8, height: 8), lineWidth: 1)
+    let selectedKnob: DiscreteKnob
     
     var names = [Localization]() {
         didSet {
@@ -309,6 +323,10 @@ final class Menu: Layer, Respondable, Localizable {
         self.knobPaddingWidth = knobPaddingWidth
         self.width = width
         self.isSmall = isSmall
+        menuHeight = isSmall ? Layout.smallHeight : Layout.basicHeight
+        selectedKnob = isSmall ?
+            DiscreteKnob(CGSize(square: 6), lineWidth: 1) :
+            DiscreteKnob(CGSize(square: 8), lineWidth: 1)
         super.init()
         fillColor = .background
         updateItems()
