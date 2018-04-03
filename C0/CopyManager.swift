@@ -65,67 +65,79 @@ struct CopyManager {
         self.copiedObjects = copiedObjects
     }
 }
-final class CopyManagerView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Copy Manager View", japanese: "コピー管理表示")
+extension CopyManager: Referenceable {
+    static let name = Localization(english: "Copy Manager", japanese: "コピー管理")
+}
+final class CopyManagerView: Layer, Respondable {
+    static let name = CopyManager.name
     
-    var locale = Locale.current {
+    var copyManager = CopyManager() {
         didSet {
-            noneLabel.locale = locale
-            updateChildren()
+            changeCount += 1
+            updateObjectViews()
+        }
+    }
+    var changeCount = 0
+    
+    var objectViewWidth = 80.0.cf, versionWidth = 120.0.cf
+    
+    let nameLabel = Label(text: CopyManager.name, font: .bold)
+    let versionView = VersionView()
+    let versionLabel = Label(text: Localization(english: "Copied:", japanese: "コピー済み:"))
+    var objectViews = [Layer]() {
+        didSet {
+            updateLayout()
+        }
+    }
+    
+    override init() {
+        versionView.frame = CGRect(x: 0, y: 0, width: versionWidth, height: Layout.basicHeight)
+        versionView.rootUndoManager = rootUndoManager
+        super.init()
+        isClipped = true
+        replace(children: [nameLabel, versionView, versionLabel])
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
+    }
+    
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    func updateLayout() {
+        let padding = Layout.basicPadding
+        nameLabel.frame.origin = CGPoint(x: padding,
+                                         y: bounds.height - nameLabel.frame.height - padding)
+        if objectViews.isEmpty {
+            replace(children: [nameLabel, versionView, versionLabel])
+            let cs = [versionView, Padding(), versionLabel]
+            _ = Layout.leftAlignment(cs, minX: nameLabel.frame.maxX + padding,
+                                     height: frame.height)
+        } else {
+            replace(children: [nameLabel, versionView, versionLabel] + objectViews)
+            let cs = [versionView, Padding(), versionLabel] + objectViews as [Layer]
+            _ = Layout.leftAlignment(cs, minX: nameLabel.frame.maxX + padding,
+                                     height: frame.height)
+        }
+    }
+    func updateObjectViews() {
+        let padding = Layout.basicPadding
+        let bounds = CGRect(x: 0, y: 0,
+                            width: objectViewWidth, height: frame.height - padding * 2)
+        objectViews = copyManager.copiedObjects.map {
+            return ($0 as? ResponderExpression)?.responder(withBounds: bounds) ??
+                ObjectView(object: $0, thumbnailView: nil, minFrame: bounds)
         }
     }
     
     var rootUndoManager = UndoManager()
     override var undoManager: UndoManager? {
         return rootUndoManager
-    }
-    
-    var changeCount = 0
-    
-    let nameLabel = Label(text: Localization(english: "Copy Manager", japanese: "コピー管理"),
-                          font: .bold)
-    let versionView = VersionView()
-    let versionLabel = Label(text: Localization(english: "Copied:", japanese: "コピー済み:"))
-    var objectViews = [Layer]() {
-        didSet {
-            let padding = Layout.basicPadding
-            nameLabel.frame.origin = CGPoint(x: padding,
-                                             y: bounds.height - nameLabel.frame.height - padding)
-            if objectViews.isEmpty {
-                replace(children: [nameLabel, versionView, versionLabel, noneLabel])
-                let cs = [versionView, Padding(), versionLabel, noneLabel]
-                _ = Layout.leftAlignment(cs, minX: nameLabel.frame.maxX + padding,
-                                         height: frame.height)
-            } else {
-                replace(children: [nameLabel, versionView, versionLabel] + objectViews)
-                let cs = [versionView, Padding(), versionLabel] + objectViews as [Layer]
-                _ = Layout.leftAlignment(cs, minX: nameLabel.frame.maxX + padding,
-                                         height: frame.height)
-            }
-        }
-    }
-    let noneLabel = Label(text: Localization(english: "Empty", japanese: "空"))
-    override init() {
-        versionView.frame = CGRect(x: 0, y: 0, width: 120, height: Layout.basicHeight)
-        versionView.rootUndoManager = rootUndoManager
-        super.init()
-        isClipped = true
-        replace(children: [nameLabel, versionView, versionLabel, noneLabel])
-    }
-    var copyManager = CopyManager() {
-        didSet {
-            changeCount += 1
-            updateChildren()
-        }
-    }
-    var objectViewWidth = 80.0.cf
-    func updateChildren() {
-        let padding = Layout.basicPadding
-        let frame = CGRect(x: 0, y: 0, width: objectViewWidth, height: self.frame.height - padding * 2)
-        objectViews = copyManager.copiedObjects.map {
-            return ($0 as? ResponderExpression)?.responder(withBounds: frame) ??
-                ObjectView(object: $0, thumbnailView: nil, minFrame: frame)
-        }
     }
     
     func delete(with event: KeyInputEvent) -> Bool {

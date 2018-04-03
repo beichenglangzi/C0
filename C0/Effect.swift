@@ -101,14 +101,8 @@ extension Effect: Interpolatable {
     }
 }
 
-final class EffectView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Effect View", japanese: "エフェクト表示")
-    
-    var locale = Locale.current {
-        didSet {
-            updateLayout()
-        }
-    }
+final class EffectView: Layer, Respondable {
+    static let name = Effect.name
     
     var effect: Effect {
         didSet {
@@ -125,21 +119,17 @@ final class EffectView: Layer, Respondable, Localizable {
     private let nameLabel: Label
     private let blendTypeView: EnumView
     private let blurLabel: Label
-    private let blurView: Slider
-    private let opacityView: Slider
+    private let blurView: NumberView
+    private let opacityView: NumberView
     
     init(isSmall: Bool = false) {
         self.isSmall = isSmall
         nameLabel = Label(text: Effect.name, font: isSmall ? .smallBold : .bold)
         blurLabel = Label(text: Localization(english: "Blur:", japanese: "ブラー:"),
                           font: isSmall ? .small : .default)
-        blurView = Slider.widthViewWith(min: 0, max: 500, exp: 3,
-                                        description: Localization(english: "Blur", japanese: "ブラー"),
-                                        isSmall: isSmall)
-        opacityView = Slider.opacityView(isSmall: isSmall)
-        blendTypeView = EnumView(names: Effect.BlendType.displayStrings,
-                                 description: Localization(english: "Type", japanese: "タイプ"),
-                                 isSmall: isSmall)
+        blurView = NumberView.widthViewWith(min: 0, max: 500, exp: 3, isSmall: isSmall)
+        opacityView = NumberView.opacityView(isSmall: isSmall)
+        blendTypeView = EnumView(names: Effect.BlendType.displayStrings, isSmall: isSmall)
         effect = defaultEffect
         super.init()
         replace(children: [nameLabel,
@@ -150,6 +140,12 @@ final class EffectView: Layer, Respondable, Localizable {
         blurView.binding = { [unowned self] in self.setEffect(with: $0) }
         opacityView.binding = { [unowned self] in self.setEffect(with: $0) }
         blendTypeView.binding = { [unowned self] in self.setEffect(with: $0) }
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
     }
     
     override var defaultBounds: CGRect {
@@ -177,8 +173,8 @@ final class EffectView: Layer, Respondable, Localizable {
         opacityView.updateOpacityLayers(withFrame: CGRect(x: px, y: padding, width: rw, height: h))
     }
     private func updateWithEffect() {
-        blurView.value = effect.blur
-        opacityView.value = effect.opacity
+        blurView.number = effect.blur
+        opacityView.number = effect.opacity
         blendTypeView.selectedIndex = index(with: effect.blendType)
     }
     
@@ -198,16 +194,16 @@ final class EffectView: Layer, Respondable, Localizable {
     var binding: ((Binding) -> ())?
     
     private var oldEffect = Effect()
-    private func setEffect(with obj: Slider.Binding) {
+    private func setEffect(with obj: NumberView.Binding) {
         if obj.type == .begin {
             oldEffect = effect
             binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
         } else {
-            switch obj.slider {
+            switch obj.view {
             case blurView:
-                effect = effect.with(blur: obj.value)
+                effect = effect.with(blur: obj.number)
             case opacityView:
-                effect = effect.with(opacity: obj.value)
+                effect = effect.with(opacity: obj.number)
             default:
                 fatalError("No case")
             }

@@ -333,14 +333,8 @@ extension Subtitle: Referenceable {
     static let name = Localization(english: "Subtitle", japanese: "字幕")
 }
 
-final class SubtitleView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Subtitle View", japanese: "字幕表示")
-    
-    var locale = Locale.current {
-        didSet {
-            updateLayout()
-        }
-    }
+final class SubtitleView: Layer, Respondable {
+    static let name = Subtitle.name
     
     var subtitle = Subtitle() {
         didSet {
@@ -363,6 +357,12 @@ final class SubtitleView: Layer, Respondable, Localizable {
         
         isConnectedWithPreviousView.binding = { [unowned self] in
             self.setIsConnectedWithPrevious(with: $0)
+        }
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
         }
     }
     

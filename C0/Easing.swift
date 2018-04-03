@@ -95,9 +95,12 @@ extension Easing: ResponderExpression {
  - 前後キーフレームからの傾斜スナップ
  */
 final class EasingView: Layer, Respondable {
-    static let name = Localization(english: "Easing View", japanese: "イージング表示")
+    static let name = Easing.name
     static let feature = Localization(english: "Horizontal axis: Time\nVertical axis: Correction time",
                                       japanese: "横軸: 時間\n縦軸: 補正後の時間")
+    var instanceDescription: Localization {
+        return easing.instanceDescription
+    }
     
     var easing = Easing() {
         didSet {
@@ -126,21 +129,17 @@ final class EasingView: Layer, Respondable {
         axis.lineWidth = 1
         return axis
     } ()
-    private let cp0View = PointView(description: Localization(english: "Control Point0",
-                                                                  japanese: "コントロールポイント0"))
-    private let cp1View = PointView(description: Localization(english: "Control Point1",
-                                                                  japanese: "コントロールポイント1"))
+    private let cp0View = PointView(), cp1View = PointView()
     var padding = Layout.basicPadding {
         didSet {
             updateLayout()
         }
     }
     
-    init(frame: CGRect = CGRect(), description: Localization = Localization(), isSmall: Bool = false) {
+    init(frame: CGRect = CGRect(), isSmall: Bool = false) {
         xLabel = Label(text: Localization("t"), font: isSmall ? .smallItalic : .italic)
         yLabel = Label(text: Localization("t'"), font: isSmall ? .smallItalic : .italic)
         super.init()
-        instanceDescription = description
         replace(children: [xLabel, yLabel, controlLine, easingLine, axis, cp0View, cp1View])
         self.frame = frame
         
@@ -155,13 +154,13 @@ final class EasingView: Layer, Respondable {
     }
     private func updateLayout() {
         cp0View.frame = CGRect(x: padding,
-                                 y: padding,
-                                 width: (bounds.width - padding * 2) / 2,
-                                 height: (bounds.height - padding * 2) / 2)
+                               y: padding,
+                               width: (bounds.width - padding * 2) / 2,
+                               height: (bounds.height - padding * 2) / 2)
         cp1View.frame = CGRect(x: bounds.width / 2,
-                                 y: padding + (bounds.height - padding * 2) / 2,
-                                 width: (bounds.width - padding * 2) / 2,
-                                 height: (bounds.height - padding * 2) / 2)
+                               y: padding + (bounds.height - padding * 2) / 2,
+                               width: (bounds.width - padding * 2) / 2,
+                               height: (bounds.height - padding * 2) / 2)
         let path = CGMutablePath()
         let sp = Layout.smallPadding
         path.addLines(between: [CGPoint(x: padding + cp0View.padding,
@@ -184,7 +183,7 @@ final class EasingView: Layer, Respondable {
         cp0View.point = easing.cp0
         cp1View.point = easing.cp1
         easingLine.path = easing.path(in: bounds.insetBy(dx: padding + cp0View.padding,
-                                                          dy: padding + cp0View.padding))
+                                                         dy: padding + cp0View.padding))
         let knobLinePath = CGMutablePath()
         knobLinePath.addLines(between: [CGPoint(x: cp0View.frame.minX + cp0View.padding,
                                                 y: cp0View.frame.minY + cp0View.padding),
@@ -198,7 +197,7 @@ final class EasingView: Layer, Respondable {
     var disabledRegisterUndo = false
     
     struct Binding {
-       let view: EasingView, easing: Easing, oldEasing: Easing, type: Action.SendType
+        let view: EasingView, easing: Easing, oldEasing: Easing, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
     
@@ -209,8 +208,7 @@ final class EasingView: Layer, Respondable {
             oldEasing = easing
             binding?(Binding(view: self, easing: oldEasing, oldEasing: oldEasing, type: .begin))
         } else {
-            easing = obj.view == cp0View ?
-                easing.with(cp0: obj.point) : easing.with(cp1: obj.point)
+            easing = obj.view == cp0View ? easing.with(cp0: obj.point) : easing.with(cp1: obj.point)
             binding?(Binding(view: self, easing: easing, oldEasing: oldEasing, type: obj.type))
         }
     }

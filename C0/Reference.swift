@@ -23,16 +23,12 @@ protocol Referenceable {
     static var name: Localization { get }
     static var feature: Localization { get }
     var instanceDescription: Localization { get }
-    var valueDescription: Localization { get }
 }
 extension Referenceable {
     static var feature: Localization {
         return Localization()
     }
     var instanceDescription: Localization {
-        return Localization()
-    }
-    var valueDescription: Localization {
         return Localization()
     }
 }
@@ -42,7 +38,7 @@ extension Referenceable {
  - リファレンス表示の具体化
  */
 final class ReferenceView: Layer, Respondable {
-    static let name = Localization(english: "Reference View", japanese: "情報表示")
+    static let name = Localization(english: "Reference", japanese: "情報")
     static let feature = Localization(english: "Close: Move cursor to outside",
                                       japanese: "閉じる: カーソルを外に出す")
     

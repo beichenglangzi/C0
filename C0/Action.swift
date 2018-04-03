@@ -157,8 +157,12 @@ extension Action: Equatable {
         return lhs.name == rhs.name
     }
 }
+extension Action: Referenceable {
+    static let name = Localization(english: "Action", japanese: "アクション")
+}
 
 struct ActionManager {
+    var isHiddenActions = false
     var actions: [Action] = {
         let cutHandler: (Respondable, Respondable, KeyInputEvent) -> (Bool) = {
             let copyManager = $1.copy(with: $2)
@@ -326,22 +330,23 @@ struct ActionManager {
         }
     }
 }
+extension ActionManager: Referenceable {
+    static let name = Localization(english: "Action Manager", japanese: "アクション管理")
+}
 
-final class ActionManagerView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Action Manager View", japanese: "アクション管理表示")
+final class ActionManagerView: Layer, Respondable {
+    static let name = ActionManager.name
     
-    var locale = Locale.current {
+    var actionManager = ActionManager() {
         didSet {
-            updateChildren()
+            isHiddenView.selectedIndex = actionManager.isHiddenActions ? 0 : 1
+            isHiddenActions = actionManager.isHiddenActions
         }
     }
     
     static let defaultWidth = 190 + Layout.basicPadding * 2
     
-    let actionManager = ActionManager()
-    
-    let nameLabel = Label(text: Localization(english: "Action Manager", japanese: "アクション管理"),
-                          font: .bold)
+    let nameLabel = Label(text: ActionManager.name, font: .bold)
     let isHiddenView = EnumView(names: [Localization(english: "Hidden", japanese: "表示なし"),
                                         Localization(english: "Shown", japanese: "表示あり")])
     var isHiddenActions = false {
@@ -350,12 +355,28 @@ final class ActionManagerView: Layer, Respondable, Localizable {
                 return
             }
             isHiddenView.selectedIndex = isHiddenActions ? 0 : 1
-            updateChildren()
+            updateLayout()
         }
     }
     var actionItems = [ActionItem]()
     
-    func updateChildren() {
+    override init() {
+        super.init()
+        isHiddenView.selectedIndex = 1
+        isHiddenView.binding = { [unowned self] in
+            self.isHiddenActions = $0.index == 0
+            self.isHiddenActionsBinding?(self.isHiddenActions)
+        }
+        updateLayout()
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
+    }
+    
+    func updateLayout() {
         let padding = Layout.basicPadding
         if isHiddenActions {
             let h = Layout.basicHeight + padding * 2
@@ -384,17 +405,7 @@ final class ActionManagerView: Layer, Respondable, Localizable {
         }
     }
     
-    override init() {
-        super.init()
-        isHiddenView.selectedIndex = 1
-        isHiddenView.binding = { [unowned self] in
-            self.isHiddenActions = $0.index == 0
-            self.isHiddenActionBinding?(self.isHiddenActions)
-        }
-        updateChildren()
-    }
-    
-    var isHiddenActionBinding: ((Bool) -> (Void))? = nil
+    var isHiddenActionsBinding: ((Bool) -> (Void))? = nil
     
     var actionWidth = ActionManagerView.defaultWidth, commandFont = Font.action
     
@@ -403,7 +414,7 @@ final class ActionManagerView: Layer, Respondable, Localizable {
                                         minY: CGFloat) -> (actionItems: [ActionItem], size: CGSize) {
         let padding = Layout.basicPadding
         var y = minY
-        let actionItems: [ActionItem] = actionManager.actions.reversed().flatMap {
+        let actionItems: [ActionItem] = actionManager.actions.reversed().compactMap {
             guard $0.gesture != .none else {
                 y += Layout.basicPadding
                 return nil
@@ -425,14 +436,17 @@ final class ActionManagerView: Layer, Respondable, Localizable {
 }
 
 final class ActionItem: Layer, Respondable {
-    static let name = Localization(english: "Action Item", japanese: "アクションアイテム")
+    static let name = Action.name
+    var instanceDescription: Localization {
+        return action.description
+    }
     
     var action: Action
     
     var nameLabel: Label, commandLabel: Label
     init(action: Action, frame: CGRect) {
         self.action = action
-        let nameLabel = Label(text: action.name, description: action.description)
+        let nameLabel = Label(text: action.name)
         let commandLabel = Label(text: action.displayCommandString, font: .action,
                                  frameAlignment: .right)
         self.nameLabel = nameLabel
@@ -442,7 +456,6 @@ final class ActionItem: Layer, Respondable {
         commandLabel.frame.origin = CGPoint(x: frame.width - commandLabel.frame.width - padding,
                                             y: padding)
         super.init()
-        instanceDescription = action.description
         self.frame = CGRect(x: frame.minX, y: frame.minY,
                             width: frame.width, height: nameLabel.frame.height + padding * 2)
         replace(children: [nameLabel, commandLabel])

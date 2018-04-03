@@ -33,6 +33,7 @@ struct Font {
     
     let name: String, size: CGFloat
     let ascent: CGFloat, descent: CGFloat, leading: CGFloat, ctFont: CTFont
+    
     init(size: CGFloat) {
         self.init(NSFont.systemFont(ofSize: size))
     }
@@ -73,6 +74,7 @@ struct Cursor: Equatable {
     static let upDown = slideCursor(isVertical: true)
     static let pointingHand = Cursor(NSCursor.pointingHand)
     static let stroke = circleCursor(size: 2)
+    
     static func circleCursor(size s: CGFloat, color: Color = .black,
                              outlineColor: Color = .white) -> Cursor {
         let lineWidth = 2.0.cf, subLineWidth = 1.0.cf
@@ -88,7 +90,8 @@ struct Cursor: Equatable {
             ctx.setStrokeColor(color.cgColor)
             ctx.strokeEllipse(in: b)
         }
-        return Cursor(NSCursor(image: image, hotSpot: NSPoint(x: d * 2 + s / 2, y: -d * 2 - s / 2)))
+        let hotSpot = NSPoint(x: d * 2 + s / 2, y: -d * 2 - s / 2)
+        return Cursor(NSCursor(image: image, hotSpot: hotSpot))
     }
     static func slideCursor(color: Color = .black, outlineColor: Color = .white,
                             isVertical: Bool) -> Cursor {
@@ -121,13 +124,13 @@ struct Cursor: Equatable {
             ctx.setStrokeColor(outlineColor.cgColor)
             ctx.drawPath(using: .fillStroke)
         }
-        return Cursor(NSCursor(image: image,
-                               hotSpot: isVertical ?
-                                CGPoint(x: h / 2, y: -w / 2) : CGPoint(x: w / 2, y: -h / 2)))
+        let hotSpot = isVertical ? CGPoint(x: h / 2, y: -w / 2) : CGPoint(x: w / 2, y: -h / 2)
+        return Cursor(NSCursor(image: image, hotSpot: hotSpot))
     }
     
     let image: CGImage, hotSpot: CGPoint
     fileprivate let nsCursor: NSCursor
+    
     private init(_ nsCursor: NSCursor) {
         self.image = nsCursor.image.cgImage(forProposedRect: nil, context: nil, hints: nil)!
         self.hotSpot = nsCursor.hotSpot
@@ -186,12 +189,14 @@ extension URL {
 
 fileprivate struct C0DynamicCoder {
     static let appUTI = Bundle.main.bundleIdentifier ?? "smdls.C0."
+    
     static func typeKey(from object: Any) -> String {
         return appUTI + String(describing: type(of: object))
     }
     static func typeKey<T>(from type: T.Type) -> String {
         return appUTI + String(describing: type)
     }
+    
     static func decode(from data: Data, forKey key: String) -> Any? {
         if let object = NSKeyedUnarchiver.unarchiveObject(with: data) {
             return object
@@ -260,6 +265,7 @@ final class C0Application: NSApplication {
     @IBOutlet weak var minimizeItem: NSMenuItem?
     @IBOutlet weak var zoomItem: NSMenuItem?
     @IBOutlet weak var bringAllToFrontItem: NSMenuItem?
+    
     private var localToken: NSObjectProtocol?
     func applicationDidFinishLaunching(_ notification: Notification) {
         updateString(with: Locale.current)
@@ -275,6 +281,7 @@ final class C0Application: NSApplication {
             NotificationCenter.default.removeObserver(localToken)
         }
     }
+    
     func updateString(with locale :Locale) {
         let appName = Bundle.main.infoDictionary?[kCFBundleNameKey as String] as? String ?? "C0"
         aboutAppItem?.title = Localization(english: "About \(appName)",
@@ -315,9 +322,9 @@ final class C0Application: NSApplication {
 /**
  # Issue
  - NSDocument廃止
- - ファイルシステムのモードレス化
  */
 final class C0Document: NSDocument, NSWindowDelegate {
+    static let rootDataModelKey = "root"
     var rootDataModel: DataModel {
         didSet {
             let isWriteHandler: (DataModel, Bool) -> Void = { [unowned self] (dataModel, isWrite) in
@@ -338,7 +345,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
             }
         }
     }
-    static let rootDataModelKey = "root", preferenceDataModelKey = "preference"
+    static let preferenceDataModelKey = "preference"
     var preferenceDataModel = DataModel(key: C0Document.preferenceDataModelKey)
     private var preference = C0Preference()
     
@@ -348,11 +355,11 @@ final class C0Document: NSDocument, NSWindowDelegate {
     weak var view: C0View!
     
     override init() {
-        self.rootDataModel = DataModel(key: C0Document.rootDataModelKey,
-                                       directoryWithDataModels: [preferenceDataModel])
+        rootDataModel = DataModel(key: C0Document.rootDataModelKey,
+                                  directoryWith: [preferenceDataModel])
         super.init()
         
-        preferenceDataModel.dataHandler = { [unowned self] in return self.preference.jsonData }
+        preferenceDataModel.dataHandler = { [unowned self] in self.preference.jsonData }
     }
     convenience init(type typeName: String) throws {
         self.init()
@@ -377,10 +384,10 @@ final class C0Document: NSDocument, NSWindowDelegate {
                 self.updateChangeCount(.changeDone)
             }
         }
-        if let humanDataModel = rootDataModel.children[Human.dataModelKey] {
-            view.human.dataModel = humanDataModel
-        } else if let humanDataModel = view.human.dataModel {
-            rootDataModel.insert(humanDataModel)
+        if let desktopDataModel = rootDataModel.children[DesktopView.dataModelKey] {
+            view.desktopView.dataModel = desktopDataModel
+        } else {
+            rootDataModel.insert(view.desktopView.dataModel)
         }
         
         if preference.windowFrame.isEmpty, let frame = NSScreen.main?.frame {
@@ -391,13 +398,13 @@ final class C0Document: NSDocument, NSWindowDelegate {
         }
         setupWindow(with: preference)
         
-        undoManager = view.human.sceneView.undoManager
+        undoManager = view.desktopView.sceneView.undoManager
         
-        view.human.preferenceDataModel.didChangeIsWriteHandler = isWriteHandler
-        view.human.sceneView.sceneDataModel.didChangeIsWriteHandler = isWriteHandler
+        view.desktopView.differentialDesktopDataModel.didChangeIsWriteHandler = isWriteHandler
+        view.desktopView.sceneView.differentialSceneDataModel.didChangeIsWriteHandler = isWriteHandler
         preferenceDataModel.didChangeIsWriteHandler = isWriteHandler
         
-        view.human.copyManagerView.copyManager = copyManager(with: NSPasteboard.general)
+        view.desktopView.copyManagerView.copyManager = copyManager(with: NSPasteboard.general)
     }
     private func setupWindow(with preference: C0Preference) {
         window.setFrame(preference.windowFrame, display: false)
@@ -432,21 +439,25 @@ final class C0Document: NSDocument, NSWindowDelegate {
         preferenceDataModel.isWrite = true
     }
     
+    var copyManagerView: CopyManagerView {
+        return view.desktopView.copyManagerView
+    }
+    
     var oldChangeCountWithCopyManager = 0
     var oldChangeCountWithPsteboard = NSPasteboard.general.changeCount
     func windowDidBecomeMain(_ notification: Notification) {
         let pasteboard = NSPasteboard.general
         if pasteboard.changeCount != oldChangeCountWithPsteboard {
             oldChangeCountWithPsteboard = pasteboard.changeCount
-            view.human.copyManagerView.copyManager = copyManager(with: pasteboard)
-            oldChangeCountWithCopyManager = view.human.copyManagerView.changeCount
+            copyManagerView.copyManager = copyManager(with: pasteboard)
+            oldChangeCountWithCopyManager = copyManagerView.changeCount
         }
     }
     func windowDidResignMain(_ notification: Notification) {
-        if oldChangeCountWithCopyManager != view.human.copyManagerView.changeCount {
-            oldChangeCountWithCopyManager = view.human.copyManagerView.changeCount
+        if oldChangeCountWithCopyManager != copyManagerView.changeCount {
+            oldChangeCountWithCopyManager = copyManagerView.changeCount
             let pasteboard = NSPasteboard.general
-            setCopyManager(view.human.copyManagerView.copyManager, in: pasteboard)
+            setCopyManager(copyManagerView.copyManager, in: pasteboard)
             oldChangeCountWithPsteboard = pasteboard.changeCount
         }
     }
@@ -531,7 +542,8 @@ final class C0Document: NSDocument, NSWindowDelegate {
 }
 
 final class C0View: NSView, NSTextInputClient {
-    let human = Human()
+    let desktopView = DesktopView()
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setup()
@@ -541,30 +553,34 @@ final class C0View: NSView, NSTextInputClient {
         setup()
     }
     private var token: NSObjectProtocol?, localToken: NSObjectProtocol?
-    override func makeBackingLayer() -> CALayer {
-        return backingLayer(with: human.vision)
-    }
     func setup() {
         acceptsTouchEvents = true
         wantsLayer = true
         guard let layer = layer else {
             return
         }
-        human.vision.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }
-        human.setCursorHandler = {
+
+        desktopView.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }
+        desktopView.setCursorHandler = {
             if $0.cursor.nsCursor != NSCursor.current {
                 $0.cursor.nsCursor.set()
             }
         }
-        
+
         let nc = NotificationCenter.default
         localToken = nc.addObserver(forName: NSLocale.currentLocaleDidChangeNotification,
                                     object: nil,
-                                    queue: nil) { [unowned self] _ in self.human.locale = .current }
+                                    queue: nil) { [unowned self] _ in
+                                        self.desktopView.locale = .current }
         token = nc.addObserver(forName: NSView.frameDidChangeNotification,
                                object: self,
                                queue: nil) { ($0.object as? C0View)?.updateFrame() }
     }
+
+    override func makeBackingLayer() -> CALayer {
+        return backingLayer(with: desktopView)
+    }
+
     deinit {
         if let token = token {
             NotificationCenter.default.removeObserver(token)
@@ -573,6 +589,7 @@ final class C0View: NSView, NSTextInputClient {
             NotificationCenter.default.removeObserver(localToken)
         }
     }
+
     override var acceptsFirstResponder: Bool {
         return true
     }
@@ -582,18 +599,18 @@ final class C0View: NSView, NSTextInputClient {
     override func resignFirstResponder() -> Bool {
         return true
     }
-    
+
     override func viewDidChangeBackingProperties() {
         if let backingScaleFactor = window?.backingScaleFactor {
             Screen.shared.backingScaleFactor = backingScaleFactor
-            human.contentsScale = backingScaleFactor
+            desktopView.contentsScale = backingScaleFactor
         }
     }
-    
+
     func updateFrame() {
-        human.fieldOfVision = bounds.size
+        desktopView.frame.size = bounds.size
     }
-    
+
     func screenPoint(with event: NSEvent) -> CGPoint {
         return convertToLayer(convert(event.locationInWindow, from: nil))
     }
@@ -617,7 +634,7 @@ final class C0View: NSView, NSTextInputClient {
         }
         return convertFromLayer(window.convertToScreen(convert(r, to: nil)))
     }
-    
+
     func quasimodeEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> MoveEvent {
         return MoveEvent(sendType: sendType, location: cursorPoint,
                          time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil)
@@ -662,12 +679,12 @@ final class C0View: NSView, NSTextInputClient {
         return KeyInputEvent(sendType: sendType, location: cursorPoint,
                              time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nsEvent.key)
     }
-    
+
     override func flagsChanged(with event: NSEvent) {
         let quasimode = quasimodeEventWith(!event.modifierFlags.isEmpty ? .begin : .end, event)
-        human.sendEditQuasimode(with: quasimode)
+        desktopView.sendEditQuasimode(with: quasimode)
     }
-    
+
     override func keyDown(with event: NSEvent) {
         keyInput(with: event, .begin)
     }
@@ -675,41 +692,41 @@ final class C0View: NSView, NSTextInputClient {
         keyInput(with: event, .end)
     }
     private func keyInput(with event: NSEvent, _ sendType: Action.SendType) {
-        if human.sendKeyInputIsEditText(with: keyInputEventWith(sendType, event)) {
+        if desktopView.sendKeyInputIsEditText(with: keyInputEventWith(sendType, event)) {
             inputContext?.handleEvent(event)
         }
     }
-    
+
     override func cursorUpdate(with event: NSEvent) {
-        human.sendMoveCursor(with: moveEventWith(.sending, event))
-        if human.indicatedResponder.cursor.nsCursor != NSCursor.current {
-            human.indicatedResponder.cursor.nsCursor.set()
+        desktopView.sendMoveCursor(with: moveEventWith(.sending, event))
+        if desktopView.indicatedResponder.cursor.nsCursor != NSCursor.current {
+            desktopView.indicatedResponder.cursor.nsCursor.set()
         }
     }
     override func mouseMoved(with event: NSEvent) {
-        human.sendMoveCursor(with: moveEventWith(.sending, event))
+        desktopView.sendMoveCursor(with: moveEventWith(.sending, event))
     }
-    
+
     override func rightMouseDown(with nsEvent: NSEvent) {
-        human.sendRightDrag(with: dragEventWith(.begin, nsEvent))
+        desktopView.sendRightDrag(with: dragEventWith(.begin, nsEvent))
     }
     override func rightMouseDragged(with nsEvent: NSEvent) {
-        human.sendRightDrag(with: dragEventWith(.sending, nsEvent))
+        desktopView.sendRightDrag(with: dragEventWith(.sending, nsEvent))
     }
     override func rightMouseUp(with nsEvent: NSEvent) {
-        human.sendRightDrag(with: dragEventWith(.end, nsEvent))
+        desktopView.sendRightDrag(with: dragEventWith(.end, nsEvent))
     }
-    
+
     override func mouseDown(with nsEvent: NSEvent) {
-        human.sendDrag(with: dragEventWith(.begin, nsEvent))
+        desktopView.sendDrag(with: dragEventWith(.begin, nsEvent))
     }
     override func mouseDragged(with nsEvent: NSEvent) {
-        human.sendDrag(with: dragEventWith(.sending, nsEvent))
+        desktopView.sendDrag(with: dragEventWith(.sending, nsEvent))
     }
     override func mouseUp(with nsEvent: NSEvent) {
-        human.sendDrag(with: dragEventWith(.end, nsEvent))
+        desktopView.sendDrag(with: dragEventWith(.end, nsEvent))
     }
-    
+
     private var beginTouchesNormalizedPosition = CGPoint()
     override func touchesBegan(with event: NSEvent) {
         let touches = event.touches(matching: .began, in: self)
@@ -718,16 +735,16 @@ final class C0View: NSView, NSTextInputClient {
                            y: max($0.y, $1.normalizedPosition.y))
         }
     }
-    
+
     override func scrollWheel(with event: NSEvent) {
         if event.phase != .mayBegin && event.phase != .cancelled {
             let momentum = event.momentumPhase == .changed || event.momentumPhase == .ended
             let sendType: Action.SendType = event.phase == .began ?
                 .begin : (event.phase == .ended ? .end : .sending)
-            human.sendScroll(with: scrollEventWith(sendType, event), momentum: momentum)
+            desktopView.sendScroll(with: scrollEventWith(sendType, event), momentum: momentum)
         }
     }
-    
+
     private enum TouchGesture {
         case none, scroll, pinch, rotate
     }
@@ -736,16 +753,16 @@ final class C0View: NSView, NSTextInputClient {
         if event.phase == .began {
             if blockGesture == .none {
                 blockGesture = .pinch
-                human.sendZoom(with: pinchEventWith(.begin, event))
+                desktopView.sendZoom(with: pinchEventWith(.begin, event))
             }
         } else if event.phase == .ended {
             if blockGesture == .pinch {
                 blockGesture = .none
-                human.sendZoom(with:pinchEventWith(.end, event))
+                desktopView.sendZoom(with:pinchEventWith(.end, event))
             }
         } else {
             if blockGesture == .pinch {
-                human.sendZoom(with: pinchEventWith(.sending, event))
+                desktopView.sendZoom(with: pinchEventWith(.sending, event))
             }
         }
     }
@@ -753,29 +770,29 @@ final class C0View: NSView, NSTextInputClient {
         if event.phase == .began {
             if blockGesture == .none {
                 blockGesture = .rotate
-                human.sendRotate(with: rotateEventWith(.begin, event))
+                desktopView.sendRotate(with: rotateEventWith(.begin, event))
             }
         } else if event.phase == .ended {
             if blockGesture == .rotate {
                 blockGesture = .none
-                human.sendRotate(with: rotateEventWith(.end, event))
+                desktopView.sendRotate(with: rotateEventWith(.end, event))
             }
         } else {
             if blockGesture == .rotate {
-                human.sendRotate(with: rotateEventWith(.sending, event))
+                desktopView.sendRotate(with: rotateEventWith(.sending, event))
             }
         }
     }
-    
+
     override func quickLook(with event: NSEvent) {
-        human.sendLookup(with: tapEventWith(.end, event))
+        desktopView.sendLookup(with: tapEventWith(.end, event))
     }
     override func smartMagnify(with event: NSEvent) {
-        human.sendResetView(with: doubleTapEventWith(.end, event))
+        desktopView.sendResetView(with: doubleTapEventWith(.end, event))
     }
-    
+
     var editTextView: TextView? {
-        return human.editTextView
+        return desktopView.editTextView
     }
     func hasMarkedText() -> Bool {
         return editTextView?.hasMarkedText ?? false
@@ -839,7 +856,7 @@ final class C0View: NSView, NSTextInputClient {
     func drawsVerticallyForCharacter(at charIndex: Int) -> Bool {
         return false
     }
-    
+
     override func insertNewline(_ sender: Any?) {
         editTextView?.insertNewline()
     }
@@ -869,6 +886,7 @@ extension NSImage {
         }
         unlockFocus()
     }
+    
     final var bitmapSize: CGSize {
         if let tiffRepresentation = tiffRepresentation {
             if let bitmap = NSBitmapImageRep(data: tiffRepresentation) {
@@ -877,6 +895,7 @@ extension NSImage {
         }
         return CGSize()
     }
+    
     final var PNGRepresentation: Data? {
         if let tiffRepresentation = tiffRepresentation,
             let bitmap = NSBitmapImageRep(data: tiffRepresentation) {
@@ -886,6 +905,7 @@ extension NSImage {
             return nil
         }
     }
+    
     static func exportAppIcon() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
@@ -933,6 +953,7 @@ extension NSEvent {
         }
         return quasimode
     }
+    
     var scrollMomentumType: Action.SendType? {
         if momentumPhase.contains(.began) {
             return .begin
@@ -944,6 +965,7 @@ extension NSEvent {
             return nil
         }
     }
+    
     var key: Action.Key? {
         switch keyCode {
         case 0:

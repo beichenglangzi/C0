@@ -19,64 +19,72 @@
 
 import Foundation
 
+struct Desktop {
+    var actionManager = ActionManager()
+    var objects = [Any]()
+    private enum CodingKeys: String, CodingKey {
+        case isHiddenActions
+    }
+}
+extension Desktop: Codable {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        actionManager.isHiddenActions = try values.decode(Bool.self, forKey: .isHiddenActions)
+    }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(actionManager.isHiddenActions, forKey: .isHiddenActions)
+    }
+}
+extension Desktop: Referenceable {
+    static let name = Localization(english: "Desktop", japanese: "デスクトップ")
+}
+
 /**
  # Issue
  - sceneViewを取り除く
  */
-final class Human: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Human", japanese: "ヒューマン")
+final class DesktopView: Layer, Respondable {
+    static let name = Desktop.name
     
-    var locale = Locale.current {
+    var desktop = Desktop() {
         didSet {
-            if locale.languageCode != oldValue.languageCode {
-                vision.allChildrenAndSelf { ($0 as? Localizable)?.locale = locale }
-            }
-        }
-    }
-    
-    static let effectiveFieldOfView = tan(.pi * (30.0 / 2) / 180) / tan(.pi * (20.0 / 2) / 180)
-    static let basicEffectiveFieldOfView = Q(152, 100)
-    
-    struct Preference: Codable {
-        var isHiddenAction = false
-    }
-    var preference = Preference() {
-        didSet {
-            actionManagerView.isHiddenView.selectedIndex = preference.isHiddenAction ? 0 : 1
-            actionManagerView.isHiddenActions = preference.isHiddenAction
+            actionManagerView.actionManager = desktop.actionManager
             updateLayout()
         }
     }
     
-    var worldDataModel: DataModel
-    var preferenceDataModel = DataModel(key: preferenceDataModelKey)
-    static let dataModelKey = "human"
-    static let worldDataModelKey = "world", preferenceDataModelKey = "preference"
-    override var dataModel: DataModel? {
+    static let dataModelKey = "desktop"
+    var dataModel: DataModel {
         didSet {
-            if let worldDataModel = dataModel?.children[Human.worldDataModelKey] {
-                self.worldDataModel = worldDataModel
+            if let objectsDataModel = dataModel.children[DesktopView.objectsDataModelKey] {
+                self.objectsDataModel = objectsDataModel
             }
-            if let preferenceDataModel = dataModel?.children[Human.preferenceDataModelKey] {
-                self.preferenceDataModel = preferenceDataModel
-                if let preference: Preference = preferenceDataModel.readObject() {
-                    self.preference = preference
+            if let dDesktopDataModel
+                = dataModel.children[DesktopView.differentialDesktopDataModelKey] {
+                
+                self.differentialDesktopDataModel = dDesktopDataModel
+                if let desktop: Desktop = dDesktopDataModel.readObject() {
+                    self.desktop = desktop
                 }
-                preferenceDataModel.dataHandler = { [unowned self] in
-                    return self.preference.jsonData
-                }
+                dDesktopDataModel.dataHandler = { [unowned self] in self.desktop.jsonData }
             }
-            if let sceneViewDataModel = worldDataModel.children[SceneView.sceneViewKey] {
-                sceneView.dataModel = sceneViewDataModel
-            } else if let sceneViewDataModel = sceneView.dataModel {
-                worldDataModel.insert(sceneViewDataModel)
+            if let sceneDataModel = objectsDataModel.children[SceneView.dataModelKey] {
+                sceneView.dataModel = sceneDataModel
+            } else {
+                objectsDataModel.insert(sceneView.dataModel)
             }
         }
     }
+    static let differentialDesktopDataModelKey = "differentialDesktop"
+    var differentialDesktopDataModel = DataModel(key: differentialDesktopDataModelKey)
+    static let objectsDataModelKey = "objects"
+    var objectsDataModel: DataModel
     
-    let vision = Vision()
     let copyManagerView = CopyManagerView(), actionManagerView = ActionManagerView()
-    let world = Box()
+    let objectsView = Box()
+    let sceneView = SceneView()
+    
     var editTextView: TextView? {
         if let editTextView = indicatedResponder as? TextView {
             return editTextView.isLocked ? nil : editTextView
@@ -84,7 +92,31 @@ final class Human: Layer, Respondable, Localizable {
             return nil
         }
     }
-    let sceneView = SceneView()
+    
+    override init() {
+        objectsDataModel = DataModel(key: DesktopView.objectsDataModelKey,
+                                     directoryWith: [sceneView.dataModel])
+        dataModel = DataModel(key: DesktopView.dataModelKey,
+                              directoryWith: [differentialDesktopDataModel, objectsDataModel])
+        
+        objectsView.isClipped = true
+        indicatedResponder = objectsView
+        
+        super.init()
+        fillColor = .background
+        
+        objectsView.replace(children: [sceneView])
+        replace(children: [copyManagerView, actionManagerView, objectsView])
+        indicatedResponder = self
+        
+        actionManagerView.isHiddenActionsBinding = { [unowned self] in
+            self.desktop.actionManager.isHiddenActions = $0
+            self.actionManagerView.actionManager.isHiddenActions = $0
+            self.updateLayout()
+            self.differentialDesktopDataModel.isWrite = true
+        }
+        differentialDesktopDataModel.dataHandler = { [unowned self] in self.desktop.jsonData }
+    }
     
     var actionWidth = ActionManagerView.defaultWidth {
         didSet {
@@ -96,80 +128,62 @@ final class Human: Layer, Respondable, Localizable {
             updateLayout()
         }
     }
-    var fieldOfVision = CGSize() {
+    
+    var rootCursorPoint = CGPoint()
+    override var cursorPoint: CGPoint {
+        return rootCursorPoint
+    }
+    
+    override var locale: Locale {
         didSet {
-            vision.frame.size = fieldOfVision
+            if locale.languageCode != oldValue.languageCode {
+                allChildrenAndSelf { $0.locale = locale }
+            }
+        }
+    }
+    
+    override var bounds: CGRect {
+        didSet {
             updateLayout()
         }
     }
-    
-    override init() {
-        if let sceneViewDataModel = sceneView.dataModel {
-            worldDataModel = DataModel(key: Human.worldDataModelKey,
-                                       directoryWithDataModels: [sceneViewDataModel])
-        } else {
-            worldDataModel = DataModel(key: Human.worldDataModelKey, directoryWithDataModels: [])
-        }
-        world.isClipped = true
-        world.replace(children: [sceneView])
-        vision.replace(children: [copyManagerView, actionManagerView, world])
-        indicatedResponder = vision
-        
-        super.init()
-        dataModel = DataModel(key: Human.dataModelKey,
-                              directoryWithDataModels: [preferenceDataModel, worldDataModel])
-        editQuasimode = EditQuasimode.move
-        
-        actionManagerView.isHiddenActionBinding = { [unowned self] in
-            self.preference.isHiddenAction = $0
-            self.updateLayout()
-            self.preferenceDataModel.isWrite = true
-        }
-        preferenceDataModel.dataHandler = { [unowned self] in return self.preference.jsonData }
-    }
-    
     private func updateLayout() {
         let padding = Layout.basicPadding
-        let preferenceY = fieldOfVision.height - actionManagerView.frame.height - padding
+        let preferenceY = bounds.height - actionManagerView.frame.height - padding
         actionManagerView.frame = CGRect(x: padding,
                                          y: preferenceY,
                                          width: actionWidth,
                                          height: actionManagerView.frame.height)
         copyManagerView.frame = CGRect(x: padding + actionWidth,
-                                        y: fieldOfVision.height - copyViewHeight - padding,
-                                        width: fieldOfVision.width - actionWidth - padding * 2,
-                                        height: copyViewHeight)
-        if preference.isHiddenAction {
-            world.frame = CGRect(x: padding,
-                                 y: padding,
-                                 width: vision.frame.width - padding * 2,
-                                 height: vision.frame.height - copyViewHeight - padding * 2)
+                                       y: bounds.height - copyViewHeight - padding,
+                                       width: bounds.width - actionWidth - padding * 2,
+                                       height: copyViewHeight)
+        if actionManagerView.actionManager.isHiddenActions {
+            objectsView.frame = CGRect(x: padding,
+                                       y: padding,
+                                       width: bounds.width - padding * 2,
+                                       height: bounds.height - copyViewHeight - padding * 2)
         } else {
-            world.frame = CGRect(x: padding + actionWidth,
-                                 y: padding,
-                                 width: vision.frame.width - (padding * 2 + actionWidth),
-                                 height: vision.frame.height - copyViewHeight - padding * 2)
+            objectsView.frame = CGRect(x: padding + actionWidth,
+                                       y: padding,
+                                       width: bounds.width - (padding * 2 + actionWidth),
+                                       height: bounds.height - copyViewHeight - padding * 2)
         }
-        world.bounds.origin = CGPoint(x: -round((world.frame.width / 2)),
-                                      y: -round((world.frame.height / 2)))
+        objectsView.bounds.origin = CGPoint(x: -round((objectsView.frame.width / 2)),
+                                            y: -round((objectsView.frame.height / 2)))
         sceneView.frame.origin = CGPoint(x: -round(sceneView.frame.width / 2),
                                          y: -round(sceneView.frame.height / 2))
     }
+    
     override var contentsScale: CGFloat {
         didSet {
             if contentsScale != oldValue {
-                vision.allChildrenAndSelf { $0.contentsScale = contentsScale }
+                allChildrenAndSelf { $0.contentsScale = contentsScale }
             }
         }
     }
     
-    override var editQuasimode: EditQuasimode {
-        didSet {
-            vision.editQuasimode = editQuasimode
-        }
-    }
-    
-    var setEditTextView: (((human: Human, textView: TextView?, oldValue: TextView?)) -> ())?
+    var setEditTextView: (((view: DesktopView, textView: TextView?, oldValue: TextView?)) -> ())?
     var indicatedResponder: Respondable {
         didSet {
             guard indicatedResponder !== oldValue else {
@@ -206,13 +220,13 @@ final class Human: Layer, Respondable, Localizable {
         }
     }
     func indicatedResponder(with event: Event) -> Respondable {
-        return (vision.at(event.location) as? Respondable) ?? vision
+        return (at(event.location) as? Respondable) ?? self
     }
     func indicatedLayer(with event: Event) -> Layer {
-        return vision.at(event.location) ?? vision
+        return at(event.location) ?? self
     }
     func indicatedLayer(at p: CGPoint) -> Layer {
-        return vision.at(p) ?? vision
+        return at(p) ?? self
     }
     func responder(with beginLayer: Layer,
                    handler: (Respondable) -> (Bool) = { _ in true }) -> Respondable {
@@ -223,11 +237,11 @@ final class Human: Layer, Respondable, Localizable {
                 stop = true
             }
         }
-        return responder ?? vision
+        return responder ?? self
     }
     
     func sendMoveCursor(with event: MoveEvent) {
-        vision.rootCursorPoint = event.location
+        rootCursorPoint = event.location
         let indicatedLayer = self.indicatedLayer(with: event)
         let indicatedResponder = responder(with: indicatedLayer)
         if indicatedResponder !== self.indicatedResponder {
@@ -237,7 +251,7 @@ final class Human: Layer, Respondable, Localizable {
         _ = responder(with: indicatedLayer) { $0.moveCursor(with: event) }
     }
     
-    var setCursorHandler: (((human: Human, cursor: Cursor, oldCursor: Cursor)) -> ())?
+    var setCursorHandler: (((view: DesktopView, cursor: Cursor, oldCursor: Cursor)) -> ())?
     var cursor = Cursor.arrow {
         didSet {
             setCursorHandler?((self, cursor, oldValue))
@@ -382,7 +396,7 @@ final class Human: Layer, Respondable, Localizable {
         panel.contents = [referenceView]
         panel.openPoint = p.integral
         panel.openViewPoint = point(from: event)
-        panel.subIndicatedParent = vision
+        panel.subIndicatedParent = self
     }
     
     func sendResetView(with event: DoubleTapEvent) {
@@ -395,17 +409,5 @@ final class Human: Layer, Respondable, Localizable {
     }
     func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
         return copyManagerView.paste(copyManager, with: event)
-    }
-}
-
-final class Vision: Layer, Respondable {
-    static let name = Localization(english: "Vision", japanese: "ビジョン")
-    var rootCursorPoint = CGPoint()
-    override var cursorPoint: CGPoint {
-        return rootCursorPoint
-    }
-    override init() {
-        super.init()
-        fillColor = .background
     }
 }

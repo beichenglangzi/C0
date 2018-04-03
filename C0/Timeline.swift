@@ -26,16 +26,10 @@ import Foundation
  - sceneを取り除く
  - スクロールの可視性の改善
  */
-final class Timeline: Layer, Respondable, Localizable {
+final class Timeline: Layer, Respondable {
     static let name = Localization(english: "Timeline", japanese: "タイムライン")
     static let feature = Localization(english: "Select time: Left and right scroll\nSelect track: Up and down scroll",
                                       japanese: "時間選択: 左右スクロール\nトラック選択: 上下スクロール")
-    
-    var locale = Locale.current {
-        didSet {
-            updateLayout()
-        }
-    }
     
     var scene = Scene() {
         didSet {
@@ -44,15 +38,16 @@ final class Timeline: Layer, Respondable, Localizable {
             cutViews = self.cutViews(with: scene)
             editCutView.isEdit = true
             baseTimeInterval = scene.baseTimeInterval
-            tempoSlider.value = scene.tempoTrack.tempoItem.tempo
+            tempoView.number = scene.tempoTrack.tempoItem.tempo
             tempoAnimationView.animation = scene.tempoTrack.animation
             tempoAnimationView.frame.size.width = maxScrollX
             soundWaveformView.tempoTrack = scene.tempoTrack
             soundWaveformView.sound = scene.sound
-            baseTimeIntervalSlider.value = scene.baseTimeInterval.q.cf
+            baseTimeIntervalView.number = scene.baseTimeInterval.q.cf
             updateWith(time: scene.time, scrollPoint: _scrollPoint)
         }
     }
+    
     var indicatedTime = 0
     var setEditCutItemIndexHandler: ((Timeline, Int) -> ())?
     var editCutIndex: Int {
@@ -92,7 +87,8 @@ final class Timeline: Layer, Respondable, Localizable {
         }
     }
     private let timeHeight = defaultTimeHeight
-    private let timeRulerHeight = 14.0.cf, tempoHeight = defaultSumKeyTimesHeight
+    private let timeRulerHeight = Layout.smallHeight
+    private let tempoHeight = defaultSumKeyTimesHeight
     private let subtitleHeight = 24.0.cf, soundHeight = 20.0.cf
     private let sumKeyTimesHeight = defaultSumKeyTimesHeight
     private let knobHalfHeight = 8.0.cf, subKnobHalfHeight = 4.0.cf, maxLineHeight = 3.0.cf
@@ -105,13 +101,11 @@ final class Timeline: Layer, Respondable, Localizable {
                                       frameAlignment: .right, alignment: .right)
     
     let timeRuler = Ruler()
-    
-    let tempoSlider = NumberSlider(frame: CGRect(x: 0, y: 0,
-                                                 width: leftWidth, height: Layout.basicHeight),
-                                   defaultValue: 120, min: 1, max: 10000, unit: " bpm",
-                                   description: Localization(english: "Tempo", japanese: "テンポ"))
+    let tempoView = RelativeNumberView(frame: CGRect(x: 0, y: 0,
+                                                     width: leftWidth, height: Layout.basicHeight),
+                                       defaultNumber: 120, min: 1, max: 10000, unit: " bpm")
     let tempoAnimationView = AnimationView(height: defaultSumKeyTimesHeight)
-    let tempoView = Box()
+    let tempoAnimationBox = Box()
     let soundWaveformView = SoundWaveformView()
     let nodeTreeView = NodeTreeManager()
     let tracksManager = TracksManager()
@@ -119,10 +113,8 @@ final class Timeline: Layer, Respondable, Localizable {
     let sumLabel = Label(text: Localization(english: "Sum:", japanese: "合計:"), font: .small)
     let sumKeyTimesView = AnimationView(height: defaultSumKeyTimesHeight)
     let sumKeyTimesBox = Box()
-    let baseTimeIntervalSlider =
-        NumberSlider(frame: Layout.valueFrame, min: 1, max: 1000, valueInterval: 1, unit: " cpb",
-                     description: Localization(english: "Edit split count per beat",
-                                               japanese: "1ビートあたりの編集用分割数"))
+    let baseTimeIntervalView = RelativeNumberView(frame: Layout.valueFrame,
+                                                  min: 1, max: 1000, numberInterval: 1, unit: " cpb")
     
     let timeLayer: Layer = {
         let layer = Layer()
@@ -146,9 +138,9 @@ final class Timeline: Layer, Respondable, Localizable {
     let keyframeView = KeyframeView(), nodeView = NodeView(isSmall: true)
     let tempoKeyframeView = KeyframeView(isSmall: true)
     
-    init(frame: CGRect = CGRect(), description: Localization = Localization()) {
-        tempoView.replace(children: [tempoAnimationView])
-        tempoView.isClipped = true
+    init(frame: CGRect = CGRect()) {
+        tempoAnimationBox.replace(children: [tempoAnimationView])
+        tempoAnimationBox.isClipped = true
         tempoAnimationView.isEdit = true
         tempoAnimationView.isSmall = false
         tempoAnimationView.smallHeight = tempoHeight
@@ -163,16 +155,15 @@ final class Timeline: Layer, Respondable, Localizable {
         beatsLayer.lineColor = nil
         
         super.init()
-        instanceDescription = description
         replace(children: [timeLayer, timeLabel, beatsLayer, sumLabel, sumKeyTimesBox, timeRuler,
-                           tempoView, baseTimeIntervalLabel,
+                           tempoAnimationBox, baseTimeIntervalLabel,
                            nodeTreeView.nodesView, tracksManager.tracksView,
                            cutViewsBox])
         if !frame.isEmpty {
             self.frame = frame
         }
         
-        tempoView.moveHandler = { [unowned self] in
+        tempoAnimationBox.moveHandler = { [unowned self] in
             if ($1.sendType == .begin && self.tempoAnimationView.frame.maxX <= $0.point(from: $1).x) ||
                 $1.sendType != .begin {
 
@@ -215,7 +206,7 @@ final class Timeline: Layer, Respondable, Localizable {
             self.setAnimationInTempoTrack(with: $0)
         }
         
-        tempoView.bindHandler = { [unowned self] _, _ in
+        tempoAnimationBox.bindHandler = { [unowned self] _, _ in
             return self.bindKeyframe(bindingKeyframeType: .tempo)
         }
         cutViewsBox.bindHandler = { [unowned self] _, _ in
@@ -283,6 +274,12 @@ final class Timeline: Layer, Respondable, Localizable {
         }
     }
     
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
+    }
+    
     override var bounds: CGRect {
         didSet {
             updateLayout()
@@ -299,25 +296,25 @@ final class Timeline: Layer, Respondable, Localizable {
         timeLabel.frame.origin = CGPoint(x: rightX - timeLabel.frame.width - Layout.smallPadding,
                                          y: bounds.height - timeRulerHeight
                                             - Layout.basicPadding + Layout.smallPadding)
-        tempoView.frame = CGRect(x: rightX,
-                                   y: bounds.height - timeRulerHeight - tempoHeight - sp,
-                                   width: bounds.width - rightX - sp, height: tempoHeight)
+        tempoAnimationBox.frame = CGRect(x: rightX,
+                                         y: bounds.height - timeRulerHeight - tempoHeight - sp,
+                                         width: bounds.width - rightX - sp, height: tempoHeight)
         let tracksHeight = 30.0.cf
         tracksManager.tracksView.frame = CGRect(x: sp, y: sumKeyTimesHeight + sp,
-                                                  width: leftWidth - sp,
-                                                  height: tracksHeight)
+                                                width: leftWidth - sp,
+                                                height: tracksHeight)
         nodeTreeView.nodesView.frame = CGRect(x: sp, y: sumKeyTimesHeight + sp + tracksHeight,
-                                                  width: leftWidth - sp,
-                                                  height: cutHeight - tracksHeight)
+                                              width: leftWidth - sp,
+                                              height: cutHeight - tracksHeight)
         cutViewsBox.frame = CGRect(x: rightX, y: sumKeyTimesHeight + sp,
-                                            width: bounds.width - rightX - sp,
-                                            height: mainHeight - tempoHeight)
+                                   width: bounds.width - rightX - sp,
+                                   height: mainHeight - tempoHeight)
         sumLabel.frame.origin = CGPoint(x: rightX - sumLabel.frame.width,
                                         y: sp + (sumKeyTimesHeight - sumLabel.frame.height) / 2)
         sumKeyTimesBox.frame = CGRect(x: rightX, y: sp,
-                                          width: bounds.width - rightX - sp, height: sumKeyTimesHeight)
-        timeLayer.frame = CGRect(x: midX - baseWidth / 2, y: 0,
-                                 width: baseWidth, height: bounds.height)
+                                      width: bounds.width - rightX - sp, height: sumKeyTimesHeight)
+        timeLayer.frame = CGRect(x: midX - baseWidth / 2, y: sp,
+                                 width: baseWidth, height: bounds.height - sp * 2)
         beatsLayer.frame = CGRect(x: rightX, y: 0,
                                   width: bounds.width - rightX, height: bounds.height)
         let bx = sp + (sumKeyTimesHeight - baseTimeIntervalLabel.frame.height) / 2
@@ -391,7 +388,7 @@ final class Timeline: Layer, Respondable, Localizable {
                 animation.duration : animation.editKeyframe.time
             let cutAnimation = scene.cutTrack.animation
             editedKeyframeTime = cutAnimation.keyframes[cutAnimation.editLoopframeIndex].time + t
-            tempoSlider.value = scene.tempoTrack.tempoItem.tempo
+            tempoView.number = scene.tempoTrack.tempoItem.tempo
         }
         if isCut {
             nodeTreeView.cut = scene.editCut
@@ -441,12 +438,12 @@ final class Timeline: Layer, Respondable, Localizable {
                 if cutView.frame.minX < bounds.minX {
                     let nw = cutView.nameLabel.frame.width + sp
                     if bounds.minX + nw > cutView.frame.maxX {
-                        cutView.nameLabel.frame.origin.x = cutView.frame.width - nw
+                        cutView.nameX = cutView.frame.width - nw
                     } else {
-                        cutView.nameLabel.frame.origin.x = bounds.minX + sp - cutView.frame.minX
+                        cutView.nameX = bounds.minX + sp - cutView.frame.minX
                     }
                 } else {
-                    cutView.nameLabel.frame.origin.x = sp
+                    cutView.nameX = sp
                 }
             }
             
@@ -581,7 +578,7 @@ final class Timeline: Layer, Respondable, Localizable {
             return
         }
         timeRuler.scrollPosition.x = localDeltaX
-        timeRuler.labels = (minSecond ... maxSecond).flatMap {
+        timeRuler.labels = (minSecond ... maxSecond).compactMap {
             guard !(maxSecond - minSecond > Int(bounds.width / 40) && $0 % 5 != 0) else {
                 return nil
             }

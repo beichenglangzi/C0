@@ -580,7 +580,7 @@ final class Canvas: DrawLayer, Respondable {
             guard fromTrack != track else {
                 return
             }
-            let cellItems: [CellItem] = fromTrack.cellItems.flatMap { cellItem in
+            let cellItems: [CellItem] = fromTrack.cellItems.compactMap { cellItem in
                 for copyCell in copyJoiningCell.cell.allCells {
                     if cellItem.cell.id == copyCell.id {
                         let newKeyGeometries = track.alignedKeyGeometries(cellItem.keyGeometries)
@@ -1374,7 +1374,7 @@ final class Canvas: DrawLayer, Respondable {
                     return ([], [])
                 }
                 let lasso = LineLasso(lines: [line])
-                return (drawing.lines.enumerated().flatMap { lasso.intersects($1) ? $0 : nil },
+                return (drawing.lines.enumerated().compactMap { lasso.intersects($1) ? $0 : nil },
                         track.cellItems.filter { $0.cell.intersects(lasso) })
             }
             let s = selected()
@@ -2214,7 +2214,7 @@ final class Canvas: DrawLayer, Respondable {
         } else if !selectedCells.contains(fromCell) {
             let fromChildrens = fromCell.allCells
             var newFromParents = node.rootCell.parents(with: fromCell)
-            let newToParents: [(cell: Cell, index: Int)] = selectedCells.flatMap { toCell in
+            let newToParents: [(cell: Cell, index: Int)] = selectedCells.compactMap { toCell in
                 for fromChild in fromChildrens {
                     if fromChild == toCell {
                         return nil

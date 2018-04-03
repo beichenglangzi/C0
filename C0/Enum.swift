@@ -24,16 +24,10 @@ import Foundation
  - RawRepresentable利用
  - ノブの滑らかな移動
  */
-final class EnumView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Enumerated Type View", japanese: "列挙型表示")
+final class EnumView: Responder {
+    static let name = Localization(english: "Enumerated Type", japanese: "列挙型")
     static let feature = Localization(english: "Select Index: Up and down drag",
                                       japanese: "インデックスを選択: 上下ドラッグ")
-    
-    var locale = Locale.current {
-        didSet {
-            menu.allChildrenAndSelf { ($0 as? Localizable)?.locale = locale }
-        }
-    }
     
     let label: Label
     let knob: DiscreteKnob
@@ -43,9 +37,7 @@ final class EnumView: Layer, Respondable, Localizable {
         return lineLayer
     } ()
     init(frame: CGRect = CGRect(), names: [Localization] = [],
-         selectedIndex: Int = 0, cationIndex: Int? = nil,
-         description: Localization = Localization(), isSmall: Bool = false) {
-        
+         selectedIndex: Int = 0, cationIndex: Int? = nil, isSmall: Bool = false) {
         knobPaddingWidth = isSmall ? 12.0 : 16.0
         self.menu = Menu(names: names,
                          knobPaddingWidth: knobPaddingWidth, width: frame.width, isSmall: isSmall)
@@ -55,11 +47,17 @@ final class EnumView: Layer, Respondable, Localizable {
             DiscreteKnob(CGSize(square: 6), lineWidth: 1) :
             DiscreteKnob(CGSize(square: 8), lineWidth: 1)
         super.init()
-        instanceDescription = description
         self.frame = frame
         replace(children: [label, lineLayer, knob])
         updateKnobPosition()
         updateLabel()
+    }
+    
+    override var locale: Locale {
+        didSet {
+            menu.allChildrenAndSelf { $0.locale = locale }
+            updateLayout()
+        }
     }
     
     override var defaultBounds: CGRect {
@@ -67,12 +65,15 @@ final class EnumView: Layer, Respondable, Localizable {
     }
     override var bounds: CGRect {
         didSet {
-            label.frame.origin.y = round((bounds.height - label.frame.height) / 2)
-            if menu.width != bounds.width {
-                menu.width = bounds.width
-            }
-            updateKnobPosition()
+            updateLayout()
         }
+    }
+    func updateLayout() {
+        label.frame.origin.y = round((bounds.height - label.frame.height) / 2)
+        if menu.width != bounds.width {
+            menu.width = bounds.width
+        }
+        updateKnobPosition()
     }
     func updateKnobPosition() {
         lineLayer.path = CGPath(rect: CGRect(x: knobPaddingWidth / 2 - 1, y: 0,
@@ -230,14 +231,8 @@ final class EnumView: Layer, Respondable, Localizable {
     }
 }
 
-final class Menu: Layer, Respondable, Localizable {
+final class Menu: Responder {
     static let name = Localization(english: "Menu", japanese: "メニュー")
-    
-    var locale = Locale.current {
-        didSet {
-            items.forEach { $0.label.locale = locale }
-        }
-    }
     
     var selectedIndex = 0 {
         didSet {

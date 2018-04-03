@@ -186,13 +186,10 @@ final class Weak<T: AnyObject> {
     }
 }
 
-final class ObjectView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Object View", japanese: "オブジェクト表示")
-    
-    var locale = Locale.current {
-        didSet {
-            updateLayout()
-        }
+final class ObjectView: Layer, Respondable {
+    static let name = Localization(english: "Object", japanese: "オブジェクト")
+    var instanceDescription: Localization {
+        return (object as? Referenceable)?.instanceDescription ?? Localization()
     }
     
     let object: Any
@@ -211,10 +208,16 @@ final class ObjectView: Layer, Respondable, Localizable {
         let width = max(minFrame.width, nameLabel.frame.width + thumbnailWidth)
         self.frame = CGRect(origin: minFrame.origin,
                             size: CGSize(width: width, height: minFrame.height))
-        instanceDescription = (object as? Referenceable)?.valueDescription ?? Localization()
         replace(children: [nameLabel, self.thumbnailView])
         updateLayout()
     }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
+    }
+    
     override var bounds: CGRect {
         didSet {
             updateLayout()
@@ -235,35 +238,30 @@ final class ObjectView: Layer, Respondable, Localizable {
 }
 
 final class DiscreteSizeView: Layer, Respondable {
-    static let name = Localization(english: "Size View", japanese: "サイズ表示")
+    static let name = CGSize.name
     
     private let wLabel = Label(text: Localization("w:"))
-    private let widthSlider = NumberSlider(frame: Layout.valueFrame,
-                                           min: 1, max: 10000, valueInterval: 1,
-                                           description: Localization(english: "Scene width",
-                                                                     japanese: "シーンの幅"))
+    private let widthView = RelativeNumberView(frame: Layout.valueFrame,
+                                               min: 1, max: 10000, numberInterval: 1)
     private let hLabel = Label(text: Localization("h:"))
-    private let heightSlider = NumberSlider(frame: Layout.valueFrame,
-                                            min: 1, max: 10000, valueInterval: 1,
-                                            description: Localization(english: "Scene height",
-                                                                      japanese: "シーンの高さ"))
-    init(description: Localization = Localization()) {
+    private let heightView = RelativeNumberView(frame: Layout.valueFrame,
+                                                min: 1, max: 10000, numberInterval: 1)
+    override init() {
         super.init()
-        instanceDescription = description
-        let size = Layout.leftAlignment([wLabel, widthSlider, Padding(), hLabel, heightSlider],
+        let size = Layout.leftAlignment([wLabel, widthView, Padding(), hLabel, heightView],
                                         height: Layout.basicHeight + Layout.basicPadding * 2)
         frame.size = CGSize(width: size.width + Layout.basicPadding, height: size.height)
-        replace(children: [wLabel, widthSlider, hLabel, heightSlider])
+        replace(children: [wLabel, widthView, hLabel, heightView])
         
-        widthSlider.binding = { [unowned self] in self.setSize(with: $0) }
-        heightSlider.binding = { [unowned self] in self.setSize(with: $0) }
+        widthView.binding = { [unowned self] in self.setSize(with: $0) }
+        heightView.binding = { [unowned self] in self.setSize(with: $0) }
     }
     
     var size = CGSize() {
         didSet {
             if size != oldValue {
-                widthSlider.value = size.width
-                heightSlider.value = size.height
+                widthView.number = size.width
+                heightView.number = size.height
             }
         }
     }
@@ -279,13 +277,13 @@ final class DiscreteSizeView: Layer, Respondable {
     var disabledRegisterUndo = false
     
     private var oldSize = CGSize()
-    private func setSize(with obj: NumberSlider.Binding) {
+    private func setSize(with obj: RelativeNumberView.Binding) {
         if obj.type == .begin {
             oldSize = size
             binding?(Binding(view: self, size: oldSize, oldSize: oldSize, type: .begin))
         } else {
-            size = obj.slider == widthSlider ?
-                size.with(width: obj.value) : size.with(height: obj.value)
+            size = obj.view == widthView ?
+                size.with(width: obj.number) : size.with(height: obj.number)
             binding?(Binding(view: self, size: size, oldSize: oldSize, type: obj.type))
         }
     }
@@ -323,7 +321,7 @@ final class DiscreteSizeView: Layer, Respondable {
 }
 
 final class PointView: Layer, Respondable {
-    static let name = Localization(english: "Point View", japanese: "ポイント表示")
+    static let name = CGPoint.name
     
     var backgroundLayers = [Layer]() {
         didSet {
@@ -332,9 +330,8 @@ final class PointView: Layer, Respondable {
     }
     
     let knob = Knob()
-    init(frame: CGRect = CGRect(), description: Localization = Localization()) {
+    init(frame: CGRect = CGRect()) {
         super.init()
-        instanceDescription = description
         self.frame = frame
         append(child: knob)
     }
@@ -453,16 +450,10 @@ final class PointView: Layer, Respondable {
     }
 }
 
-final class Progress: Layer, Respondable, Localizable {
+final class Progress: Layer, Respondable {
     static let name = Localization(english: "Progress", japanese: "進捗")
     static let feature = Localization(english: "Stop: Send \"Cut\" action",
                                       japanese: "停止: \"カット\"アクションを送信")
-    
-    var locale = Locale.current {
-        didSet {
-            updateString(with: locale)
-        }
-    }
     
     let barLayer = Layer()
     let barBackgroundLayer = Layer()
@@ -486,12 +477,12 @@ final class Progress: Layer, Respondable, Localizable {
         self.frame = frame
         isClipped = true
         replace(children: [label, barBackgroundLayer, barLayer])
-        updateChildren()
+        updateLayout()
     }
     
     var value = 0.0.cf {
         didSet {
-            updateChildren()
+            updateLayout()
         }
     }
     func begin() {
@@ -520,7 +511,14 @@ final class Progress: Layer, Respondable, Localizable {
             updateString(with: locale)
         }
     }
-    func updateChildren() {
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
+    }
+    
+    func updateLayout() {
         let padding = Layout.basicPadding
         barBackgroundLayer.frame = CGRect(x: padding, y: padding - 1,
                                           width: (bounds.width - padding * 2), height: 1)
@@ -567,9 +565,12 @@ extension CGImage {
         return CGSize(width: width, height: height)
     }
 }
+extension CGImage: Referenceable {
+    static let name = Localization(english: "Image", japanese: "画像")
+}
 
 final class ImageView: Layer, Respondable {
-    static let name = Localization(english: "Image View", japanese: "画像表示")
+    static let name = CGImage.name
     
     init(image: CGImage? = nil) {
         super.init()

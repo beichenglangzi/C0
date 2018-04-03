@@ -315,7 +315,7 @@ extension Animation: Referenceable {
 }
 
 final class AnimationView: Layer, Respondable {
-    static let name = Localization(english: "Animation View", japanese: "アニメーション表示")
+    static let name = Animation.name
     
     init(_ animation: Animation = Animation(),
          beginBaseTime: Beat = 0, baseTimeInterval: Beat = Beat(1, 16),

@@ -236,32 +236,31 @@ final class Player: Layer, Respondable {
     }
 }
 
-final class SeekBar: Layer, Respondable, Localizable {
+final class SeekBar: Layer, Respondable {
     static let name = Localization(english: "Seek Bar", japanese: "シークバー")
-    
-    var locale = Locale.current {
-        didSet {
-            updateLayout()
-        }
-    }
     
     let timeLabel = Label(text: Localization("00:00"), color: .locked)
     let frameRateLabel = Label(text: Localization("00 fps"), color: .locked)
-    let slider = Slider(min: 0, max: 1,
-                        description: Localization(english: "Play Time", japanese: "再生時間"))
+    let timeView = NumberView(min: 0, max: 1)
     
     override init() {
         super.init()
-        replace(children: [timeLabel, frameRateLabel, slider])
+        replace(children: [timeLabel, frameRateLabel, timeView])
         
-        slider.disabledRegisterUndo = true
-        slider.binding = { [unowned self] in
-            self.time = Second($0.value)
+        timeView.disabledRegisterUndo = true
+        timeView.binding = { [unowned self] in
+            self.time = Second($0.number)
             self.timeBinding?(self.time, $0.type)
         }
     }
     
     var timeBinding: ((Second, Action.SendType) -> (Void))? = nil
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
+    }
     
     override var bounds: CGRect {
         didSet {
@@ -278,9 +277,10 @@ final class SeekBar: Layer, Respondable, Localizable {
         frameRateLabel.frame.origin = CGPoint(x: bounds.width - frameRateLabel.frame.width - padding,
                                               y: labelY)
         let sliderWidth = frameRateLabel.frame.minX - timeLabel.frame.maxX - padding * 2
-        slider.frame = CGRect(x: timeLabel.frame.maxX + padding,
+        timeView.frame = CGRect(x: timeLabel.frame.maxX + padding,
                               y: sliderY, width: sliderWidth, height: height)
-        slider.backgroundLayers = [SeekBar.sliderLayer(with: slider.bounds, padding: slider.padding)]
+        timeView.backgroundLayers = [SeekBar.sliderLayer(with: timeView.bounds,
+                                                         padding: timeView.padding)]
     }
     static func sliderLayer(with bounds: CGRect, padding: CGFloat) -> Layer {
         let layer = PathLayer()
@@ -302,13 +302,13 @@ final class SeekBar: Layer, Respondable, Localizable {
     
     var time = Second(0.0) {
         didSet {
-            slider.value = CGFloat(time)
+            timeView.number = CGFloat(time)
             second = Int(time)
         }
     }
     var maxTime = Second(1.0) {
         didSet {
-            slider.maxValue = Double(maxTime).cf
+            timeView.maxNumber = Double(maxTime).cf
         }
     }
     private(set) var second = 0 {

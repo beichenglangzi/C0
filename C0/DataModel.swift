@@ -29,7 +29,7 @@ final class DataModel {
         isDirectory = false
         children = [:]
     }
-    init(key: String, directoryWithDataModels dataModels: [DataModel]) {
+    init(key: String, directoryWith dataModels: [DataModel]) {
         self.key = key
         let fws = dataModels.reduce(into: [String: FileWrapper]()) { $0[$1.key] = $1.fileWrapper }
         fileWrapper = FileWrapper(directoryWithFileWrappers: fws)

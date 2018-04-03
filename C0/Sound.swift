@@ -298,14 +298,8 @@ final class SoundWaveformView: Layer {
  - 効果音編集
  - シーケンサー
  */
-final class SoundView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Sound View", japanese: "サウンド表示")
-    
-    var locale = Locale.current {
-        didSet {
-            updateLayout()
-        }
-    }
+final class SoundView: Layer, Respondable {
+    static let name = Sound.name
     
     var sound = Sound() {
         didSet {
@@ -322,6 +316,12 @@ final class SoundView: Layer, Respondable, Localizable {
         isClipped = true
         replace(children: [nameLabel, soundLabel])
         updateLayout()
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
     }
     
     override var bounds: CGRect {

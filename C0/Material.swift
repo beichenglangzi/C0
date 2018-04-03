@@ -210,13 +210,11 @@ extension Material.MaterialType {
     }
 }
 
-extension Slider {
-    static func opacityView(isSmall: Bool = false) -> Slider {
-        return Slider(value: 1, defaultValue: 1, min: 0, max: 1,
-                      description: Localization(english: "Opacity", japanese: "不透明度"),
-                      isSmall: isSmall)
+extension NumberView {
+    static func opacityView(isSmall: Bool = false) -> NumberView {
+        return NumberView(number: 1, defaultNumber: 1, min: 0, max: 1, isSmall: isSmall)
     }
-    private static func opacitySliderLayers(with bounds: CGRect,
+    private static func opacityViewLayers(with bounds: CGRect,
                                             checkerWidth: CGFloat, padding: CGFloat) -> [Layer] {
         let frame = CGRect(x: padding, y: bounds.height / 2 - checkerWidth,
                            width: bounds.width - padding * 2, height: checkerWidth * 2)
@@ -237,15 +235,16 @@ extension Slider {
     func updateOpacityLayers(withFrame frame: CGRect) {
         if self.frame != frame {
             self.frame = frame
-            backgroundLayers = Slider.opacitySliderLayers(with: frame,
-                                                          checkerWidth: knob.radius, padding: padding)
+            backgroundLayers = NumberView.opacityViewLayers(with: frame,
+                                                            checkerWidth: knob.radius,
+                                                            padding: padding)
         }
     }
 }
-extension Slider {
+extension NumberView {
     static func widthViewWith(min: CGFloat, max: CGFloat, exp: CGFloat,
-                              description: Localization, isSmall: Bool = false) -> Slider {
-        return Slider(min: min, max: max, exp: exp, description: description, isSmall: isSmall)
+                              isSmall: Bool = false) -> NumberView {
+        return NumberView(min: min, max: max, exp: exp, isSmall: isSmall)
     }
     private static func widthLayer(with bounds: CGRect,
                                    halfWidth: CGFloat, padding: CGFloat) -> Layer {
@@ -265,8 +264,8 @@ extension Slider {
     func updateLineWidthLayers(withFrame frame: CGRect) {
         if self.frame != frame {
             self.frame = frame
-            backgroundLayers = [Slider.widthLayer(with: frame,
-                                                  halfWidth: knob.radius, padding: padding)]
+            backgroundLayers = [NumberView.widthLayer(with: frame,
+                                                      halfWidth: knob.radius, padding: padding)]
         }
     }
 }
@@ -275,14 +274,8 @@ extension Slider {
  # Issue
  - 「線の強さ」を追加
  */
-final class MaterialView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Material View", japanese: "マテリアル表示")
-    
-    var locale = Locale.current {
-        didSet {
-            updateLayout()
-        }
-    }
+final class MaterialView: Layer, Respondable {
+    static let name = Material.name
     
     var material: Material {
         didSet {
@@ -292,8 +285,8 @@ final class MaterialView: Layer, Respondable, Localizable {
             typeView.selectedIndex = index(with: material.type)
             colorView.color = material.color
             lineColorView.color = material.lineColor
-            lineWidthView.value = material.lineWidth
-            opacityView.value = material.opacity
+            lineWidthView.number = material.lineWidth
+            opacityView.number = material.opacity
         }
     }
     var defaultMaterial = Material()
@@ -301,17 +294,14 @@ final class MaterialView: Layer, Respondable, Localizable {
     static let defaultWidth = 140.0.cf
     
     private let nameLabel = Label(text: Material.name, font: .bold)
-    private let typeView = EnumView(names: Material.MaterialType.displayStrings,
-                                    description: Localization(english: "Type", japanese: "タイプ"))
+    private let typeView = EnumView(names: Material.MaterialType.displayStrings)
     private let colorView = ColorView()
-    private let lineWidthView = Slider.widthViewWith(min: Material.defaultLineWidth, max: 500, exp: 3,
-                                                     description: Localization(english: "Line Width",
-                                                                               japanese: "線の太さ"))
-    private let opacityView = Slider.opacityView()
+    private let lineWidthView = NumberView.widthViewWith(min: Material.defaultLineWidth, max: 500,
+                                                         exp: 3)
+    private let opacityView = NumberView.opacityView()
     private let lineColorLabel = Label(text: Localization(english: "Line Color:",
                                                           japanese: "線のカラー:"))
-    private let lineColorView = ColorView(hLineWidth: 2,
-                                          inPadding: 4, outPadding: 4, slPadding: 4, knobRadius: 4)
+    private let lineColorView = ColorView(hLineWidth: 2, hWidth: 8, slPadding: 4, isSmall: true)
     
     override init() {
         material = defaultMaterial
@@ -328,6 +318,12 @@ final class MaterialView: Layer, Respondable, Localizable {
         
         lineWidthView.binding = { [unowned self] in self.setMaterial(with: $0) }
         opacityView.binding = { [unowned self] in self.setMaterial(with: $0) }
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
     }
     
     override var defaultBounds: CGRect {
@@ -487,20 +483,20 @@ final class MaterialView: Layer, Respondable, Localizable {
         }
     }
     
-    private func setMaterial(with obj: Slider.Binding) {
-        switch obj.slider {
+    private func setMaterial(with obj: NumberView.Binding) {
+        switch obj.view {
         case lineWidthView:
             if obj.type == .begin {
                 isEditing = true
                 oldMaterial = material
                 lineWidthBinding?(LineWidthBinding(view: self,
-                                                   lineWidth: obj.value, oldLineWidth: obj.oldValue,
+                                                   lineWidth: obj.number, oldLineWidth: obj.oldNumber,
                                                    material: oldMaterial, oldMaterial: oldMaterial,
                                                    type: .begin))
             } else {
-                material = material.with(lineWidth: obj.value)
+                material = material.with(lineWidth: obj.number)
                 lineWidthBinding?(LineWidthBinding(view: self,
-                                                   lineWidth: obj.value, oldLineWidth: obj.oldValue,
+                                                   lineWidth: obj.number, oldLineWidth: obj.oldNumber,
                                                    material: material, oldMaterial: oldMaterial,
                                                    type: obj.type))
                 if obj.type == .end {
@@ -512,13 +508,13 @@ final class MaterialView: Layer, Respondable, Localizable {
                 isEditing = true
                 oldMaterial = material
                 opacityBinding?(OpacityBinding(view: self,
-                                               opacity: obj.value, oldOpacity: obj.oldValue,
+                                               opacity: obj.number, oldOpacity: obj.oldNumber,
                                                material: oldMaterial, oldMaterial: oldMaterial,
                                                type: .begin))
             } else {
-                material = material.with(opacity: obj.value)
+                material = material.with(opacity: obj.number)
                 opacityBinding?(OpacityBinding(view: self,
-                                               opacity: obj.value, oldOpacity: obj.oldValue,
+                                               opacity: obj.number, oldOpacity: obj.oldNumber,
                                                material: material, oldMaterial: oldMaterial,
                                                type: obj.type))
                 if obj.type == .end {

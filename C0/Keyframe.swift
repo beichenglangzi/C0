@@ -82,9 +82,19 @@ extension Keyframe: Equatable {
 extension Keyframe: Referenceable {
     static let name = Localization(english: "Keyframe", japanese: "キーフレーム")
 }
+extension Keyframe.Interpolation: Referenceable {
+    static let name = Localization(english: "Interpolation", japanese: "補間")
+    static let feature = Localization(english: "\"Bound\": Uses \"Spline\" without interpolation on previous, Not previous and next: Use \"Linear\"",
+                                      japanese: "バウンド: 前方側の補間をしないスプライン補間, 前後が足りない場合: リニア補間を使用")
+}
+extension Keyframe.Loop: Referenceable {
+    static let name = Localization(english: "Loop", japanese: "ループ")
+    static let feature = Localization(english: "Loop from \"Began Loop\" keyframe to \"Ended Loop\" keyframe on \"Ended Loop\" keyframe",
+                                      japanese: "「ループ開始」キーフレームから「ループ終了」キーフレームの間を「ループ終了」キーフレーム上でループ")
+}
 
 final class KeyframeView: Layer, Respondable {
-    static let name = Localization(english: "Keyframe View", japanese: "キーフレーム表示")
+    static let name = Keyframe.name
     
     var keyframe = Keyframe() {
         didSet {
@@ -102,19 +112,15 @@ final class KeyframeView: Layer, Respondable {
     init(isSmall: Bool = false) {
         nameLabel = Label(text: Keyframe.name, font: isSmall ? .smallBold : .bold)
         easingView = EasingView(isSmall: isSmall)
-        let interporationDescription = Localization(english: "\"Bound\": Uses \"Spline\" without interpolation on previous, Not previous and next: Use \"Linear\"",
-                                                    japanese: "バウンド: 前方側の補間をしないスプライン補間, 前後が足りない場合: リニア補間を使用")
         interpolationView = EnumView(names: [Localization(english: "Spline", japanese: "スプライン"),
                                              Localization(english: "Bound", japanese: "バウンド"),
                                              Localization(english: "Linear", japanese: "リニア"),
                                              Localization(english: "Step", japanese: "補間なし")],
-                                     description: interporationDescription, isSmall: isSmall)
-        let loopDescription = Localization(english: "Loop from \"Began Loop\" keyframe to \"Ended Loop\" keyframe on \"Ended Loop\" keyframe",
-                                           japanese: "「ループ開始」キーフレームから「ループ終了」キーフレームの間を「ループ終了」キーフレーム上でループ")
+                                     isSmall: isSmall)
         loopView = EnumView(names: [Localization(english: "No Loop", japanese: "ループなし"),
                                     Localization(english: "Began Loop", japanese: "ループ開始"),
                                     Localization(english: "Ended Loop", japanese: "ループ終了")],
-                            description: loopDescription, isSmall: isSmall)
+                            isSmall: isSmall)
         labelView = EnumView(names: [Localization(english: "Main Label", japanese: "メインラベル"),
                                      Localization(english: "Sub Label", japanese: "サブラベル")],
                              isSmall: isSmall)

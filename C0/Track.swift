@@ -1013,10 +1013,10 @@ final class NodeTrack: NSObject, Track, NSCoding {
     
     func snapCells(with cell: Cell) -> [Cell] {
         var cells = self.cells
-        var snapedCells = cells.flatMap { $0 !== cell && $0.isSnaped(cell) ? $0 : nil }
+        var snapedCells = cells.compactMap { $0 !== cell && $0.isSnaped(cell) ? $0 : nil }
         func snap(_ withCell: Cell) {
             var newSnapedCells = [Cell]()
-            cells = cells.flatMap {
+            cells = cells.compactMap {
                 if $0.isSnaped(withCell) {
                     newSnapedCells.append($0)
                     return nil

@@ -150,7 +150,7 @@ extension Drawing: ResponderExpression {
  - DraftArray、下書き化などのコマンドを排除
  */
 final class DrawingView: Layer, Respondable {
-    static let name = Localization(english: "Drawing View", japanese: "ドローイング表示")
+    static let name = Drawing.name
     
     var drawing = Drawing()
     

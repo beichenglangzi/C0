@@ -25,8 +25,8 @@ import Foundation
  - バージョン管理UndoManager
  - ブランチ機能
  */
-final class VersionView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Version View", japanese: "バージョン表示")
+final class VersionView: Layer, Respondable {
+    static let name = Localization(english: "Version", japanese: "バージョン")
     static let feature = Localization(english: "Show undoable count and undoed count in parent view",
                                       japanese: "親表示での取り消し可能回数、取り消し済み回数を表示")
     
@@ -71,7 +71,7 @@ final class VersionView: Layer, Respondable, Localizable {
         return rootUndoManager
     }
     
-    var locale = Locale.current {
+    override var locale: Locale {
         didSet {
             updateLayout()
         }

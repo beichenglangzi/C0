@@ -81,7 +81,7 @@ class Layer {
                 child.removeFromParent()
             }
         }
-        caLayer.sublayers = children.flatMap { $0.caLayer }
+        caLayer.sublayers = children.compactMap { $0.caLayer }
         self.children = children
         children.forEach { child in
             child.parent = self
@@ -305,8 +305,6 @@ class Layer {
         return CGRect(origin: convert(rect.origin, to: layer), size: rect.size)
     }
     
-    var instanceDescription = Localization()
-    
     var isIndicated = false {
         didSet {
             updateLineColorWithIsIndicated()
@@ -325,7 +323,6 @@ class Layer {
     private func updateLineColorWithIsIndicated() {
         lineColor = isIndicated ? indicatedLineColor : noIndicatedLineColor
     }
-    
     var isSubIndicated = false
     weak var subIndicatedParent: Layer?
     func allSubIndicatedParentsAndSelf(handler: (Layer) -> Void) {
@@ -333,27 +330,23 @@ class Layer {
         (subIndicatedParent ?? parent)?.allSubIndicatedParentsAndSelf(handler: handler)
     }
     
-    var undoManager: UndoManager? {
-        return subIndicatedParent?.undoManager ?? parent?.undoManager
-    }
-    
-    var dataModel: DataModel? {
-        didSet {
-            children.forEach { $0.dataModel = dataModel }
-        }
-    }
-    
-    var editQuasimode = EditQuasimode.move {
-        didSet {
-            children.forEach { $0.editQuasimode = editQuasimode }
-        }
-    }
-    
     var cursorPoint: CGPoint {
         if let parent = parent {
             return convert(parent.cursorPoint, from: parent)
         } else {
             return CGPoint()
+        }
+    }
+    
+    var undoManager: UndoManager? {
+        return subIndicatedParent?.undoManager ?? parent?.undoManager
+    }
+    
+    var locale = Locale.current
+    
+    var editQuasimode = EditQuasimode.move {
+        didSet {
+            children.forEach { $0.editQuasimode = editQuasimode }
         }
     }
 }
@@ -485,14 +478,14 @@ extension C0View {
 }
 
 private final class _CADrawLayer: CALayer {
-    init(backgroundColor: Color = .background, borderColor: Color? = .border) {
+    init(backgroundColor: Color? = .background, borderColor: Color? = .border) {
         super.init()
         self.needsDisplayOnBoundsChange = true
         self.drawsAsynchronously = true
         self.anchorPoint = CGPoint()
-        self.isOpaque = true
+        self.isOpaque = backgroundColor != nil
         self.borderWidth = borderColor == nil ? 0.0 : 0.5
-        self.backgroundColor = backgroundColor.cgColor
+        self.backgroundColor = backgroundColor?.cgColor
         self.borderColor = borderColor?.cgColor
     }
     override init(layer: Any) {

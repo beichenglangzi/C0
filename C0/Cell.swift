@@ -709,14 +709,8 @@ extension JoiningCell: ResponderExpression {
     }
 }
 
-final class CellView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Cell View", japanese: "セル表示")
-    
-    var locale = Locale.current {
-        didSet {
-            updateLayout()
-        }
-    }
+final class CellView: Layer, Respondable {
+    static let name = Cell.name
     
     var cell = Cell() {
         didSet {
@@ -739,6 +733,12 @@ final class CellView: Layer, Respondable, Localizable {
         replace(children: [nameLabel, isTranslucentLockView])
         
         isTranslucentLockView.binding = { [unowned self] in self.setIsTranslucentLock(with: $0) }
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
     }
     
     override var defaultBounds: CGRect {

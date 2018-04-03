@@ -723,7 +723,7 @@ final class Node: NSObject, NSCoding {
         if let minLine = minLine {
             if minPointIndex == 0 || minPointIndex == minLine.controls.count - 1 {
                 func caps(with point: CGPoint, _ lines: [Line]) -> [LineCap] {
-                    return lines.enumerated().flatMap {
+                    return lines.enumerated().compactMap {
                         if point == $0.element.firstPoint {
                             return LineCap(line: $0.element, lineIndex: $0.offset, isFirst: true)
                         }
@@ -738,7 +738,7 @@ final class Node: NSObject, NSCoding {
                     drawingCaps.isEmpty ? nil : (editTrack.drawingItem.drawing,
                                                  editTrack.drawingItem.drawing.lines, drawingCaps)
                 let cellResults: [(cellItem: CellItem, geometry: Geometry, caps: [LineCap])]
-                cellResults = editTrack.cellItems.flatMap {
+                cellResults = editTrack.cellItems.compactMap {
                     let aCaps = caps(with: minPoint, $0.cell.geometry.lines)
                     return aCaps.isEmpty ? nil : ($0, $0.cell.geometry, aCaps)
                 }
@@ -1464,14 +1464,8 @@ extension Node: Referenceable {
     static let name = Localization(english: "Node", japanese: "ノード")
 }
 
-final class NodeView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Node View", japanese: "ノード表示")
-    
-    var locale = Locale.current {
-        didSet {
-            updateLayout()
-        }
-    }
+final class NodeView: Layer, Respondable {
+    static let name = Node.name
     
     var node = Node() {
         didSet {
@@ -1492,6 +1486,12 @@ final class NodeView: Layer, Respondable, Localizable {
         replace(children: [nameLabel, isHiddenView])
         
         isHiddenView.binding = { [unowned self] in self.setIsHidden(with: $0) }
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
     }
     
     override var bounds: CGRect {
@@ -1543,8 +1543,6 @@ final class NodeView: Layer, Respondable, Localizable {
  */
 final class NodeTreeManager {
     init() {
-        nodesView.instanceDescription = Localization(english: "Node Tree View",
-                                                       japanese: "ノードツリー表示")
         nodesView.nameHandler = { [unowned self] in
             return Localization(self.cut.node(atTreeNodeIndex: $0).name)
         }
@@ -1665,8 +1663,6 @@ final class TracksManager {
     let tracksView = ArrayView()
     
     init() {
-        tracksView.instanceDescription = Localization(english: "Track View",
-                                                        japanese: "トラック表示")
         tracksView.nameHandler = { [unowned self] in
             let tracks = self.node.tracks
             guard $0 < tracks.count else {

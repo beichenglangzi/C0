@@ -225,7 +225,7 @@ extension Array {
  - ツリー操作が複雑
  */
 final class ArrayView: Layer, Respondable {
-    static let name = Localization(english: "Array View", japanese: "配列表示")
+    static let name = Localization(english: "Array", japanese: "配列")
     
     private let labelLineLayer: PathLayer = {
         let lineLayer = PathLayer()

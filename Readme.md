@@ -38,9 +38,9 @@ Modeless Animatable Tool
 S ([Twitter](https://twitter.com/smdls), [Youtube](https://www.youtube.com/channel/UCQ6kzSlb5Zi6-EvsGcZuDAw), メール: <smdls001@gmail.com>)
 
 ## 開発環境
-- macOS 10.13.3
-- Xcode 9.2
-- Swift 4.0.3
+- macOS 10.13.4
+- Xcode 9.3
+- Swift 4.1
 
 ## ライセンス
 [GNU General Public License v3.0](License.md)

@@ -22,8 +22,9 @@ import Foundation
 final class CutTrack: NSObject, Track, NSCoding {
     private(set) var animation: Animation
     
-    static let dataModelKey = "cutTrack"
-    var differentialDataModel = DataModel(key: CutTrack.dataModelKey, directoryWithDataModels: []) {
+    static let differentialDataModelKey = "differentialCutTrack"
+    var differentialDataModel = DataModel(key: CutTrack.differentialDataModelKey,
+                                          directoryWith: []) {
         didSet {
             var nodeDic = [String: Node]()
             cutItem.keyCuts.forEach { cut in
@@ -498,9 +499,9 @@ extension Cut: Referenceable {
 }
 
 final class CutView: Layer, Respondable {
-    static let name = Localization(english: "Cut View", japanese: "カット表示")
+    static let name = Cut.name
     
-    let nameLabel = Label(font: .small)
+    let nameLabel = Label(text: Cut.name, font: .smallBold), indexLabel = Label(font: .small)
     let clipView = Box()
     
     private(set) var editAnimationView: AnimationView {
@@ -598,6 +599,7 @@ final class CutView: Layer, Respondable {
          knobHalfHeight: CGFloat, subKnobHalfHeight: CGFloat, maxLineWidth: CGFloat, height: CGFloat) {
         
         nameLabel.fillColor = nil
+        indexLabel.fillColor = nil
         clipView.isClipped = true
         
         self.cut = cut
@@ -630,7 +632,7 @@ final class CutView: Layer, Respondable {
         
         super.init()
         clipView.replace(children: animationViews)
-        replace(children: [clipView, nameLabel])
+        replace(children: [clipView, nameLabel, indexLabel])
         frame.size.height = height
         updateLayout()
         updateWithDuration()
@@ -773,12 +775,23 @@ final class CutView: Layer, Respondable {
     
     func updateLayout() {
         let sp = Layout.smallPadding
-        nameLabel.frame.origin = CGPoint(x: sp, y: bounds.height - nameLabel.frame.height - sp)
-        clipView.frame = CGRect(x: 0, y: 0, width: frame.width, height: nameLabel.frame.minY)
+        clipView.frame = CGRect(x: 0, y: 0, width: frame.width, height: nameLabel.frame.minY - sp)
+        updateWithNamePosition()
         updateChildren()
     }
+    var nameX = Layout.smallPadding {
+        didSet {
+            updateWithNamePosition()
+        }
+    }
+    func updateWithNamePosition() {
+        let padding = Layout.smallPadding
+        nameLabel.frame.origin = CGPoint(x: nameX, y: bounds.height - nameLabel.frame.height - padding)
+        indexLabel.frame.origin = CGPoint(x: nameLabel.frame.maxX + padding,
+                                          y: bounds.height - nameLabel.frame.height - padding)
+    }
     func updateIndex(_ i: Int) {
-        nameLabel.localization = Localization(english: "Cut\(i)", japanese: "カット\(i)")
+        indexLabel.localization = Localization("\(i)")
     }
     func updateChildren() {
         guard let index = animationViews.index(of: editAnimationView) else {

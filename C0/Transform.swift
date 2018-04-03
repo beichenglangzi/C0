@@ -137,14 +137,8 @@ extension Transform: Interpolatable {
     }
 }
 
-final class TransformView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Transform View", japanese: "トランスフォーム表示")
-    
-    var locale = Locale.current {
-        didSet {
-            updateLayout()
-        }
-    }
+final class TransformView: Layer, Respondable {
+    static let name = Transform.name
     
     var transform = Transform() {
         didSet {
@@ -159,40 +153,38 @@ final class TransformView: Layer, Respondable, Localizable {
     private let yLabel = Label(text: Localization("y:"))
     private let zLabel = Label(text: Localization("z:"))
     private let thetaLabel = Label(text: Localization("θ:"))
-    private let xSlider = NumberSlider(frame: Layout.valueFrame,
-                                       min: -10000, max: 10000, valueInterval: 0.01,
-                                       description: Localization(english: "Translation x",
-                                                                 japanese: "移動 x"))
-    private let ySlider = NumberSlider(frame: Layout.valueFrame,
-                                       min: -10000, max: 10000, valueInterval: 0.01,
-                                       description: Localization(english: "Translation y",
-                                                                 japanese: "移動 y"))
-    private let zSlider = NumberSlider(frame: Layout.valueFrame,
-                                       min: -20, max: 20, valueInterval: 0.01,
-                                       description: Localization(english: "Translation z",
-                                                                 japanese: "移動 z"))
-    private let thetaSlider = NumberSlider(frame: Layout.valueFrame,
-                                           min: -10000, max: 10000, valueInterval: 0.5, unit: "°",
-                                           description: Localization(english: "Angle",
-                                                                     japanese: "角度"))
+    private let xView = RelativeNumberView(frame: Layout.valueFrame,
+                                           min: -10000, max: 10000, numberInterval: 0.01)
+    private let yView = RelativeNumberView(frame: Layout.valueFrame,
+                                           min: -10000, max: 10000, numberInterval: 0.01)
+    private let zView = RelativeNumberView(frame: Layout.valueFrame,
+                                           min: -20, max: 20, numberInterval: 0.01)
+    private let thetaView = RelativeNumberView(frame: Layout.valueFrame,
+                                               min: -10000, max: 10000, numberInterval: 0.5, unit: "°")
     
     override init() {
         super.init()
-        replace(children: [nameLabel, xLabel, xSlider, yLabel, ySlider, zLabel, zSlider,
-                           thetaLabel, thetaSlider])
+        replace(children: [nameLabel, xLabel, xView, yLabel, yView, zLabel, zView,
+                           thetaLabel, thetaView])
         
-        xSlider.binding = { [unowned self] in self.setTransform(with: $0) }
-        ySlider.binding = { [unowned self] in self.setTransform(with: $0) }
-        zSlider.binding = { [unowned self] in self.setTransform(with: $0) }
-        thetaSlider.binding = { [unowned self] in self.setTransform(with: $0) }
+        xView.binding = { [unowned self] in self.setTransform(with: $0) }
+        yView.binding = { [unowned self] in self.setTransform(with: $0) }
+        zView.binding = { [unowned self] in self.setTransform(with: $0) }
+        thetaView.binding = { [unowned self] in self.setTransform(with: $0) }
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
     }
     
     var isHorizontal = false
     override var defaultBounds: CGRect {
         if isHorizontal {
             let children = [nameLabel, Padding(),
-                            xLabel, xSlider, Padding(), yLabel, ySlider, Padding(),
-                            zLabel, zSlider, Padding(), thetaLabel, thetaSlider]
+                            xLabel, xView, Padding(), yLabel, yView, Padding(),
+                            zLabel, zView, Padding(), thetaLabel, thetaView]
             return CGRect(x: 0,
                           y: 0,
                           width: Layout.leftAlignmentWidth(children) + Layout.basicPadding,
@@ -211,42 +203,42 @@ final class TransformView: Layer, Respondable, Localizable {
     func updateLayout() {
         if isHorizontal {
             let children = [nameLabel, Padding(),
-                            xLabel, xSlider, Padding(), yLabel, ySlider, Padding(),
-                            zLabel, zSlider, Padding(), thetaLabel, thetaSlider]
+                            xLabel, xView, Padding(), yLabel, yView, Padding(),
+                            zLabel, zView, Padding(), thetaLabel, thetaView]
             _ = Layout.leftAlignment(children, height: frame.height)
         } else {
             var y = bounds.height - Layout.basicPadding - nameLabel.frame.height
             nameLabel.frame.origin = CGPoint(x: Layout.basicPadding, y: y)
             y -= Layout.basicHeight + Layout.basicPadding
-            _ = Layout.leftAlignment([xLabel, xSlider, Padding(), yLabel, ySlider],
+            _ = Layout.leftAlignment([xLabel, xView, Padding(), yLabel, yView],
                                      y: y, height: Layout.basicHeight)
             y -= Layout.basicHeight
-            _ = Layout.leftAlignment([zLabel, zSlider, Padding(), thetaLabel, thetaSlider],
+            _ = Layout.leftAlignment([zLabel, zView, Padding(), thetaLabel, thetaView],
                                      y: y, height: Layout.basicHeight)
-            if ySlider.frame.maxX < thetaSlider.frame.maxX {
-                ySlider.frame.origin.x = thetaSlider.frame.minX
-                yLabel.frame.origin.x = ySlider.frame.minX - yLabel.frame.width
+            if yView.frame.maxX < thetaView.frame.maxX {
+                yView.frame.origin.x = thetaView.frame.minX
+                yLabel.frame.origin.x = yView.frame.minX - yLabel.frame.width
             } else {
-                thetaSlider.frame.origin.x = ySlider.frame.minX
-                thetaLabel.frame.origin.x = thetaSlider.frame.minX - thetaLabel.frame.width
+                thetaView.frame.origin.x = yView.frame.minX
+                thetaLabel.frame.origin.x = thetaView.frame.minX - thetaLabel.frame.width
             }
         }
     }
     private func updateWithTransform() {
-        xSlider.value = transform.translation.x / standardTranslation.x
-        ySlider.value = transform.translation.y / standardTranslation.y
-        zSlider.value = transform.z
-        thetaSlider.value = transform.rotation * 180 / (.pi)
+        xView.number = transform.translation.x / standardTranslation.x
+        yView.number = transform.translation.y / standardTranslation.y
+        zView.number = transform.z
+        thetaView.number = transform.rotation * 180 / (.pi)
     }
     
     var standardTranslation = CGPoint(x: 1, y: 1)
     
     var isLocked = false {
         didSet {
-            xSlider.isLocked = isLocked
-            ySlider.isLocked = isLocked
-            zSlider.isLocked = isLocked
-            thetaSlider.isLocked = isLocked
+            xView.isLocked = isLocked
+            yView.isLocked = isLocked
+            zView.isLocked = isLocked
+            thetaView.isLocked = isLocked
         }
     }
     
@@ -259,23 +251,23 @@ final class TransformView: Layer, Respondable, Localizable {
     var binding: ((Binding) -> ())?
     
     private var oldTransform = Transform()
-    private func setTransform(with obj: NumberSlider.Binding) {
+    private func setTransform(with obj: RelativeNumberView.Binding) {
         if obj.type == .begin {
             oldTransform = transform
             binding?(Binding(transformView: self,
                              transform: oldTransform, oldTransform: oldTransform, type: .begin))
         } else {
-            switch obj.slider {
-            case xSlider:
-                transform = transform.with(translation: CGPoint(x: obj.value * standardTranslation.x,
+            switch obj.view {
+            case xView:
+                transform = transform.with(translation: CGPoint(x: obj.number * standardTranslation.x,
                                                                 y: transform.translation.y))
-            case ySlider:
+            case yView:
                 transform = transform.with(translation: CGPoint(x: transform.translation.x,
-                                                                y: obj.value * standardTranslation.y))
-            case zSlider:
-                transform = transform.with(z: obj.value)
-            case thetaSlider:
-                transform = transform.with(rotation: obj.value * (.pi / 180))
+                                                                y: obj.number * standardTranslation.y))
+            case zView:
+                transform = transform.with(z: obj.number)
+            case thetaView:
+                transform = transform.with(rotation: obj.number * (.pi / 180))
             default:
                 fatalError("No case")
             }
@@ -381,14 +373,8 @@ extension Wiggle: Referenceable {
     static let name = Localization(english: "Wiggle", japanese: "振動")
 }
 
-final class WiggleView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Wiggle View", japanese: "振動表示")
-    
-    var locale = Locale.current {
-        didSet {
-            updateLayout()
-        }
-    }
+final class WiggleView: Layer, Respondable {
+    static let name = Wiggle.name
     
     var wiggle = Wiggle() {
         didSet {
@@ -400,46 +386,47 @@ final class WiggleView: Layer, Respondable, Localizable {
     
     private let nameLabel = Label(text: Wiggle.name, font: .bold)
     private let xLabel = Label(text: Localization("x:"))
-    private let xSlider = NumberSlider(frame: Layout.valueFrame,
-                                       min: 0, max: 1000, valueInterval: 0.01,
-                                       description: Localization(english: "Amplitude x",
-                                                                 japanese: "振幅 x"))
+    private let xView = RelativeNumberView(frame: Layout.valueFrame,
+                                           min: 0, max: 1000, numberInterval: 0.01)
     private let yLabel = Label(text: Localization("y:"))
-    private let ySlider = NumberSlider(frame: Layout.valueFrame,
-                                       min: 0, max: 1000, valueInterval: 0.01,
-                                       description: Localization(english: "Amplitude y",
-                                                                 japanese: "振幅 y"))
+    private let yView = RelativeNumberView(frame: Layout.valueFrame,
+                                           min: 0, max: 1000, numberInterval: 0.01)
     private let frequencyLabel = Label(text: Localization("ƒ:"))
-    private let frequencySlider = NumberSlider(frame: Layout.valueFrame,
-                                               min: 0.1, max: 100000, valueInterval: 0.1, unit: " rpb",
-                                               description: Localization(english: "Frequency",
-                                                                         japanese: "振動数"))
+    private let frequencyView = RelativeNumberView(frame: Layout.valueFrame,
+                                                   min: 0.1, max: 100000,
+                                                   numberInterval: 0.1, unit: " rpb")
     override init() {
-        frequencySlider.defaultValue = wiggle.frequency
-        frequencySlider.value = wiggle.frequency
+        frequencyView.defaultNumber = wiggle.frequency
+        frequencyView.number = wiggle.frequency
         
         super.init()
-        replace(children: [nameLabel, xLabel, xSlider, yLabel, ySlider,
-                           frequencyLabel, frequencySlider])
+        replace(children: [nameLabel, xLabel, xView, yLabel, yView,
+                           frequencyLabel, frequencyView])
         
-        xSlider.binding = { [unowned self] in self.setWiggle(with: $0) }
-        ySlider.binding = { [unowned self] in self.setWiggle(with: $0) }
-        frequencySlider.binding = { [unowned self] in self.setWiggle(with: $0) }
+        xView.binding = { [unowned self] in self.setWiggle(with: $0) }
+        yView.binding = { [unowned self] in self.setWiggle(with: $0) }
+        frequencyView.binding = { [unowned self] in self.setWiggle(with: $0) }
     }
     
     var isLocked = false {
         didSet {
-            xSlider.isLocked = isLocked
-            ySlider.isLocked = isLocked
-            frequencySlider.isLocked = isLocked
+            xView.isLocked = isLocked
+            yView.isLocked = isLocked
+            frequencyView.isLocked = isLocked
+        }
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
         }
     }
     
     var isHorizontal = false
     override var defaultBounds: CGRect {
         if isHorizontal {
-            let children = [nameLabel, Padding(), xLabel, xSlider, Padding(),
-                            yLabel, ySlider, frequencyLabel, frequencySlider]
+            let children = [nameLabel, Padding(), xLabel, xView, Padding(),
+                            yLabel, yView, frequencyLabel, frequencyView]
             return CGRect(x: 0,
                           y: 0,
                           width: Layout.leftAlignmentWidth(children) + Layout.basicPadding,
@@ -457,29 +444,29 @@ final class WiggleView: Layer, Respondable, Localizable {
     }
     private func updateLayout() {
         if isHorizontal {
-            let children = [nameLabel, Padding(), xLabel, xSlider, Padding(),
-                            yLabel, ySlider, frequencySlider]
+            let children = [nameLabel, Padding(), xLabel, xView, Padding(),
+                            yLabel, yView, frequencyView]
             _ = Layout.leftAlignment(children, height: frame.height)
         } else {
             var y = bounds.height - Layout.basicPadding - nameLabel.frame.height
             nameLabel.frame.origin = CGPoint(x: Layout.basicPadding, y: y)
             y = bounds.height - Layout.basicPadding - Layout.basicHeight
-            _ = Layout.leftAlignment([frequencyLabel, frequencySlider],
+            _ = Layout.leftAlignment([frequencyLabel, frequencyView],
                                      y: y, height: Layout.basicHeight)
             y -= Layout.basicHeight
-            _ = Layout.leftAlignment([xLabel, xSlider, Padding(), yLabel, ySlider],
+            _ = Layout.leftAlignment([xLabel, xView, Padding(), yLabel, yView],
                                      y: y, height: Layout.basicHeight)
-            if ySlider.frame.maxX < bounds.width - Layout.basicPadding {
-                ySlider.frame.origin.x = bounds.width - Layout.basicPadding - ySlider.frame.width
+            if yView.frame.maxX < bounds.width - Layout.basicPadding {
+                yView.frame.origin.x = bounds.width - Layout.basicPadding - yView.frame.width
             }
-            frequencySlider.frame.origin.x = ySlider.frame.minX
-            frequencyLabel.frame.origin.x = frequencySlider.frame.minX - frequencyLabel.frame.width
+            frequencyView.frame.origin.x = yView.frame.minX
+            frequencyLabel.frame.origin.x = frequencyView.frame.minX - frequencyLabel.frame.width
         }
     }
     private func updateWithWiggle() {
-        xSlider.value = 10 * wiggle.amplitude.x / standardAmplitude.x
-        ySlider.value = 10 * wiggle.amplitude.y / standardAmplitude.y
-        frequencySlider.value = wiggle.frequency
+        xView.number = 10 * wiggle.amplitude.x / standardAmplitude.x
+        yView.number = 10 * wiggle.amplitude.y / standardAmplitude.y
+        frequencyView.number = wiggle.frequency
     }
     
     var standardAmplitude = CGPoint(x: 1, y: 1)
@@ -493,21 +480,21 @@ final class WiggleView: Layer, Respondable, Localizable {
     var binding: ((Binding) -> ())?
     
     private var oldWiggle = Wiggle()
-    private func setWiggle(with obj: NumberSlider.Binding) {
+    private func setWiggle(with obj: RelativeNumberView.Binding) {
         if obj.type == .begin {
             oldWiggle = wiggle
             binding?(Binding(wiggleView: self,
                              wiggle: oldWiggle, oldWiggle: oldWiggle, type: .begin))
         } else {
-            switch obj.slider {
-            case xSlider:
-                wiggle = wiggle.with(amplitude: CGPoint(x: obj.value * standardAmplitude.x / 10,
+            switch obj.view {
+            case xView:
+                wiggle = wiggle.with(amplitude: CGPoint(x: obj.number * standardAmplitude.x / 10,
                                                         y: wiggle.amplitude.y))
-            case ySlider:
+            case yView:
                 wiggle = wiggle.with(amplitude: CGPoint(x: wiggle.amplitude.x,
-                                                        y: obj.value * standardAmplitude.y / 10))
-            case frequencySlider:
-                wiggle = wiggle.with(frequency: obj.value)
+                                                        y: obj.number * standardAmplitude.y / 10))
+            case frequencyView:
+                wiggle = wiggle.with(frequency: obj.number)
             default:
                 fatalError("No case")
             }

@@ -80,9 +80,6 @@ final class TextBox: Layer, Respondable {
     static let name = Localization(english: "Text Box", japanese: "テキストボックス")
     static let feature = Localization(english: "Run text in the box: Click",
                                       japanese: "ボックス内のテキストを実行: クリック")
-    var valueDescription: Localization {
-        return label.localization
-    }
     
     let label: Label
     let highlight = HighlightLayer()
@@ -153,14 +150,8 @@ final class TextBox: Layer, Respondable {
     }
 }
 
-final class PopupBox: Layer, Respondable, Localizable {
+final class PopupBox: Layer, Respondable {
     static let name = Localization(english: "Popup Box", japanese: "ポップアップボックス")
-    
-    var locale = Locale.current {
-        didSet {
-            panel.allChildrenAndSelf { ($0 as? Localizable)?.locale = locale }
-        }
-    }
     
     var isSubIndicatedHandler: ((Bool) -> (Void))?
     override var isSubIndicated: Bool {
@@ -213,6 +204,12 @@ final class PopupBox: Layer, Respondable, Localizable {
         path.addLine(to: CGPoint(x: arrowWidth / 2, y: bounds.midY - arrowRadius * 0.8))
         path.addLine(to: CGPoint(x: arrowWidth / 2 + d, y: bounds.midY + arrowRadius * 0.8))
         arrowLayer.path = path
+    }
+    
+    override var locale: Locale {
+        didSet {
+            panel.allChildrenAndSelf { $0.locale = locale }
+        }
     }
     
     override var defaultBounds: CGRect {

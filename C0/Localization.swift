@@ -19,7 +19,7 @@
 
 import Foundation
 
-protocol Localizable: class {
+protocol Localizable {
     var locale: Locale { get set }
 }
 struct Localization: Codable {
@@ -50,6 +50,19 @@ struct Localization: Codable {
     }
     var isEmpty: Bool {
         return base.isEmpty
+    }
+    func spacedUnion(_ other: Localization) -> Localization {
+        var values = self.values
+        if other.values.isEmpty {
+            self.values.forEach { values[$0.key] = (values[$0.key] ?? "") + other.base }
+        } else {
+            for v in other.values {
+                values[v.key] = (self.values[v.key] ?? self.base) + v.value
+            }
+        }
+        return Localization(baseLanguageCode: baseLanguageCode,
+                            base: base + " " + other.base,
+                            values: values)
     }
     static func +(lhs: Localization, rhs: Localization) -> Localization {
         var values = lhs.values

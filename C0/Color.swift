@@ -31,6 +31,14 @@ struct Color: Codable {
     static let green = Color(hue: 156.0 / 360.0, saturation: 1, brightness: 0.69)
     static let orange = Color(hue: 38.0 / 360.0, saturation: 1, brightness: 0.95)
     
+    static let rgbRed = Color(red: 1, green: 0, blue: 0)
+    static let rgbOrange = Color(red: 1, green: 0.5, blue: 0)
+    static let rgbYellow = Color(red: 1, green: 1, blue: 0)
+    static let rgbGreen = Color(red: 0, green: 1, blue: 0)
+    static let rgbCyan = Color(red: 0, green: 1, blue: 1)
+    static let rgbBlue = Color(red: 0, green: 0, blue: 1)
+    static let rgbMagenta = Color(red: 1, green: 0, blue: 1)
+    
     static let background = Color(white: 0.97)
     static let border = Color(white: 0.7)
     static let content = Color(white: 0.35)
@@ -95,23 +103,9 @@ struct Color: Codable {
     static let subtitleBorder = Color(white: 0)
     static let subtitleFill = white
     
-    static let rgbRed = Color(red: 1, green: 0, blue: 0)
-    static let rgbOrange = Color(red: 1, green: 0.5, blue: 0)
-    static let rgbYellow = Color(red: 1, green: 1, blue: 0)
-    static let rgbGreen = Color(red: 0, green: 1, blue: 0)
-    static let rgbCyan = Color(red: 0, green: 1, blue: 1)
-    static let rgbBlue = Color(red: 0, green: 0, blue: 1)
-    static let rgbMagenta = Color(red: 1, green: 0, blue: 1)
-    
     let hue: Double, saturation: Double, lightness: Double, alpha: Double, colorSpace: ColorSpace
     let rgb: RGB, id: UUID
     
-    static func random(colorSpace: ColorSpace = .sRGB) -> Color {
-        let hue = Double.random(min: 0, max: 1)
-        let saturation = Double.random(min: 0.5, max: 1)
-        let lightness = Double.random(min: 0.4, max: 0.9)
-        return Color(hue: hue, saturation: saturation, lightness: lightness, colorSpace: colorSpace)
-    }
     init(hue: Double = 0, saturation: Double = 0, lightness: Double = 0,
          alpha: Double = 1, colorSpace: ColorSpace = .sRGB) {
         self.hue = hue
@@ -139,19 +133,6 @@ struct Color: Codable {
     init(white: Double, alpha: Double = 1, colorSpace: ColorSpace = .sRGB) {
         self.init(hue: 0, saturation: 0, lightness: white, alpha: alpha, colorSpace: colorSpace)
     }
-    private static func hsvWithHSL(h: Double, s: Double, l: Double) -> HSV {
-        let y = Color.y(withHue: h)
-        if y < l {
-            let by = y == 1 ? 0 : (l - y) / (1 - y)
-            return HSV(h: h, s: -s * by + s, v: (1 - y) * (-s * by + s + by) + y)
-        } else {
-            let by = y == 0 ? 0 : l / y
-            return HSV(h: h, s: s, v: s * by * (1 - y) + by * y)
-        }
-    }
-    var hsv: HSV {
-        return Color.hsvWithHSL(h: hue, s: saturation, l: lightness)
-    }
     init(hsv: HSV, rgb: RGB, alpha: Double, colorSpace: ColorSpace = .sRGB) {
         let h = hsv.h, s = hsv.s, v = hsv.v
         let y = Color.y(withHue: h), saturation: Double, lightness: Double
@@ -173,6 +154,13 @@ struct Color: Codable {
         self.alpha = alpha
         self.colorSpace = colorSpace
         self.id = UUID()
+    }
+    
+    static func random(colorSpace: ColorSpace = .sRGB) -> Color {
+        let hue = Double.random(min: 0, max: 1)
+        let saturation = Double.random(min: 0.5, max: 1)
+        let lightness = Double.random(min: 0.4, max: 0.9)
+        return Color(hue: hue, saturation: saturation, lightness: lightness, colorSpace: colorSpace)
     }
     
     func with(hue: Double) -> Color {
@@ -200,6 +188,20 @@ struct Color: Codable {
     }
     func multiply(white: Double) -> Color {
         return Color.linear(self, Color.white, t: white.cf)
+    }
+    
+    private static func hsvWithHSL(h: Double, s: Double, l: Double) -> HSV {
+        let y = Color.y(withHue: h)
+        if y < l {
+            let by = y == 1 ? 0 : (l - y) / (1 - y)
+            return HSV(h: h, s: -s * by + s, v: (1 - y) * (-s * by + s + by) + y)
+        } else {
+            let by = y == 0 ? 0 : l / y
+            return HSV(h: h, s: s, v: s * by * (1 - y) + by * y)
+        }
+    }
+    var hsv: HSV {
+        return Color.hsvWithHSL(h: hue, s: saturation, l: lightness)
     }
     
     static func y(withHue hue: Double) -> Double {
@@ -258,16 +260,16 @@ extension Color: Interpolatable {
                                                with: ms).loopValue().d)
     }
     static func lastMonospline(_ f0: Color, _ f1: Color, _ f2: Color,
-                              with ms: Monospline) -> Color {
+                               with ms: Monospline) -> Color {
         let rgb = RGB.lastMonospline(f0.rgb, f1.rgb, f2.rgb, with: ms)
         let alpha = CGFloat.lastMonospline(f0.alpha.cf, f1.alpha.cf, f2.alpha.cf, with: ms).d
         let color = Color(rgb: rgb, alpha: alpha)
         return color.saturation > 0 ?
             color :
             color.with(hue: CGFloat.lastMonospline(f0.hue.cf,
-                                                  f1.hue.cf.loopValue(other: f0.hue.cf),
-                                                  f2.hue.cf.loopValue(other: f0.hue.cf),
-                                                  with: ms).loopValue().d)
+                                                   f1.hue.cf.loopValue(other: f0.hue.cf),
+                                                   f2.hue.cf.loopValue(other: f0.hue.cf),
+                                                   with: ms).loopValue().d)
     }
 }
 
@@ -379,9 +381,8 @@ extension HSV: Codable {
 }
 
 enum ColorSpace: Int8, Codable {
-    static var name: Localization {
-        return Localization(english: "Color space", japanese: "色空間")
-    }
+    case sRGB, displayP3, lab
+    
     var description: String {
         switch self {
         case .sRGB:
@@ -392,21 +393,12 @@ enum ColorSpace: Int8, Codable {
             return "CIELAB"
         }
     }
-    
-    case sRGB, displayP3, lab
+}
+extension ColorSpace: Referenceable {
+    static let name = Localization(english: "Color space", japanese: "色空間")
 }
 
 extension Color {
-    func with(colorSpace: ColorSpace) -> Color {
-        guard
-            let cs = CGColorSpace.with(colorSpace),
-            let cgColor = self.cgColor.converted(to: cs, intent: .defaultIntent, options: nil),
-            let cps = cgColor.components, cgColor.numberOfComponents == 4 else {
-                return self
-        }
-        return Color(red: Double(cps[0]), green: Double(cps[1]), blue: Double(cps[2]),
-                     alpha: Double(cps[3]), colorSpace: colorSpace)
-    }
     init(_ cgColor: CGColor) {
         guard cgColor.numberOfComponents == 4,
             let components = cgColor.components,
@@ -431,6 +423,18 @@ extension Color {
             self.init()
         }
     }
+    
+    func with(colorSpace: ColorSpace) -> Color {
+        guard
+            let cs = CGColorSpace.with(colorSpace),
+            let cgColor = self.cgColor.converted(to: cs, intent: .defaultIntent, options: nil),
+            let cps = cgColor.components, cgColor.numberOfComponents == 4 else {
+                return self
+        }
+        return Color(red: Double(cps[0]), green: Double(cps[1]), blue: Double(cps[2]),
+                     alpha: Double(cps[3]), colorSpace: colorSpace)
+    }
+    
     var cgColor: CGColor {
         return CGColor.with(rgb: rgb, alpha: alpha, colorSpace: CGColorSpace.with(colorSpace))
     }
@@ -466,234 +470,14 @@ extension CGColorSpace {
     }
 }
 
-final class ColorView: Layer, Respondable {
-    static let name = Localization(english: "Color View", japanese: "カラー表示")
-    static let feature = Localization(english: "Ring: Hue, Width: Saturation, Height: Luminance",
-                                      japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
-    
-    var color = Color() {
-        didSet {
-            updateWithColor()
-            if color.colorSpace != oldValue.colorSpace {
-                updateWithColorSpace()
-            }
-        }
-    }
-    
-    private let hLineWidth: CGFloat, inPadding: CGFloat, outPadding: CGFloat
-    
-    let hLayer = DrawLayer()
-    var hCircle = ColorCircle() {
-        didSet {
-            hLayer.draw()
-        }
-    }
-    let hKnob = Knob()
-    
-    let slView = PointView()
-    let slColorLayer: GradientLayer = {
-        let layer = GradientLayer()
-        layer.gradient = Gradient(colors: [], locations: [],
-                                  startPoint: CGPoint(x: 0, y: 0),
-                                  endPoint: CGPoint(x: 1, y: 0))
-        return layer
-    } ()
-    let slBlackWhiteLayer: GradientLayer = {
-        let layer = GradientLayer()
-        layer.gradient = Gradient(colors: [Color(white: 0, alpha: 1),
-                                           Color(white: 0, alpha: 0),
-                                           Color(white: 1, alpha: 0),
-                                           Color(white: 1, alpha: 1)],
-                                  locations: [],
-                                  startPoint: CGPoint(x: 0, y: 0),
-                                  endPoint: CGPoint(x: 0, y: 1))
-        return layer
-    } ()
-    
-    init(frame: CGRect = CGRect(),
-         hLineWidth: CGFloat = 2.5,
-         inPadding: CGFloat = 8.0.cf, outPadding: CGFloat = 8.0.cf,
-         slPadding: CGFloat? = nil, knobRadius: CGFloat? = nil,
-         description: Localization = Localization()) {
-        
-        if let slPadding = slPadding {
-            slView.padding = slPadding
-        }
-        if let knobRadius = knobRadius {
-            slView.knob.radius = knobRadius
-            hKnob.radius = knobRadius
-        }
-        self.hLineWidth = hLineWidth
-        self.inPadding = inPadding
-        self.outPadding = outPadding
-        
-        hLayer.append(child: hKnob)
-        
-        slView.instanceDescription = Localization(english: "Width: Saturation, Height: Luminance",
-                                                    japanese: "横: 彩度, 縦: 輝度")
-        slView.backgroundLayers = [slColorLayer, slBlackWhiteLayer]
-        
-        super.init()
-        instanceDescription = description
-        self.frame = frame
-        replace(children: [hLayer, hKnob, slView])
-        updateLayout()
-        
-        hLayer.drawBlock = { [unowned self] ctx in
-            self.hCircle.draw(in: ctx)
-        }
-        slView.binding = { [unowned self] in self.setColor(with: $0) }
-    }
-    
-    override var bounds: CGRect {
-        didSet {
-            updateLayout()
-        }
-    }
-    private func updateLayout() {
-        guard !bounds.isEmpty else {
-            return
-        }
-        let r = floor(min(bounds.size.width, bounds.size.height) / 2)
-        let sr = r - hLineWidth - inPadding - outPadding
-        let b2 = floor(sr * 0.82)
-        let a2 = floor(sqrt(sr * sr - b2 * b2))
-        slView.frame = CGRect(x: bounds.size.width / 2 - a2,
-                                y: bounds.size.height / 2 - b2,
-                                width: a2 * 2,
-                                height: b2 * 2)
-        let slInFrame = slView.bounds.inset(by: slView.padding)
-        slColorLayer.frame = slInFrame
-        slBlackWhiteLayer.frame = slInFrame
-        
-        hLayer.frame = CGRect(x: 0, y: 0, width: bounds.width, height: frame.height)
-        hCircle = ColorCircle(lineWidth: hLineWidth,
-                                  bounds: hLayer.bounds.inset(by: outPadding))
-        
-        updateWithColor()
-    }
-    private func updateWithColor() {
-        let hueAngle = hCircle.angle(withHue: color.hue)
-        let y = Color.y(withHue: color.hue), r = hCircle.radius - hCircle.lineWidth / 2
-        slColorLayer.gradient?.colors = [Color(hue: color.hue, saturation: 0, brightness: y),
-                                         Color(hue: color.hue, saturation: 1, brightness: 1)]
-        slBlackWhiteLayer.gradient?.locations = [0, y, y, 1]
-        hKnob.position = CGPoint(x: hLayer.bounds.midX + r * cos(CGFloat(hueAngle)),
-                                 y: hLayer.bounds.midY + r * sin(CGFloat(hueAngle)))
-        slView.point = CGPoint(x: color.saturation, y: color.lightness)
-    }
-    private func updateWithColorSpace() {
-        slBlackWhiteLayer.gradient?.colors = [Color(white: 0, alpha: 1, colorSpace: color.colorSpace),
-                                              Color(white: 0, alpha: 0, colorSpace: color.colorSpace),
-                                              Color(white: 1, alpha: 0, colorSpace: color.colorSpace),
-                                              Color(white: 1, alpha: 1, colorSpace: color.colorSpace)]
-        hCircle = ColorCircle(lineWidth: hLineWidth,
-                                  bounds: hLayer.bounds.inset(by: outPadding),
-                                  colorSpace: color.colorSpace)
-    }
-    
-    struct Binding {
-        let colorView: ColorView, color: Color, oldColor: Color, type: Action.SendType
-    }
-    var setColorHandler: ((Binding) -> ())?
-    
-    var disabledRegisterUndo = false
-    
-    private func setColor(with obj: PointView.Binding) {
-        if obj.type == .begin {
-            oldColor = color
-            setColorHandler?(Binding(colorView: self,
-                                           color: oldColor, oldColor: oldColor, type: .begin))
-        } else {
-            color = color.with(saturation: obj.point.x.d, lightness: obj.point.y.d)
-            setColorHandler?(Binding(colorView: self,
-                                           color: color, oldColor: oldColor, type: obj.type))
-        }
-    }
-    
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [color])
-    }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
-            if let color = object as? Color {
-                let oldColor = self.color
-                guard color != oldColor else {
-                    continue
-                }
-                setColorHandler?(Binding(colorView: self,
-                                               color: oldColor, oldColor: oldColor, type: .begin))
-                set(color, old: oldColor)
-                setColorHandler?(Binding(colorView: self,
-                                               color: color, oldColor: oldColor, type: .end))
-                return true
-            }
-        }
-        return false
-    }
-    func delete(with event: KeyInputEvent) -> Bool {
-        let color = Color(), oldColor = self.color
-        guard color != oldColor else {
-            return false
-        }
-        setColorHandler?(Binding(colorView: self,
-                                       color: oldColor, oldColor: oldColor, type: .begin))
-        set(color, old: oldColor)
-        setColorHandler?(Binding(colorView: self,
-                                       color: color, oldColor: oldColor, type: .end))
-        return true
-    }
-    
-    private var oldPoint = CGPoint(), oldColor = Color()
-    func move(with event: DragEvent) -> Bool {
-        return move(with: event, isSlow: false)
-    }
-    func move(with event: DragEvent, isSlow: Bool) -> Bool {
-        let p = point(from: event)
-        switch event.sendType {
-        case .begin:
-            hKnob.fillColor = .editing
-            oldColor = color
-            oldPoint = p
-            setColorHandler?(Binding(colorView: self,
-                                           color: oldColor, oldColor: oldColor, type: .begin))
-            color = self.color(withHPosition: p)
-            setColorHandler?(Binding(colorView: self,
-                                           color: color, oldColor: oldColor, type: .sending))
-        case .sending:
-            color = self.color(withHPosition: isSlow ? p.mid(oldPoint) : p)
-            setColorHandler?(Binding(colorView: self,
-                                           color: color, oldColor: oldColor, type: .sending))
-        case .end:
-            color = self.color(withHPosition:isSlow ? p.mid(oldPoint) : p)
-            if color != oldColor {
-                registeringUndoManager?.registerUndo(withTarget: self) { [color, oldColor] in
-                    $0.set(oldColor, old: color)
-                }
-            }
-            setColorHandler?(Binding(colorView: self,
-                                           color: color, oldColor: oldColor, type: .end))
-            hKnob.fillColor = .knob
-        }
-        return true
-    }
-    private func color(withHPosition point: CGPoint) -> Color {
-        let angle = atan2(point.y - hLayer.bounds.midY, point.x - hLayer.bounds.midX)
-        return color.with(hue: hCircle.hue(withAngle: Double(angle)))
-    }
-    
-    private func set(_ color: Color, old oldColor: Color) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldColor, old: color) }
-        setColorHandler?(Binding(colorView: self,
-                                       color: oldColor, oldColor: oldColor, type: .begin))
-        self.color = color
-        setColorHandler?(Binding(colorView: self,
-                                       color: color, oldColor: oldColor, type: .end))
-    }
-}
-
 struct ColorCircle {
-    let lineWidth: CGFloat, bounds: CGRect, radius: CGFloat, colorSpace: ColorSpace
+    var lineWidth: CGFloat, colorSpace: ColorSpace
+    var bounds: CGRect {
+        didSet {
+            radius = min(bounds.width, bounds.height) / 2
+        }
+    }
+    private(set) var radius: CGFloat
     
     init(lineWidth: CGFloat = 2, bounds: CGRect = CGRect(), colorSpace: ColorSpace = .sRGB) {
         self.lineWidth = lineWidth
@@ -765,6 +549,7 @@ struct ColorCircle {
             return (revisionHue - split * (fast * 5 + slow * 6)) / fast + split * 11
         }
     }
+    
     func draw(in ctx: CGContext) {
         let outR = radius
         let inR = outR - lineWidth, deltaAngle = 1 / outR
@@ -788,5 +573,211 @@ struct ColorCircle {
             ctx.rotate(by: deltaAngle)
         }
         ctx.restoreGState()
+    }
+}
+
+final class ColorView: Layer, Respondable {
+    static let name = Color.name
+    static let feature = Localization(english: "Ring: Hue, Width: Saturation, Height: Luminance",
+                                      japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
+    
+    var color = Color() {
+        didSet {
+            updateWithColor()
+            if color.colorSpace != oldValue.colorSpace {
+                updateWithColorSpace()
+            }
+        }
+    }
+    
+    var hLineWidth: CGFloat {
+        didSet {
+            hCircle.lineWidth = hLineWidth
+        }
+    }
+    let hView: CircularNumberView
+    let hLayer = DrawLayer()
+    var hCircle = ColorCircle() {
+        didSet {
+            hLayer.draw()
+        }
+    }
+    
+    let slView = PointView()
+    let slColorLayer: GradientLayer = {
+        let layer = GradientLayer()
+        layer.gradient = Gradient(colors: [], locations: [],
+                                  startPoint: CGPoint(x: 0, y: 0),
+                                  endPoint: CGPoint(x: 1, y: 0))
+        return layer
+    } ()
+    let slBlackWhiteLayer: GradientLayer = {
+        let layer = GradientLayer()
+        layer.gradient = Gradient(colors: [Color(white: 0, alpha: 1),
+                                           Color(white: 0, alpha: 0),
+                                           Color(white: 1, alpha: 0),
+                                           Color(white: 1, alpha: 1)],
+                                  locations: [],
+                                  startPoint: CGPoint(x: 0, y: 0),
+                                  endPoint: CGPoint(x: 0, y: 1))
+        return layer
+    } ()
+    
+    init(frame: CGRect = CGRect(),
+         hLineWidth: CGFloat = 2.5, hWidth: CGFloat = 16.0.cf, slPadding: CGFloat? = nil,
+         isSmall: Bool = false) {
+        
+        hView = CircularNumberView(number: 0, defaultNumber: 0,
+                                   min: 0, max: 1, width: hWidth)
+        
+        if let slPadding = slPadding {
+            slView.padding = slPadding
+        }
+        if isSmall {
+            slView.knob.radius = 4
+            hView.knob.radius = 4
+        }
+        self.hLineWidth = hLineWidth
+        hView.width = hWidth
+        
+        super.init()
+        hLayer.fillColor = nil
+        hLayer.lineColor = nil
+        hLayer.drawBlock = { [unowned self] ctx in
+            self.hCircle.draw(in: ctx)
+        }
+        hView.backgroundLayers = [hLayer]
+        slView.backgroundLayers = [slColorLayer, slBlackWhiteLayer]
+        replace(children: [hView, slView])
+        self.frame = frame
+        
+        hView.binding = { [unowned self] in self.setColor(with: $0) }
+        slView.binding = { [unowned self] in self.setColor(with: $0) }
+    }
+    
+    var slRatio = 0.82.cf {
+        didSet {
+            updateLayout()
+        }
+    }
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    private func updateLayout() {
+        guard !bounds.isEmpty else {
+            return
+        }
+        let padding = Layout.smallPadding
+        let r = floor(min(bounds.size.width, bounds.size.height) / 2) - padding
+        hView.frame = CGRect(x: padding, y: padding, width: r * 2, height: r * 2)
+        let sr = r - hView.width
+        let b2 = floor(sr * slRatio)
+        let a2 = floor(sqrt(sr * sr - b2 * b2))
+        slView.frame = CGRect(x: bounds.size.width / 2 - a2,
+                              y: bounds.size.height / 2 - b2,
+                              width: a2 * 2,
+                              height: b2 * 2)
+        let slInFrame = slView.bounds.inset(by: slView.padding)
+        slColorLayer.frame = slInFrame
+        slBlackWhiteLayer.frame = slInFrame
+        
+        hLayer.frame = hView.bounds.inset(by: ceil((hView.width - hLineWidth) / 2))
+        hCircle = ColorCircle(lineWidth: hLineWidth,
+                              bounds: hLayer.bounds,
+                              colorSpace: color.colorSpace)
+        updateWithColor()
+    }
+    private func updateWithColor() {
+        let y = Color.y(withHue: color.hue)
+        slColorLayer.gradient?.colors = [Color(hue: color.hue, saturation: 0, brightness: y),
+                                         Color(hue: color.hue, saturation: 1, brightness: 1)]
+        slBlackWhiteLayer.gradient?.locations = [0, y, y, 1]
+        hView.number = color.hue.cf
+        slView.point = CGPoint(x: color.saturation, y: color.lightness)
+    }
+    private func updateWithColorSpace() {
+        slBlackWhiteLayer.gradient?.colors = [Color(white: 0, alpha: 1, colorSpace: color.colorSpace),
+                                              Color(white: 0, alpha: 0, colorSpace: color.colorSpace),
+                                              Color(white: 1, alpha: 0, colorSpace: color.colorSpace),
+                                              Color(white: 1, alpha: 1, colorSpace: color.colorSpace)]
+        hCircle = ColorCircle(lineWidth: hLineWidth,
+                              bounds: hLayer.bounds,
+                              colorSpace: color.colorSpace)
+    }
+    
+    struct Binding {
+        let colorView: ColorView, color: Color, oldColor: Color, type: Action.SendType
+    }
+    var setColorHandler: ((Binding) -> ())?
+    
+    var disabledRegisterUndo = false
+    
+    func copy(with event: KeyInputEvent) -> CopyManager? {
+        return CopyManager(copiedObjects: [color])
+    }
+    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+        for object in copyManager.copiedObjects {
+            if let color = object as? Color {
+                let oldColor = self.color
+                guard color != oldColor else {
+                    continue
+                }
+                setColorHandler?(Binding(colorView: self,
+                                         color: oldColor, oldColor: oldColor, type: .begin))
+                set(color, old: oldColor)
+                setColorHandler?(Binding(colorView: self,
+                                         color: color, oldColor: oldColor, type: .end))
+                return true
+            }
+        }
+        return false
+    }
+    func delete(with event: KeyInputEvent) -> Bool {
+        let color = Color(), oldColor = self.color
+        guard color != oldColor else {
+            return false
+        }
+        setColorHandler?(Binding(colorView: self,
+                                 color: oldColor, oldColor: oldColor, type: .begin))
+        set(color, old: oldColor)
+        setColorHandler?(Binding(colorView: self,
+                                 color: color, oldColor: oldColor, type: .end))
+        return true
+    }
+    
+    private var oldColor = Color()
+    private func setColor(with obj: PointView.Binding) {
+        if obj.type == .begin {
+            oldColor = color
+            setColorHandler?(Binding(colorView: self,
+                                     color: oldColor, oldColor: oldColor, type: .begin))
+        } else {
+            color = color.with(saturation: obj.point.x.d, lightness: obj.point.y.d)
+            setColorHandler?(Binding(colorView: self,
+                                     color: color, oldColor: oldColor, type: obj.type))
+        }
+    }
+    
+    private func setColor(with obj: CircularNumberView.Binding) {
+        if obj.type == .begin {
+            oldColor = color
+            setColorHandler?(Binding(colorView: self,
+                                     color: oldColor, oldColor: oldColor, type: .begin))
+        } else {
+            color = color.with(hue: obj.number.d)
+            setColorHandler?(Binding(colorView: self,
+                                     color: color, oldColor: oldColor, type: obj.type))
+        }
+    }
+    
+    private func set(_ color: Color, old oldColor: Color) {
+        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldColor, old: color) }
+        setColorHandler?(Binding(colorView: self,
+                                 color: oldColor, oldColor: oldColor, type: .begin))
+        self.color = color
+        setColorHandler?(Binding(colorView: self,
+                                 color: color, oldColor: oldColor, type: .end))
     }
 }

@@ -212,10 +212,9 @@ enum EditQuasimode {
  - Eventを使用しないアクション設計
  */
 protocol Respondable: class, Referenceable, Undoable, Editable, Selectable,
-PointEditable, Transformable, ViewEditable, Strokable {
+PointEditable, Transformable, ViewEditable, Strokable, Localizable {
     var isIndicated: Bool { get set }
     var isSubIndicated: Bool  { get set }
-    var dataModel: DataModel? { get set }
     static var defaultEditQuasimode: EditQuasimode { get }
     var editQuasimode: EditQuasimode { get set }
     var cursor: Cursor { get }

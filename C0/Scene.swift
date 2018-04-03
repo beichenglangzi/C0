@@ -31,7 +31,6 @@ typealias Second = Double
 
 /**
  # Issue
- △ 字幕
  - 複数のサウンド
  - 変更通知
  */
@@ -273,14 +272,8 @@ extension Scene: Referenceable {
  - セルをキャンバス外にペースト
  - Display P3サポート
  */
-final class SceneView: Layer, Respondable, Localizable {
-    static let name = Localization(english: "Scene View", japanese: "シーン表示")
-    
-    var locale = Locale.current {
-        didSet {
-            updateLayout()
-        }
-    }
+final class SceneView: Layer, Respondable {
+    static let name = Scene.name
     
     var scene = Scene() {
         didSet {
@@ -288,35 +281,33 @@ final class SceneView: Layer, Respondable, Localizable {
         }
     }
     
-    static let sceneViewKey = "sceneView", sceneKey = "scene"//X sceneView
-    var sceneDataModel = DataModel(key: SceneView.sceneKey)
-    override var dataModel: DataModel? {
+    static let dataModelKey = "scene"
+    var dataModel: DataModel {
         didSet {
-            guard let dataModel = dataModel else {
-                return
-            }
-            if let sceneDataModel = dataModel.children[SceneView.sceneKey] {
-                self.sceneDataModel = sceneDataModel
-                if let scene: Scene = sceneDataModel.readObject() {
+            if let dSceneDataModel = dataModel.children[SceneView.differentialSceneDataModelKey] {
+                self.differentialSceneDataModel = dSceneDataModel
+                if let scene: Scene = dSceneDataModel.readObject() {
                     self.scene = scene
                 }
-                sceneDataModel.dataHandler = { [unowned self] in self.scene.differentialData }
+                dSceneDataModel.dataHandler = { [unowned self] in self.scene.differentialData }
             } else {
-                dataModel.insert(sceneDataModel)
+                dataModel.insert(differentialSceneDataModel)
             }
             
-            if let cutTrackDataModel = dataModel.children[CutTrack.dataModelKey] {
-                scene.cutTrack.differentialDataModel = cutTrackDataModel
+            if let dCutTrackDataModel = dataModel.children[CutTrack.differentialDataModelKey] {
+                scene.cutTrack.differentialDataModel = dCutTrackDataModel
                 canvas.cut = scene.editCut
             } else {
                 dataModel.insert(scene.cutTrack.differentialDataModel)
             }
             
-            timeline.sceneDataModel = sceneDataModel
-            canvas.sceneDataModel = sceneDataModel
+            timeline.sceneDataModel = differentialSceneDataModel
+            canvas.sceneDataModel = differentialSceneDataModel
             updateWithScene()
         }
     }
+    static let differentialSceneDataModelKey = "differentialScene"
+    var differentialSceneDataModel = DataModel(key: differentialSceneDataModelKey)
     
     static let colorSpaceWidth = 82.0.cf
     static let colorSpaceFrame = CGRect(x: 0, y: Layout.basicPadding,
@@ -336,13 +327,10 @@ final class SceneView: Layer, Respondable, Localizable {
     
     let rendererManager = RendererManager()
     let sizeView = DiscreteSizeView()
-    let frameRateSlider = NumberSlider(frame: Layout.valueFrame,
-                                       min: 1, max: 1000, valueInterval: 1, unit: " fps",
-                                       description: Localization(english: "Frame rate",
-                                                                 japanese: "フレームレート"))
+    let frameRateView = RelativeNumberView(frame: Layout.valueFrame,
+                                           min: 1, max: 1000, numberInterval: 1, unit: " fps")
     let colorSpaceView = EnumView(frame: SceneView.colorSpaceFrame,
-                                  names: [Localization("sRGB"), Localization("Display P3")],
-                                  description: Localization(english: "Color Space", japanese: "色空間"))
+                                  names: [Localization("sRGB"), Localization("Display P3")])
     let isHiddenSubtitlesView =
         EnumView(names: [Localization(english: "Hidden Subtitles", japanese: "字幕表示なし"),
                          Localization(english: "Shown Subtitles", japanese: "字幕表示あり")],
@@ -351,15 +339,11 @@ final class SceneView: Layer, Respondable, Localizable {
     let isShownPreviousView =
         EnumView(names: [Localization(english: "Hidden Previous", japanese: "前の表示なし"),
                          Localization(english: "Shown Previous", japanese: "前の表示あり")],
-                 cationIndex: 1,
-                 description: Localization(english: "Hide or Show line drawing of previous keyframe",
-                                           japanese: "前のキーフレームの表示切り替え"))
+                 cationIndex: 1)
     let isShownNextView =
         EnumView(names: [Localization(english: "Hidden Next", japanese: "次の表示なし"),
                          Localization(english: "Shown Next", japanese: "次の表示あり")],
-                 cationIndex: 1,
-                 description: Localization(english: "Hide or Show line drawing of next keyframe",
-                                           japanese: "次のキーフレームの表示切り替え"))
+                 cationIndex: 1)
     
     let soundView = SoundView()
     let drawingView = DrawingView()
@@ -381,30 +365,31 @@ final class SceneView: Layer, Respondable, Localizable {
                                                             japanese: "マテリアルを分割"), isSmall: true)
     
     override init() {
+        dataModel = DataModel(key: SceneView.dataModelKey,
+                              directoryWith: [differentialSceneDataModel,
+                                              scene.cutTrack.differentialDataModel])
+        timeline.sceneDataModel = differentialSceneDataModel
+        canvas.sceneDataModel = differentialSceneDataModel
+        
+        versionView.rootUndoManager = rootUndoManager
+        
         super.init()
         materialManager.sceneView = self
-        dataModel = DataModel(key: SceneView.sceneViewKey,
-                              directoryWithDataModels: [sceneDataModel,
-                                                        scene.cutTrack.differentialDataModel])
-        timeline.sceneDataModel = sceneDataModel
-        canvas.sceneDataModel = sceneDataModel
         
-        replace(children: [//nameLabel,
+        replace(children: [nameLabel,
                            versionView,
-                           rendererManager.popupBox, sizeView, frameRateSlider,
+                           rendererManager.popupBox, sizeView, frameRateView,
                            isShownPreviousView, isShownNextView, soundView,
                            timeline.keyframeView,
                            drawingView, canvas.materialView, transformView, wiggleView,
-                           timeline.tempoSlider, timeline.tempoKeyframeView,
+                           timeline.tempoView, timeline.tempoKeyframeView,
                            isHiddenSubtitlesView, subtitleView,
                            timeline.nodeView, effectView,
                            canvas.cellView, showAllBox, clipCellInSelectedBox,
                            splitColorBox, splitOtherThanColorBox,
                            timeline, canvas, seekBar])
         
-        sceneDataModel.dataHandler = { [unowned self] in self.scene.differentialData }
-        
-        versionView.rootUndoManager = rootUndoManager
+        differentialSceneDataModel.dataHandler = { [unowned self] in self.scene.differentialData }
         
         rendererManager.progressesEdgeLayer = self
         sizeView.binding = { [unowned self] in
@@ -415,51 +400,51 @@ final class SceneView: Layer, Respondable, Localizable {
             self.transformView.standardTranslation = sp
             self.wiggleView.standardAmplitude = sp
             if $0.type == .end && $0.size != $0.oldSize {
-                self.sceneDataModel.isWrite = true
+                self.differentialSceneDataModel.isWrite = true
             }
         }
-        frameRateSlider.binding = { [unowned self] in
-            self.scene.frameRate = Int($0.value)
-            if $0.type == .end && $0.value != $0.oldValue {
-                self.sceneDataModel.isWrite = true
+        frameRateView.binding = { [unowned self] in
+            self.scene.frameRate = Int($0.number)
+            if $0.type == .end && $0.number != $0.oldNumber {
+                self.differentialSceneDataModel.isWrite = true
             }
         }
         colorSpaceView.binding = { [unowned self] in
             self.scene.colorSpace = $0.index == 0 ? .sRGB : .displayP3
             self.canvas.setNeedsDisplay()
             if $0.type == .end && $0.index != $0.oldIndex {
-                self.sceneDataModel.isWrite = true
+                self.differentialSceneDataModel.isWrite = true
             }
         }
         
-        timeline.baseTimeIntervalSlider.binding = { [unowned self] in
+        timeline.baseTimeIntervalView.binding = { [unowned self] in
             if $0.type == .begin {
                 self.baseTimeIntervalOldTime = self.scene.secondTime(withBeatTime: self.scene.time)
             }
-            self.scene.baseTimeInterval.q = Int($0.value)
+            self.scene.baseTimeInterval.q = Int($0.number)
             self.timeline.time = self.scene.basedBeatTime(withSecondTime: self.baseTimeIntervalOldTime)
             self.timeline.baseTimeInterval = self.scene.baseTimeInterval
-            if $0.type == .end && $0.value != $0.oldValue {
-                self.sceneDataModel.isWrite = true
+            if $0.type == .end && $0.number != $0.oldNumber {
+                self.differentialSceneDataModel.isWrite = true
             }
         }
         
         isShownPreviousView.binding = { [unowned self] in
             self.canvas.isShownPrevious = $0.index == 1
             if $0.type == .end && $0.index != $0.oldIndex {
-                self.sceneDataModel.isWrite = true
+                self.differentialSceneDataModel.isWrite = true
             }
         }
         isShownNextView.binding = { [unowned self] in
             self.canvas.isShownNext = $0.index == 1
             if $0.type == .end && $0.index != $0.oldIndex {
-                self.sceneDataModel.isWrite = true
+                self.differentialSceneDataModel.isWrite = true
             }
         }
         isHiddenSubtitlesView.binding = { [unowned self] in
             self.scene.isHiddenSubtitles = $0.index == 0
             if $0.type == .end && $0.index != $0.oldIndex {
-                self.sceneDataModel.isWrite = true
+                self.differentialSceneDataModel.isWrite = true
             }
         }
         
@@ -467,7 +452,7 @@ final class SceneView: Layer, Respondable, Localizable {
             self.scene.sound = $0.sound
             self.timeline.soundWaveformView.sound = $0.sound
             if $0.type == .end && $0.sound != $0.oldSound {
-                self.sceneDataModel.isWrite = true
+                self.differentialSceneDataModel.isWrite = true
             }
             if self.scene.sound.url == nil && self.canvas.player.audioPlayer?.isPlaying ?? false {
                 self.canvas.player.audioPlayer?.stop()
@@ -534,8 +519,8 @@ final class SceneView: Layer, Respondable, Localizable {
             return true
         }
         
-        timeline.tempoSlider.binding = { [unowned self] in
-            self.set(BPM($0.value), old: BPM($0.oldValue), type: $0.type)
+        timeline.tempoView.binding = { [unowned self] in
+            self.set(BPM($0.number), old: BPM($0.oldNumber), type: $0.type)
         }
         timeline.scrollHandler = { [unowned self] (timeline, scrollPoint, event) in
             if event.sendType == .begin && self.canvas.player.isPlaying {
@@ -602,7 +587,9 @@ final class SceneView: Layer, Respondable, Localizable {
         
         canvas.bindHandler = { [unowned self] _, m, _ in self.materialManager.material = m }
         canvas.setTimeHandler = { [unowned self] _, time in self.timeline.time = time }
-        canvas.updateSceneHandler = { [unowned self] _ in self.sceneDataModel.isWrite = true }
+        canvas.updateSceneHandler = { [unowned self] _ in
+            self.differentialSceneDataModel.isWrite = true
+        }
         canvas.setDraftLinesHandler = { [unowned self] _, _ in
             self.timeline.editCutView.updateChildren()
         }
@@ -662,6 +649,12 @@ final class SceneView: Layer, Respondable, Localizable {
         updateLayout()
     }
     
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
+    }
+    
     private func updateLayout() {
         let padding = Layout.basicPadding, sPadding = Layout.smallPadding, buttonH = Layout.basicHeight
         let h = buttonH + padding * 2
@@ -676,10 +669,10 @@ final class SceneView: Layer, Respondable, Localizable {
 //        versionView.frame.size = CGSize(width: SceneView.undoWidth, height: buttonH)
 //        rendererManager.popupBox.frame.size = CGSize(width: SceneView.rendererWidth, height: buttonH)
 //        let properties: [Layer] = [versionView, Padding(),
-//                                   rendererManager.popupBox, sizeView, frameRateSlider]
+//                                   rendererManager.popupBox, sizeView, frameRateView]
 //        properties.forEach { $0.frame.size.height = h }
 //        _ = Layout.leftAlignment(properties, minX: nameLabel.frame.maxX + padding, y: y - h, height: h)
-//        let pnx = frameRateSlider.frame.maxX + padding, soundWidth = 200.0.cf
+//        let pnx = frameRateView.frame.maxX + padding, soundWidth = 200.0.cf
         
         var ty = y
         ty -= th
@@ -734,10 +727,10 @@ final class SceneView: Layer, Respondable, Localizable {
         sizeView.frame = CGRect(x: spx, y: spy,
                                 width: spw, height: sph)
         spy -= sph
-        frameRateSlider.frame = CGRect(x: spx, y: spy,
+        frameRateView.frame = CGRect(x: spx, y: spy,
                                        width: spw, height: sph)
 //        let properties: [Layer] = [versionView, Padding(),
-//                                   rendererManager.popupBox, sizeView, frameRateSlider]
+//                                   rendererManager.popupBox, sizeView, frameRateView]
 //        properties.forEach { $0.frame.size.height = h }
 //        _ = Layout.leftAlignment(properties, minX: nameLabel.frame.maxX + padding, y: y - h, height: h)
         spy -= sh
@@ -747,7 +740,7 @@ final class SceneView: Layer, Respondable, Localizable {
         soundView.frame = CGRect(x: spx, y: spy, width: spw, height: sph)
         spy -= sPadding
         spy -= sph
-        timeline.tempoSlider.frame = CGRect(x: spx, y: spy, width: spw, height: sph)
+        timeline.tempoView.frame = CGRect(x: spx, y: spy, width: spw, height: sph)
         let tkh = ceil(kh * 0.6)
         spy -= tkh
         timeline.tempoKeyframeView.frame = CGRect(x: spx, y: spy, width: spw, height: tkh)
@@ -794,7 +787,7 @@ final class SceneView: Layer, Respondable, Localizable {
         timeline.scene = scene
         canvas.scene = scene
         sizeView.size = scene.frame.size
-        frameRateSlider.value = scene.frameRate.cf
+        frameRateView.number = scene.frameRate.cf
         colorSpaceView.selectedIndex = scene.colorSpace == .sRGB ? 0 : 1
         isShownPreviousView.selectedIndex = scene.isShownPrevious ? 1 : 0
         isShownNextView.selectedIndex = scene.isShownNext ? 1 : 0
@@ -829,7 +822,7 @@ final class SceneView: Layer, Respondable, Localizable {
         set {
             if newValue != time {
                 timeline.time = newValue
-                sceneDataModel.isWrite = true
+                differentialSceneDataModel.isWrite = true
                 seekBar.time = scene.secondTime(withBeatTime: newValue)
                 canvas.updateEditCellBindingLine()
             }
@@ -895,7 +888,7 @@ final class SceneView: Layer, Respondable, Localizable {
                    in: animationView, in: cutView, time: $1)
         }
         set(keyframe, at: index, in: track, in: animationView, in: cutView)
-        sceneDataModel.isWrite = true
+        differentialSceneDataModel.isWrite = true
     }
     
     private func setKeyframeInTempo(with obj: KeyframeView.Binding) {
@@ -939,7 +932,7 @@ final class SceneView: Layer, Respondable, Localizable {
         set(keyframe, at: index, in: track, in: animationView)
         timeline.updateTimeRuler()
         timeline.soundWaveformView.updateWaveform()
-        sceneDataModel.isWrite = true
+        differentialSceneDataModel.isWrite = true
     }
     
     private var isMadeEffectItem = false
@@ -1003,7 +996,7 @@ final class SceneView: Layer, Respondable, Localizable {
             $0.set(oldEffectItem, old: effectItem, in: track, in: cutView, time: $1)
         }
         set(effectItem, in: track, in: cutView)
-        sceneDataModel.isWrite = true
+        differentialSceneDataModel.isWrite = true
     }
     private func set(_ effect: Effect, at index: Int,
                      in track: NodeTrack, in cutView: CutView) {
@@ -1019,7 +1012,7 @@ final class SceneView: Layer, Respondable, Localizable {
             $0.set(oldEffect, old: effect, at: index, in: track, in: cutView, time: $1)
         }
         set(effect, at: index, in: track, in: cutView)
-        sceneDataModel.isWrite = true
+        differentialSceneDataModel.isWrite = true
     }
     
     private var keyframeIndex = 0, isMadeTransformItem = false
@@ -1085,7 +1078,7 @@ final class SceneView: Layer, Respondable, Localizable {
             $0.set(oldTransformItem, old: transformItem, in: track, in: cutView, time: $1)
         }
         set(transformItem, in: track, in: cutView)
-        sceneDataModel.isWrite = true
+        differentialSceneDataModel.isWrite = true
     }
     private func set(_ transform: Transform, at index: Int,
                      in track: NodeTrack, in cutView: CutView) {
@@ -1101,7 +1094,7 @@ final class SceneView: Layer, Respondable, Localizable {
             $0.set(oldTransform, old: transform, at: index, in: track, in: cutView, time: $1)
         }
         set(transform, at: index, in: track, in: cutView)
-        sceneDataModel.isWrite = true
+        differentialSceneDataModel.isWrite = true
     }
     
     private var isMadeWiggleItem = false
@@ -1166,7 +1159,7 @@ final class SceneView: Layer, Respondable, Localizable {
             $0.set(oldWiggleItem, old: wiggleItem, in: track, in: cutView, time: $1)
         }
         set(wiggleItem, in: track, in: cutView)
-        sceneDataModel.isWrite = true
+        differentialSceneDataModel.isWrite = true
     }
     private func set(_ wiggle: Wiggle, at index: Int,
                      in track: NodeTrack, in cutView: CutView) {
@@ -1181,7 +1174,7 @@ final class SceneView: Layer, Respondable, Localizable {
             $0.set(oldWiggle, old: wiggle, at: index, in: track, in: cutView, time: $1)
         }
         set(wiggle, at: index, in: track, in: cutView)
-        sceneDataModel.isWrite = true
+        differentialSceneDataModel.isWrite = true
     }
     
     private func setIsHiddenInNode(with obj: NodeView.Binding) {
@@ -1214,7 +1207,7 @@ final class SceneView: Layer, Respondable, Localizable {
         node.isHidden = isHidden
         canvas.setNeedsDisplay()
         cutView.updateChildren()
-        sceneDataModel.isWrite = true
+        differentialSceneDataModel.isWrite = true
     }
     
     private func setIsTranslucentLockInCell(with obj: CellView.Binding) {
@@ -1244,7 +1237,7 @@ final class SceneView: Layer, Respondable, Localizable {
         }
         cell.isTranslucentLock = isTranslucentLock
         canvas.setNeedsDisplay()
-        sceneDataModel.isWrite = true
+        differentialSceneDataModel.isWrite = true
     }
     
     func scroll(with event: ScrollEvent) -> Bool {
@@ -1287,7 +1280,7 @@ final class SceneView: Layer, Respondable, Localizable {
             $0.set(oldTempo, old: tempo, at: index, in: track, time: $1)
         }
         set(tempo, at: index, in: track)
-        sceneDataModel.isWrite = true
+        differentialSceneDataModel.isWrite = true
     }
     
     private var oldNode: Node?
@@ -1327,7 +1320,7 @@ final class SceneView: Layer, Respondable, Localizable {
         }
         set(drawing, at: index, in: track)
         node.differentialDataModel.isWrite = true
-        sceneDataModel.isWrite = true
+        differentialSceneDataModel.isWrite = true
     }
     
     private weak var oldSubtitleTrack: SubtitleTrack?
@@ -1364,7 +1357,7 @@ final class SceneView: Layer, Respondable, Localizable {
             $0.set(oldSubtitle, old: subtitle, at: index, in: track, time: $1)
         }
         set(subtitle, at: index, in: track)
-        sceneDataModel.isWrite = true
+        differentialSceneDataModel.isWrite = true
     }
 }
 
@@ -1398,7 +1391,7 @@ final class SceneMaterialManager {
         set {
             scene.editMaterial = newValue
             sceneView.canvas.materialView.material = newValue
-            sceneView.sceneDataModel.isWrite = true
+            sceneView.differentialSceneDataModel.isWrite = true
             animationBox.label.localization = isAnimatedMaterial ?
                 Localization(english: "Material Animation", japanese: "マテリアルアニメーションあり") :
                 Localization(english: "None Material Animation", japanese: "マテリアルアニメーションなし")
@@ -1484,13 +1477,13 @@ final class SceneMaterialManager {
         }
     }
     private func colorTuplesWith(color: Color, isSelected: Bool, in cuts: [Cut]) -> [ColorTuple] {
-        let cutTuples: [CutTuple] = cuts.flatMap { cut in
+        let cutTuples: [CutTuple] = cuts.compactMap { cut in
             let cells = cut.cells.filter { $0.material.color == color }
             
             var materialItemTuples = [MaterialItemTuple]()
             for track in cut.editNode.tracks {
                 for materialItem in track.materialItems {
-                    let indexes = materialItem.keyMaterials.enumerated().flatMap {
+                    let indexes = materialItem.keyMaterials.enumerated().compactMap {
                         $0.element.color == color ? $0.offset : nil
                     }
                     if !indexes.isEmpty {
@@ -1517,10 +1510,10 @@ final class SceneMaterialManager {
             }
         }
         return materials.reduce(into: [UUID: MaterialTuple]()) { materialTuples, material in
-            let cutTuples: [CutTuple] = cutTuples.flatMap { cutTuple in
+            let cutTuples: [CutTuple] = cutTuples.compactMap { cutTuple in
                 let cells = cutTuple.cells.filter { $0.material.id == material.id }
-                let mts: [MaterialItemTuple] = cutTuple.materialItemTuples.flatMap { mit in
-                    let indexes = mit.editIndexes.flatMap {
+                let mts: [MaterialItemTuple] = cutTuple.materialItemTuples.compactMap { mit in
+                    let indexes = mit.editIndexes.compactMap {
                         mit.materialItem.keyMaterials[$0].id == material.id ? $0 : nil
                     }
                     return indexes.isEmpty ?
@@ -1586,7 +1579,7 @@ final class SceneMaterialManager {
             }
         }
         if let material = material {
-            let cutTuples: [CutTuple] = cuts.flatMap { cut in
+            let cutTuples: [CutTuple] = cuts.compactMap { cut in
                 let cells = cut.cells.filter { $0.material.id == material.id }
                 
                 var materialItemTuples = [MaterialItemTuple]()
@@ -1594,7 +1587,7 @@ final class SceneMaterialManager {
                     for materialItem in track.materialItems {
                         let indexes = useSelected ?
                             [track.animation.editKeyframeIndex] :
-                            materialItem.keyMaterials.enumerated().flatMap {
+                            materialItem.keyMaterials.enumerated().compactMap {
                                 $0.element.id == material.id ? $0.offset : nil }
                         if !indexes.isEmpty {
                             materialItemTuples.append(MaterialItemTuple(track: track,
@@ -1684,7 +1677,7 @@ final class SceneMaterialManager {
             $0._set(oldMaterial, old: material, editIndexes: editIndexes, in: materialItem, track, cut)
         }
         set(material, editIndexes: editIndexes, in: materialItem, track)
-        sceneView.sceneDataModel.isWrite = true
+        sceneView.differentialSceneDataModel.isWrite = true
         if cut === sceneView.canvas.cut {
             sceneView.canvas.setNeedsDisplay()
         }
@@ -1808,7 +1801,7 @@ final class SceneMaterialManager {
             $0._set(oldMaterial, old: material, in: cells, cut)
         }
         cells.forEach { $0.material = material }
-        sceneView.sceneDataModel.isWrite = true
+        sceneView.differentialSceneDataModel.isWrite = true
         if cut === sceneView.canvas.cut {
             sceneView.canvas.setNeedsDisplay()
         }
@@ -1990,11 +1983,11 @@ final class SceneMaterialManager {
     private func append(_ materialItem: MaterialItem, in track: NodeTrack, _ cut: Cut) {
         undoManager?.registerUndo(withTarget: self) { $0.remove(materialItem, in: track, cut) }
         track.append(materialItem)
-        sceneView.sceneDataModel.isWrite = true
+        sceneView.differentialSceneDataModel.isWrite = true
     }
     private func remove(_ materialItem: MaterialItem, in track: NodeTrack, _ cut: Cut) {
         undoManager?.registerUndo(withTarget: self) { $0.append(materialItem, in: track, cut) }
         track.remove(materialItem)
-        sceneView.sceneDataModel.isWrite = true
+        sceneView.differentialSceneDataModel.isWrite = true
     }
 }

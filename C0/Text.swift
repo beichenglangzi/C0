@@ -51,19 +51,10 @@ extension String: ResponderExpression {
  - モードレス文字入力
  */
 typealias Label = TextView
-final class TextView: DrawLayer, Respondable, Localizable {
-    static let name = Localization(english: "Text View", japanese: "テキスト表示")
+final class TextView: DrawLayer, Respondable {
+    static let name = Localization(english: "Text", japanese: "テキスト")
     static let feature = Localization(english: "Run (Verb sentence only): Click",
                                       japanese: "実行 (動詞文のみ): クリック")
-    
-    var locale = Locale.current {
-        didSet {
-            string = localization.string(with: locale)
-            if isSizeToFit {
-                sizeToFit()
-            }
-        }
-    }
     
     var isSizeToFit = false
     var localization: Localization {
@@ -118,8 +109,7 @@ final class TextView: DrawLayer, Respondable, Localizable {
          text localization: Localization = Localization(),
          font: Font = .default, color: Color = .locked,
          frameAlignment: CTTextAlignment = .left, alignment: CTTextAlignment = .natural,
-         padding: CGFloat = 1, isSizeToFit: Bool = true,
-         description: Localization = Localization()) {
+         padding: CGFloat = 1, isSizeToFit: Bool = true) {
         
         self.localization = localization
         self.padding = padding
@@ -145,8 +135,6 @@ final class TextView: DrawLayer, Respondable, Localizable {
         self.isSizeToFit = isSizeToFit
         
         super.init()
-        instanceDescription = description
-        
         drawBlock = { [unowned self] ctx in
             self.draw(in: ctx)
         }
@@ -194,6 +182,15 @@ final class TextView: DrawLayer, Respondable, Localizable {
         ctx.translateBy(x: padding, y: padding + baselineDelta)
         textFrame.draw(in: bounds, in: ctx)
         ctx.restoreGState()
+    }
+    
+    override var locale: Locale {
+        didSet {
+            string = localization.string(with: locale)
+            if isSizeToFit {
+                sizeToFit()
+            }
+        }
     }
     
     var frameAlignment = CTTextAlignment.left
