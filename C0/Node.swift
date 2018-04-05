@@ -1532,8 +1532,8 @@ final class NodeView: Layer, Respondable {
                                     type: binding.type))
     }
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [node.copied])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [node.copied]
     }
 }
 
@@ -1551,9 +1551,7 @@ final class NodeTreeManager {
             self.cut.node(atTreeNodeIndex: $0).allParentsAndSelf { _ in i += 1 }
             return i - 2
         }
-        nodesView.copyHandler = { [unowned self] _, _ in
-            return CopyManager(copiedObjects: [self.cut.editNode.copied])
-        }
+        nodesView.copiedObjectsHandler = { [unowned self] _, _ in [self.cut.editNode.copied] }
         nodesView.moveHandler = { [unowned self] in return self.moveNode(with: $1) }
     }
     
@@ -1581,7 +1579,7 @@ final class NodeTreeManager {
         return Localization("\(index): ") + string
     }
     
-    let nodesView = ArrayView()
+    let nodesView = ListArrayView()
 
     func updateWithNodes(isAlwaysUpdate: Bool = false) {
         nodesView.set(selectedIndex: cut.editTreeNodeIndex, count: cut.maxTreeNodeIndex + 1)
@@ -1660,7 +1658,7 @@ final class NodeTreeManager {
 }
 
 final class TracksManager {
-    let tracksView = ArrayView()
+    let tracksView = ListArrayView()
     
     init() {
         tracksView.nameHandler = { [unowned self] in
@@ -1670,8 +1668,8 @@ final class TracksManager {
             }
             return Localization(tracks[$0].name)
         }
-        tracksView.copyHandler = { [unowned self] _, _ in
-            return CopyManager(copiedObjects: [self.node.editTrack.copied])
+        tracksView.copiedObjectsHandler = { [unowned self] _, _ in
+            return [self.node.editTrack.copied]
         }
         tracksView.moveHandler = { [unowned self] in return self.moveTrack(with: $1) }
     }

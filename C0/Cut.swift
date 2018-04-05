@@ -22,9 +22,8 @@ import Foundation
 final class CutTrack: NSObject, Track, NSCoding {
     private(set) var animation: Animation
     
-    static let differentialDataModelKey = "differentialCutTrack"
-    var differentialDataModel = DataModel(key: CutTrack.differentialDataModelKey,
-                                          directoryWith: []) {
+    let differentialDataModelKey = "differentialCutTrack"
+    var differentialDataModel: DataModel {
         didSet {
             var nodeDic = [String: Node]()
             cutItem.keyCuts.forEach { cut in
@@ -37,6 +36,7 @@ final class CutTrack: NSObject, Track, NSCoding {
             }
         }
     }
+    
     func insert(_ cut: Cut, at index: Int) {
         cutItem.keyCuts.insert(cut, at: index)
         let cutTime = index == animation.keyframes.count ? animation.duration : time(at: index)
@@ -64,6 +64,7 @@ final class CutTrack: NSObject, Track, NSCoding {
     func updateInterpolation() {
         animation.update(withTime: time, to: self)
     }
+    
     func step(_ f0: Int) {
         cutItem.step(f0)
     }
@@ -81,6 +82,8 @@ final class CutTrack: NSObject, Track, NSCoding {
     }
     
     init(animation: Animation = Animation(), time: Beat = 0, cutItem: CutItem = CutItem()) {
+        differentialDataModel = DataModel(key: differentialDataModelKey, directoryWith: [])
+        
         guard animation.keyframes.count == cutItem.keyCuts.count else {
             fatalError()
         }
@@ -99,6 +102,8 @@ final class CutTrack: NSObject, Track, NSCoding {
         case animation, time, cutItem
     }
     init?(coder: NSCoder) {
+        differentialDataModel = DataModel(key: differentialDataModelKey, directoryWith: [])
+        
         animation = coder.decodeDecodable(
             Animation.self, forKey: CodingKeys.animation.rawValue) ?? Animation()
         time = coder.decodeDecodable(Beat.self, forKey: CodingKeys.time.rawValue) ?? 0
@@ -927,13 +932,13 @@ final class CutView: Layer, Respondable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [cut.copied])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [cut.copied]
     }
     
-    var pasteHandler: ((CutView, CopyManager) -> (Bool))?
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        return pasteHandler?(self, copyManager) ?? false
+    var pasteHandler: ((CutView, [Any]) -> (Bool))?
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        return pasteHandler?(self, objects) ?? false
     }
     
     var deleteHandler: ((CutView) -> (Bool))?

@@ -15,27 +15,10 @@ Modeless Animatable Tool
 人が道具に対して方法を強制させるわけでもなく、道具が人に方法を強制させるわけでもない設計
 
 ## 特徴
-
-### モードレスドローイング
-キャンバス上では常に同じ太さと同じ色のストロークであり、アクションを利用することで線をコントロールします
-
-### インディケーション
-クリックすることなく、カーソルで指し示したオブジェクトにキー入力などによってアクションを送信します
-
-### 線補間
-線の補間を利用することにより、従来の中割りや彩色に相当する作業を省略することが可能です
-
-### オーバーシュートのない補間
-通常のスプライン補間で発生してしまうオーバーシュートをなくした単調性補間を採用しています
-
-### センタータイムライン
-編集中のキーフレームはどこにスクロールしても常にタイムラインの中心に位置します
-
-### 輝度を軸にしたカラーピッカー
-人の知覚特性に配慮したカラーピッカーを採用しています
-
-## 開発者
-S ([Twitter](https://twitter.com/smdls), [Youtube](https://www.youtube.com/channel/UCQ6kzSlb5Zi6-EvsGcZuDAw), メール: <smdls001@gmail.com>)
+- モードレスドローイング
+- インディケーション選択
+- オーバーシュートのない補間
+- 輝度を軸にしたカラーピッカー
 
 ## 開発環境
 - macOS 10.13.4
@@ -44,6 +27,9 @@ S ([Twitter](https://twitter.com/smdls), [Youtube](https://www.youtube.com/chann
 
 ## ライセンス
 [GNU General Public License v3.0](License.md)
+
+## 開発者
+S ([Twitter](https://twitter.com/smdls), [Youtube](https://www.youtube.com/channel/UCQ6kzSlb5Zi6-EvsGcZuDAw), メール: <smdls001@gmail.com>)
 
 ## 寄付
 Bitcoin アドレス: 19VuHwtfDh6uU72xNxHFBCPXN7M24xe35U

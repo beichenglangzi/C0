@@ -59,8 +59,14 @@ private final class ObjectIdentifierManager<T> {
 protocol Copiable {
     var copied: Self { get }
 }
-struct CopyManager {
-    var copiedObjects: [Any]
+final class CopyManager {
+    var copiedObjects: [Any] {
+        didSet {
+            copiedObjectsBinding?(copiedObjects)
+        }
+    }
+    var copiedObjectsBinding: (([Any]) -> ())?
+    
     init(copiedObjects: [Any] = []) {
         self.copiedObjects = copiedObjects
     }
@@ -71,11 +77,18 @@ extension CopyManager: Referenceable {
 final class CopyManagerView: Layer, Respondable {
     static let name = CopyManager.name
     
-    var copyManager = CopyManager() {
+    var rootCopyManager = CopyManager() {
         didSet {
-            changeCount += 1
-            updateObjectViews()
+            rootCopyManager.copiedObjectsBinding = { [unowned self] in self.didSet(copiedObjects: $0) }
+            updateCopiedObjectsView()
         }
+    }
+    override var copyManager: CopyManager {
+        return rootCopyManager
+    }
+    func didSet(copiedObjects: [Any]) {
+        changeCount += 1
+        updateCopiedObjectsView()
     }
     var changeCount = 0
     
@@ -83,19 +96,16 @@ final class CopyManagerView: Layer, Respondable {
     
     let nameLabel = Label(text: CopyManager.name, font: .bold)
     let versionView = VersionView()
-    let versionLabel = Label(text: Localization(english: "Copied:", japanese: "コピー済み:"))
-    var objectViews = [Layer]() {
-        didSet {
-            updateLayout()
-        }
-    }
+    let copiedLabel = Label(text: Localization(english: "Copied:", japanese: "コピー済み:"))
+    let copiedObjectsView = ArrayView<Any>()
     
     override init() {
         versionView.frame = CGRect(x: 0, y: 0, width: versionWidth, height: Layout.basicHeight)
         versionView.rootUndoManager = rootUndoManager
+        
         super.init()
-        isClipped = true
-        replace(children: [nameLabel, versionView, versionLabel])
+        rootCopyManager.copiedObjectsBinding = { [unowned self] in self.didSet(copiedObjects: $0) }
+        replace(children: [nameLabel, versionView, copiedLabel, copiedObjectsView])
     }
     
     override var locale: Locale {
@@ -113,26 +123,29 @@ final class CopyManagerView: Layer, Respondable {
         let padding = Layout.basicPadding
         nameLabel.frame.origin = CGPoint(x: padding,
                                          y: bounds.height - nameLabel.frame.height - padding)
-        if objectViews.isEmpty {
-            replace(children: [nameLabel, versionView, versionLabel])
-            let cs = [versionView, Padding(), versionLabel]
-            _ = Layout.leftAlignment(cs, minX: nameLabel.frame.maxX + padding,
-                                     height: frame.height)
-        } else {
-            replace(children: [nameLabel, versionView, versionLabel] + objectViews)
-            let cs = [versionView, Padding(), versionLabel] + objectViews as [Layer]
-            _ = Layout.leftAlignment(cs, minX: nameLabel.frame.maxX + padding,
-                                     height: frame.height)
-        }
+        _ = Layout.leftAlignment([versionView, Padding(), copiedLabel],
+                                 minX: nameLabel.frame.maxX + padding,
+                                 height: frame.height)
+        let cow = bounds.width - copiedLabel.frame.maxX - padding
+        copiedObjectsView.frame = CGRect(x: copiedLabel.frame.maxX, y: padding,
+                                         width: max(cow, 10), height: bounds.height - padding * 2)
     }
-    func updateObjectViews() {
-        let padding = Layout.basicPadding
-        let bounds = CGRect(x: 0, y: 0,
-                            width: objectViewWidth, height: frame.height - padding * 2)
-        objectViews = copyManager.copiedObjects.map {
-            return ($0 as? ResponderExpression)?.responder(withBounds: bounds) ??
-                ObjectView(object: $0, thumbnailView: nil, minFrame: bounds)
-        }
+    func updateCopiedObjectsView() {
+        copiedObjectsView.array = copyManager.copiedObjects
+        let padding = Layout.smallPadding
+        let bounds = CGRect(x: 0,
+                            y: 0,
+                            width: objectViewWidth,
+                            height: copiedObjectsView.bounds.height - padding * 2)
+        copiedObjectsView.replace(children: copyManager.copiedObjects.map {
+            return ($0 as? ViewExpression)?.view(withBounds: bounds, isSmall: true) ??
+                ObjectView(object: $0, thumbnailView: nil, minFrame: bounds, isSmall: true)
+        })
+        updateCopiedObjectViewPositions()
+    }
+    func updateCopiedObjectViewPositions() {
+        let padding = Layout.smallPadding
+        _ = Layout.leftAlignment(copiedObjectsView.children, minX: padding, y: padding)
     }
     
     var rootUndoManager = UndoManager()
@@ -140,21 +153,24 @@ final class CopyManagerView: Layer, Respondable {
         return rootUndoManager
     }
     
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return copyManager.copiedObjects
+    }
     func delete(with event: KeyInputEvent) -> Bool {
         guard !copyManager.copiedObjects.isEmpty else {
             return false
         }
-        setCopyManager(CopyManager(), oldCopyManager: copyManager)
+        set(CopyManager(), old: copyManager)
         return true
     }
     func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        setCopyManager(copyManager, oldCopyManager: self.copyManager)
+        set(copyManager, old: self.copyManager)
         return true
     }
-    private func setCopyManager(_ copyManager: CopyManager, oldCopyManager: CopyManager) {
+    private func set(_ copyManager: CopyManager, old oldCopyManager: CopyManager) {
         undoManager?.registerUndo(withTarget: self) {
-            $0.setCopyManager(oldCopyManager, oldCopyManager: copyManager)
+            $0.set(oldCopyManager, old: copyManager)
         }
-        self.copyManager = copyManager
+        self.rootCopyManager = copyManager
     }
 }

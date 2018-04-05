@@ -407,7 +407,7 @@ final class SubtitleView: Layer, Respondable {
                               type: binding.type))
     }
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [subtitle])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [subtitle]
     }
 }

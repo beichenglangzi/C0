@@ -34,11 +34,11 @@ final class Box: Layer, Respondable {
     
     var canPasteImage = false
     let minPasteImageWidth = 400.0.cf
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         var isChanged = false
         if canPasteImage {
             let p = self.point(from: event)
-            for object in copyManager.copiedObjects {
+            for object in objects {
                 if let url = object as? URL {
                     append(child: makeImageView(url: url, position: p))
                     isChanged = true
@@ -126,8 +126,8 @@ final class TextBox: Layer, Respondable {
         highlight.frame = bounds.inset(by: 0.5)
     }
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [label.string])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [label.string]
     }
     
     var deleteHandler: ((TextBox, KeyInputEvent) -> (Bool))?

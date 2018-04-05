@@ -19,19 +19,22 @@
 
 import Foundation
 
+protocol Quasimode {
+}
+
 /**
  # Issue
  - トラックパッドの環境設定を無効化または表示反映
  */
 struct Action {
-    struct Quasimode: OptionSet {
+    struct ModifierKeys: OptionSet, Quasimode {
         var rawValue: Int32
-        static let shift = Quasimode(rawValue: 1), command = Quasimode(rawValue: 2)
-        static let control = Quasimode(rawValue:4), option = Quasimode(rawValue: 8)
+        static let shift = ModifierKeys(rawValue: 1), command = ModifierKeys(rawValue: 2)
+        static let control = ModifierKeys(rawValue:4), option = ModifierKeys(rawValue: 8)
         
         var displayString: String {
-            func string(_ quasimode: Quasimode, _ name: String) -> String {
-                return intersection(quasimode).isEmpty ? "" : name
+            func string(_ modifierKeys: ModifierKeys, _ name: String) -> String {
+                return intersection(modifierKeys).isEmpty ? "" : name
             }
             return string(.shift, "shift")
                 .union(string(.control, "control"))
@@ -40,21 +43,22 @@ struct Action {
         }
     }
     
-    enum Key: String {
+    enum Key: String, Quasimode {
         case
-        a = "A", s = "S", d = "D", f = "F", h = "H", g = "G",  z = "Z", x = "X",
-        c = "C", v = "V", b = "B", q = "Q", w = "W", e = "E", r = "R", y = "Y", t = "T",
-        no1 = "1", no2 = "2", no3 = "3", no4 = "4", no6 = "6", no5 = "5", equals = "=", no9 = "9",
-        no7 = "7", minus = "-", no8 = "8", no0 = "0", rightBracket = "]", o = "O",
-        u = "U", leftBracket = "[", i = "I", p = "P", `return` = "return", l = "L", j = "J",
-        apostrophe = "`", k = "K", semicolon = ";", frontslash = "\\", comma = ",",
-        backslash = "/", n = "N", m = "M", period = ".", tab = "tab",
-        space = "space", backApostrophe = "^", delete = "delete", escape = "esc",
-        command = "command", shiht = "shiht", option = "option", control = "control",
+        a = "A", b = "B", c = "C", d = "D", e = "E", f = "F", g = "G", h = "H", i = "I",
+        j = "J", k = "K", l = "L", m = "M", n = "N", o = "O", p = "P", q = "Q", r = "R",
+        s = "S", t = "T", u = "U", v = "V", w = "W", x = "X", y = "Y", z = "Z",
+        no0 = "0", no1 = "1", no2 = "2", no3 = "3", no4 = "4",
+        no5 = "5", no6 = "6", no7 = "7", no8 = "8", no9 = "9",
+        minus = "-", equals = "=",
+        leftBracket = "[", rightBracket = "]", backslash = "/", frontslash = "\\",
+        apostrophe = "`", backApostrophe = "^", comma = ",", period = ".", semicolon = ";",
+        space = "space", `return` = "return", tab = "tab", delete = "delete", escape = "esc",
+        command = "command", shift = "shift", option = "option", control = "control",
         up = "↑", down = "↓", left = "←", right = "→"
     }
     
-    enum Gesture: Int8 {
+    enum Gesture: Int8, Quasimode {
         case
         none, keyInput, moveCursor, click, rightClick,
         drag, scroll, pinch, rotate, tap, doubleTap, penDrag
@@ -92,21 +96,22 @@ struct Action {
     }
     
     var name: Localization, description: Localization
-    var quasimode: Quasimode, key: Key?, editQuasimode: EditQuasimode, gesture: Gesture
-    var keyInput: ((_ sender: Respondable, _ getter: Respondable, KeyInputEvent) -> Bool)?
-    var drag: ((_ sender: Respondable, _ getter: Respondable, DragEvent) -> Bool)?
+    var modifierKeys: ModifierKeys, key: Key?, gesture: Gesture
+    var viewQuasimode: ViewQuasimode
+    var keyInput: ((_ receiver: Respondable, KeyInputEvent) -> Bool)?
+    var drag: ((_ receiver: Respondable, DragEvent) -> Bool)?
     
     init(name: Localization = Localization(), description: Localization = Localization(),
-         quasimode: Quasimode = [], key: Key? = nil,
-         editQuasimode: EditQuasimode = .move, gesture: Gesture = .none,
-         keyInput: ((_ sender: Respondable, _ getter: Respondable, KeyInputEvent) -> Bool)? = nil,
-         drag: ((_ sender: Respondable, _ getter: Respondable, DragEvent) -> Bool)? = nil) {
+         modifierKeys: ModifierKeys = [], key: Key? = nil, gesture: Gesture = .none,
+         viewQuasimode: ViewQuasimode = .move,
+         keyInput: ((_ receiver: Respondable, KeyInputEvent) -> Bool)? = nil,
+         drag: ((_ receiver: Respondable, DragEvent) -> Bool)? = nil) {
         
         self.name = name
         self.description = description
-        self.quasimode = quasimode
+        self.modifierKeys = modifierKeys
         self.key = key
-        self.editQuasimode = editQuasimode
+        self.viewQuasimode = viewQuasimode
         if keyInput != nil {
             self.gesture = .keyInput
         } else if drag != nil {
@@ -122,8 +127,8 @@ struct Action {
         self.drag = drag
     }
     
-    var displayCommandString: Localization {
-        var displayString = Localization(quasimode.displayString)
+    var quasimodeDisplayString: Localization {
+        var displayString = Localization(modifierKeys.displayString)
         if let keyDisplayString = key?.rawValue {
             displayString += Localization(displayString.isEmpty ?
                 keyDisplayString : " " + keyDisplayString)
@@ -137,18 +142,18 @@ struct Action {
     }
     
     func canTextKeyInput() -> Bool {
-        return key != nil && !quasimode.contains(.command)
+        return key != nil && !modifierKeys.contains(.command)
     }
     func canSend(with event: Event) -> Bool {
-        func contains(with quasimode: Action.Quasimode) -> Bool {
+        func contains(with quasimode: Action.ModifierKeys) -> Bool {
             let flipQuasimode = quasimode.symmetricDifference([.shift, .command, .control, .option])
             return event.quasimode.contains(quasimode) &&
                 event.quasimode.intersection(flipQuasimode).isEmpty
         }
         if let key = key {
-            return event.key == key && contains(with: quasimode)
+            return event.key == key && contains(with: modifierKeys)
         } else {
-            return contains(with: quasimode)// && (event.isPen ? gesture == .penDrag : true)
+            return contains(with: modifierKeys)// && (event.isPen ? gesture == .penDrag : true)
         }
     }
 }
@@ -161,102 +166,104 @@ extension Action: Referenceable {
     static let name = Localization(english: "Action", japanese: "アクション")
 }
 
-struct ActionManager {
+final class ActionManager {
     var isHiddenActions = false
     var actions: [Action] = {
-        let cutHandler: (Respondable, Respondable, KeyInputEvent) -> (Bool) = {
-            let copyManager = $1.copy(with: $2)
-            if let copyManager = copyManager, $1.delete(with: $2) {
-                return $0.paste(copyManager, with: $2)
+        let cutHandler: (Respondable, KeyInputEvent) -> (Bool) = {
+            if let copiedObjects = $0.copiedObjects(with: $1), $0.delete(with: $1) {
+                $0.copyManager?.copiedObjects = copiedObjects
+                return true
             } else {
                 return false
             }
         }
-        let copyHandler: (Respondable, Respondable, KeyInputEvent) -> (Bool) = {
-            if let copyObject = $1.copy(with: $2) {
-                return $0.paste(copyObject, with: $2)
+        let copiedObjectsHandler: (Respondable, KeyInputEvent) -> (Bool) = {
+            if let copiedObjects = $0.copiedObjects(with: $1) {
+                $0.copyManager?.copiedObjects = copiedObjects
+                return true
             } else {
                 return false
             }
         }
-        let pasteHandler: (Respondable, Respondable, KeyInputEvent) -> (Bool) = {
-            if let copyObject = $0.copy(with: $2) {
-                return $1.paste(copyObject, with: $2)
+        let pasteHandler: (Respondable, KeyInputEvent) -> (Bool) = {
+            if let copiedObjects = $0.copyManager?.copiedObjects {
+                return $0.paste(copiedObjects, with: $1)
             } else {
                 return false
             }
         }
         return [Action(name: Localization(english: "Undo", japanese: "取り消す"),
-                       quasimode: [.command], key: .z,
-                       keyInput: { (setter, getter, event) in getter.undo() }),
+                       modifierKeys: [.command], key: .z,
+                       keyInput: { (receiver, _) in receiver.undo() }),
                 Action(name: Localization(english: "Redo", japanese: "やり直す"),
-                       quasimode: [.command, .shift], key: .z,
-                       keyInput: { (setter, getter, event) in getter.redo() }),
-                Action(),
+                       modifierKeys: [.command, .shift], key: .z,
+                       keyInput: { (receiver, _) in receiver.redo() }),
                 Action(name: Localization(english: "Cut", japanese: "カット"),
-                       quasimode: [.command], key: .x,
+                       modifierKeys: [.command], key: .x,
                        keyInput: cutHandler),
                 Action(name: Localization(english: "Copy", japanese: "コピー"),
-                       quasimode: [.command], key: .c,
-                       keyInput: copyHandler),
+                       modifierKeys: [.command], key: .c,
+                       keyInput: copiedObjectsHandler),
                 Action(name: Localization(english: "Paste", japanese: "ペースト"),
-                       quasimode: [.command], key: .v,
+                       modifierKeys: [.command], key: .v,
                        keyInput: pasteHandler),
                 Action(name: Localization(english: "New", japanese: "新規"),
-                       quasimode: [.command], key: .d,
-                       keyInput: { $1.new(with: $2) }),
-                Action(),
+                       modifierKeys: [.command], key: .d,
+                       keyInput: { $0.new(with: $1) }),
                 Action(name: Localization(english: "Indicate", japanese: "指し示す"),
                        gesture: .moveCursor),
                 Action(name: Localization(english: "Select", japanese: "選択"),
-                       quasimode: [.command], editQuasimode: .select,
-                       drag: { $1.select(with: $2) }),
+                       modifierKeys: [.command],
+                       viewQuasimode: .select,
+                       drag: { $0.select(with: $1) }),
                 Action(name: Localization(english: "Deselect", japanese: "選択解除"),
-                       quasimode: [.command, .shift], editQuasimode: .deselect,
-                       drag: { $1.deselect(with: $2) }),
+                       modifierKeys: [.command, .shift],
+                       viewQuasimode: .deselect,
+                       drag: { $0.deselect(with: $1) }),
                 Action(name: Localization(english: "Select All", japanese: "すべて選択"),
-                       quasimode: [.command], key: .a,
-                       keyInput: { $1.selectAll(with: $2) }),
+                       modifierKeys: [.command], key: .a,
+                       keyInput: { $0.selectAll(with: $1) }),
                 Action(name: Localization(english: "Deselect All", japanese: "すべて選択解除"),
-                       quasimode: [.command, .shift], key: .a,
-                       keyInput: { $1.deselectAll(with: $2) }),
+                       modifierKeys: [.command, .shift], key: .a,
+                       keyInput: { $0.deselectAll(with: $1) }),
                 Action(name: Localization(english: "Bind", japanese: "バインド"),
-                       gesture: .rightClick, drag: { $1.bind(with: $2) }),
-                Action(),
+                       gesture: .rightClick, drag: { $0.bind(with: $1) }),
                 Action(name: Localization(english: "Run", japanese: "実行"),
                        gesture: .click),
-                Action(),
                 Action(name: Localization(english: "Move", japanese: "移動"),
-                       drag: { $1.move(with: $2) }),
+                       drag: { $0.move(with: $1) }),
                 Action(name: Localization(english: "Transform", japanese: "変形"),
-                       quasimode: [.option], editQuasimode: .transform,
-                       drag: { $1.transform(with: $2) }),
+                       modifierKeys: [.option],
+                       viewQuasimode: .transform,
+                       drag: { $0.transform(with: $1) }),
                 Action(name: Localization(english: "Warp", japanese: "歪曲"),
-                       quasimode: [.option, .shift], editQuasimode: .warp,
-                       drag: { $1.warp(with: $2) }),
+                       modifierKeys: [.option, .shift],
+                       viewQuasimode: .warp,
+                       drag: { $0.warp(with: $1) }),
                 Action(name: Localization(english: "Move Z", japanese: "Z移動"),
-                       quasimode: [.option, .control], editQuasimode: .moveZ,
-                       drag: { $1.moveZ(with: $2) }),
-                Action(),
-                Action(name: Localization(english: "Stroke", japanese: "ストローク (キャンバスのみ)"),
-                       drag: { $1.stroke(with: $2) }),
+                       modifierKeys: [.option, .control],
+                       viewQuasimode: .moveZ,
+                       drag: { $0.moveZ(with: $1) }),
+                Action(name: Localization(english: "Stroke", japanese: "ストローク"),
+                       drag: { $0.stroke(with: $1) }),
                 Action(name: Localization(english: "Lasso Erase", japanese: "囲み消し"),
-                       quasimode: [.shift], editQuasimode: .lassoErase,
-                       drag: { $1.lassoErase(with: $2) }),
-                Action(),
+                       modifierKeys: [.shift],
+                       viewQuasimode: .lassoErase,
+                       drag: { $0.lassoErase(with: $1) }),
                 Action(name: Localization(english: "Remove Edit Point", japanese: "編集点を削除"),
-                       quasimode: [.control], key: .x,
-                       keyInput: { $1.removePoint(with: $2) }),
+                       modifierKeys: [.control], key: .x,
+                       keyInput: { $0.removePoint(with: $1) }),
                 Action(name: Localization(english: "Insert Edit Point", japanese: "編集点を追加"),
-                       quasimode: [.control], key: .d,
-                       keyInput: { $1.insertPoint(with: $2) }),
+                       modifierKeys: [.control], key: .d,
+                       keyInput: { $0.insertPoint(with: $1) }),
                 Action(name: Localization(english: "Move Edit Point", japanese: "編集点を移動"),
-                       quasimode: [.control], editQuasimode: .movePoint,
-                       drag: { $1.movePoint(with: $2) }),
+                       modifierKeys: [.control],
+                       viewQuasimode: .movePoint,
+                       drag: { $0.movePoint(with: $1) }),
                 Action(name: Localization(english: "Move Vertex", japanese: "頂点を移動"),
-                       quasimode: [.control, .shift], editQuasimode: .moveVertex,
-                       drag: { $1.moveVertex(with: $2) }),
-                Action(),
+                       modifierKeys: [.control, .shift],
+                       viewQuasimode: .moveVertex,
+                       drag: { $0.moveVertex(with: $1) }),
                 Action(name: Localization(english: "Scroll", japanese: "スクロール"),
                        description: Localization(english: "Depends on system preference.",
                                                  japanese: "OSの環境設定に依存"),
@@ -273,97 +280,61 @@ struct ActionManager {
                        description: Localization(english: "Depends on system preference.",
                                                  japanese: "OSの環境設定に依存"),
                        gesture: .doubleTap),
-                Action(),
                 Action(name: Localization(english: "Look Up", japanese: "調べる"),
                        description: Localization(english: "Depends on system preference.",
                                                  japanese: "OSの環境設定に依存"),
                        gesture: .tap)]
     } ()
     
-    private(set) var moveActions = [Action]()
-    private(set) var keyActions = [Action](), dragActions = [Action]()
-    private(set) var clickActions = [Action](), rightClickActions = [Action]()
-    private(set) var scrollActions = [Action](), pinchActions = [Action]()
-    private(set) var rotateActions = [Action](), tapActions = [Action]()
-    init() {
-        actions.forEach {
-            switch $0.gesture {
-            case .keyInput:
-                keyActions.append($0)
-            case .click:
-                clickActions.append($0)
-            case .rightClick:
-                rightClickActions.append($0)
-            case .drag, .penDrag:
-                dragActions.append($0)
-            default:
-                break
-            }
-        }
-    }
-    
     func actionWith(_ gesture: Action.Gesture, _ event: Event) -> Action? {
-        func action(with actions: [Action]) -> Action? {
-            for action in actions {
-                if action.canSend(with: event) {
-                    return action
-                }
-            }
-            return nil
-        }
-        switch gesture {
-        case .keyInput:
-            if let action = action(with: keyActions) {
+        for action in actions {
+            if action.gesture == gesture && action.canSend(with: event) {
                 return action
-            } else {
-                return Action(quasimode: event.quasimode, key: event.key,
-                              keyInput: { $1.keyInput(with: $2) })
             }
-        case .click:
-            return action(with: clickActions)
-        case .rightClick:
-            return action(with: rightClickActions)
-        case .drag:
-            return action(with: dragActions)
-        default:
-            return nil
         }
+        return nil
     }
 }
 extension ActionManager: Referenceable {
     static let name = Localization(english: "Action Manager", japanese: "アクション管理")
 }
 
+/**
+ # Issue
+ - アクションの表示をキーボードに常に表示（ハードウェアの変更が必要）
+ */
 final class ActionManagerView: Layer, Respondable {
     static let name = ActionManager.name
     
     var actionManager = ActionManager() {
         didSet {
-            isHiddenView.selectedIndex = actionManager.isHiddenActions ? 0 : 1
             isHiddenActions = actionManager.isHiddenActions
+            actionsView.array = actionManager.actions
         }
     }
-    
-    static let defaultWidth = 190 + Layout.basicPadding * 2
-    
-    let nameLabel = Label(text: ActionManager.name, font: .bold)
-    let isHiddenView = EnumView(names: [Localization(english: "Hidden", japanese: "表示なし"),
-                                        Localization(english: "Shown", japanese: "表示あり")])
-    var isHiddenActions = false {
+    private var isHiddenActions = false {
         didSet {
             guard isHiddenActions != oldValue else {
                 return
             }
-            isHiddenView.selectedIndex = isHiddenActions ? 0 : 1
+            isHiddenActionsView.selectedIndex = isHiddenActions ? 0 : 1
             updateLayout()
         }
     }
-    var actionItems = [ActionItem]()
+    
+    static let defaultWidth = 200 + Layout.basicPadding * 2
+    
+    let nameLabel = Label(text: ActionManager.name, font: .bold)
+    let isHiddenActionsView = EnumView(names: [Localization(english: "Hidden Actions",
+                                                            japanese: "アクションの表示なし"),
+                                               Localization(english: "Shown Actions",
+                                                            japanese: "アクションの表示あり")])
+    let actionsView = ArrayView<Action>()
     
     override init() {
         super.init()
-        isHiddenView.selectedIndex = 1
-        isHiddenView.binding = { [unowned self] in
+        isHiddenActionsView.selectedIndex = 1
+        isHiddenActionsView.binding = { [unowned self] in
             self.isHiddenActions = $0.index == 0
             self.isHiddenActionsBinding?(self.isHiddenActions)
         }
@@ -377,65 +348,61 @@ final class ActionManagerView: Layer, Respondable {
     }
     
     func updateLayout() {
-        let padding = Layout.basicPadding
+        let padding = Layout.basicPadding, sPadding = Layout.smallPadding
         if isHiddenActions {
             let h = Layout.basicHeight + padding * 2
-            actionItems = []
             nameLabel.frame.origin = CGPoint(x: padding, y: h - padding - nameLabel.frame.height)
-            isHiddenView.frame = CGRect(x: nameLabel.frame.width + padding * 2,
-                                        y: padding,
-                                        width: actionWidth - nameLabel.frame.width - padding * 3,
-                                        height: Layout.basicHeight)
-            replace(children: [nameLabel, isHiddenView])
+            let ihw = actionWidth - nameLabel.frame.width - padding * 3
+            isHiddenActionsView.frame = CGRect(x: nameLabel.frame.width + padding * 2, y: padding,
+                                               width: ihw, height: Layout.basicHeight)
+            actionsView.replace(children: [])
+            replace(children: [nameLabel, isHiddenActionsView])
             frame.size = CGSize(width: actionWidth, height: h)
         } else {
-            let aaf = ActionManagerView.actionItemsAndFrameWith(actionManager: actionManager,
-                                                                actionWidth: actionWidth - padding * 2,
-                                                                minY: padding)
-            let h = aaf.size.height + Layout.basicHeight + padding * 3
-            self.actionItems = aaf.actionItems
+            let aw = actionWidth - sPadding * 2 - padding * 2
+            let aaf = ActionManagerView.actionViewsAndSizeWith(actionManager: actionManager,
+                                                               origin: CGPoint(x: sPadding,
+                                                                               y: sPadding),
+                                                               actionWidth: aw)
+            let ah = aaf.size.height + sPadding * 2
+            let h = ah + Layout.basicHeight + padding * 3
             nameLabel.frame.origin = CGPoint(x: padding,
                                              y: h - padding - nameLabel.frame.height)
-            isHiddenView.frame = CGRect(x: nameLabel.frame.width + padding * 2,
-                                        y: aaf.size.height + padding * 2,
+            isHiddenActionsView.frame = CGRect(x: nameLabel.frame.width + padding * 2,
+                                        y: ah + padding * 2,
                                         width: actionWidth - nameLabel.frame.width - padding * 3,
                                         height: Layout.basicHeight)
-            replace(children: [nameLabel, isHiddenView] + actionItems)
+            actionsView.replace(children: aaf.views)
+            actionsView.frame = CGRect(x: padding, y: padding,
+                                       width: aaf.size.width + sPadding * 2, height: ah)
+            replace(children: [nameLabel, isHiddenActionsView, actionsView])
             frame.size = CGSize(width: actionWidth, height: h)
         }
     }
     
     var isHiddenActionsBinding: ((Bool) -> (Void))? = nil
     
-    var actionWidth = ActionManagerView.defaultWidth, commandFont = Font.action
+    var actionWidth = ActionManagerView.defaultWidth
     
-    static func actionItemsAndFrameWith(actionManager: ActionManager,
-                                        actionWidth: CGFloat,
-                                        minY: CGFloat) -> (actionItems: [ActionItem], size: CGSize) {
-        let padding = Layout.basicPadding
-        var y = minY
-        let actionItems: [ActionItem] = actionManager.actions.reversed().compactMap {
+    static func actionViewsAndSizeWith(actionManager: ActionManager,
+                                       origin: CGPoint,
+                                       actionWidth: CGFloat) -> (views: [ActionView], size: CGSize) {
+        var y = origin.y
+        let actionViews: [ActionView] = actionManager.actions.reversed().compactMap {
             guard $0.gesture != .none else {
                 y += Layout.basicPadding
                 return nil
             }
-            let actionItem = ActionItem(action: $0, frame: CGRect(x: padding, y: y,
+            let actionView = ActionView(action: $0, frame: CGRect(x: origin.x, y: y,
                                                                   width: actionWidth, height: 0))
-            y += actionItem.frame.height
-            return actionItem
+            y += actionView.frame.height
+            return actionView
         }
-        return (actionItems, CGSize(width: actionWidth, height: y - minY))
-    }
-    
-    func actionItems(with quasimode: Action.Quasimode) -> [ActionItem] {
-        return actionItems.filter { $0.action.quasimode == quasimode }
-    }
-    func actionItems(with action: Action) -> [ActionItem] {
-        return actionItems.filter { $0.action == action }
+        return (actionViews, CGSize(width: actionWidth, height: y - origin.y))
     }
 }
 
-final class ActionItem: Layer, Respondable {
+final class ActionView: Layer, Respondable {
     static let name = Action.name
     var instanceDescription: Localization {
         return action.description
@@ -443,22 +410,27 @@ final class ActionItem: Layer, Respondable {
     
     var action: Action
     
-    var nameLabel: Label, commandLabel: Label
+    var nameLabel: Label, quasimodeLabel: Label
+    
     init(action: Action, frame: CGRect) {
         self.action = action
         let nameLabel = Label(text: action.name)
-        let commandLabel = Label(text: action.displayCommandString, font: .action,
+        let quasimodeLabel = Label(text: action.quasimodeDisplayString, font: .action,
                                  frameAlignment: .right)
         self.nameLabel = nameLabel
-        self.commandLabel = commandLabel
+        self.quasimodeLabel = quasimodeLabel
         let padding = Layout.basicPadding
         nameLabel.frame.origin = CGPoint(x: padding, y: padding)
-        commandLabel.frame.origin = CGPoint(x: frame.width - commandLabel.frame.width - padding,
-                                            y: padding)
+        quasimodeLabel.frame.origin = CGPoint(x: frame.width - quasimodeLabel.frame.width - padding,
+                                              y: padding)
         super.init()
         self.frame = CGRect(x: frame.minX, y: frame.minY,
                             width: frame.width, height: nameLabel.frame.height + padding * 2)
-        replace(children: [nameLabel, commandLabel])
+        replace(children: [nameLabel, quasimodeLabel])
+    }
+    
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [action]
     }
 }
 
@@ -466,7 +438,7 @@ protocol Event {
     var sendType: Action.SendType { get }
     var location: CGPoint { get }
     var time: Double { get }
-    var quasimode: Action.Quasimode { get }
+    var quasimode: Action.ModifierKeys { get }
     var key: Action.Key? { get }
     var isPen: Bool { get }
 }
@@ -477,39 +449,39 @@ extension Event {
 }
 struct BasicEvent: Event {
     let sendType: Action.SendType, location: CGPoint, time: Second
-    let quasimode: Action.Quasimode, key: Action.Key?
+    let quasimode: Action.ModifierKeys, key: Action.Key?
 }
 typealias MoveEvent = BasicEvent
 typealias TapEvent = BasicEvent
 typealias DoubleTapEvent = BasicEvent
 struct KeyInputEvent: Event {
-    let sendType: Action.SendType, location: CGPoint, time: Second
-    let quasimode: Action.Quasimode, key: Action.Key?
+    var sendType: Action.SendType, location: CGPoint, time: Second
+    var quasimode: Action.ModifierKeys, key: Action.Key?
     func with(sendType: Action.SendType) -> KeyInputEvent {
         return KeyInputEvent(sendType: sendType, location: location,
                              time: time, quasimode: quasimode, key: key)
     }
 }
 struct DragEvent: Event {
-    let sendType: Action.SendType, location: CGPoint, time: Second
-    let quasimode: Action.Quasimode, key: Action.Key?, isPen: Bool
-    let pressure: CGFloat
+    var sendType: Action.SendType, location: CGPoint, time: Second
+    var quasimode: Action.ModifierKeys, key: Action.Key?, isPen: Bool
+    var pressure: CGFloat
 }
 typealias ClickEvent = DragEvent
 typealias RightClickEvent = DragEvent
 struct ScrollEvent: Event {
-    let sendType: Action.SendType, location: CGPoint, time: Second
-    let quasimode: Action.Quasimode, key: Action.Key?
-    let scrollDeltaPoint: CGPoint, scrollMomentumType: Action.SendType?
-    let beginNormalizedPosition: CGPoint
+    var sendType: Action.SendType, location: CGPoint, time: Second
+    var quasimode: Action.ModifierKeys, key: Action.Key?
+    var scrollDeltaPoint: CGPoint, scrollMomentumType: Action.SendType?
+    var beginNormalizedPosition: CGPoint
 }
 struct PinchEvent: Event {
-    let sendType: Action.SendType, location: CGPoint, time: Second
-    let quasimode: Action.Quasimode, key: Action.Key?
-    let magnification: CGFloat
+    var sendType: Action.SendType, location: CGPoint, time: Second
+    var quasimode: Action.ModifierKeys, key: Action.Key?
+    var magnification: CGFloat
 }
 struct RotateEvent: Event {
-    let sendType: Action.SendType, location: CGPoint, time: Second
-    let quasimode: Action.Quasimode, key: Action.Key?
-    let rotation: CGFloat
+    var sendType: Action.SendType, location: CGPoint, time: Second
+    var quasimode: Action.ModifierKeys, key: Action.Key?
+    var rotation: CGFloat
 }

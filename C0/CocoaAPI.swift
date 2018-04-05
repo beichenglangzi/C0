@@ -31,8 +31,17 @@ struct Font {
     static let hedding1 = Font(boldMonospacedSize: 10)
     static let subtitle = Font(boldMonospacedSize: 20)
     
-    let name: String, size: CGFloat
-    let ascent: CGFloat, descent: CGFloat, leading: CGFloat, ctFont: CTFont
+    var name: String {
+        didSet {
+            updateWith(name: name, size: size)
+        }
+    }
+    var size: CGFloat {
+        didSet {
+            updateWith(name: name, size: size)
+        }
+    }
+    private(set) var ascent: CGFloat, descent: CGFloat, leading: CGFloat, ctFont: CTFont
     
     init(size: CGFloat) {
         self.init(NSFont.systemFont(ofSize: size))
@@ -54,12 +63,19 @@ struct Font {
         self.init(CTFontCreateWithName(name as CFString, size, nil))
     }
     init(_ ctFont: CTFont) {
-        self.name = CTFontCopyFullName(ctFont) as String
-        self.size = CTFontGetSize(ctFont)
-        self.ascent = CTFontGetAscent(ctFont)
-        self.descent = -CTFontGetDescent(ctFont)
-        self.leading = -CTFontGetLeading(ctFont)
+        name = CTFontCopyFullName(ctFont) as String
+        size = CTFontGetSize(ctFont)
+        ascent = CTFontGetAscent(ctFont)
+        descent = -CTFontGetDescent(ctFont)
+        leading = -CTFontGetLeading(ctFont)
         self.ctFont = ctFont
+    }
+    
+    private mutating func updateWith(name: String, size: CGFloat) {
+        ctFont = CTFontCreateWithName(name as CFString, size, nil)
+        ascent = CTFontGetAscent(ctFont)
+        descent = -CTFontGetDescent(ctFont)
+        leading = -CTFontGetLeading(ctFont)
     }
     
     func ceilHeight(withPadding padding: CGFloat) -> CGFloat {
@@ -67,7 +83,7 @@ struct Font {
     }
 }
 
-struct Cursor: Equatable {
+struct Cursor {
     static let arrow = Cursor(NSCursor.arrow)
     static let iBeam = Cursor(NSCursor.iBeam)
     static let leftRight = slideCursor(isVertical: false)
@@ -128,8 +144,17 @@ struct Cursor: Equatable {
         return Cursor(NSCursor(image: image, hotSpot: hotSpot))
     }
     
-    let image: CGImage, hotSpot: CGPoint
-    fileprivate let nsCursor: NSCursor
+    var image: CGImage {
+        didSet {
+            nsCursor = NSCursor(image: NSImage(cgImage: image, size: NSSize()), hotSpot: hotSpot)
+        }
+    }
+    var hotSpot: CGPoint {
+        didSet {
+            nsCursor = NSCursor(image: NSImage(cgImage: image, size: NSSize()), hotSpot: hotSpot)
+        }
+    }
+    fileprivate var nsCursor: NSCursor
     
     private init(_ nsCursor: NSCursor) {
         self.image = nsCursor.image.cgImage(forProposedRect: nil, context: nil, hints: nil)!
@@ -139,9 +164,10 @@ struct Cursor: Equatable {
     init(image: CGImage, hotSpot: CGPoint) {
         self.image = image
         self.hotSpot = hotSpot
-        self.nsCursor = NSCursor(image: NSImage(cgImage: image, size: NSSize()), hotSpot: hotSpot)
+        nsCursor = NSCursor(image: NSImage(cgImage: image, size: NSSize()), hotSpot: hotSpot)
     }
-    
+}
+extension Cursor: Equatable {
     static func ==(lhs: Cursor, rhs: Cursor) -> Bool {
         return lhs.image === rhs.image && lhs.hotSpot == rhs.hotSpot
     }
@@ -324,41 +350,50 @@ final class C0Application: NSApplication {
  - NSDocument廃止
  */
 final class C0Document: NSDocument, NSWindowDelegate {
-    static let rootDataModelKey = "root"
+    let rootDataModelKey = "root"
     var rootDataModel: DataModel {
         didSet {
-            let isWriteHandler: (DataModel, Bool) -> Void = { [unowned self] (dataModel, isWrite) in
-                if isWrite {
-                    self.updateChangeCount(.changeDone)
-                }
-            }
-            
-            if let preferenceDataModel = rootDataModel.children[C0Document.preferenceDataModelKey] {
+            if let preferenceDataModel = rootDataModel.children[preferenceDataModelKey] {
                 self.preferenceDataModel = preferenceDataModel
-                if let preference: C0Preference = preferenceDataModel.readObject() {
-                    self.preference = preference
-                }
-                preferenceDataModel.didChangeIsWriteHandler = isWriteHandler
-                preferenceDataModel.dataHandler = { [unowned self] in self.preference.jsonData }
             } else {
                 rootDataModel.insert(preferenceDataModel)
             }
         }
     }
-    static let preferenceDataModelKey = "preference"
-    var preferenceDataModel = DataModel(key: C0Document.preferenceDataModelKey)
+    let preferenceDataModelKey = "preference"
+    var preferenceDataModel: DataModel {
+        didSet {
+            if let preference: C0Preference = preferenceDataModel.readObject() {
+                self.preference = preference
+            }
+            preferenceDataModel.didChangeIsWriteHandler = { [unowned self] (_, isWrite) in
+                if isWrite {
+                    self.updateChangeCount(.changeDone)
+                }
+            }
+            preferenceDataModel.dataHandler = { [unowned self] in self.preference.jsonData }
+        }
+    }
     private var preference = C0Preference()
     
     var window: NSWindow {
         return windowControllers.first!.window!
     }
     weak var view: C0View!
+    var copyManagerView: CopyManagerView {
+        return view.desktopView.copyManagerView
+    }
     
     override init() {
-        rootDataModel = DataModel(key: C0Document.rootDataModelKey,
-                                  directoryWith: [preferenceDataModel])
-        super.init()
+        preferenceDataModel = DataModel(key: preferenceDataModelKey)
+        rootDataModel = DataModel(key: rootDataModelKey, directoryWith: [preferenceDataModel])
         
+        super.init()
+        preferenceDataModel.didChangeIsWriteHandler = { [unowned self] (_, isWrite) in
+            if isWrite {
+                self.updateChangeCount(.changeDone)
+            }
+        }
         preferenceDataModel.dataHandler = { [unowned self] in self.preference.jsonData }
     }
     convenience init(type typeName: String) throws {
@@ -379,12 +414,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
         window.acceptsMouseMovedEvents = true
         view = windowController.contentViewController!.view as! C0View
         
-        let isWriteHandler: (DataModel, Bool) -> Void = { [unowned self] (dataModel, isWrite) in
-            if isWrite {
-                self.updateChangeCount(.changeDone)
-            }
-        }
-        if let desktopDataModel = rootDataModel.children[DesktopView.dataModelKey] {
+        if let desktopDataModel = rootDataModel.children[view.desktopView.dataModelKey] {
             view.desktopView.dataModel = desktopDataModel
         } else {
             rootDataModel.insert(view.desktopView.dataModel)
@@ -400,11 +430,16 @@ final class C0Document: NSDocument, NSWindowDelegate {
         
         undoManager = view.desktopView.sceneView.undoManager
         
+        let isWriteHandler: (DataModel, Bool) -> Void = { [unowned self] (_, isWrite) in
+            if isWrite {
+                self.updateChangeCount(.changeDone)
+            }
+        }
         view.desktopView.differentialDesktopDataModel.didChangeIsWriteHandler = isWriteHandler
         view.desktopView.sceneView.differentialSceneDataModel.didChangeIsWriteHandler = isWriteHandler
         preferenceDataModel.didChangeIsWriteHandler = isWriteHandler
         
-        view.desktopView.copyManagerView.copyManager = copyManager(with: NSPasteboard.general)
+        copyManagerView.rootCopyManager.copiedObjects = NSPasteboard.general.copiedObjects
     }
     private func setupWindow(with preference: C0Preference) {
         window.setFrame(preference.windowFrame, display: false)
@@ -419,7 +454,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
         return rootDataModel.fileWrapper
     }
     override func read(from fileWrapper: FileWrapper, ofType typeName: String) throws {
-        rootDataModel = DataModel(key: C0Document.rootDataModelKey, fileWrapper: fileWrapper)
+        rootDataModel = DataModel(key: rootDataModelKey, fileWrapper: fileWrapper)
     }
     
     func windowDidResize(_ notification: Notification) {
@@ -439,17 +474,13 @@ final class C0Document: NSDocument, NSWindowDelegate {
         preferenceDataModel.isWrite = true
     }
     
-    var copyManagerView: CopyManagerView {
-        return view.desktopView.copyManagerView
-    }
-    
     var oldChangeCountWithCopyManager = 0
     var oldChangeCountWithPsteboard = NSPasteboard.general.changeCount
     func windowDidBecomeMain(_ notification: Notification) {
         let pasteboard = NSPasteboard.general
         if pasteboard.changeCount != oldChangeCountWithPsteboard {
             oldChangeCountWithPsteboard = pasteboard.changeCount
-            copyManagerView.copyManager = copyManager(with: pasteboard)
+            copyManagerView.rootCopyManager.copiedObjects = pasteboard.copiedObjects
             oldChangeCountWithCopyManager = copyManagerView.changeCount
         }
     }
@@ -457,52 +488,58 @@ final class C0Document: NSDocument, NSWindowDelegate {
         if oldChangeCountWithCopyManager != copyManagerView.changeCount {
             oldChangeCountWithCopyManager = copyManagerView.changeCount
             let pasteboard = NSPasteboard.general
-            setCopyManager(copyManagerView.copyManager, in: pasteboard)
+            pasteboard.set(copiedObjects: copyManagerView.copyManager.copiedObjects)
             oldChangeCountWithPsteboard = pasteboard.changeCount
         }
     }
-    func copyManager(with pasteboard: NSPasteboard) -> CopyManager {
-        var copyManager = CopyManager()
+    
+    func openEmoji() {
+        NSApp.orderFrontCharacterPalette(nil)
+    }
+}
+
+extension NSPasteboard {
+    var copiedObjects: [Any] {
+        var copiedObjects = [Any]()
         func append(with data: Data, type: NSPasteboard.PasteboardType) {
             if let object = C0DynamicCoder.decode(from: data, forKey: type.rawValue) {
-                copyManager.copiedObjects.append(object)
+                copiedObjects.append(object)
             }
         }
-        if let urls = pasteboard.readObjects(forClasses: [NSURL.self],
-                                             options: nil) as? [URL], !urls.isEmpty {
-            urls.forEach { copyManager.copiedObjects.append($0) }
+        if let urls = readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
+            urls.forEach { copiedObjects.append($0) }
         }
-         if let string = pasteboard.string(forType: .string) {
-            copyManager.copiedObjects.append(string)
-        } else if let types = pasteboard.types {
+        if let string = string(forType: .string) {
+            copiedObjects.append(string)
+        } else if let types = types {
             for type in types {
-                if let data = pasteboard.data(forType: type) {
+                if let data = data(forType: type) {
                     append(with: data, type: type)
-                } else if let string = pasteboard.string(forType: .string) {
-                    copyManager.copiedObjects.append(string)
+                } else if let string = string(forType: .string) {
+                    copiedObjects.append(string)
                 }
             }
-        } else if let items = pasteboard.pasteboardItems {
+        } else if let items = pasteboardItems {
             for item in items {
                 for type in item.types {
                     if let data = item.data(forType: type) {
                         append(with: data, type: type)
                     } else if let string = item.string(forType: .string) {
-                        copyManager.copiedObjects.append(string)
+                        copiedObjects.append(string)
                     }
                 }
             }
         }
-        return copyManager
+        return copiedObjects
     }
-    func setCopyManager(_ copyManager: CopyManager, in pasteboard: NSPasteboard) {
-        guard !copyManager.copiedObjects.isEmpty else {
-            pasteboard.clearContents()
+    func set(copiedObjects: [Any]) {
+        guard !copiedObjects.isEmpty else {
+            clearContents()
             return
         }
         var strings = [String]()
         var typesAndDatas = [(type: NSPasteboard.PasteboardType, data: Data)]()
-        for object in copyManager.copiedObjects {
+        for object in copiedObjects {
             if let string = object as? String {
                 strings.append(string)
             } else {
@@ -514,11 +551,11 @@ final class C0Document: NSDocument, NSWindowDelegate {
         }
         
         if strings.count == 1, let string = strings.first {
-            pasteboard.declareTypes([.string], owner: nil)
-            pasteboard.setString(string, forType: .string)
+            declareTypes([.string], owner: nil)
+            setString(string, forType: .string)
         } else if typesAndDatas.count == 1, let typeAndData = typesAndDatas.first {
-            pasteboard.declareTypes([typeAndData.type], owner: nil)
-            pasteboard.setData(typeAndData.data, forType: typeAndData.type)
+            declareTypes([typeAndData.type], owner: nil)
+            setData(typeAndData.data, forType: typeAndData.type)
         } else {
             var items = [NSPasteboardItem]()
             for string in strings {
@@ -531,24 +568,25 @@ final class C0Document: NSDocument, NSWindowDelegate {
                 item.setData(typeAndData.data, forType: typeAndData.type)
                 items.append(item)
             }
-            pasteboard.clearContents()
-            pasteboard.writeObjects(items)
+            clearContents()
+            writeObjects(items)
         }
-    }
-    
-    func openEmoji() {
-        NSApp.orderFrontCharacterPalette(nil)
     }
 }
 
 final class C0View: NSView, NSTextInputClient {
+    let sender: Sender
     let desktopView = DesktopView()
 
     override init(frame frameRect: NSRect) {
+        sender = Sender(rootView: desktopView,
+                        actionManager: desktopView.actionManagerView.actionManager)
         super.init(frame: frameRect)
         setup()
     }
     required init?(coder: NSCoder) {
+        sender = Sender(rootView: desktopView,
+                        actionManager: desktopView.actionManagerView.actionManager)
         super.init(coder: coder)
         setup()
     }
@@ -561,7 +599,7 @@ final class C0View: NSView, NSTextInputClient {
         }
 
         desktopView.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }
-        desktopView.setCursorHandler = {
+        sender.setCursorHandler = {
             if $0.cursor.nsCursor != NSCursor.current {
                 $0.cursor.nsCursor.set()
             }
@@ -637,21 +675,21 @@ final class C0View: NSView, NSTextInputClient {
 
     func quasimodeEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> MoveEvent {
         return MoveEvent(sendType: sendType, location: cursorPoint,
-                         time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil)
+                         time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil)
     }
     func moveEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> MoveEvent {
         return MoveEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                         time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil)
+                         time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil)
     }
     func dragEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> DragEvent {
         return DragEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                         time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil,
+                         time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil,
                          isPen: nsEvent.subtype == .tabletPoint,
                          pressure: nsEvent.pressure.cf)
     }
     func scrollEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> ScrollEvent {
         return ScrollEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                           time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil,
+                           time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil,
                            scrollDeltaPoint: CGPoint(x: nsEvent.scrollingDeltaX,
                                                      y: -nsEvent.scrollingDeltaY),
                            scrollMomentumType: nsEvent.scrollMomentumType,
@@ -659,30 +697,30 @@ final class C0View: NSView, NSTextInputClient {
     }
     func pinchEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> PinchEvent {
         return PinchEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                          time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil,
+                          time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil,
                           magnification: nsEvent.magnification)
     }
     func rotateEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> RotateEvent {
         return RotateEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                           time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil,
+                           time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil,
                            rotation: nsEvent.rotation.cf)
     }
     func tapEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> TapEvent {
         return TapEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                        time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil)
+                        time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil)
     }
     func doubleTapEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> DoubleTapEvent {
         return DoubleTapEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                              time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nil)
+                              time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil)
     }
     func keyInputEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> KeyInputEvent {
         return KeyInputEvent(sendType: sendType, location: cursorPoint,
-                             time: nsEvent.timestamp, quasimode: nsEvent.quasimode, key: nsEvent.key)
+                             time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nsEvent.key)
     }
 
     override func flagsChanged(with event: NSEvent) {
         let quasimode = quasimodeEventWith(!event.modifierFlags.isEmpty ? .begin : .end, event)
-        desktopView.sendEditQuasimode(with: quasimode)
+        sender.sendViewQuasimode(with: quasimode)
     }
 
     override func keyDown(with event: NSEvent) {
@@ -692,39 +730,39 @@ final class C0View: NSView, NSTextInputClient {
         keyInput(with: event, .end)
     }
     private func keyInput(with event: NSEvent, _ sendType: Action.SendType) {
-        if desktopView.sendKeyInputIsEditText(with: keyInputEventWith(sendType, event)) {
+        if sender.sendKeyInputIsEditText(with: keyInputEventWith(sendType, event)) {
             inputContext?.handleEvent(event)
         }
     }
 
     override func cursorUpdate(with event: NSEvent) {
-        desktopView.sendMoveCursor(with: moveEventWith(.sending, event))
-        if desktopView.indicatedResponder.cursor.nsCursor != NSCursor.current {
-            desktopView.indicatedResponder.cursor.nsCursor.set()
+        sender.sendMoveCursor(with: moveEventWith(.sending, event))
+        if sender.indicatedResponder.cursor.nsCursor != NSCursor.current {
+            sender.indicatedResponder.cursor.nsCursor.set()
         }
     }
     override func mouseMoved(with event: NSEvent) {
-        desktopView.sendMoveCursor(with: moveEventWith(.sending, event))
+        sender.sendMoveCursor(with: moveEventWith(.sending, event))
     }
 
     override func rightMouseDown(with nsEvent: NSEvent) {
-        desktopView.sendRightDrag(with: dragEventWith(.begin, nsEvent))
+        sender.sendRightDrag(with: dragEventWith(.begin, nsEvent))
     }
     override func rightMouseDragged(with nsEvent: NSEvent) {
-        desktopView.sendRightDrag(with: dragEventWith(.sending, nsEvent))
+        sender.sendRightDrag(with: dragEventWith(.sending, nsEvent))
     }
     override func rightMouseUp(with nsEvent: NSEvent) {
-        desktopView.sendRightDrag(with: dragEventWith(.end, nsEvent))
+        sender.sendRightDrag(with: dragEventWith(.end, nsEvent))
     }
 
     override func mouseDown(with nsEvent: NSEvent) {
-        desktopView.sendDrag(with: dragEventWith(.begin, nsEvent))
+        sender.sendDrag(with: dragEventWith(.begin, nsEvent))
     }
     override func mouseDragged(with nsEvent: NSEvent) {
-        desktopView.sendDrag(with: dragEventWith(.sending, nsEvent))
+        sender.sendDrag(with: dragEventWith(.sending, nsEvent))
     }
     override func mouseUp(with nsEvent: NSEvent) {
-        desktopView.sendDrag(with: dragEventWith(.end, nsEvent))
+        sender.sendDrag(with: dragEventWith(.end, nsEvent))
     }
 
     private var beginTouchesNormalizedPosition = CGPoint()
@@ -741,7 +779,7 @@ final class C0View: NSView, NSTextInputClient {
             let momentum = event.momentumPhase == .changed || event.momentumPhase == .ended
             let sendType: Action.SendType = event.phase == .began ?
                 .begin : (event.phase == .ended ? .end : .sending)
-            desktopView.sendScroll(with: scrollEventWith(sendType, event), momentum: momentum)
+            sender.sendScroll(with: scrollEventWith(sendType, event), momentum: momentum)
         }
     }
 
@@ -753,16 +791,16 @@ final class C0View: NSView, NSTextInputClient {
         if event.phase == .began {
             if blockGesture == .none {
                 blockGesture = .pinch
-                desktopView.sendZoom(with: pinchEventWith(.begin, event))
+                sender.sendZoom(with: pinchEventWith(.begin, event))
             }
         } else if event.phase == .ended {
             if blockGesture == .pinch {
                 blockGesture = .none
-                desktopView.sendZoom(with:pinchEventWith(.end, event))
+                sender.sendZoom(with:pinchEventWith(.end, event))
             }
         } else {
             if blockGesture == .pinch {
-                desktopView.sendZoom(with: pinchEventWith(.sending, event))
+                sender.sendZoom(with: pinchEventWith(.sending, event))
             }
         }
     }
@@ -770,29 +808,29 @@ final class C0View: NSView, NSTextInputClient {
         if event.phase == .began {
             if blockGesture == .none {
                 blockGesture = .rotate
-                desktopView.sendRotate(with: rotateEventWith(.begin, event))
+                sender.sendRotate(with: rotateEventWith(.begin, event))
             }
         } else if event.phase == .ended {
             if blockGesture == .rotate {
                 blockGesture = .none
-                desktopView.sendRotate(with: rotateEventWith(.end, event))
+                sender.sendRotate(with: rotateEventWith(.end, event))
             }
         } else {
             if blockGesture == .rotate {
-                desktopView.sendRotate(with: rotateEventWith(.sending, event))
+                sender.sendRotate(with: rotateEventWith(.sending, event))
             }
         }
     }
 
     override func quickLook(with event: NSEvent) {
-        desktopView.sendLookup(with: tapEventWith(.end, event))
+        sender.sendLookup(with: tapEventWith(.end, event))
     }
     override func smartMagnify(with event: NSEvent) {
-        desktopView.sendResetView(with: doubleTapEventWith(.end, event))
+        sender.sendResetView(with: doubleTapEventWith(.end, event))
     }
 
     var editTextView: TextView? {
-        return desktopView.editTextView
+        return sender.editTextView
     }
     func hasMarkedText() -> Bool {
         return editTextView?.hasMarkedText ?? false
@@ -937,23 +975,6 @@ extension NSImage {
 }
 
 extension NSEvent {
-    var quasimode: Action.Quasimode {
-        var quasimode: Action.Quasimode = []
-        if modifierFlags.contains(.shift) {
-            quasimode.insert(.shift)
-        }
-        if modifierFlags.contains(.command) {
-            quasimode.insert(.command)
-        }
-        if modifierFlags.contains(.control) {
-            quasimode.insert(.control)
-        }
-        if modifierFlags.contains(.option) {
-            quasimode.insert(.option)
-        }
-        return quasimode
-    }
-    
     var scrollMomentumType: Action.SendType? {
         if momentumPhase.contains(.began) {
             return .begin
@@ -964,6 +985,23 @@ extension NSEvent {
         } else {
             return nil
         }
+    }
+    
+    var modifierKeys: Action.ModifierKeys {
+        var modifierKeys: Action.ModifierKeys = []
+        if modifierFlags.contains(.shift) {
+            modifierKeys.insert(.shift)
+        }
+        if modifierFlags.contains(.command) {
+            modifierKeys.insert(.command)
+        }
+        if modifierFlags.contains(.control) {
+            modifierKeys.insert(.control)
+        }
+        if modifierFlags.contains(.option) {
+            modifierKeys.insert(.option)
+        }
+        return modifierKeys
     }
     
     var key: Action.Key? {
@@ -1075,7 +1113,7 @@ extension NSEvent {
         case 55:
             return .command
         case 56:
-            return .shiht
+            return .shift
         case 58:
             return .option
         case 59:

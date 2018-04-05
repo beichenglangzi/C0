@@ -220,11 +220,30 @@ extension Array {
     }
 }
 
+final class ArrayView<T>: View {
+    static var name: Localization {
+        return Localization(english: "Array", japanese: "配列")
+    }
+    
+    var array = [T]()
+    
+    init(children: [Layer] = [], frame: CGRect = CGRect()) {
+        super.init()
+        isClipped = true
+        self.frame = frame
+        replace(children: children)
+    }
+    
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return array
+    }
+}
+
 /**
  # Issue
  - ツリー操作が複雑
  */
-final class ArrayView: Layer, Respondable {
+final class ListArrayView: Layer, Respondable {
     static let name = Localization(english: "Array", japanese: "配列")
     
     private let labelLineLayer: PathLayer = {
@@ -351,24 +370,24 @@ final class ArrayView: Layer, Respondable {
             + treeLabels as [Layer] + labels as [Layer])
     }
     
-    var deleteHandler: ((ArrayView, KeyInputEvent) -> (Bool))?
+    var deleteHandler: ((ListArrayView, KeyInputEvent) -> (Bool))?
     func delete(with event: KeyInputEvent) -> Bool {
         return deleteHandler?(self, event) ?? false
     }
-    var copyHandler: ((ArrayView, KeyInputEvent) -> (CopyManager))?
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return copyHandler?(self, event)
+    var copiedObjectsHandler: ((ListArrayView, KeyInputEvent) -> ([Any]))?
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return copiedObjectsHandler?(self, event)
     }
-    var pasteHandler: ((ArrayView, CopyManager, KeyInputEvent) -> (Bool))?
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        return pasteHandler?(self, copyManager, event) ?? false
+    var pasteHandler: ((ListArrayView, [Any], KeyInputEvent) -> (Bool))?
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        return pasteHandler?(self, objects, event) ?? false
     }
-    var newHandler: ((ArrayView, KeyInputEvent) -> (Bool))?
+    var newHandler: ((ListArrayView, KeyInputEvent) -> (Bool))?
     func new(with event: KeyInputEvent) -> Bool {
         return newHandler?(self, event) ?? false
     }
     
-    var moveHandler: ((ArrayView, DragEvent) -> (Bool))?
+    var moveHandler: ((ListArrayView, DragEvent) -> (Bool))?
     func move(with event: DragEvent) -> Bool {
         return moveHandler?(self, event) ?? false
     }

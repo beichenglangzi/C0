@@ -760,8 +760,8 @@ final class AnimationView: Layer, Respondable {
     }
     var selectHandler: ((SelectBinding) -> ())?
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [animation.editKeyframe])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [animation.editKeyframe]
     }
     
     func delete(with event: KeyInputEvent) -> Bool {

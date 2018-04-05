@@ -60,7 +60,7 @@ final class Canvas: DrawLayer, Respondable {
         super.init()
         drawBlock = { [unowned self] in self.draw(in: $0) }
         player.endPlayHandler = { [unowned self] _ in self.isOpenedPlayer = false }
-        cellView.copyHandler = { [unowned self] _, _ in self.copyCell() }
+        cellView.copiedObjectsHandler = { [unowned self] _, _ in self.copiedCells() }
     }
     
     var cursor = Cursor.stroke
@@ -95,9 +95,9 @@ final class Canvas: DrawLayer, Respondable {
         }
     }
     
-    override var editQuasimode: EditQuasimode {
+    override var viewQuasimode: ViewQuasimode {
         didSet {
-            switch editQuasimode {
+            switch viewQuasimode {
             case .move, .stroke, .lassoErase, .select, .deselect:
                 cursor = .stroke
             default:
@@ -113,7 +113,7 @@ final class Canvas: DrawLayer, Respondable {
         } else if materialViewType == .preview {
             viewType = .changingMaterial
         } else {
-            switch editQuasimode {
+            switch viewQuasimode {
             case .stroke:
                 viewType = .edit
             case .movePoint:
@@ -455,7 +455,7 @@ final class Canvas: DrawLayer, Respondable {
         undoManager?.registerUndo(withTarget: self) { [oldTime = time] in handler($0, oldTime) }
     }
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
         let p = convertToCurrentLocal(point(from: event))
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         switch ict.type {
@@ -463,32 +463,32 @@ final class Canvas: DrawLayer, Respondable {
             let copySelectedLines = cut.editNode.editTrack.drawingItem.drawing.editLines
             if !copySelectedLines.isEmpty {
                 let drawing = Drawing(lines: copySelectedLines)
-                return CopyManager(copiedObjects: [drawing.copied])
+                return [drawing.copied]
             }
         case .indicated, .selected:
             if !ict.selectedLineIndexes.isEmpty {
                 let copySelectedLines = cut.editNode.editTrack.drawingItem.drawing.editLines
                 let drawing = Drawing(lines: copySelectedLines)
-                return CopyManager(copiedObjects: [drawing.copied])
+                return [drawing.copied]
             } else {
                 let cell = cut.editNode.rootCell.intersection(ict.cellItems.map { $0.cell },
                                                               isNewID: false)
                 let material = ict.cellItems[0].cell.material
-                return CopyManager(copiedObjects: [JoiningCell(cell), material])
+                return [JoiningCell(cell), material]
             }
         }
-        return CopyManager()
+        return []
     }
-    func copyCell() -> CopyManager? {
+    func copiedCells() -> [Cell]? {
         guard let editCell = editCell else {
             return nil
         }
         let cells = cut.editNode.selectedCells(with: editCell)
         let cell = cut.editNode.rootCell.intersection(cells, isNewID: true)
-        return CopyManager(copiedObjects: [cell.copied])
+        return [cell.copied]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let color = object as? Color {
                 return paste(color, with: event)
             } else if let material = object as? Material {

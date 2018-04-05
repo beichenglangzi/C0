@@ -101,7 +101,7 @@ final class Timeline: Layer, Respondable {
                                       frameAlignment: .right, alignment: .right)
     
     let timeRuler = Ruler()
-    let tempoView = RelativeNumberView(frame: CGRect(x: 0, y: 0,
+    let tempoView = DiscreteNumberView(frame: CGRect(x: 0, y: 0,
                                                      width: leftWidth, height: Layout.basicHeight),
                                        defaultNumber: 120, min: 1, max: 10000, unit: " bpm")
     let tempoAnimationView = AnimationView(height: defaultSumKeyTimesHeight)
@@ -113,7 +113,7 @@ final class Timeline: Layer, Respondable {
     let sumLabel = Label(text: Localization(english: "Sum:", japanese: "合計:"), font: .small)
     let sumKeyTimesView = AnimationView(height: defaultSumKeyTimesHeight)
     let sumKeyTimesBox = Box()
-    let baseTimeIntervalView = RelativeNumberView(frame: Layout.valueFrame,
+    let baseTimeIntervalView = DiscreteNumberView(frame: Layout.valueFrame,
                                                   min: 1, max: 1000, numberInterval: 1, unit: " cpb")
     
     let timeLayer: Layer = {
@@ -495,7 +495,7 @@ final class Timeline: Layer, Respondable {
         }
         cutView.pasteHandler = { [unowned self] in
             if let index = self.cutViews.index(of: $0) {
-                for object in $1.copiedObjects {
+                for object in $1 {
                     if let cut = object as? Cut {
                         self.paste(cut, at: index + 1)
                         return true
@@ -855,8 +855,8 @@ final class Timeline: Layer, Respondable {
         updateView(isCut: true, isTransform: false, isKeyframe: false)
     }
     
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let cut = object as? Cut {
                 let localX = convertToLocalX(point(from: event).x)
                 let index = cutIndex(withLocalX: localX)
@@ -960,8 +960,8 @@ final class Timeline: Layer, Respondable {
         node.editTrack.name = Localization(english: "Track 0", japanese: "トラック0").currentString
         return append(node, in: editCutView)
     }
-    func pasteFromNodesView(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func pasteFromNodesView(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let node = object as? Node {
                 return append(node, in: editCutView)
             }
@@ -1057,8 +1057,8 @@ final class Timeline: Layer, Respondable {
         set(editTrackIndex: trackIndex, oldEditTrackIndex: node.editTrackIndex,
             in: node, in: cutView, time: time)
     }
-    func pasteFromTracksView(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func pasteFromTracksView(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let track = object as? NodeTrack {
                 return append(track, in: editCutView)
             }

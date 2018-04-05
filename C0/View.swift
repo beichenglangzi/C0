@@ -61,8 +61,9 @@ extension Undoable {
 }
 
 protocol Editable {
-    func copy(with event: KeyInputEvent) -> CopyManager?
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool
+    var copyManager: CopyManager? { get }
+    func copiedObjects(with event: KeyInputEvent) -> [Any]?
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool
     func delete(with event: KeyInputEvent) -> Bool
     func new(with event: KeyInputEvent) -> Bool
     func moveCursor(with event: MoveEvent) -> Bool
@@ -72,10 +73,13 @@ protocol Editable {
     func lookUp(with event: TapEvent) -> Referenceable?
 }
 extension Editable {
-    func copy(with event: KeyInputEvent) -> CopyManager? {
+    var copyManager: CopyManager? {
         return nil
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return nil
+    }
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         return false
     }
     func delete(with event: KeyInputEvent) -> Bool {
@@ -202,7 +206,7 @@ extension PointEditable {
     }
 }
 
-enum EditQuasimode {
+enum ViewQuasimode {
     case select, deselect, move, moveZ, transform, warp, movePoint, moveVertex, stroke, lassoErase
 }
 
@@ -215,8 +219,8 @@ protocol Respondable: class, Referenceable, Undoable, Editable, Selectable,
 PointEditable, Transformable, ViewEditable, Strokable, Localizable {
     var isIndicated: Bool { get set }
     var isSubIndicated: Bool  { get set }
-    static var defaultEditQuasimode: EditQuasimode { get }
-    var editQuasimode: EditQuasimode { get set }
+    static var defaultViewQuasimode: ViewQuasimode { get }
+    var viewQuasimode: ViewQuasimode { get set }
     var cursor: Cursor { get }
     var cursorPoint: CGPoint { get }
 }
@@ -224,7 +228,7 @@ extension Respondable {
     var cursor: Cursor {
         return .arrow
     }
-    static var defaultEditQuasimode: EditQuasimode {
+    static var defaultViewQuasimode: ViewQuasimode {
         return .move
     }
     func lookUp(with event: TapEvent) -> Referenceable? {
@@ -232,8 +236,15 @@ extension Respondable {
     }
 }
 
-typealias Responder = Layer & Respondable
+typealias View = Layer & Respondable
+typealias PathView = PathLayer & Respondable
+typealias DrawView = DrawLayer & Respondable
 
-protocol ResponderExpression {
-    func responder(withBounds bounds: CGRect) -> Responder
+protocol ViewExpression {
+    func view(withBounds bounds: CGRect, isSmall: Bool) -> View
 }
+
+protocol RootRespondable: Respondable {
+    var rootCursorPoint: CGPoint { get set }
+}
+typealias RootView = Layer & RootRespondable

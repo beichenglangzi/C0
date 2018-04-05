@@ -127,14 +127,15 @@ extension Drawing: Copying {
         return Drawing(lines: lines, draftLines: draftLines, selectedLineIndexes: selectedLineIndexes)
     }
 }
-extension Drawing: ResponderExpression {
-    func responder(withBounds bounds: CGRect) -> Responder {
+extension Drawing: ViewExpression {
+    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
         let thumbnailView = DrawingBox()
         thumbnailView.drawBlock = { [unowned self, unowned thumbnailView] ctx in
             self.draw(with: thumbnailView.bounds, in: ctx)
         }
         thumbnailView.bounds = bounds
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
+                          isSmall : isSmall)
     }
     func draw(with bounds: CGRect, in ctx: CGContext) {
         let imageBounds = self.imageBounds(withLineWidth: 1)
@@ -215,11 +216,11 @@ final class DrawingView: Layer, Respondable {
     }
     var binding: ((Binding) -> ())?
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [drawing.copied])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [drawing.copied]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let drawing = object as? Drawing {
                 guard drawing != self.drawing else {
                     continue

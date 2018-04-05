@@ -19,6 +19,8 @@
 
 import Foundation
 
+typealias Version = UndoManager
+
 /**
  # Issue
  - Versionクラス
@@ -82,12 +84,14 @@ final class VersionView: Layer, Respondable {
     let nameLabel = Label(text: Localization(english: "Version", japanese: "バージョン"), font: .bold)
     let allCountLabel = Label(text: Localization("0"))
     let currentCountLabel = Label(color: .warning)
+    
     override init() {
         _ = Layout.leftAlignment([nameLabel, Padding(), allCountLabel], height: Layout.basicHeight)
         super.init()
         isClipped = true
         replace(children: [nameLabel, allCountLabel])
     }
+    
     deinit {
         removeNotification()
     }
@@ -108,6 +112,16 @@ final class VersionView: Layer, Respondable {
             updateLayout()
         }
     }
+    func updateLayout() {
+        if undoCount < allCount {
+            _ = Layout.leftAlignment([nameLabel, Padding(),
+                                      allCountLabel, Padding(), currentCountLabel],
+                                     height: frame.height)
+        } else {
+            _ = Layout.leftAlignment([nameLabel, Padding(), allCountLabel],
+                                     height: frame.height)
+        }
+    }
     func updateLabel() {
         if undoCount < allCount {
             allCountLabel.localization = Localization("\(allCount)")
@@ -122,16 +136,6 @@ final class VersionView: Layer, Respondable {
                 replace(children: [nameLabel, allCountLabel])
                 updateLayout()
             }
-        }
-    }
-    func updateLayout() {
-        if undoCount < allCount {
-            _ = Layout.leftAlignment([nameLabel, Padding(),
-                                      allCountLabel, Padding(), currentCountLabel],
-                                     height: frame.height)
-        } else {
-            _ = Layout.leftAlignment([nameLabel, Padding(), allCountLabel],
-                                     height: frame.height)
         }
     }
 }

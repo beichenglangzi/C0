@@ -646,14 +646,15 @@ extension Cell: Copying {
 extension Cell: Referenceable {
     static let name = Localization(english: "Cell", japanese: "セル")
 }
-extension Cell: ResponderExpression {
-    func responder(withBounds bounds: CGRect) -> Responder {
+extension Cell: ViewExpression {
+    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
         let thumbnailView = DrawingBox()
         thumbnailView.drawBlock = { [unowned self, unowned thumbnailView] ctx in
             self.draw(with: thumbnailView.bounds, in: ctx)
         }
         thumbnailView.bounds = bounds
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
+                          isSmall : isSmall)
     }
     func draw(with bounds: CGRect, in ctx: CGContext) {
         var imageBounds = CGRect()
@@ -698,14 +699,15 @@ final class JoiningCell: NSObject, NSCoding {
 extension JoiningCell: Referenceable {
     static let name = Localization(english: "Joining Cell", japanese: "接続セル")
 }
-extension JoiningCell: ResponderExpression {
-    func responder(withBounds bounds: CGRect) -> Responder {
+extension JoiningCell: ViewExpression {
+    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
         let thumbnailView = DrawingBox()
         thumbnailView.drawBlock = { [unowned cell, unowned thumbnailView] ctx in
             cell.draw(with: thumbnailView.bounds, in: ctx)
         }
         thumbnailView.bounds = bounds
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
+                          isSmall : isSmall)
     }
 }
 
@@ -788,12 +790,12 @@ final class CellView: Layer, Respondable {
                                              type: binding.type))
     }
     
-    var copyHandler: ((CellView, KeyInputEvent) -> CopyManager?)?
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        if let copyHandler = copyHandler {
-            return copyHandler(self, event)
+    var copiedObjectsHandler: ((CellView, KeyInputEvent) -> [Any]?)?
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        if let copiedObjectsHandler = copiedObjectsHandler {
+            return copiedObjectsHandler(self, event)
         } else {
-            return CopyManager(copiedObjects: [cell.copied])
+            return [cell.copied]
         }
     }
 }

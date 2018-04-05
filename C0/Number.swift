@@ -181,11 +181,11 @@ final class NumberView: Layer, Respondable, Slidable {
         set(number, oldNumber: self.number)
         return true
     }
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [String(number.d)])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [String(number.d)]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let string = object as? String {
                 if let number = Double(string)?.cf {
                     guard number != self.number else {
@@ -238,9 +238,9 @@ final class NumberView: Layer, Respondable, Slidable {
  # Issue
  - スクロールによる値の変更
  */
-final class RelativeNumberView: Responder, Slidable {
+final class DiscreteNumberView: View, Slidable {
     static let name = Number.name
-    static let feature = Localization(english: "Relative Slider", japanese: "離散スライダー")
+    static let feature = Localization(english: "Discrete Slider", japanese: "離散スライダー")
     
     var number: Number {
         didSet {
@@ -276,7 +276,7 @@ final class RelativeNumberView: Responder, Slidable {
     
     private var knobLineFrame = CGRect()
     private let labelPaddingX = Layout.basicPadding, knobPadding = 3.0.cf
-    private var numberX = 1.0.cf
+    private var numberX = 1.5.cf
     
     private let knob = DiscreteKnob(CGSize(width: 6, height: 4), lineWidth: 1)
     private let lineLayer: Layer = {
@@ -368,7 +368,7 @@ final class RelativeNumberView: Responder, Slidable {
     var disabledRegisterUndo = false
     
     struct Binding {
-        let view: RelativeNumberView, number: Number, oldNumber: Number, type: Action.SendType
+        let view: DiscreteNumberView, number: Number, oldNumber: Number, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
     
@@ -380,14 +380,14 @@ final class RelativeNumberView: Responder, Slidable {
         set(number, oldNumber: self.number)
         return true
     }
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [String(number.d)])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [String(number.d)]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         guard !isLocked else {
             return false
         }
-        for object in copyManager.copiedObjects {
+        for object in objects {
             if let string = object as? String {
                 if let v = Double(string)?.cf {
                     let number = v.clip(min: minNumber, max: maxNumber)
@@ -481,7 +481,7 @@ final class CircularNumberView: PathLayer, Respondable, Slidable {
     init(frame: CGRect = CGRect(),
          number: Number = 0, defaultNumber: Number = 0,
          min: Number = -.pi, max: Number = .pi, exp: Number = 1,
-         isClockwise: Bool = false, beginAngle: CGFloat = 0,
+         isClockwise: Bool = false, beginAngle: CGFloat = -.pi,
          numberInterval: CGFloat = 0, width: CGFloat = 16,
          isSmall: Bool = false) {
         
@@ -572,11 +572,11 @@ final class CircularNumberView: PathLayer, Respondable, Slidable {
         set(number, oldNumber: self.number)
         return true
     }
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [String(number.d)])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [String(number.d)]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let string = object as? String {
                 if let number = Double(string)?.cf {
                     guard number != self.number else {

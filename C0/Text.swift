@@ -40,9 +40,10 @@ extension String: Referenceable {
         return Localization(english: "String", japanese: "文字")
     }
 }
-extension String: ResponderExpression {
-    func responder(withBounds bounds: CGRect) -> Responder {
-        return Label(frame: bounds, text: Localization(self), font: .small, isSizeToFit: false)
+extension String: ViewExpression {
+    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
+        return Label(frame: bounds, text: Localization(self),
+                     font: isSmall ? .small : .default, isSizeToFit: false)
     }
 }
 
@@ -250,17 +251,17 @@ final class TextView: DrawLayer, Respondable {
         return true
     }
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
         guard let backingStore = backingStore.copy() as? NSAttributedString else {
             return nil
         }
-        return CopyManager(copiedObjects: [backingStore.string])
+        return [backingStore.string]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         guard !isLocked else {
             return false
         }
-        for object in copyManager.copiedObjects {
+        for object in objects {
             if let string = object as? String {
                 let oldText = string
                 binding?(Binding(view: self, text: oldText, oldText: oldText, type: .begin))

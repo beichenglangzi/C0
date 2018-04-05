@@ -220,11 +220,11 @@ final class EffectView: Layer, Respondable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [effect])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [effect]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let effect = object as? Effect {
                 guard effect != self.effect else {
                     continue

@@ -30,18 +30,25 @@ struct Layout {
                          in bounds: CGRect, paddingWidth: CGFloat = 0) {
         
         let w = layers.reduce(-paddingWidth) { $0 +  $1.frame.width + paddingWidth }
-        _ = layers.reduce(floor((bounds.width - w) / 2)) { x, responder in
-            responder.frame.origin.x = x
-            return x + responder.frame.width + paddingWidth
+        _ = layers.reduce(floor((bounds.width - w) / 2)) { x, layer in
+            layer.frame.origin.x = x
+            return x + layer.frame.width + paddingWidth
         }
     }
     static func leftAlignmentWidth(_ layers: [Layer], minX: CGFloat = basicPadding,
                                    paddingWidth: CGFloat = 0) -> CGFloat {
         return layers.reduce(minX) { $0 + $1.frame.width + paddingWidth } - paddingWidth
     }
-    static func leftAlignment(_ responders: [Layer], minX: CGFloat = basicPadding,
+    static func leftAlignment(_ layers: [Layer], minX: CGFloat = basicPadding,
+                              y: CGFloat = 0, paddingWidth: CGFloat = 0) {
+        _ = layers.reduce(minX) { x, layer in
+            layer.frame.origin = CGPoint(x: x, y: y)
+            return x + layer.frame.width + paddingWidth
+        }
+    }
+    static func leftAlignment(_ layers: [Layer], minX: CGFloat = basicPadding,
                               y: CGFloat = 0, height: CGFloat, paddingWidth: CGFloat = 0) -> CGSize {
-        let width = responders.reduce(minX) { x, layer in
+        let width = layers.reduce(minX) { x, layer in
             layer.frame.origin = CGPoint(x: x, y: y + round((height - layer.frame.height) / 2))
             return x + layer.frame.width + paddingWidth
         }
@@ -52,10 +59,10 @@ struct Layout {
                              minSize: inout CGSize, padding: CGFloat = Layout.basicPadding) {
         
         let width = layers.reduce(0.0.cf) { max($0, $1.defaultBounds.width) } + padding * 2
-        let height = layers.reversed().reduce(minY) { y, responder in
-            responder.frame = CGRect(x: minX, y: y,
-                                     width: width, height: responder.defaultBounds.height)
-            return y + responder.frame.height
+        let height = layers.reversed().reduce(minY) { y, layerr in
+            layerr.frame = CGRect(x: minX, y: y,
+                                  width: width, height: layerr.defaultBounds.height)
+            return y + layerr.frame.height
         }
         minSize = CGSize(width: width, height: height - minY)
     }
@@ -117,7 +124,7 @@ extension URL {
             var bookmarkDataIsStale = false
             guard let url = try URL(resolvingBookmarkData: bookmark,
                                     bookmarkDataIsStale: &bookmarkDataIsStale) else {
-                return nil
+                                        return nil
             }
             self = url
         } catch {
@@ -130,10 +137,11 @@ extension URL: Referenceable {
         return Localization("URL")
     }
 }
-extension URL: ResponderExpression {
-    func responder(withBounds bounds: CGRect) -> Responder {
-        let thumbnailView = lastPathComponent.responder(withBounds: bounds)
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
+extension URL: ViewExpression {
+    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
+        let thumbnailView = lastPathComponent.view(withBounds: bounds, isSmall: isSmall)
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
+                          isSmall : isSmall)
     }
 }
 
@@ -165,7 +173,7 @@ final class LockTimer {
         let time = interval + CFAbsoluteTimeGetCurrent()
         let timer = CFRunLoopTimerCreateWithHandler(kCFAllocatorDefault,
                                                     time, repeats ? interval : 0, 0, 0) { _ in
-            handler()
+                                                        handler()
         }
         CFRunLoopAddTimer(CFRunLoopGetCurrent(), timer, .commonModes)
         self.timer = timer
@@ -194,15 +202,19 @@ final class ObjectView: Layer, Respondable {
     
     let object: Any
     
+    var isSmall: Bool
     let nameLabel: Label, thumbnailView: Layer
-    init(object: Any, thumbnailView: Layer?, minFrame: CGRect, thumbnailWidth: CGFloat = 40.0) {
+    init(object: Any, thumbnailView: Layer?, minFrame: CGRect, thumbnailWidth: CGFloat = 40.0,
+         isSmall: Bool = false) {
         self.object = object
         if let reference = object as? Referenceable {
-            nameLabel = Label(text: type(of: reference).name, font: .bold)
+            nameLabel = Label(text: type(of: reference).name, font: isSmall ? .smallBold : .bold)
         } else {
-            nameLabel = Label(text: Localization(String(describing: type(of: object))), font: .bold)
+            nameLabel = Label(text: Localization(String(describing: type(of: object))),
+                              font: isSmall ? .smallBold : .bold)
         }
         self.thumbnailView = thumbnailView ?? Box()
+        self.isSmall = isSmall
         
         super.init()
         let width = max(minFrame.width, nameLabel.frame.width + thumbnailWidth)
@@ -224,7 +236,7 @@ final class ObjectView: Layer, Respondable {
         }
     }
     func updateLayout() {
-        let padding = Layout.basicPadding
+        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
         nameLabel.frame.origin = CGPoint(x: padding,
                                          y: bounds.height - nameLabel.frame.height - padding)
         thumbnailView.frame = CGRect(x: nameLabel.frame.maxX + padding,
@@ -232,8 +244,8 @@ final class ObjectView: Layer, Respondable {
                                      width: bounds.width - nameLabel.frame.width - padding * 3,
                                      height: bounds.height - padding * 2)
     }
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [object])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [object]
     }
 }
 
@@ -241,10 +253,10 @@ final class DiscreteSizeView: Layer, Respondable {
     static let name = CGSize.name
     
     private let wLabel = Label(text: Localization("w:"))
-    private let widthView = RelativeNumberView(frame: Layout.valueFrame,
+    private let widthView = DiscreteNumberView(frame: Layout.valueFrame,
                                                min: 1, max: 10000, numberInterval: 1)
     private let hLabel = Label(text: Localization("h:"))
-    private let heightView = RelativeNumberView(frame: Layout.valueFrame,
+    private let heightView = DiscreteNumberView(frame: Layout.valueFrame,
                                                 min: 1, max: 10000, numberInterval: 1)
     override init() {
         super.init()
@@ -277,7 +289,7 @@ final class DiscreteSizeView: Layer, Respondable {
     var disabledRegisterUndo = false
     
     private var oldSize = CGSize()
-    private func setSize(with obj: RelativeNumberView.Binding) {
+    private func setSize(with obj: DiscreteNumberView.Binding) {
         if obj.type == .begin {
             oldSize = size
             binding?(Binding(view: self, size: oldSize, oldSize: oldSize, type: .begin))
@@ -288,11 +300,11 @@ final class DiscreteSizeView: Layer, Respondable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [size])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [size]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let size = object as? CGSize {
                 guard size != self.size else {
                     continue
@@ -392,11 +404,11 @@ final class PointView: Layer, Respondable {
     
     var disabledRegisterUndo = false
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [point])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [point]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let point = object as? CGPoint {
                 guard point != self.point else {
                     continue
@@ -663,26 +675,26 @@ final class ImageView: Layer, Respondable {
 
 final class Drager {
     private var downPosition = CGPoint(), oldFrame = CGRect()
-    func drag(with event: DragEvent, _ responder: Layer, in parent: Layer) {
+    func drag(with event: DragEvent, _ layer: Layer, in parent: Layer) {
         let p = parent.point(from: event)
         switch event.sendType {
         case .begin:
             downPosition = p
-            oldFrame = responder.frame
+            oldFrame = layer.frame
         case .sending:
             let dp =  p - downPosition
-            responder.frame.origin = CGPoint(x: oldFrame.origin.x + dp.x,
-                                             y: oldFrame.origin.y + dp.y)
+            layer.frame.origin = CGPoint(x: oldFrame.origin.x + dp.x,
+                                         y: oldFrame.origin.y + dp.y)
         case .end:
             let dp =  p - downPosition
-            responder.frame.origin = CGPoint(x: round(oldFrame.origin.x + dp.x),
-                                             y: round(oldFrame.origin.y + dp.y))
+            layer.frame.origin = CGPoint(x: round(oldFrame.origin.x + dp.x),
+                                         y: round(oldFrame.origin.y + dp.y))
         }
     }
 }
 final class Scroller {
-    func scroll(with event: ScrollEvent, responder: Layer) {
-        responder.frame.origin += event.scrollDeltaPoint
+    func scroll(with event: ScrollEvent, layer: Layer) {
+        layer.frame.origin += event.scrollDeltaPoint
     }
 }
 

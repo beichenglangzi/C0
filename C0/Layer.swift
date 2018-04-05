@@ -342,11 +342,15 @@ class Layer {
         return subIndicatedParent?.undoManager ?? parent?.undoManager
     }
     
+    var copyManager: CopyManager? {
+        return subIndicatedParent?.copyManager ?? parent?.copyManager
+    }
+    
     var locale = Locale.current
     
-    var editQuasimode = EditQuasimode.move {
+    var viewQuasimode = ViewQuasimode.move {
         didSet {
-            children.forEach { $0.editQuasimode = editQuasimode }
+            children.forEach { $0.viewQuasimode = viewQuasimode }
         }
     }
 }

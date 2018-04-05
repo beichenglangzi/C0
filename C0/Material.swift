@@ -188,12 +188,13 @@ extension Material: Interpolatable {
                         lineWidth: lineWidth, opacity: opacity)
     }
 }
-extension Material: ResponderExpression {
-    func responder(withBounds bounds: CGRect) -> Responder {
+extension Material: ViewExpression {
+    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
         let thumbnailView = Box()
         thumbnailView.bounds = bounds
         thumbnailView.fillColor = color
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
+                          isSmall : isSmall)
     }
 }
 
@@ -526,11 +527,11 @@ final class MaterialView: Layer, Respondable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [material])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [material]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let material = object as? Material {
                 guard material.id != self.material.id else {
                     continue

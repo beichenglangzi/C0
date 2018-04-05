@@ -24,7 +24,7 @@ import Foundation
  - RawRepresentable利用
  - ノブの滑らかな移動
  */
-final class EnumView: Responder {
+final class EnumView: View {
     static let name = Localization(english: "Enumerated Type", japanese: "列挙型")
     static let feature = Localization(english: "Select Index: Up and down drag",
                                       japanese: "インデックスを選択: 上下ドラッグ")
@@ -102,11 +102,11 @@ final class EnumView: Responder {
         set(index: index, oldIndex: oldIndex)
         return true
     }
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [String(selectedIndex)])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [String(selectedIndex)]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let string = object as? String, let index = Int(string) {
                 let oldIndex = selectedIndex
                 guard index != oldIndex else {
@@ -231,7 +231,7 @@ final class EnumView: Responder {
     }
 }
 
-final class Menu: Responder {
+final class Menu: View {
     static let name = Localization(english: "Menu", japanese: "メニュー")
     
     var selectedIndex = 0 {

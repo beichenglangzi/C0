@@ -281,20 +281,16 @@ final class SceneView: Layer, Respondable {
         }
     }
     
-    static let dataModelKey = "scene"
+    let dataModelKey = "scene"
     var dataModel: DataModel {
         didSet {
-            if let dSceneDataModel = dataModel.children[SceneView.differentialSceneDataModelKey] {
+            if let dSceneDataModel = dataModel.children[differentialSceneDataModelKey] {
                 self.differentialSceneDataModel = dSceneDataModel
-                if let scene: Scene = dSceneDataModel.readObject() {
-                    self.scene = scene
-                }
-                dSceneDataModel.dataHandler = { [unowned self] in self.scene.differentialData }
             } else {
                 dataModel.insert(differentialSceneDataModel)
             }
             
-            if let dCutTrackDataModel = dataModel.children[CutTrack.differentialDataModelKey] {
+            if let dCutTrackDataModel = dataModel.children[scene.cutTrack.differentialDataModelKey] {
                 scene.cutTrack.differentialDataModel = dCutTrackDataModel
                 canvas.cut = scene.editCut
             } else {
@@ -306,8 +302,15 @@ final class SceneView: Layer, Respondable {
             updateWithScene()
         }
     }
-    static let differentialSceneDataModelKey = "differentialScene"
-    var differentialSceneDataModel = DataModel(key: differentialSceneDataModelKey)
+    let differentialSceneDataModelKey = "differentialScene"
+    var differentialSceneDataModel: DataModel {
+        didSet {
+            if let scene: Scene = differentialSceneDataModel.readObject() {
+                self.scene = scene
+            }
+            differentialSceneDataModel.dataHandler = { [unowned self] in self.scene.differentialData }
+        }
+    }
     
     static let colorSpaceWidth = 82.0.cf
     static let colorSpaceFrame = CGRect(x: 0, y: Layout.basicPadding,
@@ -327,7 +330,7 @@ final class SceneView: Layer, Respondable {
     
     let rendererManager = RendererManager()
     let sizeView = DiscreteSizeView()
-    let frameRateView = RelativeNumberView(frame: Layout.valueFrame,
+    let frameRateView = DiscreteNumberView(frame: Layout.valueFrame,
                                            min: 1, max: 1000, numberInterval: 1, unit: " fps")
     let colorSpaceView = EnumView(frame: SceneView.colorSpaceFrame,
                                   names: [Localization("sRGB"), Localization("Display P3")])
@@ -365,7 +368,8 @@ final class SceneView: Layer, Respondable {
                                                             japanese: "マテリアルを分割"), isSmall: true)
     
     override init() {
-        dataModel = DataModel(key: SceneView.dataModelKey,
+        differentialSceneDataModel = DataModel(key: differentialSceneDataModelKey)
+        dataModel = DataModel(key: dataModelKey,
                               directoryWith: [differentialSceneDataModel,
                                               scene.cutTrack.differentialDataModel])
         timeline.sceneDataModel = differentialSceneDataModel
@@ -1683,8 +1687,8 @@ final class SceneMaterialManager {
         }
     }
     
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let material = object as? Material {
                 paste(material, withSelected: self.material, useSelected: false)
                 return true

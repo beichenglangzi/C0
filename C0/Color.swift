@@ -103,18 +103,45 @@ struct Color: Codable {
     static let subtitleBorder = Color(white: 0)
     static let subtitleFill = white
     
-    let hue: Double, saturation: Double, lightness: Double, alpha: Double, colorSpace: ColorSpace
-    let rgb: RGB, id: UUID
+    var hue: Double {
+        didSet {
+            rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
+            id = UUID()
+        }
+    }
+    var saturation: Double {
+        didSet {
+            rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
+            id = UUID()
+        }
+    }
+    var lightness: Double {
+        didSet {
+            rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
+            id = UUID()
+        }
+    }
+    var alpha: Double {
+        didSet {
+            id = UUID()
+        }
+    }
+    var colorSpace: ColorSpace {
+        didSet {
+            id = UUID()
+        }
+    }
+    private(set) var rgb: RGB, id: UUID
     
     init(hue: Double = 0, saturation: Double = 0, lightness: Double = 0,
          alpha: Double = 1, colorSpace: ColorSpace = .sRGB) {
         self.hue = hue
         self.saturation = saturation
         self.lightness = lightness
-        self.rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
+        rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
         self.alpha = alpha
         self.colorSpace = colorSpace
-        self.id = UUID()
+        id = UUID()
     }
     init(hue: Double, saturation: Double, brightness: Double,
          alpha: Double = 1, colorSpace: ColorSpace = .sRGB) {
@@ -134,26 +161,11 @@ struct Color: Codable {
         self.init(hue: 0, saturation: 0, lightness: white, alpha: alpha, colorSpace: colorSpace)
     }
     init(hsv: HSV, rgb: RGB, alpha: Double, colorSpace: ColorSpace = .sRGB) {
-        let h = hsv.h, s = hsv.s, v = hsv.v
-        let y = Color.y(withHue: h), saturation: Double, lightness: Double
-        let n = s * (1 - y) + y
-        let nb = n == 0 ? 0 : y * v / n
-        if nb < y {
-            saturation = s
-            lightness = nb
-        } else {
-            let n = 1 - y
-            let nb = n == 0 ? 1 : (v - y) / n - s
-            lightness = n * nb + y
-            saturation = nb == 1 ? 0 : s / (1 - nb)
-        }
-        self.hue =  h
-        self.saturation = saturation
-        self.lightness = lightness
+        (hue, saturation, lightness) = Color.hsl(with: hsv)
         self.rgb = rgb
         self.alpha = alpha
         self.colorSpace = colorSpace
-        self.id = UUID()
+        id = UUID()
     }
     
     static func random(colorSpace: ColorSpace = .sRGB) -> Color {
@@ -190,6 +202,19 @@ struct Color: Codable {
         return Color.linear(self, Color.white, t: white.cf)
     }
     
+    private static func hsl(with hsv: HSV) -> (h: Double, s: Double, l: Double) {
+        let h = hsv.h, s = hsv.s, v = hsv.v
+        let y = Color.y(withHue: h)
+        let n = s * (1 - y) + y
+        let nb = n == 0 ? 0 : y * v / n
+        if nb < y {
+            return (h, s, nb)
+        } else {
+            let n = 1 - y
+            let nb = n == 0 ? 1 : (v - y) / n - s
+            return (h, nb == 1 ? 0 : s / (1 - nb), n * nb + y)
+        }
+    }
     private static func hsvWithHSL(h: Double, s: Double, l: Double) -> HSV {
         let y = Color.y(withHue: h)
         if y < l {
@@ -439,12 +464,13 @@ extension Color {
         return CGColor.with(rgb: rgb, alpha: alpha, colorSpace: CGColorSpace.with(colorSpace))
     }
 }
-extension Color: ResponderExpression {
-    func responder(withBounds bounds: CGRect) -> Responder {
+extension Color: ViewExpression {
+    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
         let thumbnailView = Box()
         thumbnailView.bounds = bounds
         thumbnailView.fillColor = self
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
+                          isSmall : isSmall)
     }
 }
 extension CGColor {
@@ -627,8 +653,7 @@ final class ColorView: Layer, Respondable {
          hLineWidth: CGFloat = 2.5, hWidth: CGFloat = 16.0.cf, slPadding: CGFloat? = nil,
          isSmall: Bool = false) {
         
-        hView = CircularNumberView(number: 0, defaultNumber: 0,
-                                   min: 0, max: 1, width: hWidth)
+        hView = CircularNumberView(width: hWidth)
         
         if let slPadding = slPadding {
             slView.padding = slPadding
@@ -694,7 +719,7 @@ final class ColorView: Layer, Respondable {
         slColorLayer.gradient?.colors = [Color(hue: color.hue, saturation: 0, brightness: y),
                                          Color(hue: color.hue, saturation: 1, brightness: 1)]
         slBlackWhiteLayer.gradient?.locations = [0, y, y, 1]
-        hView.number = color.hue.cf
+        hView.number = hCircle.angle(withHue: color.hue).cf
         slView.point = CGPoint(x: color.saturation, y: color.lightness)
     }
     private func updateWithColorSpace() {
@@ -714,11 +739,11 @@ final class ColorView: Layer, Respondable {
     
     var disabledRegisterUndo = false
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [color])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [color]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let color = object as? Color {
                 let oldColor = self.color
                 guard color != oldColor else {
@@ -766,7 +791,7 @@ final class ColorView: Layer, Respondable {
             setColorHandler?(Binding(colorView: self,
                                      color: oldColor, oldColor: oldColor, type: .begin))
         } else {
-            color = color.with(hue: obj.number.d)
+            color = color.with(hue: hCircle.hue(withAngle: obj.number.d))
             setColorHandler?(Binding(colorView: self,
                                      color: color, oldColor: oldColor, type: obj.type))
         }

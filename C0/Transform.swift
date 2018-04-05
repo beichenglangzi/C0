@@ -22,33 +22,68 @@ import Foundation
 struct Transform: Codable {
     static let name = Localization(english: "Transform", japanese: "トランスフォーム")
     
-    let translation: CGPoint, scale: CGPoint, rotation: CGFloat
-    let z: CGFloat, affineTransform: CGAffineTransform
+    var translation: CGPoint {
+        didSet {
+            affineTransform = Transform.affineTransform(translation: translation,
+                                                        scale: scale, rotation: rotation)
+        }
+    }
+    var scale: CGPoint {
+        get {
+            return _scale
+        }
+        set {
+            _scale = newValue
+            _z = log2(newValue.x)
+            affineTransform = Transform.affineTransform(translation: translation,
+                                                        scale: scale, rotation: rotation)
+        }
+    }
+    var z: CGFloat {
+        get {
+            return _z
+        }
+        set {
+            _z = newValue
+            let pow2 = pow(2, z)
+            _scale = CGPoint(x: pow2, y: pow2)
+            affineTransform = Transform.affineTransform(translation: translation,
+                                                        scale: scale, rotation: rotation)
+        }
+    }
+    var _scale: CGPoint, _z: CGFloat
+    var rotation: CGFloat {
+        didSet {
+            affineTransform = Transform.affineTransform(translation: translation,
+                                                        scale: scale, rotation: rotation)
+        }
+    }
+    private(set) var affineTransform: CGAffineTransform
     
     init(translation: CGPoint = CGPoint(), z: CGFloat = 0, rotation: CGFloat = 0) {
         let pow2 = pow(2, z)
         self.translation = translation
-        self.scale = CGPoint(x: pow2, y: pow2)
-        self.z = z
+        _scale = CGPoint(x: pow2, y: pow2)
+        _z = z
         self.rotation = rotation
-        self.affineTransform = Transform.affineTransform(translation: translation,
-                                                         scale: scale, rotation: rotation)
+        affineTransform = Transform.affineTransform(translation: translation,
+                                                    scale: _scale, rotation: rotation)
     }
     init(translation: CGPoint = CGPoint(), scale: CGPoint, rotation: CGFloat = 0) {
         self.translation = translation
-        self.z = log2(scale.x)
-        self.scale = scale
+        _z = log2(scale.x)
+        _scale = scale
         self.rotation = rotation
-        self.affineTransform = Transform.affineTransform(translation: translation,
-                                                         scale: scale, rotation: rotation)
+        affineTransform = Transform.affineTransform(translation: translation,
+                                                    scale: scale, rotation: rotation)
     }
-    init(translation: CGPoint, z: CGFloat, scale: CGPoint, rotation: CGFloat) {
+    private init(translation: CGPoint, z: CGFloat, scale: CGPoint, rotation: CGFloat) {
         self.translation = translation
-        self.z = z
-        self.scale = scale
+        _z = z
+        _scale = scale
         self.rotation = rotation
-        self.affineTransform = Transform.affineTransform(translation: translation,
-                                                         scale: scale, rotation: rotation)
+        affineTransform = Transform.affineTransform(translation: translation,
+                                                    scale: scale, rotation: rotation)
     }
     
     private static func affineTransform(translation: CGPoint,
@@ -74,12 +109,10 @@ struct Transform: Codable {
                          scale: CGPoint(x: scale, y: scale), rotation: rotation)
     }
     func with(scale: CGPoint) -> Transform {
-        return Transform(translation: translation,
-                         scale: scale, rotation: rotation)
+        return Transform(translation: translation, scale: scale, rotation: rotation)
     }
     func with(rotation: CGFloat) -> Transform {
-        return Transform(translation: translation,
-                         z: z, scale: scale, rotation: rotation)
+        return Transform(translation: translation, z: z, scale: scale, rotation: rotation)
     }
     
     var isIdentity: Bool {
@@ -153,13 +186,13 @@ final class TransformView: Layer, Respondable {
     private let yLabel = Label(text: Localization("y:"))
     private let zLabel = Label(text: Localization("z:"))
     private let thetaLabel = Label(text: Localization("θ:"))
-    private let xView = RelativeNumberView(frame: Layout.valueFrame,
+    private let xView = DiscreteNumberView(frame: Layout.valueFrame,
                                            min: -10000, max: 10000, numberInterval: 0.01)
-    private let yView = RelativeNumberView(frame: Layout.valueFrame,
+    private let yView = DiscreteNumberView(frame: Layout.valueFrame,
                                            min: -10000, max: 10000, numberInterval: 0.01)
-    private let zView = RelativeNumberView(frame: Layout.valueFrame,
+    private let zView = DiscreteNumberView(frame: Layout.valueFrame,
                                            min: -20, max: 20, numberInterval: 0.01)
-    private let thetaView = RelativeNumberView(frame: Layout.valueFrame,
+    private let thetaView = DiscreteNumberView(frame: Layout.valueFrame,
                                                min: -10000, max: 10000, numberInterval: 0.5, unit: "°")
     
     override init() {
@@ -251,7 +284,7 @@ final class TransformView: Layer, Respondable {
     var binding: ((Binding) -> ())?
     
     private var oldTransform = Transform()
-    private func setTransform(with obj: RelativeNumberView.Binding) {
+    private func setTransform(with obj: DiscreteNumberView.Binding) {
         if obj.type == .begin {
             oldTransform = transform
             binding?(Binding(transformView: self,
@@ -276,14 +309,14 @@ final class TransformView: Layer, Respondable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [transform])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [transform]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         guard !isLocked else {
             return false
         }
-        for object in copyManager.copiedObjects {
+        for object in objects {
             if let transform = object as? Transform {
                 guard transform != self.transform else {
                     continue
@@ -386,13 +419,13 @@ final class WiggleView: Layer, Respondable {
     
     private let nameLabel = Label(text: Wiggle.name, font: .bold)
     private let xLabel = Label(text: Localization("x:"))
-    private let xView = RelativeNumberView(frame: Layout.valueFrame,
+    private let xView = DiscreteNumberView(frame: Layout.valueFrame,
                                            min: 0, max: 1000, numberInterval: 0.01)
     private let yLabel = Label(text: Localization("y:"))
-    private let yView = RelativeNumberView(frame: Layout.valueFrame,
+    private let yView = DiscreteNumberView(frame: Layout.valueFrame,
                                            min: 0, max: 1000, numberInterval: 0.01)
     private let frequencyLabel = Label(text: Localization("ƒ:"))
-    private let frequencyView = RelativeNumberView(frame: Layout.valueFrame,
+    private let frequencyView = DiscreteNumberView(frame: Layout.valueFrame,
                                                    min: 0.1, max: 100000,
                                                    numberInterval: 0.1, unit: " rpb")
     override init() {
@@ -480,7 +513,7 @@ final class WiggleView: Layer, Respondable {
     var binding: ((Binding) -> ())?
     
     private var oldWiggle = Wiggle()
-    private func setWiggle(with obj: RelativeNumberView.Binding) {
+    private func setWiggle(with obj: DiscreteNumberView.Binding) {
         if obj.type == .begin {
             oldWiggle = wiggle
             binding?(Binding(wiggleView: self,
@@ -503,22 +536,23 @@ final class WiggleView: Layer, Respondable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [wiggle])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [wiggle]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         guard !isLocked else {
-            return
+            return false
         }
-        for object in copyManager.copiedObjects {
+        for object in objects {
             if let wiggle = object as? Wiggle {
                 guard wiggle != self.wiggle else {
                     continue
                 }
                 set(wiggle, oldWiggle: self.wiggle)
-                return
+                return true
             }
         }
+        return false
     }
     func delete(with event: KeyInputEvent) -> Bool {
         guard !isLocked else {

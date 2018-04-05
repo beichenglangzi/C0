@@ -220,10 +220,11 @@ extension RationalNumber: Codable {
 extension RationalNumber: Referenceable {
     static let name = Localization(english: "Rational Number", japanese: "有理数")
 }
-extension RationalNumber: ResponderExpression {
-    func responder(withBounds bounds: CGRect) -> Responder {
-        let thumbnailView = description.responder(withBounds: bounds)
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
+extension RationalNumber: ViewExpression {
+    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
+        let thumbnailView = description.view(withBounds: bounds, isSmall: isSmall)
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
+                          isSmall : isSmall)
     }
 }
 extension RationalNumber: CustomStringConvertible {
@@ -1035,7 +1036,7 @@ struct Monospline {
 }
 
 struct RotatedRect: Codable {
-    let centerPoint: CGPoint, size: CGSize, angle: CGFloat
+    var centerPoint: CGPoint, size: CGSize, angle: CGFloat
     init(convexHullPoints chps: [CGPoint]) {
         guard !chps.isEmpty else {
             fatalError()

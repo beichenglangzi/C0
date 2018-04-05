@@ -347,14 +347,14 @@ final class SoundView: Layer, Respondable {
         set(Sound(), old: self.sound)
         return true
     }
-    func copy(with event: KeyInputEvent) -> CopyManager? {
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
         guard let url = sound.url else {
-            return CopyManager(copiedObjects: [sound])
+            return [sound]
         }
-        return CopyManager(copiedObjects: [sound, url])
+        return [sound, url]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let url = object as? URL, url.isConforms(uti: kUTTypeAudio as String) {
                 var sound = Sound()
                 sound.url = url

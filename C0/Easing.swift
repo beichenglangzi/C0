@@ -72,14 +72,15 @@ extension Easing: Equatable {
 extension Easing: Referenceable {
     static let name = Localization(english: "Easing", japanese: "イージング")
 }
-extension Easing: ResponderExpression {
-    func responder(withBounds bounds: CGRect) -> Responder {
+extension Easing: ViewExpression {
+    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
         let thumbnailView = DrawingBox()
         thumbnailView.drawBlock = { [unowned thumbnailView] ctx in
             self.draw(with: thumbnailView.bounds, in: ctx)
         }
         thumbnailView.bounds = bounds
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds)
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
+                          isSmall : isSmall)
     }
     func draw(with bounds: CGRect, in ctx: CGContext) {
         let path = self.path(in: bounds.inset(by: 5))
@@ -213,11 +214,11 @@ final class EasingView: Layer, Respondable {
         }
     }
     
-    func copy(with event: KeyInputEvent) -> CopyManager? {
-        return CopyManager(copiedObjects: [easing])
+    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+        return [easing]
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        for object in copyManager.copiedObjects {
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
             if let easing = object as? Easing {
                 guard easing != self.easing else {
                     continue
