@@ -66,11 +66,11 @@ protocol Editable {
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool
     func delete(with event: KeyInputEvent) -> Bool
     func new(with event: KeyInputEvent) -> Bool
-    func moveCursor(with event: MoveEvent) -> Bool
+    func moveCursor(with event: MoveCursorEvent) -> Bool
     func keyInput(with event: KeyInputEvent) -> Bool
     func run(with event: ClickEvent) -> Bool
-    func bind(with event: RightClickEvent) -> Bool
-    func lookUp(with event: TapEvent) -> Referenceable?
+    func bind(with event: SubClickEvent) -> Bool
+    func lookUp(with event: TapEvent) -> Reference?
 }
 extension Editable {
     var copyManager: CopyManager? {
@@ -88,7 +88,7 @@ extension Editable {
     func new(with event: KeyInputEvent) -> Bool {
         return false
     }
-    func moveCursor(with event: MoveEvent) -> Bool {
+    func moveCursor(with event: MoveCursorEvent) -> Bool {
         return false
     }
     func keyInput(with event: KeyInputEvent) -> Bool {
@@ -97,10 +97,10 @@ extension Editable {
     func run(with event: ClickEvent) -> Bool {
         return false
     }
-    func bind(with event: RightClickEvent) -> Bool {
+    func bind(with event: SubClickEvent) -> Bool {
         return false
     }
-    func lookUp(with event: TapEvent) -> Referenceable? {
+    func lookUp(with event: TapEvent) -> Reference? {
         return nil
     }
 }
@@ -171,16 +171,12 @@ extension ViewEditable {
 protocol Strokable {
     func stroke(with event: DragEvent) -> Bool
     func lassoErase(with event: DragEvent) -> Bool
-    func moveInStrokable(with event: DragEvent) -> Bool
 }
 extension Strokable {
     func stroke(with event: DragEvent) -> Bool {
         return false
     }
     func lassoErase(with event: DragEvent) -> Bool {
-        return false
-    }
-    func moveInStrokable(with event: DragEvent) -> Bool {
         return false
     }
 }
@@ -215,14 +211,14 @@ enum ViewQuasimode {
  - コピー・ペーストなどのアクション対応を拡大
  - Eventを使用しないアクション設計
  */
-protocol Respondable: class, Referenceable, Undoable, Editable, Selectable,
+protocol Respondable: class, Undoable, Editable, Selectable,
 PointEditable, Transformable, ViewEditable, Strokable, Localizable {
+    var cursor: Cursor { get }
+    var cursorPoint: CGPoint { get }
     var isIndicated: Bool { get set }
     var isSubIndicated: Bool  { get set }
     static var defaultViewQuasimode: ViewQuasimode { get }
     var viewQuasimode: ViewQuasimode { get set }
-    var cursor: Cursor { get }
-    var cursorPoint: CGPoint { get }
 }
 extension Respondable {
     var cursor: Cursor {
@@ -231,20 +227,17 @@ extension Respondable {
     static var defaultViewQuasimode: ViewQuasimode {
         return .move
     }
-    func lookUp(with event: TapEvent) -> Referenceable? {
-        return self
-    }
-}
-
-typealias View = Layer & Respondable
-typealias PathView = PathLayer & Respondable
-typealias DrawView = DrawLayer & Respondable
-
-protocol ViewExpression {
-    func view(withBounds bounds: CGRect, isSmall: Bool) -> View
 }
 
 protocol RootRespondable: Respondable {
     var rootCursorPoint: CGPoint { get set }
 }
+
+typealias View = Layer & Respondable
+typealias PathView = PathLayer & Respondable
+typealias DrawView = DrawLayer & Respondable
 typealias RootView = Layer & RootRespondable
+
+protocol ViewExpression {
+    func view(withBounds bounds: CGRect, isSmall: Bool) -> View
+}

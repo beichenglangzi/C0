@@ -52,17 +52,14 @@ extension String: ViewExpression {
  - モードレス文字入力
  */
 typealias Label = TextView
-final class TextView: DrawLayer, Respondable {
-    static let name = Localization(english: "Text", japanese: "テキスト")
-    static let feature = Localization(english: "Run (Verb sentence only): Click",
-                                      japanese: "実行 (動詞文のみ): クリック")
-    
-    var isSizeToFit = false
+final class TextView: DrawView {
     var localization: Localization {
         didSet {
             string = localization.currentString
         }
     }
+    
+    var isSizeToFit = false
     
     var backingStore = NSMutableAttributedString() {
         didSet {
@@ -147,13 +144,12 @@ final class TextView: DrawLayer, Respondable {
         } else {
             self.frame = frame
         }
-        bounds = CGRect(origin: CGPoint(x: -padding, y: -padding), size: self.frame.size)
         noIndicatedLineColor = Color(white: 0.85)
         indicatedLineColor = .noBorderIndicated
     }
     
-    func word(for point: CGPoint) -> String {
-        let characterIndex = self.characterIndex(for: point)
+    func word(for p: CGPoint) -> String {
+        let characterIndex = self.characterIndex(for: p)
         var range = NSRange()
         if characterIndex >= selectedRange.location
             && characterIndex < NSMaxRange(selectedRange) {
@@ -174,15 +170,18 @@ final class TextView: DrawLayer, Respondable {
         }
         return backingStore.attributedSubstring(from: range).string
     }
+    func textDefinition(for p: CGPoint) -> String? {
+        let string = self.string as CFString
+        let characterIndex = self.characterIndex(for: p)
+        let range = DCSGetTermRangeInString(nil, string, characterIndex)
+        return DCSCopyTextDefinition(nil, string, range)?.takeRetainedValue() as String?
+    }
     
     func updateTextFrame() {
         textFrame.attributedString = backingStore
     }
     func draw(in ctx: CGContext) {
-        ctx.saveGState()
-        ctx.translateBy(x: padding, y: padding + baselineDelta)
-        textFrame.draw(in: bounds, in: ctx)
-        ctx.restoreGState()
+        textFrame.draw(in: bounds.inset(by: padding), baseFont: baseFont, in: ctx)
     }
     
     override var locale: Locale {
@@ -201,18 +200,19 @@ final class TextView: DrawLayer, Respondable {
             guard bounds.size != oldValue.size else {
                 return
             }
-            let oldFrame = frame
             if textFrame.frameWidth != nil {
                 textFrame.frameWidth = Double(frame.width - padding * 2)
-            }
-            if frameAlignment == .right {
-                frame.origin.x = oldFrame.maxX - bounds.width
             }
         }
     }
     
     func sizeToFit() {
-        frame = CGRect(origin: frame.origin, size: fitSize)
+        let size = fitSize
+        let y = frame.maxY - size.height
+        let origin = frameAlignment == .right ?
+            CGPoint(x: frame.maxX - size.width, y: y) :
+            CGPoint(x: frame.origin.x, y: y)
+        frame = CGRect(origin: origin, size: size)
     }
     var fitSize: CGSize {
         let w = textFrame.frameWidth?.cf ?? ceil(textFrame.pathBounds.width)
@@ -274,7 +274,7 @@ final class TextView: DrawLayer, Respondable {
         return true
     }
     
-    func moveCursor(with event: MoveEvent) -> Bool {
+    func moveCursor(with event: MoveCursorEvent) -> Bool {
         selectedRange = NSRange(location: editCharacterIndex(for: point(from: event)), length: 0)
         return true
     }
@@ -478,6 +478,15 @@ final class TextView: DrawLayer, Respondable {
     func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> CGRect {
         return textFrame.typographicBounds(for: range)
     }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        let p = convert(event.location, from: nil)
+        let textDefinition = Localization(self.textDefinition(for: p) ?? "")
+        return Reference(name: Localization(english: "Text", japanese: "テキスト"),
+                         instanceDescription: textDefinition,
+                         viewDescription: Localization(english: "Run (Verb sentence only): Click",
+                                                       japanese: "実行 (動詞文のみ): クリック"))
+    }
 }
 
 struct TextFrame {
@@ -649,9 +658,13 @@ struct TextFrame {
         return 0.0
     }
     
-    func draw(in bounds: CGRect, in ctx: CGContext) {
+    func draw(in bounds: CGRect, baseFont: Font, in ctx: CGContext) {
+        guard let firstLine = lines.first else {
+            return
+        }
         ctx.saveGState()
-        ctx.translateBy(x: bounds.origin.x, y: bounds.origin.y)
+        let height = firstLine.origin.y + baseFont.ascent
+        ctx.translateBy(x: bounds.origin.x, y: bounds.maxY - height)
         lines.forEach { $0.draw(in: ctx) }
         ctx.restoreGState()
     }

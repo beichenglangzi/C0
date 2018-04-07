@@ -173,6 +173,17 @@ extension Cursor: Equatable {
     }
 }
 
+extension NSImage {
+    convenience init(size: CGSize, handler: (CGContext) -> Void) {
+        self.init(size: size)
+        lockFocus()
+        if let ctx = NSGraphicsContext.current?.cgContext {
+            handler(ctx)
+        }
+        unlockFocus()
+    }
+}
+
 struct TextInputContext {
     private static var currentContext: NSTextInputContext? {
         return NSTextInputContext.current
@@ -439,7 +450,8 @@ final class C0Document: NSDocument, NSWindowDelegate {
         view.desktopView.sceneView.differentialSceneDataModel.didChangeIsWriteHandler = isWriteHandler
         preferenceDataModel.didChangeIsWriteHandler = isWriteHandler
         
-        copyManagerView.rootCopyManager.copiedObjects = NSPasteboard.general.copiedObjects
+        copyManagerView.rootCopyManager
+            = CopyManager(copiedObjects: NSPasteboard.general.copiedObjects)
     }
     private func setupWindow(with preference: C0Preference) {
         window.setFrame(preference.windowFrame, display: false)
@@ -480,7 +492,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
         let pasteboard = NSPasteboard.general
         if pasteboard.changeCount != oldChangeCountWithPsteboard {
             oldChangeCountWithPsteboard = pasteboard.changeCount
-            copyManagerView.rootCopyManager.copiedObjects = pasteboard.copiedObjects
+            copyManagerView.rootCopyManager.push(copiedObjects: pasteboard.copiedObjects)
             oldChangeCountWithCopyManager = copyManagerView.changeCount
         }
     }
@@ -577,7 +589,9 @@ extension NSPasteboard {
 final class C0View: NSView, NSTextInputClient {
     let sender: Sender
     let desktopView = DesktopView()
-
+    
+    private let isHiddenActionsKey = "isHiddenActionsKey"
+    
     override init(frame frameRect: NSRect) {
         sender = Sender(rootView: desktopView,
                         actionManager: desktopView.actionManagerView.actionManager)
@@ -598,6 +612,12 @@ final class C0View: NSView, NSTextInputClient {
             return
         }
 
+        desktopView.actionManagerView.isHiddenActions =
+            UserDefaults.standard.bool(forKey: isHiddenActionsKey)
+        desktopView.isHiddenActionsBinding = { [unowned self] in
+            UserDefaults.standard.set($0, forKey: self.isHiddenActionsKey)
+        }
+        
         desktopView.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }
         sender.setCursorHandler = {
             if $0.cursor.nsCursor != NSCursor.current {
@@ -673,23 +693,23 @@ final class C0View: NSView, NSTextInputClient {
         return convertFromLayer(window.convertToScreen(convert(r, to: nil)))
     }
 
-    func quasimodeEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> MoveEvent {
-        return MoveEvent(sendType: sendType, location: cursorPoint,
-                         time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil)
+    func viewQuasimodeEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> MoveCursorEvent {
+        return MoveCursorEvent(sendType: sendType, location: cursorPoint,
+                               time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil)
     }
-    func moveEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> MoveEvent {
-        return MoveEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                         time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil)
+    func moveEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> MoveCursorEvent {
+        return MoveCursorEvent(sendType: sendType, location: screenPoint(with: nsEvent),
+                               time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil)
     }
     func dragEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> DragEvent {
         return DragEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                         time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil,
+                         time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil,
                          isPen: nsEvent.subtype == .tabletPoint,
                          pressure: nsEvent.pressure.cf)
     }
     func scrollEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> ScrollEvent {
         return ScrollEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                           time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil,
+                           time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil,
                            scrollDeltaPoint: CGPoint(x: nsEvent.scrollingDeltaX,
                                                      y: -nsEvent.scrollingDeltaY),
                            scrollMomentumType: nsEvent.scrollMomentumType,
@@ -697,30 +717,31 @@ final class C0View: NSView, NSTextInputClient {
     }
     func pinchEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> PinchEvent {
         return PinchEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                          time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil,
+                          time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil,
                           magnification: nsEvent.magnification)
     }
     func rotateEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> RotateEvent {
         return RotateEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                           time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil,
+                           time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil,
                            rotation: nsEvent.rotation.cf)
     }
     func tapEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> TapEvent {
         return TapEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                        time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil)
+                        time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil)
     }
     func doubleTapEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> DoubleTapEvent {
         return DoubleTapEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                              time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nil)
+                              time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil)
     }
     func keyInputEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> KeyInputEvent {
         return KeyInputEvent(sendType: sendType, location: cursorPoint,
-                             time: nsEvent.timestamp, quasimode: nsEvent.modifierKeys, key: nsEvent.key)
+                             time: nsEvent.timestamp,
+                             modifierKeys: nsEvent.modifierKeys, key: nsEvent.key)
     }
 
     override func flagsChanged(with event: NSEvent) {
-        let quasimode = quasimodeEventWith(!event.modifierFlags.isEmpty ? .begin : .end, event)
-        sender.sendViewQuasimode(with: quasimode)
+        let viewQuasimode = viewQuasimodeEventWith(!event.modifierFlags.isEmpty ? .begin : .end, event)
+        sender.sendViewQuasimode(with: viewQuasimode)
     }
 
     override func keyDown(with event: NSEvent) {
@@ -746,13 +767,13 @@ final class C0View: NSView, NSTextInputClient {
     }
 
     override func rightMouseDown(with nsEvent: NSEvent) {
-        sender.sendRightDrag(with: dragEventWith(.begin, nsEvent))
+        sender.sendSubDrag(with: dragEventWith(.begin, nsEvent))
     }
     override func rightMouseDragged(with nsEvent: NSEvent) {
-        sender.sendRightDrag(with: dragEventWith(.sending, nsEvent))
+        sender.sendSubDrag(with: dragEventWith(.sending, nsEvent))
     }
     override func rightMouseUp(with nsEvent: NSEvent) {
-        sender.sendRightDrag(with: dragEventWith(.end, nsEvent))
+        sender.sendSubDrag(with: dragEventWith(.end, nsEvent))
     }
 
     override func mouseDown(with nsEvent: NSEvent) {
@@ -791,16 +812,16 @@ final class C0View: NSView, NSTextInputClient {
         if event.phase == .began {
             if blockGesture == .none {
                 blockGesture = .pinch
-                sender.sendZoom(with: pinchEventWith(.begin, event))
+                sender.sendPinch(with: pinchEventWith(.begin, event))
             }
         } else if event.phase == .ended {
             if blockGesture == .pinch {
                 blockGesture = .none
-                sender.sendZoom(with:pinchEventWith(.end, event))
+                sender.sendPinch(with:pinchEventWith(.end, event))
             }
         } else {
             if blockGesture == .pinch {
-                sender.sendZoom(with: pinchEventWith(.sending, event))
+                sender.sendPinch(with: pinchEventWith(.sending, event))
             }
         }
     }
@@ -823,10 +844,10 @@ final class C0View: NSView, NSTextInputClient {
     }
 
     override func quickLook(with event: NSEvent) {
-        sender.sendLookup(with: tapEventWith(.end, event))
+        sender.sendTap(with: tapEventWith(.end, event))
     }
     override func smartMagnify(with event: NSEvent) {
-        sender.sendResetView(with: doubleTapEventWith(.end, event))
+        sender.sendDoubleTap(with: doubleTapEventWith(.end, event))
     }
 
     var editTextView: TextView? {
@@ -915,65 +936,6 @@ final class C0View: NSView, NSTextInputClient {
     }
 }
 
-extension NSImage {
-    convenience init(size: CGSize, handler: (CGContext) -> Void) {
-        self.init(size: size)
-        lockFocus()
-        if let ctx = NSGraphicsContext.current?.cgContext {
-            handler(ctx)
-        }
-        unlockFocus()
-    }
-    
-    final var bitmapSize: CGSize {
-        if let tiffRepresentation = tiffRepresentation {
-            if let bitmap = NSBitmapImageRep(data: tiffRepresentation) {
-                return CGSize(width: bitmap.pixelsWide, height: bitmap.pixelsHigh)
-            }
-        }
-        return CGSize()
-    }
-    
-    final var PNGRepresentation: Data? {
-        if let tiffRepresentation = tiffRepresentation,
-            let bitmap = NSBitmapImageRep(data: tiffRepresentation) {
-            
-            return bitmap.representation(using: .png, properties: [.interlaced: false])
-        } else {
-            return nil
-        }
-    }
-    
-    static func exportAppIcon() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.begin { [unowned panel] result in
-            guard result.rawValue == NSFileHandlingPanelOKButton, let url = panel.url else {
-                return
-            }
-            for width in [16.0.cf, 32.0.cf, 64.0.cf, 128.0.cf, 256.0.cf, 512.0.cf, 1024.0.cf] {
-                let size = CGSize(width: width, height: width)
-                let image = NSImage(size: size, flipped: false) { rect -> Bool in
-                    let ctx = NSGraphicsContext.current!.cgContext
-                    let c = width * 0.5, r = width * 0.43, l = width * 0.008, fs = width * 0.45
-                    ctx.setFillColor(Color.white.cgColor)
-                    ctx.setStrokeColor(Color.locked.cgColor)
-                    ctx.setLineWidth(l)
-                    ctx.addEllipse(in: CGRect(x: c - r, y: c - r, width: r * 2, height: r * 2))
-                    ctx.drawPath(using: .fillStroke)
-                    let textFrame = TextFrame(string: "C0",
-                                              font: Font(name: "Avenir Next Regular", size: fs),
-                                              color: .locked)
-                    textFrame.drawWithCenterOfImageBounds(in: rect, in: ctx)
-                    return true
-                }
-                try? image.PNGRepresentation?
-                    .write(to: url.appendingPathComponent("\(String(Int(width))).png"))
-            }
-        }
-    }
-}
-
 extension NSEvent {
     var scrollMomentumType: Action.SendType? {
         if momentumPhase.contains(.began) {
@@ -987,8 +949,8 @@ extension NSEvent {
         }
     }
     
-    var modifierKeys: Action.ModifierKeys {
-        var modifierKeys: Action.ModifierKeys = []
+    var modifierKeys: Quasimode.ModifierKeys {
+        var modifierKeys: Quasimode.ModifierKeys = []
         if modifierFlags.contains(.shift) {
             modifierKeys.insert(.shift)
         }
@@ -1004,7 +966,7 @@ extension NSEvent {
         return modifierKeys
     }
     
-    var key: Action.Key? {
+    var key: Quasimode.Key? {
         switch keyCode {
         case 0:
             return .a

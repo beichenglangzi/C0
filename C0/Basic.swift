@@ -59,10 +59,10 @@ struct Layout {
                              minSize: inout CGSize, padding: CGFloat = Layout.basicPadding) {
         
         let width = layers.reduce(0.0.cf) { max($0, $1.defaultBounds.width) } + padding * 2
-        let height = layers.reversed().reduce(minY) { y, layerr in
-            layerr.frame = CGRect(x: minX, y: y,
-                                  width: width, height: layerr.defaultBounds.height)
-            return y + layerr.frame.height
+        let height = layers.reversed().reduce(minY) { y, layer in
+            layer.frame = CGRect(x: minX, y: y,
+                                  width: width, height: layer.defaultBounds.height)
+            return y + layer.frame.height
         }
         minSize = CGSize(width: width, height: height - minY)
     }
@@ -89,7 +89,7 @@ struct Layout {
         }
     }
 }
-final class Padding: Layer, Respondable {
+final class Padding: View {
     static let name = Localization(english: "Padding", japanese: "パディング")
     override init() {
         super.init()
@@ -194,7 +194,7 @@ final class Weak<T: AnyObject> {
     }
 }
 
-final class ObjectView: Layer, Respondable {
+final class ObjectView: View {
     static let name = Localization(english: "Object", japanese: "オブジェクト")
     var instanceDescription: Localization {
         return (object as? Referenceable)?.instanceDescription ?? Localization()
@@ -203,24 +203,24 @@ final class ObjectView: Layer, Respondable {
     let object: Any
     
     var isSmall: Bool
-    let nameLabel: Label, thumbnailView: Layer
+    let classNameLabel: Label, thumbnailView: Layer
     init(object: Any, thumbnailView: Layer?, minFrame: CGRect, thumbnailWidth: CGFloat = 40.0,
          isSmall: Bool = false) {
         self.object = object
         if let reference = object as? Referenceable {
-            nameLabel = Label(text: type(of: reference).name, font: isSmall ? .smallBold : .bold)
+            classNameLabel = Label(text: type(of: reference).name, font: isSmall ? .smallBold : .bold)
         } else {
-            nameLabel = Label(text: Localization(String(describing: type(of: object))),
-                              font: isSmall ? .smallBold : .bold)
+            classNameLabel = Label(text: Localization(String(describing: type(of: object))),
+                                   font: isSmall ? .smallBold : .bold)
         }
         self.thumbnailView = thumbnailView ?? Box()
         self.isSmall = isSmall
         
         super.init()
-        let width = max(minFrame.width, nameLabel.frame.width + thumbnailWidth)
+        let width = max(minFrame.width, classNameLabel.frame.width + thumbnailWidth)
         self.frame = CGRect(origin: minFrame.origin,
                             size: CGSize(width: width, height: minFrame.height))
-        replace(children: [nameLabel, self.thumbnailView])
+        replace(children: [classNameLabel, self.thumbnailView])
         updateLayout()
     }
     
@@ -237,11 +237,11 @@ final class ObjectView: Layer, Respondable {
     }
     func updateLayout() {
         let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
-        nameLabel.frame.origin = CGPoint(x: padding,
-                                         y: bounds.height - nameLabel.frame.height - padding)
-        thumbnailView.frame = CGRect(x: nameLabel.frame.maxX + padding,
+        classNameLabel.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameLabel.frame.height - padding)
+        thumbnailView.frame = CGRect(x: classNameLabel.frame.maxX + padding,
                                      y: padding,
-                                     width: bounds.width - nameLabel.frame.width - padding * 3,
+                                     width: bounds.width - classNameLabel.frame.width - padding * 3,
                                      height: bounds.height - padding * 2)
     }
     func copiedObjects(with event: KeyInputEvent) -> [Any]? {
@@ -249,228 +249,10 @@ final class ObjectView: Layer, Respondable {
     }
 }
 
-final class DiscreteSizeView: Layer, Respondable {
-    static let name = CGSize.name
-    
-    private let wLabel = Label(text: Localization("w:"))
-    private let widthView = DiscreteNumberView(frame: Layout.valueFrame,
-                                               min: 1, max: 10000, numberInterval: 1)
-    private let hLabel = Label(text: Localization("h:"))
-    private let heightView = DiscreteNumberView(frame: Layout.valueFrame,
-                                                min: 1, max: 10000, numberInterval: 1)
-    override init() {
-        super.init()
-        let size = Layout.leftAlignment([wLabel, widthView, Padding(), hLabel, heightView],
-                                        height: Layout.basicHeight + Layout.basicPadding * 2)
-        frame.size = CGSize(width: size.width + Layout.basicPadding, height: size.height)
-        replace(children: [wLabel, widthView, hLabel, heightView])
-        
-        widthView.binding = { [unowned self] in self.setSize(with: $0) }
-        heightView.binding = { [unowned self] in self.setSize(with: $0) }
-    }
-    
-    var size = CGSize() {
-        didSet {
-            if size != oldValue {
-                widthView.number = size.width
-                heightView.number = size.height
-            }
-        }
-    }
-    
-    var defaultSize = CGSize()
-    
-    struct Binding {
-        let view: DiscreteSizeView
-        let size: CGSize, oldSize: CGSize, type: Action.SendType
-    }
-    var binding: ((Binding) -> ())?
-    
-    var disabledRegisterUndo = false
-    
-    private var oldSize = CGSize()
-    private func setSize(with obj: DiscreteNumberView.Binding) {
-        if obj.type == .begin {
-            oldSize = size
-            binding?(Binding(view: self, size: oldSize, oldSize: oldSize, type: .begin))
-        } else {
-            size = obj.view == widthView ?
-                size.with(width: obj.number) : size.with(height: obj.number)
-            binding?(Binding(view: self, size: size, oldSize: oldSize, type: obj.type))
-        }
-    }
-    
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
-        return [size]
-    }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        for object in objects {
-            if let size = object as? CGSize {
-                guard size != self.size else {
-                    continue
-                }
-                set(size, oldSize: self.size)
-                return true
-            }
-        }
-        return false
-    }
-    func delete(with event: KeyInputEvent) -> Bool {
-        let size = defaultSize
-        guard size != self.size else {
-            return false
-        }
-        set(size, oldSize: self.size)
-        return true
-    }
-    
-    func set(_ size: CGSize, oldSize: CGSize) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldSize, oldSize: size) }
-        binding?(Binding(view: self, size: size, oldSize: oldSize, type: .begin))
-        self.size = size
-        binding?(Binding(view: self, size: size, oldSize: oldSize, type: .end))
-    }
-}
-
-final class PointView: Layer, Respondable {
-    static let name = CGPoint.name
-    
-    var backgroundLayers = [Layer]() {
-        didSet {
-            replace(children: backgroundLayers + [knob])
-        }
-    }
-    
-    let knob = Knob()
-    init(frame: CGRect = CGRect()) {
-        super.init()
-        self.frame = frame
-        append(child: knob)
-    }
-    
-    override var bounds: CGRect {
-        didSet {
-            knob.position = position(from: point)
-        }
-    }
-    
-    var isOutOfBounds = false {
-        didSet {
-            if isOutOfBounds != oldValue {
-                knob.fillColor = isOutOfBounds ? .warning : .knob
-            }
-        }
-    }
-    var padding = 5.0.cf
-    
-    var defaultPoint = CGPoint()
-    var pointAABB = AABB(minX: 0, maxX: 1, minY: 0, maxY: 1) {
-        didSet {
-            guard pointAABB.maxX - pointAABB.minX > 0 && pointAABB.maxY - pointAABB.minY > 0 else {
-                fatalError("Division by zero")
-            }
-        }
-    }
-    var point = CGPoint() {
-        didSet {
-            isOutOfBounds = !pointAABB.contains(point)
-            if point != oldValue {
-                knob.position = isOutOfBounds ?
-                    position(from: clippedPoint(with: point)) : position(from: point)
-            }
-        }
-    }
-    
-    func clippedPoint(with point: CGPoint) -> CGPoint {
-        return pointAABB.clippedPoint(with: point)
-    }
-    func point(withPosition position: CGPoint) -> CGPoint {
-        let inB = bounds.inset(by: padding)
-        let x = pointAABB.width * (position.x - inB.origin.x) / inB.width + pointAABB.minX
-        let y = pointAABB.height * (position.y - inB.origin.y) / inB.height + pointAABB.minY
-        return CGPoint(x: x, y: y)
-    }
-    func position(from point: CGPoint) -> CGPoint {
-        let inB = bounds.inset(by: padding)
-        let x = inB.width * (point.x - pointAABB.minX) / pointAABB.width + inB.origin.x
-        let y = inB.height * (point.y - pointAABB.minY) / pointAABB.height + inB.origin.y
-        return CGPoint(x: x, y: y)
-    }
-    
-    struct Binding {
-        let view: PointView, point: CGPoint, oldPoint: CGPoint, type: Action.SendType
-    }
-    var binding: ((Binding) -> ())?
-    
-    var disabledRegisterUndo = false
-    
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
-        return [point]
-    }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        for object in objects {
-            if let point = object as? CGPoint {
-                guard point != self.point else {
-                    continue
-                }
-                set(point, oldPoint: self.point)
-                return true
-            }
-        }
-        return false
-    }
-    func delete(with event: KeyInputEvent) -> Bool {
-        let point = defaultPoint
-        guard point != self.point else {
-            return false
-        }
-        set(point, oldPoint: self.point)
-        return true
-    }
-    
-    private var oldPoint = CGPoint()
-    func move(with event: DragEvent) -> Bool {
-        let p = self.point(from: event)
-        switch event.sendType {
-        case .begin:
-            knob.fillColor = .editing
-            oldPoint = point
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .begin))
-            point = clippedPoint(with: self.point(withPosition: p))
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .sending))
-        case .sending:
-            point = clippedPoint(with: self.point(withPosition: p))
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .sending))
-        case .end:
-            point = clippedPoint(with: self.point(withPosition: p))
-            if point != oldPoint {
-                registeringUndoManager?.registerUndo(withTarget: self) { [point, oldPoint] in
-                    $0.set(oldPoint, oldPoint: point)
-                }
-            }
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .end))
-            knob.fillColor = .knob
-        }
-        return true
-    }
-    
-    func set(_ point: CGPoint, oldPoint: CGPoint) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldPoint, oldPoint: point) }
-        binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .begin))
-        self.point = point
-        binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .end))
-    }
-}
-
-final class Progress: Layer, Respondable {
-    static let name = Localization(english: "Progress", japanese: "進捗")
-    static let feature = Localization(english: "Stop: Send \"Cut\" action",
-                                      japanese: "停止: \"カット\"アクションを送信")
-    
+final class Progress: View {
     let barLayer = Layer()
     let barBackgroundLayer = Layer()
-    
-    let label: Label
+    let nameLabel: Label
     
     init(frame: CGRect = CGRect(), backgroundColor: Color = .background,
          name: String = "", type: String = "", state: Localization? = nil) {
@@ -478,9 +260,9 @@ final class Progress: Layer, Respondable {
         self.name = name
         self.type = type
         self.state = state
-        label = Label()
-        label.frame.origin = CGPoint(x: Layout.basicPadding,
-                                     y: round((frame.height - label.frame.height) / 2))
+        nameLabel = Label()
+        nameLabel.frame.origin = CGPoint(x: Layout.basicPadding,
+                                         y: round((frame.height - nameLabel.frame.height) / 2))
         barLayer.frame = CGRect(x: 0, y: 0, width: 0, height: frame.height)
         barBackgroundLayer.fillColor = .editing
         barLayer.fillColor = .content
@@ -488,7 +270,7 @@ final class Progress: Layer, Respondable {
         super.init()
         self.frame = frame
         isClipped = true
-        replace(children: [label, barBackgroundLayer, barLayer])
+        replace(children: [nameLabel, barBackgroundLayer, barLayer])
         updateLayout()
     }
     
@@ -530,6 +312,11 @@ final class Progress: Layer, Respondable {
         }
     }
     
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
     func updateLayout() {
         let padding = Layout.basicPadding
         barBackgroundLayer.frame = CGRect(x: padding, y: padding - 1,
@@ -556,10 +343,10 @@ final class Progress: Layer, Respondable {
                                                                String(minutes), String(seconds))
             }
         }
-        label.string = type + "(" + name + "), "
+        nameLabel.string = type + "(" + name + "), "
             + string + (string.isEmpty ? "" : ", ") + "\(Int(value * 100)) %"
-        label.frame.origin = CGPoint(x: Layout.basicPadding,
-                                     y: round((frame.height - label.frame.height) / 2))
+        nameLabel.frame.origin = CGPoint(x: Layout.basicPadding,
+                                         y: round((frame.height - nameLabel.frame.height) / 2))
     }
     
     var deleteHandler: ((Progress) -> (Bool))?
@@ -570,106 +357,11 @@ final class Progress: Layer, Respondable {
         }
         return deleteHandler?(self) ?? false
     }
-}
-
-extension CGImage {
-    var size: CGSize {
-        return CGSize(width: width, height: height)
-    }
-}
-extension CGImage: Referenceable {
-    static let name = Localization(english: "Image", japanese: "画像")
-}
-
-final class ImageView: Layer, Respondable {
-    static let name = CGImage.name
     
-    init(image: CGImage? = nil) {
-        super.init()
-        self.image = image
-    }
-    init(url: URL?) {
-        super.init()
-        self.url = url
-        if let url = url {
-            self.image = ImageView.image(with: url)
-        }
-    }
-    
-    var url: URL? {
-        didSet {
-            if let url = url {
-                self.image = ImageView.image(with: url)
-            }
-        }
-    }
-    static func image(with url: URL) -> CGImage? {
-        guard
-            let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-            let image = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
-                return nil
-        }
-        return image
-    }
-    func delete(with event: KeyInputEvent) -> Bool {
-        removeFromParent()
-        return true
-    }
-    enum DragType {
-        case move, resizeMinXMinY, resizeMaxXMinY, resizeMinXMaxY, resizeMaxXMaxY
-    }
-    var dragType = DragType.move, downPosition = CGPoint(), oldFrame = CGRect()
-    var resizeWidth = 10.0.cf, ratio = 1.0.cf
-    func move(with event: DragEvent) -> Bool {
-        guard let parent = parent else {
-            return false
-        }
-        let p = parent.point(from: event), ip = point(from: event)
-        switch event.sendType {
-        case .begin:
-            if CGRect(x: 0, y: 0, width: resizeWidth, height: resizeWidth).contains(ip) {
-                dragType = .resizeMinXMinY
-            } else if CGRect(x:  bounds.width - resizeWidth, y: 0,
-                             width: resizeWidth, height: resizeWidth).contains(ip) {
-                dragType = .resizeMaxXMinY
-            } else if CGRect(x: 0, y: bounds.height - resizeWidth,
-                             width: resizeWidth, height: resizeWidth).contains(ip) {
-                dragType = .resizeMinXMaxY
-            } else if CGRect(x: bounds.width - resizeWidth, y: bounds.height - resizeWidth,
-                             width: resizeWidth, height: resizeWidth).contains(ip) {
-                dragType = .resizeMaxXMaxY
-            } else {
-                dragType = .move
-            }
-            downPosition = p
-            oldFrame = frame
-            ratio = frame.height / frame.width
-        case .sending, .end:
-            let dp =  p - downPosition
-            var frame = self.frame
-            switch dragType {
-            case .move:
-                frame.origin = CGPoint(x: oldFrame.origin.x + dp.x, y: oldFrame.origin.y + dp.y)
-            case .resizeMinXMinY:
-                frame.origin.x = oldFrame.origin.x + dp.x
-                frame.origin.y = oldFrame.origin.y + dp.y
-                frame.size.width = oldFrame.width - dp.x
-                frame.size.height = frame.size.width * ratio
-            case .resizeMaxXMinY:
-                frame.origin.y = oldFrame.origin.y + dp.y
-                frame.size.width = oldFrame.width + dp.x
-                frame.size.height = frame.size.width * ratio
-            case .resizeMinXMaxY:
-                frame.origin.x = oldFrame.origin.x + dp.x
-                frame.size.width = oldFrame.width - dp.x
-                frame.size.height = frame.size.width * ratio
-            case .resizeMaxXMaxY:
-                frame.size.width = oldFrame.width + dp.x
-                frame.size.height = frame.size.width * ratio
-            }
-            self.frame = event.sendType == .end ? frame.integral : frame
-        }
-        return true
+    func lookUp(with event: TapEvent) -> Reference? {
+        return Reference(name: Localization(english: "Progress", japanese: "進捗"),
+                         viewDescription: Localization(english: "Stop: Send \"Cut\" action",
+                                                       japanese: "停止: \"カット\"アクションを送信"))
     }
 }
 

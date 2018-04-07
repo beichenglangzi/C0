@@ -25,9 +25,7 @@ import Foundation
  - スクロール後の元の位置までの距離を表示
  - sceneを取り除く
  */
-final class Canvas: DrawLayer, Respondable {
-    static let name = Localization(english: "Canvas", japanese: "キャンバス")
-    
+final class Canvas: DrawView {
     let player = Player()
     
     var scene = Scene() {
@@ -340,21 +338,21 @@ final class Canvas: DrawLayer, Respondable {
             setTimeHandler?(self, newValue)
         }
     }
-    var isShownPrevious: Bool {
+    var isHiddenPrevious: Bool {
         get {
-            return scene.isShownPrevious
+            return scene.isHiddenPrevious
         }
         set {
-            scene.isShownPrevious = newValue
+            scene.isHiddenPrevious = newValue
             updateWithScene()
         }
     }
-    var isShownNext: Bool {
+    var isHiddenNext: Bool {
         get {
-            return scene.isShownNext
+            return scene.isHiddenNext
         }
         set {
-            scene.isShownNext = newValue
+            scene.isHiddenNext = newValue
             updateWithScene()
         }
     }
@@ -1080,24 +1078,24 @@ final class Canvas: DrawLayer, Respondable {
         let seletionCells = cut.editNode.indicatedCellsTuple(with: convertToCurrentLocal(point),
                                                              reciprocalScale: scene.reciprocalScale)
         for cellItem in seletionCells.cellItems {
-            if !cellItem.cell.isTranslucentLock {
-                setIsTranslucentLock(true, in: cellItem.cell, time: time)
+            if !cellItem.cell.isLocked {
+                setIsLocked(true, in: cellItem.cell, time: time)
             }
         }
     }
     func unlockAllCells() {
         cut.editNode.rootCell.allCells { cell, stop in
-            if cell.isTranslucentLock {
-                setIsTranslucentLock(false, in: cell, time: time)
+            if cell.isLocked {
+                setIsLocked(false, in: cell, time: time)
             }
         }
     }
-    func setIsTranslucentLock(_ isTranslucentLock: Bool, in cell: Cell, time: Beat) {
-        registerUndo { [oldIsTranslucentLock = cell.isTranslucentLock] in
-            $0.setIsTranslucentLock(oldIsTranslucentLock, in: cell, time: $1)
+    func setIsLocked(_ isLocked: Bool, in cell: Cell, time: Beat) {
+        registerUndo { [oldIsLocked = cell.isLocked] in
+            $0.setIsLocked(oldIsLocked, in: cell, time: $1)
         }
         self.time = time
-        cell.isTranslucentLock = isTranslucentLock
+        cell.isLocked = isLocked
         sceneDataModel?.isWrite = true
         setNeedsDisplay()
         if cell == cellView.cell {
@@ -1261,7 +1259,7 @@ final class Canvas: DrawLayer, Respondable {
         set(newLines, old: drawing.lines, in: drawing, inNode, time: time)
     }
     
-    func moveCursor(with event: MoveEvent) -> Bool {
+    func moveCursor(with event: MoveCursorEvent) -> Bool {
         updateEditView(with: convertToCurrentLocal(point(from: event)))
         return true
     }
@@ -1289,7 +1287,7 @@ final class Canvas: DrawLayer, Respondable {
     }
     
     let materialView = MaterialView(), cellView = CellView(isSmall: true)
-    func bind(with event: RightClickEvent) -> Bool {
+    func bind(with event: SubClickEvent) -> Bool {
         let p = convertToCurrentLocal(point(from: event))
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         if let cell = ict.cellItems.first?.cell {
@@ -2710,13 +2708,16 @@ final class Canvas: DrawLayer, Respondable {
         self.viewTransform = viewTransform.with(translation: translation)
     }
     
-    func lookUp(with event: TapEvent) -> Referenceable? {
+    func lookUp(with event: TapEvent) -> Reference? {
         let ict = cut.editNode.indicatedCellsTuple(with: convertToCurrentLocal(point(from: event)),
                                                    reciprocalScale: scene.reciprocalScale)
         if let cellItem = ict.cellItems.first {
-            return cellItem.cell
+            return cellItem.cell.reference
         } else {
-            return self
+            return reference
         }
     }
+}
+extension Canvas: Referenceable {
+    static let name = Localization(english: "Canvas", japanese: "キャンバス")
 }

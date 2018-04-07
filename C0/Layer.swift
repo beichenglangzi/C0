@@ -337,7 +337,7 @@ class Layer {
             return CGPoint()
         }
     }
-    
+     
     var undoManager: UndoManager? {
         return subIndicatedParent?.undoManager ?? parent?.undoManager
     }
@@ -690,16 +690,18 @@ extension CGContext {
         }
     }
     func drawBlur(withBlurRadius blurRadius: CGFloat, to ctx: CGContext) {
-        if let image = makeImage() {
-            let ciImage = CIImage(cgImage: image)
-            let cictx = CIContext(cgContext: ctx, options: nil)
-            let filter = CIFilter(name: "CIGaussianBlur")
-            filter?.setValue(ciImage, forKey: kCIInputImageKey)
-            filter?.setValue(Float(blurRadius), forKey: kCIInputRadiusKey)
-            if let outputImage = filter?.outputImage {
-                cictx.draw(outputImage,
-                           in: ctx.boundingBoxOfClipPath, from: CGRect(origin: CGPoint(), size: image.size))
-            }
+        guard let image = makeImage() else {
+            return
+        }
+        let ciImage = CIImage(cgImage: image)
+        let cictx = CIContext(cgContext: ctx, options: nil)
+        let filter = CIFilter(name: "CIGaussianBlur")
+        filter?.setValue(ciImage, forKey: kCIInputImageKey)
+        filter?.setValue(Float(blurRadius), forKey: kCIInputRadiusKey)
+        if let outputImage = filter?.outputImage {
+            cictx.draw(outputImage,
+                       in: ctx.boundingBoxOfClipPath,
+                       from: CGRect(origin: CGPoint(), size: image.size))
         }
     }
 }

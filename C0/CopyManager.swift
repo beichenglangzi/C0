@@ -60,7 +60,8 @@ protocol Copiable {
     var copied: Self { get }
 }
 final class CopyManager {
-    var copiedObjects: [Any] {
+    var version = Version()
+    private(set) var copiedObjects: [Any] {
         didSet {
             copiedObjectsBinding?(copiedObjects)
         }
@@ -70,15 +71,24 @@ final class CopyManager {
     init(copiedObjects: [Any] = []) {
         self.copiedObjects = copiedObjects
     }
+    
+    func push(copiedObjects: [Any]) {
+        push(copiedObjects: copiedObjects, oldCopiedObjects: self.copiedObjects)
+    }
+    private func push(copiedObjects: [Any], oldCopiedObjects: [Any]) {
+        version.registerUndo(withTarget: self) {
+            $0.push(copiedObjects: oldCopiedObjects, oldCopiedObjects: copiedObjects)
+        }
+        self.copiedObjects = copiedObjects
+    }
 }
 extension CopyManager: Referenceable {
     static let name = Localization(english: "Copy Manager", japanese: "コピー管理")
 }
-final class CopyManagerView: Layer, Respondable {
-    static let name = CopyManager.name
-    
+final class CopyManagerView: View {
     var rootCopyManager = CopyManager() {
         didSet {
+            versionView.version = copyManager.version
             rootCopyManager.copiedObjectsBinding = { [unowned self] in self.didSet(copiedObjects: $0) }
             updateCopiedObjectsView()
         }
@@ -94,18 +104,18 @@ final class CopyManagerView: Layer, Respondable {
     
     var objectViewWidth = 80.0.cf, versionWidth = 120.0.cf
     
-    let nameLabel = Label(text: CopyManager.name, font: .bold)
+    let classNameLabel = Label(text: CopyManager.name, font: .bold)
     let versionView = VersionView()
     let copiedLabel = Label(text: Localization(english: "Copied:", japanese: "コピー済み:"))
     let copiedObjectsView = ArrayView<Any>()
     
     override init() {
         versionView.frame = CGRect(x: 0, y: 0, width: versionWidth, height: Layout.basicHeight)
-        versionView.rootUndoManager = rootUndoManager
+        versionView.version = rootCopyManager.version
         
         super.init()
         rootCopyManager.copiedObjectsBinding = { [unowned self] in self.didSet(copiedObjects: $0) }
-        replace(children: [nameLabel, versionView, copiedLabel, copiedObjectsView])
+        replace(children: [classNameLabel, versionView, copiedLabel, copiedObjectsView])
     }
     
     override var locale: Locale {
@@ -121,10 +131,10 @@ final class CopyManagerView: Layer, Respondable {
     }
     func updateLayout() {
         let padding = Layout.basicPadding
-        nameLabel.frame.origin = CGPoint(x: padding,
-                                         y: bounds.height - nameLabel.frame.height - padding)
+        classNameLabel.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameLabel.frame.height - padding)
         _ = Layout.leftAlignment([versionView, Padding(), copiedLabel],
-                                 minX: nameLabel.frame.maxX + padding,
+                                 minX: classNameLabel.frame.maxX + padding,
                                  height: frame.height)
         let cow = bounds.width - copiedLabel.frame.maxX - padding
         copiedObjectsView.frame = CGRect(x: copiedLabel.frame.maxX, y: padding,
@@ -148,9 +158,8 @@ final class CopyManagerView: Layer, Respondable {
         _ = Layout.leftAlignment(copiedObjectsView.children, minX: padding, y: padding)
     }
     
-    var rootUndoManager = UndoManager()
     override var undoManager: UndoManager? {
-        return rootUndoManager
+        return copyManager.version
     }
     
     func copiedObjects(with event: KeyInputEvent) -> [Any]? {
@@ -160,17 +169,15 @@ final class CopyManagerView: Layer, Respondable {
         guard !copyManager.copiedObjects.isEmpty else {
             return false
         }
-        set(CopyManager(), old: copyManager)
+        copyManager.push(copiedObjects: [])
         return true
     }
-    func paste(_ copyManager: CopyManager, with event: KeyInputEvent) -> Bool {
-        set(copyManager, old: self.copyManager)
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        copyManager.push(copiedObjects: objects)
         return true
     }
-    private func set(_ copyManager: CopyManager, old oldCopyManager: CopyManager) {
-        undoManager?.registerUndo(withTarget: self) {
-            $0.set(oldCopyManager, old: copyManager)
-        }
-        self.rootCopyManager = copyManager
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        return copyManager.reference
     }
 }

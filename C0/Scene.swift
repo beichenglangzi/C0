@@ -39,7 +39,7 @@ final class Scene: NSObject, NSCoding {
     var frame: CGRect, frameRate: FPS, baseTimeInterval: Beat
     var colorSpace: ColorSpace
     var editMaterial: Material
-    var isShownPrevious: Bool, isShownNext: Bool
+    var isHiddenPrevious: Bool, isHiddenNext: Bool
     
     var viewTransform: Transform {
         didSet {
@@ -110,7 +110,7 @@ final class Scene: NSObject, NSCoding {
          baseTimeInterval: Beat = Beat(1, 24),
          colorSpace: ColorSpace = .sRGB,
          editMaterial: Material = Material(),
-         isShownPrevious: Bool = false, isShownNext: Bool = false,
+         isHiddenPrevious: Bool = false, isHiddenNext: Bool = false,
          isHiddenSubtitles: Bool = false,
          sound: Sound = Sound(),
          tempoTrack: TempoTrack = TempoTrack(),
@@ -124,8 +124,8 @@ final class Scene: NSObject, NSCoding {
         self.baseTimeInterval = baseTimeInterval
         self.colorSpace = colorSpace
         self.editMaterial = editMaterial
-        self.isShownPrevious = isShownPrevious
-        self.isShownNext = isShownNext
+        self.isHiddenPrevious = isHiddenPrevious
+        self.isHiddenNext = isHiddenNext
         self.isHiddenSubtitles = isHiddenSubtitles
         self.sound = sound
         self.tempoTrack = tempoTrack
@@ -139,7 +139,7 @@ final class Scene: NSObject, NSCoding {
     private enum CodingKeys: String, CodingKey {
         case
         name, frame, frameRate, baseTimeInterval, tempo, colorSpace,
-        editMaterial, materials, isShownPrevious, isShownNext, isHiddenSubtitles, sound,
+        editMaterial, materials, isHiddenPrevious, isHiddenNext, isHiddenSubtitles, sound,
         tempoTrack, cutTrack, time,
         viewTransform
     }
@@ -153,8 +153,8 @@ final class Scene: NSObject, NSCoding {
             rawValue: Int8(coder.decodeInt32(forKey: CodingKeys.colorSpace.rawValue))) ?? .sRGB
         editMaterial = coder.decodeObject(
             forKey: CodingKeys.editMaterial.rawValue) as? Material ?? Material()
-        isShownPrevious = coder.decodeBool(forKey: CodingKeys.isShownPrevious.rawValue)
-        isShownNext = coder.decodeBool(forKey: CodingKeys.isShownNext.rawValue)
+        isHiddenPrevious = coder.decodeBool(forKey: CodingKeys.isHiddenPrevious.rawValue)
+        isHiddenNext = coder.decodeBool(forKey: CodingKeys.isHiddenNext.rawValue)
         viewTransform = coder.decodeDecodable(
             Transform.self, forKey: CodingKeys.viewTransform.rawValue) ?? Transform()
         isHiddenSubtitles = coder.decodeBool(forKey: CodingKeys.isHiddenSubtitles.rawValue)
@@ -174,8 +174,8 @@ final class Scene: NSObject, NSCoding {
         coder.encodeEncodable(baseTimeInterval, forKey: CodingKeys.baseTimeInterval.rawValue)
         coder.encode(Int32(colorSpace.rawValue), forKey: CodingKeys.colorSpace.rawValue)
         coder.encode(editMaterial, forKey: CodingKeys.editMaterial.rawValue)
-        coder.encode(isShownPrevious, forKey: CodingKeys.isShownPrevious.rawValue)
-        coder.encode(isShownNext, forKey: CodingKeys.isShownNext.rawValue)
+        coder.encode(isHiddenPrevious, forKey: CodingKeys.isHiddenPrevious.rawValue)
+        coder.encode(isHiddenNext, forKey: CodingKeys.isHiddenNext.rawValue)
         coder.encodeEncodable(viewTransform, forKey: CodingKeys.viewTransform.rawValue)
         coder.encode(isHiddenSubtitles, forKey: CodingKeys.isHiddenSubtitles.rawValue)
         coder.encodeEncodable(sound, forKey: CodingKeys.sound.rawValue)
@@ -255,7 +255,7 @@ extension Scene: Copying {
     func copied(from copier: Copier) -> Scene {
         return Scene(frame: frame, frameRate: frameRate,
                      editMaterial: editMaterial,
-                     isShownPrevious: isShownPrevious, isShownNext: isShownNext,
+                     isHiddenPrevious: isHiddenPrevious, isHiddenNext: isHiddenNext,
                      sound: sound,
                      tempoTrack: tempoTrack.copied,
                      cutTrack: cutTrack.copied,
@@ -272,15 +272,12 @@ extension Scene: Referenceable {
  - セルをキャンバス外にペースト
  - Display P3サポート
  */
-final class SceneView: Layer, Respondable {
-    static let name = Scene.name
-    
+final class SceneView: View {
     var scene = Scene() {
         didSet {
             updateWithScene()
         }
     }
-    
     let dataModelKey = "scene"
     var dataModel: DataModel {
         didSet {
@@ -292,7 +289,6 @@ final class SceneView: Layer, Respondable {
             
             if let dCutTrackDataModel = dataModel.children[scene.cutTrack.differentialDataModelKey] {
                 scene.cutTrack.differentialDataModel = dCutTrackDataModel
-                canvas.cut = scene.editCut
             } else {
                 dataModel.insert(scene.cutTrack.differentialDataModel)
             }
@@ -321,7 +317,7 @@ final class SceneView: Layer, Respondable {
     static let buttonsWidth = 120.0.cf, timelineWidth = 430.0.cf
     static let timelineTextBoxesWidth = 142.0.cf, timelineHeight = 190.0.cf
     
-    let nameLabel = Label(text: Scene.name, font: .bold)
+    let classNameLabel = Label(text: Scene.name, font: .bold)
     let versionView = VersionView()
     
     let timeline = Timeline()
@@ -332,22 +328,18 @@ final class SceneView: Layer, Respondable {
     let sizeView = DiscreteSizeView()
     let frameRateView = DiscreteNumberView(frame: Layout.valueFrame,
                                            min: 1, max: 1000, numberInterval: 1, unit: " fps")
-    let colorSpaceView = EnumView(frame: SceneView.colorSpaceFrame,
-                                  names: [Localization("sRGB"), Localization("Display P3")])
-    let isHiddenSubtitlesView =
-        EnumView(names: [Localization(english: "Hidden Subtitles", japanese: "字幕表示なし"),
-                         Localization(english: "Shown Subtitles", japanese: "字幕表示あり")],
-                 cationIndex: 0, isSmall: true)
-    
-    let isShownPreviousView =
-        EnumView(names: [Localization(english: "Hidden Previous", japanese: "前の表示なし"),
-                         Localization(english: "Shown Previous", japanese: "前の表示あり")],
-                 cationIndex: 1)
-    let isShownNextView =
-        EnumView(names: [Localization(english: "Hidden Next", japanese: "次の表示なし"),
-                         Localization(english: "Shown Next", japanese: "次の表示あり")],
-                 cationIndex: 1)
-    
+    let colorSpaceView = EnumView<ColorSpace>(enumeratedType: ColorSpace.sRGB,
+                                              frame: SceneView.colorSpaceFrame,
+                                              names: ColorSpace.displayStrings)
+    let isHiddenSubtitlesView = BoolView(cationBool: true,
+                                         name: Localization(english: "Hidden Subtitles",
+                                                            japanese: "字幕表示なし"), isSmall: true)
+    let isHiddenPreviousView = BoolView(defaultBool: true, cationBool: false,
+                                        name: Localization(english: "Hidden Previous",
+                                                           japanese: "前の表示なし"))
+    let isHiddenNextView = BoolView(defaultBool: true, cationBool: false,
+                                    name: Localization(english: "Hidden Next",
+                                                       japanese: "次の表示なし"))
     let soundView = SoundView()
     let drawingView = DrawingView()
     let materialManager = SceneMaterialManager()
@@ -375,15 +367,16 @@ final class SceneView: Layer, Respondable {
         timeline.sceneDataModel = differentialSceneDataModel
         canvas.sceneDataModel = differentialSceneDataModel
         
-        versionView.rootUndoManager = rootUndoManager
+        versionView.version = rootUndoManager
         
         super.init()
+        bounds = defaultBounds
         materialManager.sceneView = self
         
-        replace(children: [nameLabel,
+        replace(children: [classNameLabel,
                            versionView,
                            rendererManager.popupBox, sizeView, frameRateView,
-                           isShownPreviousView, isShownNextView, soundView,
+                           isHiddenPreviousView, isHiddenNextView, soundView,
                            timeline.keyframeView,
                            drawingView, canvas.materialView, transformView, wiggleView,
                            timeline.tempoView, timeline.tempoKeyframeView,
@@ -414,9 +407,9 @@ final class SceneView: Layer, Respondable {
             }
         }
         colorSpaceView.binding = { [unowned self] in
-            self.scene.colorSpace = $0.index == 0 ? .sRGB : .displayP3
+            self.scene.colorSpace = $0.enumeratedType
             self.canvas.setNeedsDisplay()
-            if $0.type == .end && $0.index != $0.oldIndex {
+            if $0.type == .end && $0.enumeratedType != $0.oldEnumeratedType {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
@@ -433,21 +426,21 @@ final class SceneView: Layer, Respondable {
             }
         }
         
-        isShownPreviousView.binding = { [unowned self] in
-            self.canvas.isShownPrevious = $0.index == 1
-            if $0.type == .end && $0.index != $0.oldIndex {
+        isHiddenPreviousView.binding = { [unowned self] in
+            self.canvas.isHiddenPrevious = $0.bool
+            if $0.type == .end && $0.bool != $0.oldBool {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
-        isShownNextView.binding = { [unowned self] in
-            self.canvas.isShownNext = $0.index == 1
-            if $0.type == .end && $0.index != $0.oldIndex {
+        isHiddenNextView.binding = { [unowned self] in
+            self.canvas.isHiddenNext = $0.bool
+            if $0.type == .end && $0.bool != $0.oldBool {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
         isHiddenSubtitlesView.binding = { [unowned self] in
-            self.scene.isHiddenSubtitles = $0.index == 0
-            if $0.type == .end && $0.index != $0.oldIndex {
+            self.scene.isHiddenSubtitles = $0.bool
+            if $0.type == .end && $0.bool != $0.oldBool {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
@@ -603,8 +596,8 @@ final class SceneView: Layer, Respondable {
         canvas.pasteColorBinding = { [unowned self] in self.materialManager.paste($1, in: $2) }
         canvas.pasteMaterialBinding = { [unowned self] in self.materialManager.paste($1, in: $2) }
         
-        canvas.cellView.setIsTranslucentLockHandler = { [unowned self] in
-            self.setIsTranslucentLockInCell(with: $0)
+        canvas.cellView.setIsLockedHandler = { [unowned self] in
+            self.setIsLockedInCell(with: $0)
         }
         
         canvas.materialView.isEditingBinding = { [unowned self] (materialditor, isEditing) in
@@ -659,7 +652,7 @@ final class SceneView: Layer, Respondable {
         }
     }
     
-    private func updateLayout() {
+    override var defaultBounds: CGRect {
         let padding = Layout.basicPadding, sPadding = Layout.smallPadding, buttonH = Layout.basicHeight
         let h = buttonH + padding * 2
         let cs = SceneView.canvasSize, th = SceneView.timelineHeight
@@ -667,15 +660,29 @@ final class SceneView: Layer, Respondable {
         let inWidth = cs.width + SceneView.propertyWidth + sPadding + spw + padding
         let width = inWidth + padding * 2
         let height = th + cs.height + h + padding * 2
-        let y = height - padding
+        return CGRect(x: 0, y: 0, width: width, height: height)
+    }
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    private func updateLayout() {
+        let padding = Layout.basicPadding, sPadding = Layout.smallPadding, buttonH = Layout.basicHeight
+        let h = buttonH + padding * 2
+        let cs = SceneView.canvasSize, th = SceneView.timelineHeight
+        let spw = ceil(SceneView.propertyWidth * 8 / 11)
+//        let height = th + cs.height + h + padding * 2
+        let y = bounds.height - padding
         
-//        nameLabel.frame.origin = CGPoint(x: padding, y: y - h + padding * 2)
+        classNameLabel.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameLabel.frame.height - padding)
 //        versionView.frame.size = CGSize(width: SceneView.undoWidth, height: buttonH)
 //        rendererManager.popupBox.frame.size = CGSize(width: SceneView.rendererWidth, height: buttonH)
 //        let properties: [Layer] = [versionView, Padding(),
 //                                   rendererManager.popupBox, sizeView, frameRateView]
 //        properties.forEach { $0.frame.size.height = h }
-//        _ = Layout.leftAlignment(properties, minX: nameLabel.frame.maxX + padding, y: y - h, height: h)
+//        _ = Layout.leftAlignment(properties, minX: classNameLabel.frame.maxX + padding, y: y - h, height: h)
 //        let pnx = frameRateView.frame.maxX + padding, soundWidth = 200.0.cf
         
         var ty = y
@@ -690,7 +697,7 @@ final class SceneView: Layer, Respondable {
         var py = propertyMaxY
         let kh = 150.0.cf
         
-        Layout.autoHorizontalAlignment([isShownPreviousView, isShownNextView],
+        Layout.autoHorizontalAlignment([isHiddenPreviousView, isHiddenNextView],
                                        in: CGRect(x: px, y: y - buttonH,
                                                   width: pw + spw + sPadding, height: buttonH))
         
@@ -736,7 +743,7 @@ final class SceneView: Layer, Respondable {
 //        let properties: [Layer] = [versionView, Padding(),
 //                                   rendererManager.popupBox, sizeView, frameRateView]
 //        properties.forEach { $0.frame.size.height = h }
-//        _ = Layout.leftAlignment(properties, minX: nameLabel.frame.maxX + padding, y: y - h, height: h)
+//        _ = Layout.leftAlignment(properties, minX: classNameLabel.frame.maxX + padding, y: y - h, height: h)
         spy -= sh
         isHiddenSubtitlesView.frame = CGRect(x: spx, y: spy, width: spw, height: sh)
         
@@ -772,18 +779,9 @@ final class SceneView: Layer, Respondable {
         splitColorBox.frame = CGRect(x: spx, y: spy, width: spw, height: sh)
         spy -= sh
         splitOtherThanColorBox.frame = CGRect(x: spx, y: spy, width: spw, height: sh)
-        
-        let timeBindingPath = CGMutablePath()
-        timeBindingPath.move(to: CGPoint(x: timeline.frame.midX, y: timeline.frame.maxY))
-        timeBindingPath.addLine(to: CGPoint(x: timeline.frame.midX, y: transformView.frame.minY))
-        timeline.nodeBindingLineLayer.path = timeBindingPath
-        
-        frame.size = CGSize(width: width, height: height)
     }
     private func updateWithScene() {
-        scene.timeBinding = { [unowned self] (scene, time) in
-            self.update(withTime: time)
-        }
+        scene.timeBinding = { [unowned self] (_, time) in self.update(withTime: time) }
         update(withTime: scene.time)
         
         materialManager.scene = scene
@@ -792,10 +790,10 @@ final class SceneView: Layer, Respondable {
         canvas.scene = scene
         sizeView.size = scene.frame.size
         frameRateView.number = scene.frameRate.cf
-        colorSpaceView.selectedIndex = scene.colorSpace == .sRGB ? 0 : 1
-        isShownPreviousView.selectedIndex = scene.isShownPrevious ? 1 : 0
-        isShownNextView.selectedIndex = scene.isShownNext ? 1 : 0
-        isHiddenSubtitlesView.selectedIndex = scene.isHiddenSubtitles ? 0 : 1
+        colorSpaceView.enumeratedType = scene.colorSpace
+        isHiddenPreviousView.bool = scene.isHiddenPrevious
+        isHiddenNextView.bool = scene.isHiddenNext
+        isHiddenSubtitlesView.bool = scene.isHiddenSubtitles
         soundView.sound = scene.sound
         let sp = CGPoint(x: scene.frame.width, y: scene.frame.height)
         transformView.standardTranslation = sp
@@ -1214,7 +1212,7 @@ final class SceneView: Layer, Respondable {
         differentialSceneDataModel.isWrite = true
     }
     
-    private func setIsTranslucentLockInCell(with obj: CellView.Binding) {
+    private func setIsLockedInCell(with obj: CellView.Binding) {
         switch obj.type {
         case .begin:
             self.cutView = timeline.editCutView
@@ -1224,22 +1222,22 @@ final class SceneView: Layer, Respondable {
             guard let cutView = cutView else {
                 return
             }
-            if obj.isTranslucentLock != obj.oldIsTranslucentLock {
-                set(isTranslucentLock: obj.isTranslucentLock,
-                    oldIsTranslucentLock: obj.oldIsTranslucentLock,
+            if obj.isLocked != obj.oldIsLocked {
+                set(isLocked: obj.isLocked,
+                    oldIsLocked: obj.oldIsLocked,
                     in: obj.inCell, in: cutView, time: time)
             } else {
                 canvas.setNeedsDisplay()
             }
         }
     }
-    private func set(isTranslucentLock: Bool, oldIsTranslucentLock: Bool,
+    private func set(isLocked: Bool, oldIsLocked: Bool,
                      in cell: Cell, in cutView: CutView, time: Beat) {
         registerUndo(time: time) {
-            $0.set(isTranslucentLock: oldIsTranslucentLock,
-                   oldIsTranslucentLock: isTranslucentLock, in: cell, in: cutView, time: $1)
+            $0.set(isLocked: oldIsLocked,
+                   oldIsLocked: isLocked, in: cell, in: cutView, time: $1)
         }
-        cell.isTranslucentLock = isTranslucentLock
+        cell.isLocked = isLocked
         canvas.setNeedsDisplay()
         differentialSceneDataModel.isWrite = true
     }
@@ -1396,14 +1394,6 @@ final class SceneMaterialManager {
             scene.editMaterial = newValue
             sceneView.canvas.materialView.material = newValue
             sceneView.differentialSceneDataModel.isWrite = true
-            animationBox.label.localization = isAnimatedMaterial ?
-                Localization(english: "Material Animation", japanese: "マテリアルアニメーションあり") :
-                Localization(english: "None Material Animation", japanese: "マテリアルアニメーションなし")
-            let x = animationBox.isLeftAlignment ?
-                animationBox.leftPadding :
-                round((animationBox.frame.width - animationBox.label.frame.width) / 2)
-            let y = round((animationBox.frame.height - animationBox.label.frame.height) / 2)
-            animationBox.label.frame.origin = CGPoint(x: x, y: y)
         }
     }
     

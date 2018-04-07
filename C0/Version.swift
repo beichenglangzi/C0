@@ -21,27 +21,25 @@ import Foundation
 
 typealias Version = UndoManager
 
+extension Version: Referenceable {
+    static let name = Localization(english: "Version", japanese: "バージョン")
+}
+
 /**
  # Issue
  - Versionクラス
  - バージョン管理UndoManager
  - ブランチ機能
  */
-final class VersionView: Layer, Respondable {
-    static let name = Localization(english: "Version", japanese: "バージョン")
-    static let feature = Localization(english: "Show undoable count and undoed count in parent view",
-                                      japanese: "親表示での取り消し可能回数、取り消し済み回数を表示")
-    
-    private var undoGroupToken: NSObjectProtocol?
-    private var undoToken: NSObjectProtocol?, redoToken: NSObjectProtocol?
-    var rootUndoManager: UndoManager? {
+final class VersionView: View {
+    var version = Version() {
         didSet {
             removeNotification()
             let nc = NotificationCenter.default
             
             undoGroupToken = nc.addObserver(forName: .NSUndoManagerDidCloseUndoGroup,
-                                            object: rootUndoManager, queue: nil) { [unowned self] in
-                if let undoManager = $0.object as? UndoManager, undoManager == self.rootUndoManager {
+                                            object: version, queue: nil) { [unowned self] in
+                if let undoManager = $0.object as? UndoManager, undoManager == self.version {
                     if undoManager.groupingLevel == 0 {
                         self.undoCount += 1
                         self.allCount = self.undoCount
@@ -51,16 +49,16 @@ final class VersionView: Layer, Respondable {
             }
             
             undoToken = nc.addObserver(forName: .NSUndoManagerDidUndoChange,
-                                       object: rootUndoManager, queue: nil) { [unowned self] in
-                if let undoManager = $0.object as? UndoManager, undoManager == self.rootUndoManager {
+                                       object: version, queue: nil) { [unowned self] in
+                if let undoManager = $0.object as? UndoManager, undoManager == self.version {
                     self.undoCount -= 1
                     self.updateLabel()
                 }
             }
             
             redoToken = nc.addObserver(forName: .NSUndoManagerDidRedoChange,
-                                       object: rootUndoManager, queue: nil) { [unowned self] in
-                if let undoManager = $0.object as? UndoManager, undoManager == self.rootUndoManager {
+                                       object: version, queue: nil) { [unowned self] in
+                if let undoManager = $0.object as? UndoManager, undoManager == self.version {
                     self.undoCount += 1
                     self.updateLabel()
                 }
@@ -69,8 +67,10 @@ final class VersionView: Layer, Respondable {
             updateLabel()
         }
     }
+    private var undoGroupToken: NSObjectProtocol?
+    private var undoToken: NSObjectProtocol?, redoToken: NSObjectProtocol?
     override var undoManager: UndoManager? {
-        return rootUndoManager
+        return version
     }
     
     override var locale: Locale {
@@ -81,15 +81,16 @@ final class VersionView: Layer, Respondable {
     
     var undoCount = 0, allCount = 0
     
-    let nameLabel = Label(text: Localization(english: "Version", japanese: "バージョン"), font: .bold)
+    let classNameLabel = Label(text: Version.name, font: .bold)
     let allCountLabel = Label(text: Localization("0"))
     let currentCountLabel = Label(color: .warning)
     
     override init() {
-        _ = Layout.leftAlignment([nameLabel, Padding(), allCountLabel], height: Layout.basicHeight)
+        _ = Layout.leftAlignment([classNameLabel, Padding(), allCountLabel],
+                                 height: Layout.basicHeight)
         super.init()
         isClipped = true
-        replace(children: [nameLabel, allCountLabel])
+        replace(children: [classNameLabel, allCountLabel])
     }
     
     deinit {
@@ -114,11 +115,11 @@ final class VersionView: Layer, Respondable {
     }
     func updateLayout() {
         if undoCount < allCount {
-            _ = Layout.leftAlignment([nameLabel, Padding(),
+            _ = Layout.leftAlignment([classNameLabel, Padding(),
                                       allCountLabel, Padding(), currentCountLabel],
                                      height: frame.height)
         } else {
-            _ = Layout.leftAlignment([nameLabel, Padding(), allCountLabel],
+            _ = Layout.leftAlignment([classNameLabel, Padding(), allCountLabel],
                                      height: frame.height)
         }
     }
@@ -127,15 +128,23 @@ final class VersionView: Layer, Respondable {
             allCountLabel.localization = Localization("\(allCount)")
             currentCountLabel.localization = Localization("\(undoCount - allCount)")
             if currentCountLabel.parent == nil {
-                replace(children: [nameLabel, allCountLabel, currentCountLabel])
+                replace(children: [classNameLabel, allCountLabel, currentCountLabel])
                 updateLayout()
             }
         } else {
             allCountLabel.localization = Localization("\(allCount)")
             if currentCountLabel.parent != nil {
-                replace(children: [nameLabel, allCountLabel])
+                replace(children: [classNameLabel, allCountLabel])
                 updateLayout()
             }
         }
+    }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        var reference = version.reference
+        reference.classDescription += Localization("\n\n")
+            + Localization(english: "Show undoable count and undoed count in parent view",
+                           japanese: "親表示での取り消し可能回数、取り消し済み回数を表示")
+        return reference
     }
 }

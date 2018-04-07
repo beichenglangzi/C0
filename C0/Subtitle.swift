@@ -79,7 +79,8 @@ final class SubtitleTrack: NSObject, Track, NSCoding {
         drawSubtitle = Subtitle(string: string, isConnectedWithPrevious: false)
     }
     
-    init(animation: Animation = Animation(), time: Beat = 0, subtitleItem: SubtitleItem = SubtitleItem()) {
+    init(animation: Animation = Animation(), time: Beat = 0,
+         subtitleItem: SubtitleItem = SubtitleItem()) {
         guard animation.keyframes.count == subtitleItem.keySubtitles.count else {
             fatalError()
         }
@@ -220,8 +221,10 @@ final class SubtitleItem: NSObject, TrackItem, NSCoding {
         case keySubtitles, subtitle
     }
     init?(coder: NSCoder) {
-        keySubtitles = coder.decodeDecodable([Subtitle].self, forKey: CodingKeys.keySubtitles.rawValue) ?? []
-        subtitle = coder.decodeDecodable(Subtitle.self, forKey: CodingKeys.subtitle.rawValue) ?? Subtitle()
+        keySubtitles = coder.decodeDecodable([Subtitle].self,
+                                             forKey: CodingKeys.keySubtitles.rawValue) ?? []
+        subtitle = coder.decodeDecodable(Subtitle.self,
+                                         forKey: CodingKeys.subtitle.rawValue) ?? Subtitle()
         super.init()
         if keySubtitles.isEmpty {
             keySubtitles = [subtitle]
@@ -333,27 +336,25 @@ extension Subtitle: Referenceable {
     static let name = Localization(english: "Subtitle", japanese: "字幕")
 }
 
-final class SubtitleView: Layer, Respondable {
-    static let name = Subtitle.name
-    
+final class SubtitleView: View {
     var subtitle = Subtitle() {
         didSet {
-            isConnectedWithPreviousView.selectedIndex = subtitle.isConnectedWithPrevious ? 1 : 0
+            isConnectedWithPreviousView.bool = subtitle.isConnectedWithPrevious
         }
     }
     
     var isSmall: Bool
-    private let nameLabel: Label
-    private let isConnectedWithPreviousView: EnumView
+    private let classNameLabel: Label
+    private let isConnectedWithPreviousView: BoolView
     init(isSmall: Bool = false) {
         self.isSmall = isSmall
-        nameLabel = Label(text: Subtitle.name, font: isSmall ? .smallBold : .bold)
-        isConnectedWithPreviousView = EnumView(names: [
-            Localization(english: "No Connected With Previous", japanese: "前と結合なし"),
-            Localization(english: "Connected with Previous", japanese: "前と結合あり")],
-                                               cationIndex: 1, isSmall: isSmall)
+        classNameLabel = Label(text: Subtitle.name, font: isSmall ? .smallBold : .bold)
+        isConnectedWithPreviousView = BoolView(cationBool: true,
+                                               name: Localization(english: "No Connected With Previous",
+                                                                  japanese: "前と結合なし"),
+                                               isSmall: isSmall)
         super.init()
-        replace(children: [nameLabel, isConnectedWithPreviousView])
+        replace(children: [classNameLabel, isConnectedWithPreviousView])
         
         isConnectedWithPreviousView.binding = { [unowned self] in
             self.setIsConnectedWithPrevious(with: $0)
@@ -373,15 +374,15 @@ final class SubtitleView: Layer, Respondable {
     }
     private func updateLayout() {
         let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
-        nameLabel.frame.origin = CGPoint(x: padding,
-                                         y: bounds.height - nameLabel.frame.height - padding)
-        let icpw = bounds.width - nameLabel.frame.width - padding * 3
+        classNameLabel.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameLabel.frame.height - padding)
+        let icpw = bounds.width - classNameLabel.frame.width - padding * 3
         let icph = isSmall ? Layout.smallHeight : Layout.basicHeight
-        isConnectedWithPreviousView.frame = CGRect(x: nameLabel.frame.maxX + padding, y: padding,
+        isConnectedWithPreviousView.frame = CGRect(x: classNameLabel.frame.maxX + padding, y: padding,
                                                    width: icpw, height: icph)
     }
     func updateWithSubtitle() {
-        isConnectedWithPreviousView.selectedIndex = subtitle.isConnectedWithPrevious ? 1 : 0
+        isConnectedWithPreviousView.bool = subtitle.isConnectedWithPrevious
     }
     
     var disabledRegisterUndo = true
@@ -394,15 +395,15 @@ final class SubtitleView: Layer, Respondable {
     
     private var oldSubtitle = Subtitle()
     
-    private func setIsConnectedWithPrevious(with binding: EnumView.Binding) {
+    private func setIsConnectedWithPrevious(with binding: BoolView.Binding) {
         if binding.type == .begin {
             oldSubtitle = subtitle
         } else {
-            subtitle.isConnectedWithPrevious = binding.index == 1
+            subtitle.isConnectedWithPrevious = binding.bool
         }
         self.binding?(Binding(view: self,
-                              isConnectedWithPrevious: binding.index == 1,
-                              oldIsConnectedWithPrevious: binding.oldIndex == 1,
+                              isConnectedWithPrevious: binding.bool,
+                              oldIsConnectedWithPrevious: binding.oldBool,
                               subtitle: subtitle, oldSubtitle: oldSubtitle,
                               type: binding.type))
     }

@@ -243,7 +243,7 @@ final class ArrayView<T>: View {
  # Issue
  - ツリー操作が複雑
  */
-final class ListArrayView: Layer, Respondable {
+final class ListArrayView: View {
     static let name = Localization(english: "Array", japanese: "配列")
     
     private let labelLineLayer: PathLayer = {

@@ -21,76 +21,95 @@ import Foundation
 
 protocol Referenceable {
     static var name: Localization { get }
-    static var feature: Localization { get }
+    static var classDescription: Localization { get }
     var instanceDescription: Localization { get }
+    var viewDescription: Localization { get }
+    var reference: Reference { get }
 }
 extension Referenceable {
-    static var feature: Localization {
+    static var classDescription: Localization {
         return Localization()
     }
     var instanceDescription: Localization {
         return Localization()
     }
+    var viewDescription: Localization {
+        return Localization()
+    }
+    var reference: Reference {
+        return Reference(name: Self.name,
+                         classDescription: Self.classDescription,
+                         instanceDescription: instanceDescription,
+                         viewDescription: viewDescription)
+    }
+}
+
+struct Reference {
+    var name: Localization, classDescription: Localization
+    var instanceDescription: Localization, viewDescription: Localization
+    init(name: Localization = Localization(),
+         classDescription: Localization = Localization(),
+         instanceDescription: Localization = Localization(),
+         viewDescription: Localization = Localization()) {
+        self.name = name
+        self.classDescription = classDescription
+        self.instanceDescription = instanceDescription
+        self.viewDescription = viewDescription
+    }
+}
+extension Reference: Referenceable {
+    static let name = Localization(english: "Reference", japanese: "情報")
 }
 
 /**
  # Issue
  - リファレンス表示の具体化
  */
-final class ReferenceView: Layer, Respondable {
-    static let name = Localization(english: "Reference", japanese: "情報")
-    static let feature = Localization(english: "Close: Move cursor to outside",
-                                      japanese: "閉じる: カーソルを外に出す")
-    
-    var reference: Referenceable? {
+final class ReferenceView: View {
+    var reference = Reference() {
         didSet {
             updateWithReference()
         }
     }
     
     let minWidth = 200.0.cf
+    let nameLabel = Label()
     
-    init(reference: Referenceable? = nil) {
+    init(reference: Reference = Reference()) {
         self.reference = reference
         super.init()
         fillColor = .background
         updateWithReference()
     }
     
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    private func updateLayout() {
+        
+    }
     private func updateWithReference() {
-        if let reference = reference {
-            let cas = ReferenceView.childrenAndSize(with: reference, width: minWidth)
-            replace(children: cas.children)
-            frame = CGRect(x: frame.origin.x, y: frame.origin.y - (cas.size.height - frame.height),
-                           width: cas.size.width, height: cas.size.height)
-        } else {
-            replace(children: [])
-        }
+        nameLabel.localization = reference.name
     }
-    private static func childrenAndSize(with reference: Referenceable,
-                                        width: CGFloat) -> (children: [Layer], size: CGSize) {
-        
-        let type =  Swift.type(of: reference).name, feature = Swift.type(of: reference).feature
-        let instanceDescription = reference.instanceDescription
-        let description: Localization
-        if instanceDescription.isEmpty && feature.isEmpty {
-            description = Localization(english: "No description", japanese: "説明なし")
-        } else {
-            description = !instanceDescription.isEmpty && !feature.isEmpty ?
-                instanceDescription + Localization("\n\n") + feature : instanceDescription + feature
-        }
-        
-        let typeLabel = Label(frame: CGRect(x: 0, y: 0, width: width, height: 0),
-                              text: type, font: .hedding0)
-        let descriptionLabel = Label(frame: CGRect(x: 0, y: 0, width: width, height: 0),
-                                     text: description)
-        let padding = Layout.basicPadding
-        let size = CGSize(width: width + padding * 2,
-                          height: typeLabel.frame.height + descriptionLabel.frame.height + padding * 5)
-        var y = size.height - typeLabel.frame.height - padding * 2
-        typeLabel.frame.origin = CGPoint(x: padding, y: y)
-        y -= descriptionLabel.frame.height + padding
-        descriptionLabel.frame.origin = CGPoint(x: padding, y: y)
-        return ([typeLabel, descriptionLabel], size)
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        return reference.reference
     }
+}
+
+final class ReferenceManagerView {
+    func open() {
+//        let p = event.location.integral
+//        let responder = self.responder(with: indicatedLayer(with: event))
+//        let referenceView = ReferenceView(reference: responder.lookUp(with: event))
+//        let panel = Panel(isUseHedding: true)
+//        panel.contents = [referenceView]
+//        panel.openPoint = p.integral
+//        panel.openViewPoint = rootView.point(from: event)
+//        panel.subIndicatedParent = rootView
+    }
+//    description: Localization(english: "Close: Move cursor to outside",
+//    japanese: "閉じる: カーソルを外に出す"))
 }

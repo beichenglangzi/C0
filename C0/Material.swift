@@ -21,7 +21,6 @@ import Foundation
 
 final class Material: NSObject, NSCoding {
     enum MaterialType: Int8, Codable {
-        static let name = Localization(english: "Material Type", japanese: "マテリアルタイプ")
         case normal, lineless, blur, luster, add, subtract
         var isDrawLine: Bool {
             return self == .normal
@@ -197,7 +196,9 @@ extension Material: ViewExpression {
                           isSmall : isSmall)
     }
 }
-
+extension Material.MaterialType: Referenceable {
+    static let name = Localization(english: "Material Type", japanese: "マテリアルタイプ")
+}
 extension Material.MaterialType {
     var blendMode: CGBlendMode {
         switch self {
@@ -275,15 +276,13 @@ extension NumberView {
  # Issue
  - 「線の強さ」を追加
  */
-final class MaterialView: Layer, Respondable {
-    static let name = Material.name
-    
+final class MaterialView: View {
     var material: Material {
         didSet {
             guard material.id != oldValue.id else {
                 return
             }
-            typeView.selectedIndex = index(with: material.type)
+            typeView.enumeratedType = material.type
             colorView.color = material.color
             lineColorView.color = material.lineColor
             lineWidthView.number = material.lineWidth
@@ -294,8 +293,12 @@ final class MaterialView: Layer, Respondable {
     
     static let defaultWidth = 140.0.cf
     
-    private let nameLabel = Label(text: Material.name, font: .bold)
-    private let typeView = EnumView(names: Material.MaterialType.displayStrings)
+    private let classNameLabel = Label(text: Material.name, font: .bold)
+    private let typeView =
+        EnumView<Material.MaterialType>(enumeratedType: .normal,
+                                        indexHandler: { Int($0) },
+                                        rawValueHandler: { Material.MaterialType.RawValue($0) },
+                                        names: Material.MaterialType.displayStrings)
     private let colorView = ColorView()
     private let lineWidthView = NumberView.widthViewWith(min: Material.defaultLineWidth, max: 500,
                                                          exp: 3)
@@ -307,7 +310,7 @@ final class MaterialView: Layer, Respondable {
     override init() {
         material = defaultMaterial
         super.init()
-        replace(children: [nameLabel,
+        replace(children: [classNameLabel,
                            typeView,
                            colorView, lineColorLabel, lineColorView,
                            lineWidthView, opacityView])
@@ -330,7 +333,7 @@ final class MaterialView: Layer, Respondable {
     override var defaultBounds: CGRect {
         return CGRect(x: 0, y: 0,
                       width: MaterialView.defaultWidth,
-                      height: MaterialView.defaultWidth + nameLabel.frame.height
+                      height: MaterialView.defaultWidth + classNameLabel.frame.height
                         + Layout.basicHeight * 4 + Layout.basicPadding * 3)
     }
     override var bounds: CGRect {
@@ -342,7 +345,7 @@ final class MaterialView: Layer, Respondable {
         let padding = Layout.basicPadding, h = Layout.basicHeight
         let cw = bounds.width - padding * 2
         let leftWidth = cw - h * 3
-        nameLabel.frame.origin = CGPoint(x: padding, y: padding * 2 + h * 4 + cw)
+        classNameLabel.frame.origin = CGPoint(x: padding, y: padding * 2 + h * 4 + cw)
         typeView.frame = CGRect(x: padding, y: padding + h * 3 + cw, width: cw, height: h)
         colorView.frame = CGRect(x: padding, y: padding + h * 3, width: cw, height: cw)
         lineColorLabel.frame.origin = CGPoint(x: padding + leftWidth - lineColorLabel.frame.width,
@@ -352,13 +355,6 @@ final class MaterialView: Layer, Respondable {
         lineWidthView.updateLineWidthLayers(withFrame: lineWidthFrame)
         let opacityFrame = CGRect(x: padding, y: padding + h, width: leftWidth, height: h)
         opacityView.updateOpacityLayers(withFrame: opacityFrame)
-    }
-    
-    private func materialType(withIndex index: Int) -> Material.MaterialType {
-        return Material.MaterialType(rawValue: Int8(index)) ?? .normal
-    }
-    private func index(with type: Material.MaterialType) -> Int {
-        return Int(type.rawValue)
     }
     
     var isEditingBinding: ((MaterialView, Bool) -> ())?
@@ -420,7 +416,7 @@ final class MaterialView: Layer, Respondable {
     
     private var oldMaterial = Material()
     
-    private func setMaterial(with binding: EnumView.Binding) {
+    private func setMaterial(with binding: EnumView<Material.MaterialType>.Binding) {
         if binding.type == .begin {
             isEditing = true
             oldMaterial = material
@@ -429,10 +425,9 @@ final class MaterialView: Layer, Respondable {
                                      material: oldMaterial, oldMaterial: oldMaterial,
                                      sendType: .begin))
         } else {
-            let type = materialType(withIndex: binding.index)
-            material = material.with(type)
+            material = material.with(binding.enumeratedType)
             typeBinding?(TypeBinding(view: self,
-                                     type: type, oldType: oldMaterial.type,
+                                     type: binding.enumeratedType, oldType: oldMaterial.type,
                                      material: material, oldMaterial: oldMaterial,
                                      sendType: binding.type))
             if binding.type == .end {
@@ -553,5 +548,9 @@ final class MaterialView: Layer, Respondable {
         binding?(Binding(view: self, material: oldMaterial, oldMaterial: oldMaterial, type: .begin))
         self.material = material
         binding?(Binding(view: self, material: material, oldMaterial: oldMaterial, type: .end))
+    }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        return material.reference
     }
 }

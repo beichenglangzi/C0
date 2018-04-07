@@ -55,15 +55,7 @@ final class SceneImageRendedrer {
         guard let image = image else {
             throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteUnknownError)
         }
-        guard let imageDestination = CGImageDestinationCreateWithURL(url as CFURL,
-                                                                     fileType as CFString,
-                                                                     1, nil) else {
-            throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteUnknownError)
-        }
-        CGImageDestinationAddImage(imageDestination, image, nil)
-        if !CGImageDestinationFinalize(imageDestination) {
-            throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteUnknownError)
-        }
+        try image.write(to: url, fileType: fileType)
     }
 }
 
@@ -309,10 +301,6 @@ final class RendererManager {
         let s1080String = "w: \(Int(size1080p.width)) px, h: 1080 px"
         let s2160String = "w: \(Int(size2160p.width)) px, h: 2160 px"
         
-        let cutIndexText = Localization(english: "No.\(self.scene.editCutIndex) Only",
-                                        japanese: "No.\(self.scene.editCutIndex)のみ")
-        let cutIndexString = cutIndexText.currentString
-        
         let s2Text = Localization(english: "Export Movie(\(s2String))",
                                   japanese: "動画として書き出す(\(s2String))")
         let s2Handler: (TextBox) -> (Bool) = { [unowned self] in
@@ -332,27 +320,6 @@ final class RendererManager {
                                      japanese: "動画として書き出す(\(s2160String))")
         let s2160Handler: (TextBox) -> (Bool) = { [unowned self] in
             self.exportMovie(message: $0.label.string, size: size2160p, isSelectedCutOnly: false)
-        }
-        
-        let s2SText = Localization(english: "Export Movie(\(s2String), \(cutIndexString))",
-                                      japanese: "動画として書き出す(\(s2String), \(cutIndexString))")
-        let s2SHandler: (TextBox) -> (Bool) = { [unowned self] in
-            self.exportMovie(message: $0.label.string, size: size2, isSelectedCutOnly: true)
-        }
-        let s720SText = Localization(english: "Export Movie(\(s720String), \(cutIndexString))",
-                                     japanese: "動画として書き出す(\(s720String), \(cutIndexString))")
-        let s720SHandler: (TextBox) -> (Bool) = { [unowned self] in
-            self.exportMovie(message: $0.label.string, size: size720p, isSelectedCutOnly: true)
-        }
-        let s1080SText = Localization(english: "Export Movie(\(s1080String), \(cutIndexString))",
-                                      japanese: "動画として書き出す(\(s1080String), \(cutIndexString))")
-        let s1080SHandler: (TextBox) -> (Bool) = { [unowned self] in
-            self.exportMovie(message: $0.label.string, size: size1080p, isSelectedCutOnly: true)
-        }
-        let s2160SText = Localization(english: "Export Movie(\(s2160String), \(cutIndexString))",
-                                      japanese: "動画として書き出す(\(s2160String), \(cutIndexString))")
-        let s2160SHandler: (TextBox) -> (Bool) = { [unowned self] in
-            self.exportMovie(message: $0.label.string, size: size2160p, isSelectedCutOnly: true)
         }
         
         let s2IText = Localization(english: "Export Image(\(s2String))",
@@ -386,16 +353,11 @@ final class RendererManager {
                                  TextBox(name: s720Text, runHandler: s720Handler),
                                  TextBox(name: s1080Text, runHandler: s1080Handler),
                                  TextBox(name: s2160Text, runHandler: s2160Handler),
-                                 TextBox(name: s2SText, runHandler: s2SHandler),
-                                 TextBox(name: s720SText, runHandler: s720SHandler),
-                                 TextBox(name: s1080SText, runHandler: s1080SHandler),
-                                 TextBox(name: s2160SText, runHandler: s2160SHandler),
                                  TextBox(name: s2IText, runHandler: s2IHandler),
                                  TextBox(name: s720IText, runHandler: s720IHandler),
                                  TextBox(name: s1080IText, runHandler: s1080IHandler),
                                  TextBox(name: s2160IText, runHandler: s2160IHandler),
                                  TextBox(name: subtitleText, runHandler: subtitleHandler)])
-        
         var minSize = CGSize()
         Layout.topAlignment(panel.children, minSize: &minSize)
         panel.frame.size = CGSize(width: minSize.width + Layout.basicPadding * 2,
@@ -479,7 +441,7 @@ final class RendererManager {
                     } catch {
                         OperationQueue.main.addOperation() {
                             progressBar.state = Localization(english: "Error", japanese: "エラー")
-                            progressBar.label.textFrame.color = .warning
+                            progressBar.nameLabel.textFrame.color = .warning
                         }
                     }
                 }
@@ -490,7 +452,7 @@ final class RendererManager {
                 } catch {
                     OperationQueue.main.addOperation() {
                         progressBar.state = Localization(english: "Error", japanese: "エラー")
-                        progressBar.label.textFrame.color = .warning
+                        progressBar.nameLabel.textFrame.color = .warning
                     }
                 }
             }
@@ -535,7 +497,7 @@ final class RendererManager {
         let progressBar = Progress()
         progressBar.name = name
         progressBar.state = Localization(english: "Error", japanese: "エラー")
-        progressBar.label.textFrame.color = .warning
+        progressBar.nameLabel.textFrame.color = .warning
         progressBar.deleteHandler = { [unowned self] in
             self.endProgress($0)
             return true

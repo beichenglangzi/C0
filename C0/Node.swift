@@ -324,7 +324,7 @@ final class Node: NSObject, NSCoding {
         var effect = Effect()
         tracks.forEach {
             if let e = $0.effectItem?.drawEffect {
-                effect.blur += e.blur
+                effect.blurRadius += e.blurRadius
                 effect.opacity *= e.opacity
                 effect.blendType = e.blendType
             }
@@ -792,15 +792,15 @@ final class Node: NSObject, NSCoding {
         
         ctx.concatenate(transform.affineTransform)
         
-        if effect.opacity != 1 || effect.blendType != .normal || effect.blur > 0 || !isEdited {
+        if effect.opacity != 1 || effect.blendType != .normal || effect.blurRadius > 0 || !isEdited {
             ctx.saveGState()
             ctx.setAlpha(!isEdited ? 0.2 * effect.opacity : effect.opacity)
             ctx.setBlendMode(effect.blendType.blendMode)
-            if effect.blur > 0 {
+            if effect.blurRadius > 0 {
                 let invertCTM = ctx.ctm
-                let bBounds = ctx.boundingBoxOfClipPath.inset(by: -effect.blur).applying(invertCTM)
+                let bBounds = ctx.boundingBoxOfClipPath.inset(by: -effect.blurRadius).applying(invertCTM)
                 if let bctx = CGContext.bitmap(with: bBounds.size) {
-                    bctx.translateBy(x: -effect.blur, y: -effect.blur)
+                    bctx.translateBy(x: -effect.blurRadius, y: -effect.blurRadius)
                     bctx.concatenate(ctx.ctm)
                     _draw(scene: scene, viewType: viewType,
                           reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
@@ -811,7 +811,7 @@ final class Node: NSObject, NSCoding {
                                 viewScale: inViewScale, viewRotation: inViewRotation,
                                 in: bctx)
                     }
-                    bctx.drawBlur(withBlurRadius: effect.blur, to: ctx)
+                    bctx.drawBlur(withBlurRadius: effect.blurRadius, to: ctx)
                 }
             } else {
                 ctx.beginTransparencyLayer(auxiliaryInfo: nil)
@@ -855,7 +855,7 @@ final class Node: NSObject, NSCoding {
         }
         if isEdit {
             rootCell.children.forEach {
-                $0.draw(isEdit: isEdit, isMain: false,
+                $0.draw(isEdit: isEdit, isUseDraw: false,
                         reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
                         scale: scale, rotation: rotation,
                         in: ctx)
@@ -865,7 +865,7 @@ final class Node: NSObject, NSCoding {
             ctx.setAlpha(0.5)
             ctx.beginTransparencyLayer(auxiliaryInfo: nil)
             rootCell.children.forEach {
-                $0.draw(isEdit: isEdit, isMain: true,
+                $0.draw(isEdit: isEdit, isUseDraw: true,
                         reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
                         scale: scale, rotation: rotation,
                         in: ctx)
@@ -874,7 +874,7 @@ final class Node: NSObject, NSCoding {
             ctx.restoreGState()
         } else {
             rootCell.children.forEach {
-                $0.draw(isEdit: isEdit, isMain: true,
+                $0.draw(isEdit: isEdit, isUseDraw: true,
                         reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
                         scale: scale, rotation: rotation,
                         in: ctx)
@@ -959,8 +959,8 @@ final class Node: NSObject, NSCoding {
                 if viewType == .editPoint || viewType == .editVertex {
                     editTrack.drawTransparentCellLines(withReciprocalScale: rScale, in: ctx)
                 }
-                editTrack.drawPreviousNext(isShownPrevious: scene.isShownPrevious,
-                                           isShownNext: scene.isShownNext,
+                editTrack.drawPreviousNext(isHiddenPrevious: scene.isHiddenPrevious,
+                                           isHiddenNext: scene.isHiddenNext,
                                            time: time, reciprocalScale: rScale, in: ctx)
             }
             
@@ -970,7 +970,6 @@ final class Node: NSObject, NSCoding {
                                             color: .selected,
                                             subColor: .subSelected,
                                             reciprocalScale: rScale,  in: ctx)
-                    
                     let drawing = track.drawingItem.drawing
                     let selectedLineIndexes = drawing.selectedLineIndexes
                     if !selectedLineIndexes.isEmpty {
@@ -1222,7 +1221,7 @@ final class Node: NSObject, NSCoding {
         }
         if !editTrack.cellItems.isEmpty {
             for cellItem in editTrack.cellItems {
-                if !cellItem.cell.isTranslucentLock {
+                if !cellItem.cell.isLocked {
                     if !isEditVertex {
                         Line.drawEditPointsWith(lines: cellItem.cell.geometry.lines,
                                                 reciprocalScale: reciprocalAllScale, in: ctx)
@@ -1464,26 +1463,25 @@ extension Node: Referenceable {
     static let name = Localization(english: "Node", japanese: "ノード")
 }
 
-final class NodeView: Layer, Respondable {
-    static let name = Node.name
-    
+final class NodeView: View {
     var node = Node() {
         didSet {
-            isHiddenView.selectedIndex = node.isHidden ? 0 : 1
+            isHiddenView.bool = node.isHidden
         }
     }
     
     var isSmall: Bool
-    private let nameLabel: Label
-    private let isHiddenView: EnumView
+    private let classNameLabel: Label
+    private let isHiddenView: BoolView
     init(isSmall: Bool = false) {
         self.isSmall = isSmall
-        nameLabel = Label(text: Node.name, font: isSmall ? .smallBold : .bold)
-        isHiddenView = EnumView(names: [Localization(english: "Hidden", japanese: "表示なし"),
-                                        Localization(english: "Shown", japanese: "表示あり")],
-                                cationIndex: 0, isSmall: isSmall)
+        classNameLabel = Label(text: Node.name, font: isSmall ? .smallBold : .bold)
+        isHiddenView = BoolView(cationBool: true,
+                                name: Localization(english: "Hidden", japanese: "表示なし"),
+                                isSmall: isSmall)
+        
         super.init()
-        replace(children: [nameLabel, isHiddenView])
+        replace(children: [classNameLabel, isHiddenView])
         
         isHiddenView.binding = { [unowned self] in self.setIsHidden(with: $0) }
     }
@@ -1501,14 +1499,14 @@ final class NodeView: Layer, Respondable {
     }
     private func updateLayout() {
         let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
-        nameLabel.frame.origin = CGPoint(x: padding,
-                                         y: bounds.height - nameLabel.frame.height - padding)
-        isHiddenView.frame = CGRect(x: nameLabel.frame.maxX + padding, y: padding,
-                                    width: bounds.width - nameLabel.frame.width - padding * 3,
+        classNameLabel.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameLabel.frame.height - padding)
+        isHiddenView.frame = CGRect(x: classNameLabel.frame.maxX + padding, y: padding,
+                                    width: bounds.width - classNameLabel.frame.width - padding * 3,
                                     height: isSmall ? Layout.smallHeight : Layout.basicHeight)
     }
     func updateWithNode() {
-        isHiddenView.selectedIndex = node.isHidden ? 0 : 1
+        isHiddenView.bool = node.isHidden
     }
     
     var disabledRegisterUndo = true
@@ -1521,19 +1519,23 @@ final class NodeView: Layer, Respondable {
     
     private var oldNode = Node()
     
-    private func setIsHidden(with binding: EnumView.Binding) {
+    private func setIsHidden(with binding: BoolView.Binding) {
         if binding.type == .begin {
             oldNode = node
         } else {
-            node.isHidden = binding.index == 0
+            node.isHidden = binding.bool
         }
-        setIsHiddenHandler?(Binding(nodeView: self, isHidden: binding.index == 0,
-                                    oldIsHidden: binding.oldIndex == 0, inNode: oldNode,
+        setIsHiddenHandler?(Binding(nodeView: self, isHidden: binding.bool,
+                                    oldIsHidden: binding.oldBool, inNode: oldNode,
                                     type: binding.type))
     }
     
     func copiedObjects(with event: KeyInputEvent) -> [Any]? {
         return [node.copied]
+    }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        return node.reference
     }
 }
 
@@ -1561,22 +1563,6 @@ final class NodeTreeManager {
                 updateWithNodes(isAlwaysUpdate: true)
             }
         }
-    }
-    
-    func cutIndexLabel(_ cutItem: CutItem, index: Int) -> Label {
-        return Label(frame: CGRect(x: 0, y: 0,
-                                   width: Timeline.leftWidth, height: Layout.smallHeight),
-                     text: cutLabelString(with: cutItem, at: index),
-                     font: .small, color: .locked)
-    }
-    func cutLabelString(with cutItem: CutItem, at index: Int) -> Localization {
-        let node = cutItem.cut.editNode
-        let indexPath = node.indexPath
-        var string = Localization(english: "Node", japanese: "ノード")
-        indexPath.forEach { string += Localization("\($0).") }
-        string += Localization(english: "Track", japanese: "トラック")
-        string += Localization("\(node.editTrackIndex)")
-        return Localization("\(index): ") + string
     }
     
     let nodesView = ListArrayView()

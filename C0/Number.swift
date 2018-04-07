@@ -37,10 +37,7 @@ protocol Slidable {
     var exp: Number { get }
 }
 
-final class NumberView: Layer, Respondable, Slidable {
-    static let name = Number.name
-    static let feature = Localization(english: "Slider", japanese: "スライダー")
-    
+final class NumberView: View, Slidable {
     var number: Number {
         didSet {
             updateWithNumber()
@@ -175,10 +172,9 @@ final class NumberView: Layer, Respondable, Slidable {
     
     func delete(with event: KeyInputEvent) -> Bool {
         let number = defaultNumber.clip(min: minNumber, max: maxNumber)
-        guard number != self.number else {
-            return false
+        if number != self.number {
+            set(number, old: self.number)
         }
-        set(number, oldNumber: self.number)
         return true
     }
     func copiedObjects(with event: KeyInputEvent) -> [Any]? {
@@ -188,15 +184,23 @@ final class NumberView: Layer, Respondable, Slidable {
         for object in objects {
             if let string = object as? String {
                 if let number = Double(string)?.cf {
-                    guard number != self.number else {
-                        continue
+                    if number != self.number {
+                        set(number, old: self.number)
+                        break
                     }
-                    set(number, oldNumber: self.number)
-                    return true
                 }
             }
         }
-        return false
+        return true
+    }
+    
+    func run(with event: ClickEvent) -> Bool {
+        let p = point(from: event)
+        let number = self.number(at: p)
+        if number != self.number {
+            set(number, old: self.number)
+        }
+        return true
     }
     
     private var oldNumber = 0.0.cf, oldPoint = CGPoint()
@@ -217,7 +221,7 @@ final class NumberView: Layer, Respondable, Slidable {
             number = self.number(at: p)
             if number != oldNumber {
                 registeringUndoManager?.registerUndo(withTarget: self) { [number, oldNumber] in
-                    $0.set(oldNumber, oldNumber: number)
+                    $0.set(oldNumber, old: number)
                 }
             }
             binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
@@ -226,11 +230,17 @@ final class NumberView: Layer, Respondable, Slidable {
         return true
     }
     
-    private func set(_ number: Number, oldNumber: Number) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, oldNumber: number) }
+    private func set(_ number: Number, old oldNumber: Number) {
+        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, old: number) }
         binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, type: .begin))
         self.number = number
         binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
+    }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        var reference = number.reference
+        reference.viewDescription = Localization(english: "Slider", japanese: "スライダー")
+        return reference
     }
 }
 
@@ -239,9 +249,6 @@ final class NumberView: Layer, Respondable, Slidable {
  - スクロールによる値の変更
  */
 final class DiscreteNumberView: View, Slidable {
-    static let name = Number.name
-    static let feature = Localization(english: "Discrete Slider", japanese: "離散スライダー")
-    
     var number: Number {
         didSet {
             updateWithNumber()
@@ -351,7 +358,7 @@ final class DiscreteNumberView: View, Slidable {
             return (d >= 0 ? pow(d, exp) : -pow(abs(d), exp)).interval(scale: numberInterval)
         }
     }
-    private func number(at p: CGPoint, oldNumber: Number) -> Number {
+    private func number(at p: CGPoint, old oldNumber: Number) -> Number {
         let d = isVertical ? p.y - oldPoint.y : p.x - oldPoint.x
         let v = oldNumber.interval(scale: numberInterval) + number(withDelta: isInverted ? -d : d)
         return v.clip(min: minNumber, max: maxNumber)
@@ -374,10 +381,9 @@ final class DiscreteNumberView: View, Slidable {
     
     func delete(with event: KeyInputEvent) -> Bool {
         let number = defaultNumber.clip(min: minNumber, max: maxNumber)
-        guard number != self.number else {
-            return false
+        if number != self.number {
+            set(number, oldNumber: self.number)
         }
-        set(number, oldNumber: self.number)
         return true
     }
     func copiedObjects(with event: KeyInputEvent) -> [Any]? {
@@ -391,15 +397,23 @@ final class DiscreteNumberView: View, Slidable {
             if let string = object as? String {
                 if let v = Double(string)?.cf {
                     let number = v.clip(min: minNumber, max: maxNumber)
-                    guard number != self.number else {
-                        continue
+                    if number != self.number {
+                        set(number, oldNumber: self.number)
+                        break
                     }
-                    set(number, oldNumber: self.number)
-                    return true
                 }
             }
         }
-        return false
+        return true
+    }
+    
+    func run(with event: ClickEvent) -> Bool {
+        let p = point(from: event)
+        let number = self.number(at: p, old: self.number)
+        if number != self.number {
+            set(number, oldNumber: self.number)
+        }
+        return true
     }
     
     private var oldNumber = 0.0.cf, oldPoint = CGPoint()
@@ -414,13 +428,13 @@ final class DiscreteNumberView: View, Slidable {
             oldNumber = number
             oldPoint = p
             binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .begin))
-            number = self.number(at: p, oldNumber: oldNumber)
+            number = self.number(at: p, old: oldNumber)
             binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .sending))
         case .sending:
-            number = self.number(at: p, oldNumber: oldNumber)
+            number = self.number(at: p, old: oldNumber)
             binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .sending))
         case .end:
-            number = self.number(at: p, oldNumber: oldNumber)
+            number = self.number(at: p, old: oldNumber)
             if number != oldNumber {
                 registeringUndoManager?.registerUndo(withTarget: self) { [number, oldNumber] in
                     $0.set(oldNumber, oldNumber: number)
@@ -438,12 +452,15 @@ final class DiscreteNumberView: View, Slidable {
         self.number = number
         binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
     }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        var reference = number.reference
+        reference.viewDescription = Localization(english: "Discrete Slider", japanese: "離散スライダー")
+        return reference
+    }
 }
 
-final class CircularNumberView: PathLayer, Respondable, Slidable {
-    static let name = Number.name
-    static let feature = Localization(english: "Circular Slider", japanese: "円状スライダー")
-    
+final class CircularNumberView: PathView, Slidable {
     var number: Number {
         didSet {
             updateWithNumber()
@@ -566,10 +583,9 @@ final class CircularNumberView: PathLayer, Respondable, Slidable {
     
     func delete(with event: KeyInputEvent) -> Bool {
         let number = defaultNumber.clip(min: minNumber, max: maxNumber)
-        guard number != self.number else {
-            return false
+        if number != self.number {
+            set(number, old: self.number)
         }
-        set(number, oldNumber: self.number)
         return true
     }
     func copiedObjects(with event: KeyInputEvent) -> [Any]? {
@@ -579,15 +595,23 @@ final class CircularNumberView: PathLayer, Respondable, Slidable {
         for object in objects {
             if let string = object as? String {
                 if let number = Double(string)?.cf {
-                    guard number != self.number else {
-                        continue
+                    if number != self.number {
+                        set(number, old: self.number)
+                        break
                     }
-                    set(number, oldNumber: self.number)
-                    return true
                 }
             }
         }
-        return false
+        return true
+    }
+    
+    func run(with event: ClickEvent) -> Bool {
+        let p = point(from: event)
+        let number = self.number(at: p)
+        if number != self.number {
+            set(number, old: self.number)
+        }
+        return true
     }
     
     private var oldNumber = 0.0.cf, oldPoint = CGPoint()
@@ -608,7 +632,7 @@ final class CircularNumberView: PathLayer, Respondable, Slidable {
             number = self.number(at: p)
             if number != oldNumber {
                 registeringUndoManager?.registerUndo(withTarget: self) { [number, oldNumber] in
-                    $0.set(oldNumber, oldNumber: number)
+                    $0.set(oldNumber, old: number)
                 }
             }
             binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
@@ -617,10 +641,16 @@ final class CircularNumberView: PathLayer, Respondable, Slidable {
         return true
     }
     
-    private func set(_ number: Number, oldNumber: Number) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, oldNumber: number) }
+    private func set(_ number: Number, old oldNumber: Number) {
+        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, old: number) }
         binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, type: .begin))
         self.number = number
         binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
+    }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        var reference = number.reference
+        reference.viewDescription = Localization(english: "Circular Slider", japanese: "円状スライダー")
+        return reference
     }
 }

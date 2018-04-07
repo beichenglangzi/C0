@@ -129,7 +129,7 @@ extension Drawing: Copying {
 }
 extension Drawing: ViewExpression {
     func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
-        let thumbnailView = DrawingBox()
+        let thumbnailView = DrawBox()
         thumbnailView.drawBlock = { [unowned self, unowned thumbnailView] ctx in
             self.draw(with: thumbnailView.bounds, in: ctx)
         }
@@ -150,13 +150,11 @@ extension Drawing: ViewExpression {
  # Issue
  - DraftArray、下書き化などのコマンドを排除
  */
-final class DrawingView: Layer, Respondable {
-    static let name = Drawing.name
-    
+final class DrawingView: View {
     var drawing = Drawing()
     
     var isSmall: Bool
-    private let nameLabel: Label
+    private let classNameLabel: Label
     
     let changeToDraftBox = TextBox(name: Localization(english: "Change to Draft", japanese: "下書き化"))
     let removeDraftBox = TextBox(name: Localization(english: "Remove Draft", japanese: "下書きを削除"))
@@ -167,16 +165,17 @@ final class DrawingView: Layer, Respondable {
     
     init(isSmall: Bool = false) {
         self.isSmall = isSmall
-        nameLabel = Label(text: Drawing.name, font: isSmall ? .smallBold : .bold)
+        classNameLabel = Label(text: Drawing.name, font: isSmall ? .smallBold : .bold)
         super.init()
-        replace(children: [nameLabel, changeToDraftBox, removeDraftBox, exchangeWithDraftBox, shapeLinesBox])
+        replace(children: [classNameLabel,
+                           changeToDraftBox, removeDraftBox, exchangeWithDraftBox, shapeLinesBox])
     }
     
     override var defaultBounds: CGRect {
         let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
         let buttonH = isSmall ? Layout.smallHeight : Layout.basicHeight
         return CGRect(x: 0, y: 0, width: 100,
-                      height: nameLabel.frame.height + buttonH * 4 + padding * 3)
+                      height: classNameLabel.frame.height + buttonH * 4 + padding * 3)
     }
     override var bounds: CGRect {
         didSet {
@@ -188,8 +187,8 @@ final class DrawingView: Layer, Respondable {
         let buttonH = isSmall ? Layout.smallHeight : Layout.basicHeight
         let px = padding, pw = bounds.width - padding * 2
         var py = bounds.height - padding
-        py -= nameLabel.frame.height
-        nameLabel.frame.origin = CGPoint(x: padding, y: py)
+        py -= classNameLabel.frame.height
+        classNameLabel.frame.origin = CGPoint(x: padding, y: py)
         py -= padding
         py -= buttonH
         changeToDraftBox.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
@@ -247,5 +246,9 @@ final class DrawingView: Layer, Respondable {
         binding?(Binding(view: self, drawing: oldDrawing, oldDrawing: oldDrawing, type: .begin))
         self.drawing = drawing
         binding?(Binding(view: self, drawing: drawing, oldDrawing: oldDrawing, type: .end))
+    }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        return drawing.reference
     }
 }

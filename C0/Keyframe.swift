@@ -21,13 +21,58 @@ import Foundation
 
 struct Keyframe: Codable {
     enum Interpolation: Int8, Codable {
-        case spline, bound, linear, none
+        case spline, bound, linear, step
+        var displayString: Localization {
+            switch self {
+            case .spline:
+                return Localization(english: "Interpolation: Spline", japanese: "補間: スプライン")
+            case .bound:
+                return Localization(english: "Interpolation: Bound", japanese: "補間: バウンド")
+            case .linear:
+                return Localization(english: "Interpolation: Linear", japanese: "補間: リニア")
+            case .step:
+                return Localization(english: "Interpolation: Step", japanese: "補間: ステップ")
+            }
+        }
+        static var displayStrings: [Localization] {
+            return [spline.displayString,
+                    bound.displayString,
+                    linear.displayString,
+                    step.displayString]
+        }
     }
     enum Loop: Int8, Codable {
         case none, began, ended
+        var displayString: Localization {
+            switch self {
+            case .none:
+                return Localization(english: "Loop: None", japanese: "ループ: なし")
+            case .began:
+                return Localization(english: "Loop: Began", japanese: "ループ: 開始")
+            case .ended:
+                return Localization(english: "Loop: Ended", japanese: "ループ: 終了")
+            }
+        }
+        static var displayStrings: [Localization] {
+            return [none.displayString,
+                    began.displayString,
+                    ended.displayString]
+        }
     }
     enum Label: Int8, Codable {
         case main, sub
+        var displayString: Localization {
+            switch self {
+            case .main:
+                return Localization(english: "Label: Main", japanese: "ラベル: メイン")
+            case .sub:
+                return Localization(english: "Label: Sub", japanese: "ラベル: サブ")
+            }
+        }
+        static var displayStrings: [Localization] {
+            return [main.displayString,
+                    sub.displayString]
+        }
     }
     
     var time = Beat(0)
@@ -83,19 +128,23 @@ extension Keyframe: Referenceable {
     static let name = Localization(english: "Keyframe", japanese: "キーフレーム")
 }
 extension Keyframe.Interpolation: Referenceable {
-    static let name = Localization(english: "Interpolation", japanese: "補間")
-    static let feature = Localization(english: "\"Bound\": Uses \"Spline\" without interpolation on previous, Not previous and next: Use \"Linear\"",
-                                      japanese: "バウンド: 前方側の補間をしないスプライン補間, 前後が足りない場合: リニア補間を使用")
+    static let mainName = Localization(english: "Interpolation", japanese: "補間")
+    static let name = Keyframe.name.spacedUnion(mainName)
+    static let classDescription = Localization(english: "\"Bound\": Uses \"Spline\" without interpolation on previous, Not previous and next: Use \"Linear\"",
+                                               japanese: "バウンド: 前方側の補間をしないスプライン補間, 前後が足りない場合: リニア補間を使用")
 }
 extension Keyframe.Loop: Referenceable {
-    static let name = Localization(english: "Loop", japanese: "ループ")
-    static let feature = Localization(english: "Loop from \"Began Loop\" keyframe to \"Ended Loop\" keyframe on \"Ended Loop\" keyframe",
-                                      japanese: "「ループ開始」キーフレームから「ループ終了」キーフレームの間を「ループ終了」キーフレーム上でループ")
+    static let mainName = Localization(english: "Loop", japanese: "ループ")
+    static let name = Keyframe.name.spacedUnion(mainName)
+    static let classDescription = Localization(english: "Loop from \"Began Loop\" keyframe to \"Ended Loop\" keyframe on \"Ended Loop\" keyframe",
+                                               japanese: "「ループ開始」キーフレームから「ループ終了」キーフレームの間を「ループ終了」キーフレーム上でループ")
+}
+extension Keyframe.Label: Referenceable {
+    static let mainName = Localization(english: "Label", japanese: "ラベル")
+    static let name = Keyframe.name.spacedUnion(mainName)
 }
 
-final class KeyframeView: Layer, Respondable {
-    static let name = Keyframe.name
-    
+final class KeyframeView: View {
     var keyframe = Keyframe() {
         didSet {
             if !keyframe.equalOption(other: oldValue) {
@@ -105,28 +154,33 @@ final class KeyframeView: Layer, Respondable {
     }
     
     var isSmall: Bool
-    let nameLabel: Label
+    let classNameLabel: Label
     let easingView: EasingView
-    let interpolationView: EnumView, loopView: EnumView, labelView: EnumView
+    let interpolationView: EnumView<Keyframe.Interpolation>
+    let loopView: EnumView<Keyframe.Loop>
+    let labelView: EnumView<Keyframe.Label>
     
     init(isSmall: Bool = false) {
-        nameLabel = Label(text: Keyframe.name, font: isSmall ? .smallBold : .bold)
+        classNameLabel = Label(text: Keyframe.name, font: isSmall ? .smallBold : .bold)
         easingView = EasingView(isSmall: isSmall)
-        interpolationView = EnumView(names: [Localization(english: "Spline", japanese: "スプライン"),
-                                             Localization(english: "Bound", japanese: "バウンド"),
-                                             Localization(english: "Linear", japanese: "リニア"),
-                                             Localization(english: "Step", japanese: "補間なし")],
+        interpolationView = EnumView(enumeratedType: .spline,
+                                     indexHandler: { Int($0) },
+                                     rawValueHandler: { Keyframe.Interpolation.RawValue($0) },
+                                     names: Keyframe.Interpolation.displayStrings,
                                      isSmall: isSmall)
-        loopView = EnumView(names: [Localization(english: "No Loop", japanese: "ループなし"),
-                                    Localization(english: "Began Loop", japanese: "ループ開始"),
-                                    Localization(english: "Ended Loop", japanese: "ループ終了")],
+        loopView = EnumView(enumeratedType: .none,
+                            indexHandler: { Int($0) },
+                            rawValueHandler: { Keyframe.Loop.RawValue($0) },
+                            names: Keyframe.Loop.displayStrings,
                             isSmall: isSmall)
-        labelView = EnumView(names: [Localization(english: "Main Label", japanese: "メインラベル"),
-                                     Localization(english: "Sub Label", japanese: "サブラベル")],
+        labelView = EnumView(enumeratedType: .main,
+                             indexHandler: { Int($0) },
+                             rawValueHandler: { Keyframe.Label.RawValue($0) },
+                             names: Keyframe.Label.displayStrings,
                              isSmall: isSmall)
         self.isSmall = isSmall
         super.init()
-        replace(children: [nameLabel, easingView, interpolationView, loopView, labelView])
+        replace(children: [classNameLabel, easingView, interpolationView, loopView, labelView])
         interpolationView.binding = { [unowned self] in self.setKeyframe(with: $0) }
         loopView.binding = { [unowned self] in self.setKeyframe(with: $0) }
         labelView.binding = { [unowned self] in self.setKeyframe(with: $0) }
@@ -141,8 +195,8 @@ final class KeyframeView: Layer, Respondable {
     private func updateLayout() {
         let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
         let w = bounds.width - padding * 2, h = isSmall ? Layout.smallHeight : Layout.basicHeight
-        var y = bounds.height - nameLabel.frame.height - padding
-        nameLabel.frame.origin = CGPoint(x: padding, y: y)
+        var y = bounds.height - classNameLabel.frame.height - padding
+        classNameLabel.frame.origin = CGPoint(x: padding, y: y)
         y -= h + padding
         interpolationView.frame = CGRect(x: padding, y: y, width: w, height: h)
         y -= h
@@ -152,33 +206,11 @@ final class KeyframeView: Layer, Respondable {
         easingView.frame = CGRect(x: padding, y: padding,
                                     width: w, height: y - padding)
     }
-    
     private func updateWithKeyframeOption() {
-        labelView.selectedIndex = KeyframeView.index(with: keyframe.label)
-        loopView.selectedIndex = KeyframeView.index(with: keyframe.loop)
-        interpolationView.selectedIndex = KeyframeView.index(with: keyframe.interpolation)
+        labelView.enumeratedType = keyframe.label
+        loopView.enumeratedType = keyframe.loop
+        interpolationView.enumeratedType = keyframe.interpolation
         easingView.easing = keyframe.easing
-    }
-    
-    private static func index(with interpolation: Keyframe.Interpolation) -> Int {
-        return Int(interpolation.rawValue)
-    }
-    private static func interpolation(at index: Int) -> Keyframe.Interpolation {
-        return Keyframe.Interpolation(rawValue: Int8(index)) ?? .spline
-    }
-    
-    private static func index(with loop: Keyframe.Loop) -> Int {
-        return Int(loop.rawValue)
-    }
-    private static func loop(at index: Int) -> Keyframe.Loop {
-        return Keyframe.Loop(rawValue: Int8(index)) ?? .none
-    }
-    
-    private static func index(with label: Keyframe.Label) -> Int {
-        return Int(label.rawValue)
-    }
-    private static func label(at index: Int) -> Keyframe.Label {
-        return Keyframe.Label(rawValue: Int8(index)) ?? .main
     }
     
     var disabledRegisterUndo = false
@@ -191,21 +223,18 @@ final class KeyframeView: Layer, Respondable {
     
     private var oldKeyframe = Keyframe()
     
-    private func setKeyframe(with binding: EnumView.Binding) {
+    private func setKeyframe<T: EnumType>(with binding: EnumView<T>.Binding) {
         if binding.type == .begin {
             oldKeyframe = keyframe
             self.binding?(Binding(view: self,
                                   keyframe: oldKeyframe, oldKeyframe: oldKeyframe, type: .begin))
         } else {
-            switch binding.enumView {
-            case interpolationView:
-                keyframe = keyframe.with(KeyframeView.interpolation(at: binding.index))
-            case loopView:
-                keyframe = keyframe.with(KeyframeView.loop(at: binding.index))
-            case labelView:
-                keyframe = keyframe.with(KeyframeView.label(at: binding.index))
-            default:
-                fatalError("No case")
+            if let interpolation = binding.enumeratedType as? Keyframe.Interpolation {
+                keyframe.interpolation = interpolation
+            } else if let loop = binding.enumeratedType as? Keyframe.Loop {
+                keyframe.loop = loop
+            } else if let label = binding.enumeratedType as? Keyframe.Label {
+                keyframe.label = label
             }
             self.binding?(Binding(view: self,
                                   keyframe: keyframe, oldKeyframe: oldKeyframe, type: binding.type))
@@ -258,5 +287,9 @@ final class KeyframeView: Layer, Respondable {
         self.keyframe = keyframe
         binding?(Binding(view: self,
                          keyframe: keyframe, oldKeyframe: oldKeyframe, type: .end))
+    }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        return keyframe.reference
     }
 }

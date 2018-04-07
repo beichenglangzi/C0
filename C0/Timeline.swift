@@ -26,7 +26,7 @@ import Foundation
  - sceneを取り除く
  - スクロールの可視性の改善
  */
-final class Timeline: Layer, Respondable {
+final class Timeline: View {
     static let name = Localization(english: "Timeline", japanese: "タイムライン")
     static let feature = Localization(english: "Select time: Left and right scroll\nSelect track: Up and down scroll",
                                       japanese: "時間選択: 左右スクロール\nトラック選択: 上下スクロール")
@@ -436,7 +436,7 @@ final class Timeline: Layer, Respondable {
             if !(cutView.frame.minX > bounds.maxX && cutView.frame.maxX < bounds.minX) {
                 let sp = Layout.smallPadding
                 if cutView.frame.minX < bounds.minX {
-                    let nw = cutView.nameLabel.frame.width + sp
+                    let nw = cutView.classNameLabel.frame.width + sp
                     if bounds.minX + nw > cutView.frame.maxX {
                         cutView.nameX = cutView.frame.width - nw
                     } else {
@@ -1685,7 +1685,7 @@ final class Timeline: Layer, Respondable {
     }
 }
 
-final class Ruler: Layer, Respondable {
+final class Ruler: View {
     static let name = Localization(english: "Ruler", japanese: "目盛り")
     
     private let scroller: Layer = {

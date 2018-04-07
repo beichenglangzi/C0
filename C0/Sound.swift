@@ -298,9 +298,7 @@ final class SoundWaveformView: Layer {
  - 効果音編集
  - シーケンサー
  */
-final class SoundView: Layer, Respondable {
-    static let name = Sound.name
-    
+final class SoundView: View {
     var sound = Sound() {
         didSet {
             soundLabel.localization = sound.url != nil ?
@@ -308,13 +306,13 @@ final class SoundView: Layer, Respondable {
         }
     }
     
-    let nameLabel = Label(text: Localization(english: "Sound", japanese: "サウンド"), font: .bold)
+    let classNameLabel = Label(text: Sound.name, font: .bold)
     let soundLabel = Label(text: Localization(english: "Empty", japanese: "空"))
     
     override init() {
         super.init()
         isClipped = true
-        replace(children: [nameLabel, soundLabel])
+        replace(children: [classNameLabel, soundLabel])
         updateLayout()
     }
     
@@ -330,7 +328,7 @@ final class SoundView: Layer, Respondable {
         }
     }
     private func updateLayout() {
-        _ = Layout.leftAlignment([nameLabel, Padding(), soundLabel], height: frame.height)
+        _ = Layout.leftAlignment([classNameLabel, Padding(), soundLabel], height: frame.height)
     }
     
     var disabledRegisterUndo = false
@@ -374,5 +372,9 @@ final class SoundView: Layer, Respondable {
         self.sound = sound
         setSoundHandler?(Binding(soundView: self,
                                  sound: sound, oldSound: oldSound, type: .end))
+    }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        return sound.reference
     }
 }

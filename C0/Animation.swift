@@ -314,9 +314,7 @@ extension Animation: Referenceable {
     static let name = Localization(english: "Animation", japanese: "アニメーション")
 }
 
-final class AnimationView: Layer, Respondable {
-    static let name = Animation.name
-    
+final class AnimationView: View {
     init(_ animation: Animation = Animation(),
          beginBaseTime: Beat = 0, baseTimeInterval: Beat = Beat(1, 16),
          origin: CGPoint = CGPoint(),
@@ -347,7 +345,7 @@ final class AnimationView: Layer, Respondable {
         case .linear:
             path.addRect(CGRect(x: p.x - linearLineWidth / 2, y: p.y - lineHeight / 2,
                                 width: linearLineWidth, height: lineHeight))
-        case .none:
+        case .step:
             path.addRect(CGRect(x: p.x - lineWidth / 2, y: p.y - lineHeight / 2,
                                 width: lineWidth, height: lineHeight))
         }
@@ -606,7 +604,7 @@ final class AnimationView: Layer, Respondable {
                                           width: baseWidth, height: frame.height)
         }
     }
-    func moveCursor(with event: MoveEvent) -> Bool {
+    func moveCursor(with event: MoveCursorEvent) -> Bool {
         updateIndicatedKeyframeIndex(at: point(from: event))
         return true
     }
@@ -1270,5 +1268,9 @@ final class AnimationView: Layer, Respondable {
                                      type: .end))
         isUseUpdateChildren = true
         updateChildren()
+    }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        return animation.reference
     }
 }

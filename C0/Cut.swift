@@ -41,7 +41,7 @@ final class CutTrack: NSObject, Track, NSCoding {
         cutItem.keyCuts.insert(cut, at: index)
         let cutTime = index == animation.keyframes.count ? animation.duration : time(at: index)
         let keyframe = Keyframe(time: cutTime, easing: Easing(),
-                                interpolation: .none, loop: .none, label: .main)
+                                interpolation: .step, loop: .none, label: .main)
         animation.keyframes.insert(keyframe, at: index)
         updateCutTimeAndDuration()
         cut.rootNode.allChildren { differentialDataModel.insert($0.differentialDataModel) }
@@ -343,7 +343,7 @@ final class Cut: NSObject, NSCoding {
             let sb = textLine.typographicBounds.insetBy(dx: -10, dy: -2).integral
             textLine.draw(in: CGRect(x: bounds.minX + (bounds.width - sb.width) / 2,
                                      y: bounds.minY + bounds.height - sb.height - borderWidth,
-                                     width: sb.width, height: sb.height),
+                                     width: sb.width, height: sb.height), baseFont: .bold,
                           in: ctx)
         }
     }
@@ -503,10 +503,10 @@ extension Cut: Referenceable {
     static let name = Localization(english: "Cut", japanese: "カット")
 }
 
-final class CutView: Layer, Respondable {
+final class CutView: View {
     static let name = Cut.name
     
-    let nameLabel = Label(text: Cut.name, font: .smallBold), indexLabel = Label(font: .small)
+    let classNameLabel = Label(text: Cut.name, font: .smallBold), indexLabel = Label(font: .small)
     let clipView = Box()
     
     private(set) var editAnimationView: AnimationView {
@@ -603,7 +603,7 @@ final class CutView: Layer, Respondable {
          baseWidth: CGFloat, baseTimeInterval: Beat,
          knobHalfHeight: CGFloat, subKnobHalfHeight: CGFloat, maxLineWidth: CGFloat, height: CGFloat) {
         
-        nameLabel.fillColor = nil
+        classNameLabel.fillColor = nil
         indexLabel.fillColor = nil
         clipView.isClipped = true
         
@@ -637,7 +637,7 @@ final class CutView: Layer, Respondable {
         
         super.init()
         clipView.replace(children: animationViews)
-        replace(children: [clipView, nameLabel, indexLabel])
+        replace(children: [clipView, classNameLabel, indexLabel])
         frame.size.height = height
         updateLayout()
         updateWithDuration()
@@ -772,6 +772,12 @@ final class CutView: Layer, Respondable {
         return DoubleBeat(time / baseTimeInterval).cf * baseWidth
     }
     
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
+    }
+    
     override var bounds: CGRect {
         didSet {
             updateLayout()
@@ -780,7 +786,7 @@ final class CutView: Layer, Respondable {
     
     func updateLayout() {
         let sp = Layout.smallPadding
-        clipView.frame = CGRect(x: 0, y: 0, width: frame.width, height: nameLabel.frame.minY - sp)
+        clipView.frame = CGRect(x: 0, y: 0, width: frame.width, height: classNameLabel.frame.minY - sp)
         updateWithNamePosition()
         updateChildren()
     }
@@ -791,9 +797,10 @@ final class CutView: Layer, Respondable {
     }
     func updateWithNamePosition() {
         let padding = Layout.smallPadding
-        nameLabel.frame.origin = CGPoint(x: nameX, y: bounds.height - nameLabel.frame.height - padding)
-        indexLabel.frame.origin = CGPoint(x: nameLabel.frame.maxX + padding,
-                                          y: bounds.height - nameLabel.frame.height - padding)
+        classNameLabel.frame.origin = CGPoint(x: nameX,
+                                              y: bounds.height - classNameLabel.frame.height - padding)
+        indexLabel.frame.origin = CGPoint(x: classNameLabel.frame.maxX + padding,
+                                          y: bounds.height - classNameLabel.frame.height - padding)
     }
     func updateIndex(_ i: Int) {
         indexLabel.localization = Localization("\(i)")

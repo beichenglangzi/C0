@@ -20,16 +20,16 @@
 import Foundation
 
 protocol Sendable {
-    func sendMoveCursor(with event: MoveEvent)
+    func sendMoveCursor(with event: MoveCursorEvent)
     func sendViewQuasimode(with event: Event)
     func sendKeyInputIsEditText(with event: KeyInputEvent) -> Bool
-    func sendRightDrag(with event: DragEvent)
+    func sendSubDrag(with event: SubDragEvent)
     func sendDrag(with event: DragEvent)
     func sendScroll(with event: ScrollEvent, momentum: Bool)
-    func sendZoom(with event: PinchEvent)
+    func sendPinch(with event: PinchEvent)
     func sendRotate(with event: RotateEvent)
-    func sendLookup(with event: TapEvent)
-    func sendResetView(with event: DoubleTapEvent)
+    func sendTap(with event: TapEvent)
+    func sendDoubleTap(with event: DoubleTapEvent)
 }
 
 final class Sender: Sendable {
@@ -107,7 +107,9 @@ final class Sender: Sendable {
         }
     }
     
-    func sendMoveCursor(with event: MoveEvent) {
+    private let defaultMoveCursorAction = Action(quasimode: Quasimode(gesture: .moveCursor),
+                                                 moveCursor: { $0.moveCursor(with: $1) })
+    func sendMoveCursor(with event: MoveCursorEvent) {
         rootView.rootCursorPoint = event.location
         let indicatedLayer = self.indicatedLayer(with: event)
         let indicatedResponder = responder(with: indicatedLayer)
@@ -125,18 +127,18 @@ final class Sender: Sendable {
         }
     }
     
-    private var oldQuasimodeAction = Action()
-    private weak var oldQuasimodeResponder: Respondable?
+    private var oldViewQuasimodeAction = Action()
+    private weak var oldViewQuasimodeResponder: Respondable?
     func sendViewQuasimode(with event: Event) {
-        let quasimodeAction = actionManager.actionWith(.drag, event) ?? Action()
-        if !isDown {
-            if rootView.viewQuasimode != quasimodeAction.viewQuasimode {
-                rootView.viewQuasimode = quasimodeAction.viewQuasimode
+        let viewQuasimodeAction = actionManager.actionWith(.drag, event) ?? Action()
+        if dragAction == nil {
+            if rootView.viewQuasimode != viewQuasimodeAction.viewQuasimode {
+                rootView.viewQuasimode = viewQuasimodeAction.viewQuasimode
                 cursor = indicatedResponder.cursor
             }
         }
-        oldQuasimodeAction = quasimodeAction
-        oldQuasimodeResponder = indicatedResponder
+        oldViewQuasimodeAction = viewQuasimodeAction
+        oldViewQuasimodeResponder = indicatedResponder
     }
     
     private var isKey = false, keyAction = Action(), keyEvent: KeyInputEvent?
@@ -145,14 +147,14 @@ final class Sender: Sendable {
         switch event.sendType {
         case .begin:
             setIndicatedResponder(at: event.location)
-            guard !isDown else {
+            guard dragAction == nil else {
                 keyEvent = event
                 return false
             }
             isKey = true
             keyAction = actionManager.actionWith(.keyInput, event)
-                ?? Action(key: event.key)
-            if let editTextView = editTextView, keyAction.canTextKeyInput() {
+                ?? Action(quasimode: Quasimode([], event.key))
+            if let editTextView = editTextView, keyAction.quasimode.canTextKeyInput() {
                 self.keyTextView = editTextView
                 _ = keyAction.keyInput?(editTextView, event)
                 return true
@@ -177,63 +179,114 @@ final class Sender: Sendable {
         return false
     }
     
-    func sendRightDrag(with event: DragEvent) {
-        if event.sendType == .end {
-            _ = responder(with: indicatedLayer(with: event)) { $0.bind(with: event) }
-        }
-    }
-    
-    private let defaultClickAction = Action(gesture: .click)
-    private let defaultDragAction = Action(drag: { $0.move(with: $1) })
-    private var isDown = false, isDrag = false, dragAction = Action()
+    private let defaultClickAction = Action(quasimode: Quasimode(gesture: .click),
+                                            click: { $0.run(with: $1) })
+    private let defaultDragAction = Action(quasimode: Quasimode(gesture: .drag),
+                                           drag: { $0.move(with: $1) })
+    private var dragAction: Action?, firstDragEvent: DragEvent?
     private weak var dragResponder: Respondable?
     func sendDrag(with event: DragEvent) {
         switch event.sendType {
         case .begin:
             setIndicatedResponder(at: event.location)
-            isDown = true
-            isDrag = false
+            firstDragEvent = event
             dragAction = actionManager.actionWith(.drag, event) ?? defaultDragAction
-            dragResponder = responder(with: indicatedLayer(with: event)) {
-                dragAction.drag?($0, event) ?? false
-            }
+            dragResponder = nil
         case .sending:
-            isDrag = true
-            if isDown, let dragResponder = dragResponder {
+            guard let dragAction = dragAction else {
+                return
+            }
+            if let dragResponder = dragResponder {
+                _ = dragAction.drag?(dragResponder, event)
+            } else if let firstDragEvent = firstDragEvent {
+                let dragResponder = responder(with: indicatedLayer(with: firstDragEvent)) {
+                    dragAction.drag?($0, firstDragEvent) ?? false
+                }
+                self.firstDragEvent = nil
+                self.dragResponder = dragResponder
                 _ = dragAction.drag?(dragResponder, event)
             }
         case .end:
-            if isDown {
-                if let dragResponder = dragResponder {
-                    _ = dragAction.drag?(dragResponder, event)
-                }
-                if !isDrag {
-                    _ = responder(with: indicatedLayer(with: event)) { $0.run(with: event) }
-                }
-                isDown = false
-                
-                if let keyEvent = keyEvent {
-                    _ = sendKeyInputIsEditText(with: keyEvent.with(sendType: .begin))
-                    self.keyEvent = nil
-                } else {
-                    let indicatedResponder = responder(with: indicatedLayer(with: event))
-                    if self.indicatedResponder !== indicatedResponder {
-                        self.indicatedResponder = indicatedResponder
-                        cursor = indicatedResponder.cursor
-                    }
-                }
-                isDrag = false
-                
-                if dragAction != oldQuasimodeAction {
-                    if let dragResponder = dragResponder {
-                        if indicatedResponder !== dragResponder {
-                            dragResponder.viewQuasimode = .move
-                        }
-                    }
-                    rootView.viewQuasimode = oldQuasimodeAction.viewQuasimode
-                    indicatedResponder.viewQuasimode = oldQuasimodeAction.viewQuasimode
+            guard let dragAction = dragAction else {
+                return
+            }
+            if let dragResponder = dragResponder {
+                _ = dragAction.drag?(dragResponder, event)
+            } else {
+                self.firstDragEvent = nil
+                let clickAction = actionManager.actionWith(.click, event) ?? defaultClickAction
+                _ = responder(with: indicatedLayer(with: event)) {
+                    clickAction.click?($0, event) ?? false
                 }
             }
+            endAction(with: event, editAction: dragAction, editResponder: dragResponder)
+            self.dragResponder = nil
+            self.dragAction = nil
+        }
+    }
+    
+    private var subDragAction: Action?, firstSubDragEvent: DragEvent?
+    private weak var subDragResponder: Respondable?
+    func sendSubDrag(with event: SubDragEvent) {
+        switch event.sendType {
+        case .begin:
+            setIndicatedResponder(at: event.location)
+            firstSubDragEvent = event
+            subDragAction = actionManager.actionWith(.subDrag, event)
+            subDragResponder = nil
+        case .sending:
+            guard let subDragAction = subDragAction else {
+                return
+            }
+            if let subDragResponder = subDragResponder {
+                _ = subDragAction.drag?(subDragResponder, event)
+            } else if let firstSubDragEvent = firstSubDragEvent {
+                let subDragResponder = responder(with: indicatedLayer(with: firstSubDragEvent)) {
+                    subDragAction.drag?($0, firstSubDragEvent) ?? false
+                }
+                self.firstDragEvent = nil
+                self.subDragResponder = subDragResponder
+                _ = subDragAction.drag?(subDragResponder, event)
+            }
+        case .end:
+            guard let subDragAction = subDragAction else {
+                return
+            }
+            if let subDragResponder = subDragResponder {
+                _ = subDragAction.drag?(subDragResponder, event)
+            } else {
+                self.firstSubDragEvent = nil
+                if let subClickAction = actionManager.actionWith(.subClick, event) {
+                    _ = responder(with: indicatedLayer(with: event)) {
+                        subClickAction.click?($0, event) ?? false
+                    }
+                }
+            }
+            endAction(with: event, editAction: subDragAction, editResponder: subDragResponder)
+            self.subDragResponder = nil
+            self.subDragAction = nil
+        }
+    }
+    
+    func endAction(with event: Event, editAction: Action, editResponder: Respondable?) {
+        if let keyEvent = keyEvent {
+            _ = sendKeyInputIsEditText(with: keyEvent.with(sendType: .begin))
+            self.keyEvent = nil
+        } else {
+            let indicatedResponder = responder(with: indicatedLayer(with: event))
+            if self.indicatedResponder !== indicatedResponder {
+                self.indicatedResponder = indicatedResponder
+                cursor = indicatedResponder.cursor
+            }
+        }
+        if editAction != oldViewQuasimodeAction {
+            if let editResponder = editResponder {
+                if indicatedResponder !== editResponder {
+                    editResponder.viewQuasimode = type(of: editResponder).defaultViewQuasimode
+                }
+            }
+            rootView.viewQuasimode = oldViewQuasimodeAction.viewQuasimode
+            indicatedResponder.viewQuasimode = oldViewQuasimodeAction.viewQuasimode
         }
     }
     
@@ -249,26 +302,26 @@ final class Sender: Sendable {
         setIndicatedResponder(at: event.location)
         cursor = indicatedResponder.cursor
     }
-    func sendZoom(with event: PinchEvent) {
+    func sendPinch(with event: PinchEvent) {
         _ = responder(with: indicatedLayer(with: event)) { $0.zoom(with: event) }
     }
     func sendRotate(with event: RotateEvent) {
         _ = responder(with: indicatedLayer(with: event)) { $0.rotate(with: event) }
     }
     
-    func sendLookup(with event: TapEvent) {
-        let p = event.location.integral
-        let responder = self.responder(with: indicatedLayer(with: event))
-        let referenceView = ReferenceView(reference: responder.lookUp(with: event))
-        let panel = Panel(isUseHedding: true)
-        panel.contents = [referenceView]
-        panel.openPoint = p.integral
-        panel.openViewPoint = rootView.point(from: event)
-        panel.subIndicatedParent = rootView
+    func sendTap(with event: TapEvent) {
+        guard let action = actionManager.actionWith(.tap, event) else {
+            return
+        }
+        _ = responder(with: indicatedLayer(with: event)) { action.tap?($0, event) ?? false }
+        setIndicatedResponder(at: event.location)
     }
     
-    func sendResetView(with event: DoubleTapEvent) {
-        _ = responder(with: indicatedLayer(with: event)) { $0.resetView(with: event) }
+    private let defaultDoubleTapAction = Action(quasimode: Quasimode(gesture: .doubleTap),
+                                                doubleTap: { $0.resetView(with: $1) })
+    func sendDoubleTap(with event: DoubleTapEvent) {
+        let action = actionManager.actionWith(.doubleTap, event) ?? defaultDoubleTapAction
+        _ = responder(with: indicatedLayer(with: event)) { action.doubleTap?($0, event) ?? false }
         setIndicatedResponder(at: event.location)
     }
 }

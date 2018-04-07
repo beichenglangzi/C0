@@ -74,7 +74,7 @@ extension Easing: Referenceable {
 }
 extension Easing: ViewExpression {
     func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
-        let thumbnailView = DrawingBox()
+        let thumbnailView = DrawBox()
         thumbnailView.drawBlock = { [unowned thumbnailView] ctx in
             self.draw(with: thumbnailView.bounds, in: ctx)
         }
@@ -95,10 +95,7 @@ extension Easing: ViewExpression {
  # Issue
  - 前後キーフレームからの傾斜スナップ
  */
-final class EasingView: Layer, Respondable {
-    static let name = Easing.name
-    static let feature = Localization(english: "Horizontal axis: Time\nVertical axis: Correction time",
-                                      japanese: "横軸: 時間\n縦軸: 補正後の時間")
+final class EasingView: View {
     var instanceDescription: Localization {
         return easing.instanceDescription
     }
@@ -243,5 +240,12 @@ final class EasingView: Layer, Respondable {
         binding?(Binding(view: self, easing: oldEasing, oldEasing: oldEasing, type: .begin))
         self.easing = easing
         binding?(Binding(view: self, easing: easing, oldEasing: oldEasing, type: .end))
+    }
+    
+    func lookUp(with event: TapEvent) -> Referenceable? {
+        var reference = easing.reference
+        reference.viewDescription = Localization(english: "Horizontal axis: Time\nVertical axis: Correction time",
+                                                 japanese: "横軸: 時間\n縦軸: 補正後の時間")
+        return reference
     }
 }

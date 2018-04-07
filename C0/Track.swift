@@ -1155,14 +1155,14 @@ final class NodeTrack: NSObject, Track, NSCoding {
             .unionNoEmpty(drawingItem.imageBounds)
     }
     
-    func drawPreviousNext(isShownPrevious: Bool, isShownNext: Bool,
+    func drawPreviousNext(isHiddenPrevious: Bool, isHiddenNext: Bool,
                           time: Beat, reciprocalScale: CGFloat, in ctx: CGContext) {
         let index = animation.loopedKeyframeIndex(withTime: time).keyframeIndex
-        drawingItem.drawPreviousNext(isShownPrevious: isShownPrevious, isShownNext: isShownNext,
+        drawingItem.drawPreviousNext(isHiddenPrevious: isHiddenPrevious, isHiddenNext: isHiddenNext,
                                      index: index, reciprocalScale: reciprocalScale, in: ctx)
         cellItems.forEach {
             $0.drawPreviousNext(lineWidth: drawingItem.lineWidth * reciprocalScale,
-                                isShownPrevious: isShownPrevious, isShownNext: isShownNext,
+                                isHiddenPrevious: isHiddenPrevious, isHiddenNext: isHiddenNext,
                                 index: index, in: ctx)
         }
     }
@@ -1303,13 +1303,13 @@ final class DrawingItem: NSObject, TrackItem, NSCoding {
     func draw(withReciprocalScale reciprocalScale: CGFloat, in ctx: CGContext) {
         drawing.draw(lineWidth: lineWidth * reciprocalScale, lineColor: color, in: ctx)
     }
-    func drawPreviousNext(isShownPrevious: Bool, isShownNext: Bool,
+    func drawPreviousNext(isHiddenPrevious: Bool, isHiddenNext: Bool,
                           index: Int, reciprocalScale: CGFloat, in ctx: CGContext) {
         let lineWidth = self.lineWidth * reciprocalScale
-        if isShownPrevious && index - 1 >= 0 {
+        if !isHiddenPrevious && index - 1 >= 0 {
             keyDrawings[index - 1].draw(lineWidth: lineWidth, lineColor: Color.previous, in: ctx)
         }
-        if isShownNext && index + 1 <= keyDrawings.count - 1 {
+        if !isHiddenNext && index + 1 <= keyDrawings.count - 1 {
             keyDrawings[index + 1].draw(lineWidth: lineWidth, lineColor: Color.next, in: ctx)
         }
     }
@@ -1399,12 +1399,12 @@ final class CellItem: NSObject, TrackItem, NSCoding {
     }
     
     func drawPreviousNext(lineWidth: CGFloat,
-                          isShownPrevious: Bool, isShownNext: Bool, index: Int, in ctx: CGContext) {
-        if isShownPrevious && index - 1 >= 0 {
+                          isHiddenPrevious: Bool, isHiddenNext: Bool, index: Int, in ctx: CGContext) {
+        if !isHiddenPrevious && index - 1 >= 0 {
             ctx.setFillColor(Color.previous.cgColor)
             keyGeometries[index - 1].draw(withLineWidth: lineWidth, in: ctx)
         }
-        if isShownNext && index + 1 <= keyGeometries.count - 1 {
+        if !isHiddenNext && index + 1 <= keyGeometries.count - 1 {
             ctx.setFillColor(Color.next.cgColor)
             keyGeometries[index + 1].draw(withLineWidth: lineWidth, in: ctx)
         }

@@ -31,14 +31,14 @@ import Foundation
  */
 final class Cell: NSObject, NSCoding {
     var children: [Cell], geometry: Geometry, material: Material
-    var isLocked: Bool, isHidden: Bool, isTranslucentLock: Bool, id: UUID
+    var isLocked: Bool, isHidden: Bool, isMainEdit: Bool, id: UUID
     var drawGeometry: Geometry, drawMaterial: Material
     var isIndicated = false
     
     init(children: [Cell] = [], geometry: Geometry = Geometry(),
          material: Material = Material(color: Color.random()),
-         isLocked: Bool = false, isHidden: Bool = false,
-         isTranslucentLock: Bool = false, id: UUID = UUID()) {
+         isLocked: Bool = false, isHidden: Bool = false, isMainEdit: Bool = false,
+         id: UUID = UUID()) {
         
         self.children = children
         self.geometry = geometry
@@ -47,7 +47,7 @@ final class Cell: NSObject, NSCoding {
         self.drawMaterial = material
         self.isLocked = isLocked
         self.isHidden = isHidden
-        self.isTranslucentLock = isTranslucentLock
+        self.isMainEdit = isMainEdit
         self.id = id
         super.init()
     }
@@ -55,7 +55,7 @@ final class Cell: NSObject, NSCoding {
     private enum CodingKeys: String, CodingKey {
         case
         children, geometry, material, drawGeometry, drawMaterial,
-        isLocked, isHidden, isTranslucentLock, id
+        isLocked, isHidden, isMainEdit, id
     }
     init?(coder: NSCoder) {
         children = coder.decodeObject(forKey: CodingKeys.children.rawValue) as? [Cell] ?? []
@@ -67,7 +67,7 @@ final class Cell: NSObject, NSCoding {
             as? Material ?? Material()
         isLocked = coder.decodeBool(forKey: CodingKeys.isLocked.rawValue)
         isHidden = coder.decodeBool(forKey: CodingKeys.isHidden.rawValue)
-        isTranslucentLock = coder.decodeBool(forKey: CodingKeys.isTranslucentLock.rawValue)
+        isMainEdit = coder.decodeBool(forKey: CodingKeys.isMainEdit.rawValue)
         id = coder.decodeObject(forKey: CodingKeys.id.rawValue) as? UUID ?? UUID()
         super.init()
     }
@@ -82,7 +82,7 @@ final class Cell: NSObject, NSCoding {
         coder.encode(drawMaterial, forKey: CodingKeys.drawMaterial.rawValue)
         coder.encode(isLocked, forKey: CodingKeys.isLocked.rawValue)
         coder.encode(isHidden, forKey: CodingKeys.isHidden.rawValue)
-        coder.encode(isTranslucentLock, forKey: CodingKeys.isTranslucentLock.rawValue)
+        coder.encode(isMainEdit, forKey: CodingKeys.isMainEdit.rawValue)
         coder.encode(id, forKey: CodingKeys.id.rawValue)
     }
     
@@ -108,7 +108,7 @@ final class Cell: NSObject, NSCoding {
                                                    lineWidth: material.lineWidth * 2)
     }
     var isEditable: Bool {
-        return !isLocked && !isHidden && !isTranslucentLock
+        return !isLocked && !isHidden
     }
     
     private var depthFirstSearched = false
@@ -318,8 +318,7 @@ final class Cell: NSObject, NSCoding {
     }
     
     func contains(_ p: CGPoint) -> Bool {
-        return !isHidden && !isTranslucentLock
-            && (imageBounds.contains(p) ? geometry.path.contains(p) : false)
+        return !isEditable && (imageBounds.contains(p) ? geometry.path.contains(p) : false)
     }
     func contains(_ cell: Cell) -> Bool {
         if !geometry.isEmpty && !cell.geometry.isEmpty && isEditable
@@ -490,35 +489,34 @@ final class Cell: NSObject, NSCoding {
     
     func colorAndLineColor(withIsEdit isEdit: Bool,
                            isInterpolated: Bool) -> (color: Color, lineColor: Color) {
-        if isEdit {
-            let mColor = isIndicated ?
-                Color.linear(material.color, .subIndicated, t: 0.5) :
-                material.color
-            let mLineColor = isIndicated ? Color.indicated : material.lineColor
-            
-            let color = isInterpolated ? Color.linear(mColor, .red, t: 0.5) : mColor
-            let lineColor = isInterpolated ? Color.linear(mLineColor, .red, t: 0.5) : mLineColor
-            
-            let aColor = material.type == .add || material.type == .luster ?
-                color.multiply(alpha: 0.5) : color.multiply(white: 0.8)
-            let aLineColor = isLocked ?
-                lineColor.multiply(white: 0.5) : lineColor
-            if isTranslucentLock {
-                return (aColor.multiply(alpha: 0.2), aLineColor.multiply(alpha: 0.2))
-            } else {
-                return (aColor, aLineColor)
-            }
-        } else {
+        guard isEdit else {
             return (material.color, material.lineColor)
         }
+        let mColor = isIndicated ?
+            Color.linear(material.color, .subIndicated, t: 0.5) :
+            material.color
+        let mLineColor = isIndicated ? Color.indicated : material.lineColor
+        
+        let color = isInterpolated ? Color.linear(mColor, .red, t: 0.5) : mColor
+        let lineColor = isInterpolated ? Color.linear(mLineColor, .red, t: 0.5) : mLineColor
+        
+        let aColor = material.type == .add || material.type == .luster ?
+            color.multiply(alpha: 0.5) : color.multiply(white: 0.8)
+        let aLineColor = isLocked ?
+            lineColor.multiply(white: 0.5) : lineColor
+        if isLocked {
+            return (aColor.multiply(alpha: 0.2), aLineColor.multiply(alpha: 0.2))
+        } else {
+            return (aColor, aLineColor)
+        }
     }
-    func draw(isEdit: Bool = false, isMain: Bool = false,
+    func draw(isEdit: Bool = false, isUseDraw: Bool = false,
               reciprocalScale: CGFloat, reciprocalAllScale: CGFloat,
-              scale: CGFloat, rotation: CGFloat,in ctx: CGContext) {
-        let isEditMain = isEdit && isMain
-        if isEditMain && self.geometry == drawGeometry {
+              scale: CGFloat, rotation: CGFloat, in ctx: CGContext) {
+        let isEditAndUseDraw = isEdit && isUseDraw
+        if isEditAndUseDraw && self.geometry == drawGeometry {
             children.forEach {
-                $0.draw(isEdit: isEdit, isMain: isMain,
+                $0.draw(isEdit: isEdit, isUseDraw: isUseDraw,
                         reciprocalScale: reciprocalScale,
                         reciprocalAllScale: reciprocalAllScale,
                         scale: scale, rotation: rotation,
@@ -526,12 +524,12 @@ final class Cell: NSObject, NSCoding {
             }
             return
         }
-        let geometry = !isEdit || isEditMain ? drawGeometry : self.geometry
-        let isInterpolated = isEditMain && self.geometry != drawGeometry
+        let geometry = !isEdit || isEditAndUseDraw ? drawGeometry : self.geometry
+        let isInterpolated = isEditAndUseDraw && self.geometry != drawGeometry
         guard !isHidden, !geometry.isEmpty else {
             return
         }
-        let isEditUnlock = isEdit && !isLocked
+        let isEditUnlocked = isEdit && !isLocked
         if material.opacity < 1 {
             ctx.saveGState()
             ctx.setAlpha(material.opacity)
@@ -557,7 +555,7 @@ final class Cell: NSObject, NSCoding {
                 }
                 clipFillPath(color: color, path: path, in: ctx) {
                     children.forEach {
-                        $0.draw(isEdit: isEdit, isMain: isMain,
+                        $0.draw(isEdit: isEdit, isUseDraw: isUseDraw,
                                 reciprocalScale: reciprocalScale,
                                 reciprocalAllScale: reciprocalAllScale,
                                 scale: scale, rotation: rotation,
@@ -589,7 +587,7 @@ final class Cell: NSObject, NSCoding {
                 ctx.addPath(path)
                 ctx.clip()
                 children.forEach {
-                    $0.draw(isEdit: isEdit, isMain: isMain,
+                    $0.draw(isEdit: isEdit, isUseDraw: isUseDraw,
                             reciprocalScale: reciprocalScale,
                             reciprocalAllScale: reciprocalAllScale,
                             scale: scale, rotation: rotation,
@@ -598,7 +596,7 @@ final class Cell: NSObject, NSCoding {
             }
             ctx.restoreGState()
         }
-        if isEditUnlock {
+        if isEditUnlocked {
             ctx.setFillColor(Color.border.cgColor)
             if material.type != .normal {
                 geometry.draw(withLineWidth: 0.5 * reciprocalScale, in: ctx)
@@ -640,7 +638,7 @@ extension Cell: Copying {
         return Cell(children: children.map { copier.copied($0) },
                     geometry: geometry, material: material,
                     isLocked: isLocked, isHidden: isHidden,
-                    isTranslucentLock: isTranslucentLock, id: id)
+                    isMainEdit: isMainEdit, id: id)
     }
 }
 extension Cell: Referenceable {
@@ -648,7 +646,7 @@ extension Cell: Referenceable {
 }
 extension Cell: ViewExpression {
     func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
-        let thumbnailView = DrawingBox()
+        let thumbnailView = DrawBox()
         thumbnailView.drawBlock = { [unowned self, unowned thumbnailView] ctx in
             self.draw(with: thumbnailView.bounds, in: ctx)
         }
@@ -701,7 +699,7 @@ extension JoiningCell: Referenceable {
 }
 extension JoiningCell: ViewExpression {
     func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
-        let thumbnailView = DrawingBox()
+        let thumbnailView = DrawBox()
         thumbnailView.drawBlock = { [unowned cell, unowned thumbnailView] ctx in
             cell.draw(with: thumbnailView.bounds, in: ctx)
         }
@@ -711,30 +709,27 @@ extension JoiningCell: ViewExpression {
     }
 }
 
-final class CellView: Layer, Respondable {
-    static let name = Cell.name
-    
+final class CellView: View {
     var cell = Cell() {
         didSet {
-            isTranslucentLockView.selectedIndex = !cell.isTranslucentLock ? 0 : 1
+            isLockedView.bool = cell.isLocked
         }
     }
     
     var isSmall: Bool
-    private let nameLabel: Label
-    private let isTranslucentLockView: EnumView
+    private let classNameLabel: Label
+    private let isLockedView: BoolView
     
     init(isSmall: Bool = false) {
         self.isSmall = isSmall
-        nameLabel = Label(text: Cell.name, font: isSmall ? .smallBold : .bold)
-        isTranslucentLockView = EnumView(names: [Localization(english: "Unlock", japanese: "ロックなし"),
-                                                 Localization(english: "Translucent Lock",
-                                                              japanese: "半透明ロック")],
-                                         cationIndex: 1, isSmall: isSmall)
+        classNameLabel = Label(text: Cell.name, font: isSmall ? .smallBold : .bold)
+        isLockedView = BoolView(cationBool: true,
+                                name: Localization(english: "Locked", japanese: "ロック済"),
+                                isSmall: isSmall)
         super.init()
-        replace(children: [nameLabel, isTranslucentLockView])
+        replace(children: [classNameLabel, isLockedView])
         
-        isTranslucentLockView.binding = { [unowned self] in self.setIsTranslucentLock(with: $0) }
+        isLockedView.binding = { [unowned self] in self.setIsLocked(with: $0) }
     }
     
     override var locale: Locale {
@@ -746,7 +741,7 @@ final class CellView: Layer, Respondable {
     override var defaultBounds: CGRect {
         let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
         let h = isSmall ? Layout.smallHeight : Layout.basicHeight
-        let tlw = nameLabel.frame.width + isTranslucentLockView.frame.width + padding * 3
+        let tlw = classNameLabel.frame.width + isLockedView.frame.width + padding * 3
         return CGRect(x: 0, y: 0, width: tlw, height: h + padding * 2)
     }
     override var bounds: CGRect {
@@ -757,37 +752,38 @@ final class CellView: Layer, Respondable {
     private func updateLayout() {
         let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
         let h = isSmall ? Layout.smallHeight : Layout.basicHeight
-        let tlw = bounds.width - nameLabel.frame.width - padding * 3
-        nameLabel.frame.origin = CGPoint(x: padding,
-                                         y: bounds.height - nameLabel.frame.height - padding)
-        isTranslucentLockView.frame = CGRect(x: nameLabel.frame.maxX + padding, y: padding,
-                                             width: tlw, height: h)
+        let tlw = bounds.width - classNameLabel.frame.width - padding * 3
+        classNameLabel.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameLabel.frame.height - padding)
+        isLockedView.frame = CGRect(x: classNameLabel.frame.maxX + padding, y: padding,
+                                    width: tlw, height: h)
     }
     func updateWithCell() {
-        isTranslucentLockView.selectedIndex = !cell.isTranslucentLock ? 0 : 1
+        isLockedView.bool = !cell.isLocked
     }
     
     var disabledRegisterUndo = true
     
     struct Binding {
         let cellView: CellView
-        let isTranslucentLock: Bool, oldIsTranslucentLock: Bool, inCell: Cell, type: Action.SendType
+        let isLocked: Bool, oldIsLocked: Bool
+        let inCell: Cell, type: Action.SendType
     }
-    var setIsTranslucentLockHandler: ((Binding) -> ())?
+    var setIsLockedHandler: ((Binding) -> ())?
     
     private var oldCell = Cell()
     
-    private func setIsTranslucentLock(with binding: EnumView.Binding) {
+    private func setIsLocked(with binding: BoolView.Binding) {
         if binding.type == .begin {
             oldCell = cell
         } else {
-            cell.isTranslucentLock = binding.index == 1
+            cell.isLocked = binding.bool
         }
-        setIsTranslucentLockHandler?(Binding(cellView: self,
-                                             isTranslucentLock: binding.index == 1,
-                                             oldIsTranslucentLock: binding.oldIndex == 1,
-                                             inCell: oldCell,
-                                             type: binding.type))
+        setIsLockedHandler?(Binding(cellView: self,
+                                    isLocked: binding.bool,
+                                    oldIsLocked: binding.oldBool,
+                                    inCell: oldCell,
+                                    type: binding.type))
     }
     
     var copiedObjectsHandler: ((CellView, KeyInputEvent) -> [Any]?)?
@@ -797,5 +793,9 @@ final class CellView: Layer, Respondable {
         } else {
             return [cell.copied]
         }
+    }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        return cell.reference
     }
 }

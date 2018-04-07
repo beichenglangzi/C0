@@ -23,9 +23,7 @@ import Foundation
  # Issue
  - コピーオブジェクトの自由な貼り付け
  */
-final class Box: Layer, Respondable {
-    static let name = Localization(english: "Box", japanese: "ボックス")
-    
+final class Box: View {
     init(children: [Layer] = [], frame: CGRect = CGRect()) {
         super.init()
         self.frame = frame
@@ -61,8 +59,8 @@ final class Box: Layer, Respondable {
         return imageView
     }
     
-    var bindHandler: ((Box, RightClickEvent) -> (Bool))?
-    func bind(with event: RightClickEvent) -> Bool {
+    var bindHandler: ((Box, SubClickEvent) -> (Bool))?
+    func bind(with event: SubClickEvent) -> Bool {
         return bindHandler?(self, event) ?? false
     }
     
@@ -70,17 +68,16 @@ final class Box: Layer, Respondable {
     func move(with event: DragEvent) -> Bool {
         return moveHandler?(self, event) ?? false
     }
-}
-
-final class DrawingBox: DrawLayer, Respondable {
-    static let name = Localization(english: "Drawing Box", japanese: "描画ボックス")
-}
-
-final class TextBox: Layer, Respondable {
-    static let name = Localization(english: "Text Box", japanese: "テキストボックス")
-    static let feature = Localization(english: "Run text in the box: Click",
-                                      japanese: "ボックス内のテキストを実行: クリック")
     
+    func lookUp(with event: TapEvent) -> Reference? {
+        return Reference(name: Localization(english: "Box", japanese: "ボックス"))
+    }
+}
+
+final class DrawBox: DrawView {
+}
+
+final class TextBox: View {
     let label: Label
     let highlight = HighlightLayer()
     
@@ -101,6 +98,13 @@ final class TextBox: Layer, Respondable {
         replace(children: [label, highlight])
     }
     
+    var isLeftAlignment: Bool
+    var leftPadding: CGFloat {
+        didSet {
+            updateLayout()
+        }
+    }
+    
     override var defaultBounds: CGRect {
         let fitSize = label.fitSize
         return CGRect(x: 0,
@@ -110,16 +114,10 @@ final class TextBox: Layer, Respondable {
     }
     override var bounds: CGRect {
         didSet {
-            updateChildren()
+            updateLayout()
         }
     }
-    var isLeftAlignment: Bool
-    var leftPadding: CGFloat {
-        didSet {
-            updateChildren()
-        }
-    }
-    func updateChildren() {
+    func updateLayout() {
         let x = isLeftAlignment ? leftPadding : round((frame.width - label.frame.width) / 2)
         let y = round((frame.height - label.frame.height) / 2)
         label.frame.origin = CGPoint(x: x, y: y)
@@ -148,11 +146,15 @@ final class TextBox: Layer, Respondable {
         }
         return isChanged
     }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        return Reference(name: Localization(english: "Text Box", japanese: "テキストボックス"),
+                         viewDescription: Localization(english: "Run text in the box: Click",
+                                                       japanese: "ボックス内のテキストを実行: クリック"))
+    }
 }
 
-final class PopupBox: Layer, Respondable {
-    static let name = Localization(english: "Popup Box", japanese: "ポップアップボックス")
-    
+final class PopupBox: View {
     var isSubIndicatedHandler: ((Bool) -> (Void))?
     override var isSubIndicated: Bool {
         didSet {
@@ -236,8 +238,12 @@ final class PopupBox: Layer, Respondable {
         }
         return true
     }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        return Reference(name: Localization(english: "Popup Box", japanese: "ポップアップボックス"))
+    }
 }
-final class Panel: Layer, Respondable {
+final class Panel: View {
     static let name = Localization(english: "Panel", japanese: "パネル")
     
     let openPointRadius = 2.0.cf

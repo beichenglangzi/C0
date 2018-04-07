@@ -44,16 +44,13 @@ extension Desktop: Referenceable {
  # Issue
  - sceneViewを取り除く
  */
-final class DesktopView: Layer, RootRespondable {
-    static let name = Desktop.name
-    
+final class DesktopView: RootView {
     var desktop = Desktop() {
         didSet {
             actionManagerView.actionManager = desktop.actionManager
             updateLayout()
         }
     }
-    
     let dataModelKey = "desktop"
     var dataModel: DataModel {
         didSet {
@@ -116,9 +113,12 @@ final class DesktopView: Layer, RootRespondable {
         
         actionManagerView.isHiddenActionsBinding = { [unowned self] in
             self.update(withIsHiddenActions: $0)
+            self.isHiddenActionsBinding?($0)
         }
         differentialDesktopDataModel.dataHandler = { [unowned self] in self.desktop.jsonData }
     }
+    
+    var isHiddenActionsBinding: ((Bool) -> (Void))? = nil
     
     override var copyManager: CopyManager? {
         return copyManagerView.rootCopyManager
@@ -136,7 +136,6 @@ final class DesktopView: Layer, RootRespondable {
             }
         }
     }
-    
     override var locale: Locale {
         didSet {
             if locale.languageCode != oldValue.languageCode {
@@ -152,11 +151,10 @@ final class DesktopView: Layer, RootRespondable {
     }
     private func updateLayout() {
         let padding = Layout.basicPadding
-        let preferenceY = bounds.height - actionManagerView.frame.height - padding
-        actionManagerView.frame = CGRect(x: padding,
-                                         y: preferenceY,
-                                         width: actionWidth,
-                                         height: actionManagerView.frame.height)
+        let ah = actionManagerView.defaultBounds.height
+        let preferenceY = bounds.height - ah - padding
+        actionManagerView.frame = CGRect(x: padding, y: preferenceY,
+                                         width: actionWidth, height: ah)
         copyManagerView.frame = CGRect(x: padding + actionWidth,
                                        y: bounds.height - copyManagerViewHeight - padding,
                                        width: bounds.width - actionWidth - padding * 2,
@@ -178,9 +176,11 @@ final class DesktopView: Layer, RootRespondable {
                                          y: -round(sceneView.frame.height / 2))
     }
     private func update(withIsHiddenActions isHiddenActions: Bool) {
-        desktop.actionManager.isHiddenActions = isHiddenActions
-        actionManagerView.actionManager.isHiddenActions = isHiddenActions
         updateLayout()
         differentialDesktopDataModel.isWrite = true
+    }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        return desktop.reference
     }
 }

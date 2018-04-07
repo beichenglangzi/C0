@@ -20,7 +20,7 @@
 import Foundation
 import AVFoundation
 
-final class Player: Layer, Respondable {
+final class Player: View {
     static let name = Localization(english: "Player", japanese: "プレイヤー")
     
     private let drawLayer = DrawLayer()
@@ -236,7 +236,7 @@ final class Player: Layer, Respondable {
     }
 }
 
-final class SeekBar: Layer, Respondable {
+final class SeekBar: View {
     static let name = Localization(english: "Seek Bar", japanese: "シークバー")
     
     let timeLabel = Label(text: Localization("00:00"), color: .locked)

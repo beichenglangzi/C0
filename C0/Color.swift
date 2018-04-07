@@ -406,7 +406,7 @@ extension HSV: Codable {
 }
 
 enum ColorSpace: Int8, Codable {
-    case sRGB, displayP3, lab
+    case sRGB, displayP3
     
     var description: String {
         switch self {
@@ -414,9 +414,13 @@ enum ColorSpace: Int8, Codable {
             return "sRGB"
         case .displayP3:
             return "Display P3"
-        case .lab:
-            return "CIELAB"
         }
+    }
+    var displayString: Localization {
+        return Localization(description)
+    }
+    static var displayStrings: [Localization] {
+        return [sRGB.displayString, displayP3.displayString]
     }
 }
 extension ColorSpace: Referenceable {
@@ -482,16 +486,17 @@ extension CGColor {
     }
 }
 extension CGColorSpace {
+    static var labColorSpace: CGColorSpace? {
+        return CGColorSpace(labWhitePoint: [0.95947, 1, 1.08883],
+                            blackPoint: [0, 0, 0],
+                            range: [-127, 127, -127, 127])
+    }
     static func with(_ colorSpace: ColorSpace) -> CGColorSpace? {
         switch colorSpace {
         case .sRGB:
             return CGColorSpace(name: CGColorSpace.sRGB)
         case .displayP3:
             return CGColorSpace(name: CGColorSpace.displayP3)
-        case .lab:
-            return CGColorSpace(labWhitePoint: [0.95947, 1, 1.08883],
-                                blackPoint: [0, 0, 0],
-                                range: [-127, 127, -127, 127])
         }
     }
 }
@@ -602,11 +607,7 @@ struct ColorCircle {
     }
 }
 
-final class ColorView: Layer, Respondable {
-    static let name = Color.name
-    static let feature = Localization(english: "Ring: Hue, Width: Saturation, Height: Luminance",
-                                      japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
-    
+final class ColorView: View {    
     var color = Color() {
         didSet {
             updateWithColor()
@@ -804,5 +805,12 @@ final class ColorView: Layer, Respondable {
         self.color = color
         setColorHandler?(Binding(colorView: self,
                                  color: color, oldColor: oldColor, type: .end))
+    }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        var reference = color.reference
+        reference.viewDescription = Localization(english: "Ring: Hue, Width: Saturation, Height: Luminance",
+                                                 japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
+        return reference
     }
 }

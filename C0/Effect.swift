@@ -48,23 +48,39 @@ struct Effect: Codable {
                     subtract.displayString]
         }
     }
-    var blur = 0.0.cf, opacity = 1.0.cf, blendType = BlendType.normal
+    
+    var blendType = BlendType.normal, blurRadius = 0.0.cf, opacity = 1.0.cf
+    
     var isEmpty: Bool {
         return self == Effect()
     }
+    func with(_ blendType: BlendType) -> Effect {
+        return Effect(blendType: blendType, blurRadius: blurRadius, opacity: opacity)
+    }
     func with(blur: CGFloat) -> Effect {
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+        return Effect(blendType: blendType, blurRadius: blur, opacity: opacity)
     }
     func with(opacity: CGFloat) -> Effect {
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+        return Effect(blendType: blendType, blurRadius: blurRadius, opacity: opacity)
     }
-    func with(_ blendType: BlendType) -> Effect {
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+    
+    static func displayString(with keyPath: PartialKeyPath<Effect>) -> Localization {
+        switch keyPath {
+        case \Effect.blendType:
+            return Localization(english: "Blend Type", japanese: "ブレンドタイプ")
+        case \Effect.blurRadius:
+            return Localization(english: "Blur Radius", japanese: "ブラー半径")
+        case \Effect.opacity:
+            return Localization(english: "Opacity", japanese: "不透明度")
+        default:
+            fatalError("No case")
+        }
     }
 }
 extension Effect: Equatable {
     static func ==(lhs: Effect, rhs: Effect) -> Bool {
-        return lhs.blur == rhs.blur && lhs.opacity == rhs.opacity && lhs.blendType == rhs.blendType
+        return lhs.blendType == rhs.blendType
+            && lhs.blurRadius == rhs.blurRadius && lhs.opacity == rhs.opacity
     }
 }
 extension Effect: Referenceable {
@@ -72,38 +88,40 @@ extension Effect: Referenceable {
 }
 extension Effect: Interpolatable {
     static func linear(_ f0: Effect, _ f1: Effect, t: CGFloat) -> Effect {
-        let blur = CGFloat.linear(f0.blur, f1.blur, t: t)
+        let blur = CGFloat.linear(f0.blurRadius, f1.blurRadius, t: t)
         let opacity = CGFloat.linear(f0.opacity, f1.opacity, t: t)
         let blendType = f0.blendType
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+        return Effect(blendType: blendType, blurRadius: blur, opacity: opacity)
     }
     static func firstMonospline(_ f1: Effect, _ f2: Effect, _ f3: Effect,
                                 with ms: Monospline) -> Effect {
-        let blur = CGFloat.firstMonospline(f1.blur, f2.blur, f3.blur, with: ms)
+        let blur = CGFloat.firstMonospline(f1.blurRadius, f2.blurRadius, f3.blurRadius, with: ms)
         let opacity = CGFloat.firstMonospline(f1.opacity, f2.opacity, f3.opacity, with: ms)
         let blendType = f1.blendType
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+        return Effect(blendType: blendType, blurRadius: blur, opacity: opacity)
     }
     static func monospline(_ f0: Effect, _ f1: Effect, _ f2: Effect, _ f3: Effect,
                            with ms: Monospline) -> Effect {
-        let blur = CGFloat.monospline(f0.blur, f1.blur, f2.blur, f3.blur, with: ms)
+        let blur = CGFloat.monospline(f0.blurRadius, f1.blurRadius,
+                                      f2.blurRadius, f3.blurRadius, with: ms)
         let opacity = CGFloat.monospline(f0.opacity, f1.opacity,
                                          f2.opacity, f3.opacity, with: ms)
         let blendType = f1.blendType
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+        return Effect(blendType: blendType, blurRadius: blur, opacity: opacity)
     }
     static func lastMonospline(_ f0: Effect, _ f1: Effect, _ f2: Effect,
                                with ms: Monospline) -> Effect {
-        let blur = CGFloat.lastMonospline(f0.blur, f1.blur, f2.blur, with: ms)
+        let blur = CGFloat.lastMonospline(f0.blurRadius, f1.blurRadius, f2.blurRadius, with: ms)
         let opacity = CGFloat.lastMonospline(f0.opacity, f1.opacity, f2.opacity, with: ms)
         let blendType = f1.blendType
-        return Effect(blur: blur, opacity: opacity, blendType: blendType)
+        return Effect(blendType: blendType, blurRadius: blur, opacity: opacity)
     }
 }
+extension Effect.BlendType: Referenceable {
+    static let name = Localization(english: "Blend Type", japanese: "ブレンドタイプ")
+}
 
-final class EffectView: Layer, Respondable {
-    static let name = Effect.name
-    
+final class EffectView: View {
     var effect: Effect {
         didSet {
             if effect != oldValue {
@@ -116,23 +134,26 @@ final class EffectView: Layer, Respondable {
     static let defaultWidth = 140.0.cf
     
     var isSmall: Bool
-    private let nameLabel: Label
-    private let blendTypeView: EnumView
+    private let classNameLabel: Label
+    private let blendTypeView: EnumView<Effect.BlendType>
     private let blurLabel: Label
     private let blurView: NumberView
     private let opacityView: NumberView
     
     init(isSmall: Bool = false) {
         self.isSmall = isSmall
-        nameLabel = Label(text: Effect.name, font: isSmall ? .smallBold : .bold)
-        blurLabel = Label(text: Localization(english: "Blur:", japanese: "ブラー:"),
+        classNameLabel = Label(text: Effect.name, font: isSmall ? .smallBold : .bold)
+        blurLabel = Label(text: Effect.displayString(with: \Effect.blurRadius) + Localization(":"),
                           font: isSmall ? .small : .default)
         blurView = NumberView.widthViewWith(min: 0, max: 500, exp: 3, isSmall: isSmall)
         opacityView = NumberView.opacityView(isSmall: isSmall)
-        blendTypeView = EnumView(names: Effect.BlendType.displayStrings, isSmall: isSmall)
+        blendTypeView = EnumView(enumeratedType: .normal,
+                                 indexHandler: { Int($0) },
+                                 rawValueHandler: { Effect.BlendType.RawValue($0) },
+                                 names: Effect.BlendType.displayStrings, isSmall: isSmall)
         effect = defaultEffect
         super.init()
-        replace(children: [nameLabel,
+        replace(children: [classNameLabel,
                            blendTypeView,
                            blurLabel, blurView,
                            opacityView])
@@ -163,26 +184,19 @@ final class EffectView: Layer, Respondable {
         let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
         let h = isSmall ? Layout.smallHeight : Layout.basicHeight
         let cw = bounds.width - padding * 2
-        let rw = cw - nameLabel.frame.width - padding
+        let rw = cw - classNameLabel.frame.width - padding
         let px = bounds.width - rw - padding
-        nameLabel.frame.origin = CGPoint(x: padding,
-                                         y: bounds.height - nameLabel.frame.height - padding)
+        classNameLabel.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameLabel.frame.height - padding)
         blendTypeView.frame = CGRect(x: px, y: padding + h * 2, width: rw, height: h)
         blurLabel.frame.origin = CGPoint(x: px - blurLabel.frame.width, y: padding * 2 + h)
         blurView.updateLineWidthLayers(withFrame: CGRect(x: px, y: padding + h, width: rw, height: h))
         opacityView.updateOpacityLayers(withFrame: CGRect(x: px, y: padding, width: rw, height: h))
     }
     private func updateWithEffect() {
-        blurView.number = effect.blur
+        blurView.number = effect.blurRadius
         opacityView.number = effect.opacity
-        blendTypeView.selectedIndex = index(with: effect.blendType)
-    }
-    
-    private func blendType(withIndex index: Int) -> Effect.BlendType {
-        return Effect.BlendType(rawValue: Int8(index)) ?? .normal
-    }
-    private func index(with type: Effect.BlendType) -> Int {
-        return Int(type.rawValue)
+        blendTypeView.enumeratedType = effect.blendType
     }
     
     var disabledRegisterUndo = true
@@ -194,6 +208,15 @@ final class EffectView: Layer, Respondable {
     var binding: ((Binding) -> ())?
     
     private var oldEffect = Effect()
+    private func setEffect(with obj: EnumView<Effect.BlendType>.Binding) {
+        if obj.type == .begin {
+            oldEffect = effect
+            binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
+        } else {
+            effect.blendType = obj.enumeratedType
+            binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: obj.type))
+        }
+    }
     private func setEffect(with obj: NumberView.Binding) {
         if obj.type == .begin {
             oldEffect = effect
@@ -201,21 +224,12 @@ final class EffectView: Layer, Respondable {
         } else {
             switch obj.view {
             case blurView:
-                effect = effect.with(blur: obj.number)
+                effect.blurRadius = obj.number
             case opacityView:
-                effect = effect.with(opacity: obj.number)
+                effect.opacity = obj.number
             default:
                 fatalError("No case")
             }
-            binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: obj.type))
-        }
-    }
-    private func setEffect(with obj: EnumView.Binding) {
-        if obj.type == .begin {
-            oldEffect = effect
-            binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
-        } else {
-            effect = effect.with(blendType(withIndex: obj.index))
             binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: obj.type))
         }
     }
@@ -251,5 +265,9 @@ final class EffectView: Layer, Respondable {
         binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
         self.effect = effect
         binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: .end))
+    }
+    
+    func lookUp(with event: TapEvent) -> Reference? {
+        return effect.reference
     }
 }
