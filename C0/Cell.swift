@@ -633,7 +633,7 @@ final class Cell: NSObject, NSCoding {
         textFrame.drawWithCenterOfImageBounds(in: imageBounds, in: ctx)
     }
 }
-extension Cell: Copying {
+extension Cell: ClassCopiable {
     func copied(from copier: Copier) -> Cell {
         return Cell(children: children.map { copier.copied($0) },
                     geometry: geometry, material: material,
@@ -645,14 +645,14 @@ extension Cell: Referenceable {
     static let name = Localization(english: "Cell", japanese: "セル")
 }
 extension Cell: ViewExpression {
-    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
+    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
         let thumbnailView = DrawBox()
         thumbnailView.drawBlock = { [unowned self, unowned thumbnailView] ctx in
             self.draw(with: thumbnailView.bounds, in: ctx)
         }
         thumbnailView.bounds = bounds
         return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
-                          isSmall : isSmall)
+                          sizeType: sizeType)
     }
     func draw(with bounds: CGRect, in ctx: CGContext) {
         var imageBounds = CGRect()
@@ -697,15 +697,16 @@ final class JoiningCell: NSObject, NSCoding {
 extension JoiningCell: Referenceable {
     static let name = Localization(english: "Joining Cell", japanese: "接続セル")
 }
-extension JoiningCell: ViewExpression {
-    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
+extension JoiningCell: ClassCopiable {
+}
+extension JoiningCell: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
         let thumbnailView = DrawBox()
         thumbnailView.drawBlock = { [unowned cell, unowned thumbnailView] ctx in
             cell.draw(with: thumbnailView.bounds, in: ctx)
         }
         thumbnailView.bounds = bounds
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
-                          isSmall : isSmall)
+        return thumbnailView
     }
 }
 
@@ -716,16 +717,16 @@ final class CellView: View {
         }
     }
     
-    var isSmall: Bool
+    var sizeType: SizeType
     private let classNameLabel: Label
     private let isLockedView: BoolView
     
-    init(isSmall: Bool = false) {
-        self.isSmall = isSmall
-        classNameLabel = Label(text: Cell.name, font: isSmall ? .smallBold : .bold)
+    init(sizeType: SizeType = .regular) {
+        self.sizeType = sizeType
+        classNameLabel = Label(text: Cell.name, font: Font.bold(with: sizeType))
         isLockedView = BoolView(cationBool: true,
                                 name: Localization(english: "Locked", japanese: "ロック済"),
-                                isSmall: isSmall)
+                                sizeType: sizeType)
         super.init()
         replace(children: [classNameLabel, isLockedView])
         
@@ -739,8 +740,7 @@ final class CellView: View {
     }
     
     override var defaultBounds: CGRect {
-        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
-        let h = isSmall ? Layout.smallHeight : Layout.basicHeight
+        let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
         let tlw = classNameLabel.frame.width + isLockedView.frame.width + padding * 3
         return CGRect(x: 0, y: 0, width: tlw, height: h + padding * 2)
     }
@@ -750,8 +750,7 @@ final class CellView: View {
         }
     }
     private func updateLayout() {
-        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
-        let h = isSmall ? Layout.smallHeight : Layout.basicHeight
+        let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
         let tlw = bounds.width - classNameLabel.frame.width - padding * 3
         classNameLabel.frame.origin = CGPoint(x: padding,
                                               y: bounds.height - classNameLabel.frame.height - padding)
@@ -786,8 +785,8 @@ final class CellView: View {
                                     type: binding.type))
     }
     
-    var copiedObjectsHandler: ((CellView, KeyInputEvent) -> [Any]?)?
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    var copiedObjectsHandler: ((CellView, KeyInputEvent) -> [ViewExpression]?)?
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         if let copiedObjectsHandler = copiedObjectsHandler {
             return copiedObjectsHandler(self, event)
         } else {
@@ -795,7 +794,7 @@ final class CellView: View {
         }
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return cell.reference
     }
 }

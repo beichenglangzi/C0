@@ -22,7 +22,7 @@ import Foundation
 protocol Localizable {
     var locale: Locale { get set }
 }
-struct Localization: Codable {
+struct Localization: Codable, Equatable {
     var baseLanguageCode: String, base: String, values: [String: String]
     init(baseLanguageCode: String, base: String, values: [String: String]) {
         self.baseLanguageCode = baseLanguageCode
@@ -83,7 +83,13 @@ struct Localization: Codable {
         }
         lhs.base += rhs.base
     }
-    static func ==(lhs: Localization, rhs: Localization) -> Bool {
-        return lhs.base == rhs.base
+}
+extension Localization: Referenceable {
+    static let name = Localization(english: "Text", japanese: "テキスト")
+}
+extension Localization: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return Label(frame: bounds, text: self,
+                     font: Font.default(with: sizeType), isSizeToFit: false)
     }
 }

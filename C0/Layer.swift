@@ -342,8 +342,26 @@ class Layer {
         return subIndicatedParent?.undoManager ?? parent?.undoManager
     }
     
-    var copyManager: CopyManager? {
-        return subIndicatedParent?.copyManager ?? parent?.copyManager
+    var topCopiedObjects: [ViewExpression] {
+        if let subIndicatedParent = subIndicatedParent {
+            return subIndicatedParent.topCopiedObjects
+        } else {
+            return parent?.topCopiedObjects ?? []
+        }
+    }
+    func sendToTop(copiedObjects: [ViewExpression]) {
+        if let subIndicatedParent = subIndicatedParent {
+            subIndicatedParent.sendToTop(copiedObjects: copiedObjects)
+        } else {
+            parent?.sendToTop(copiedObjects: copiedObjects)
+        }
+    }
+    func sendToTop(_ reference: Reference) {
+        if let subIndicatedParent = subIndicatedParent {
+            subIndicatedParent.sendToTop(reference)
+        } else {
+            parent?.sendToTop(reference)
+        }
     }
     
     var locale = Locale.current
@@ -357,6 +375,35 @@ class Layer {
 extension Layer: Equatable {
     static func ==(lhs: Layer, rhs: Layer) -> Bool {
         return lhs === rhs
+    }
+}
+
+final class Knob: Layer {
+    init(radius: CGFloat = 5, lineWidth: CGFloat = 1) {
+        super.init()
+        fillColor = .knob
+        lineColor = .border
+        self.lineWidth = lineWidth
+        self.radius = radius
+    }
+    var radius: CGFloat {
+        get {
+            return min(bounds.width, bounds.height) / 2
+        }
+        set {
+            frame = CGRect(x: position.x - newValue, y: position.y - newValue,
+                           width: newValue * 2, height: newValue * 2)
+            cornerRadius = newValue
+        }
+    }
+}
+final class DiscreteKnob: Layer {
+    init(_ size: CGSize = CGSize(width: 5, height: 10), lineWidth: CGFloat = 1) {
+        super.init()
+        fillColor = .knob
+        lineColor = .border
+        self.lineWidth = lineWidth
+        frame.size = size
     }
 }
 

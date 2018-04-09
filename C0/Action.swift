@@ -63,7 +63,7 @@ struct Quasimode {
         keyInput, click, subClick, tap, doubleTap,
         drag, subDrag, scroll, pinch, rotate
         
-        var displayString: Localization {
+        var displayText: Localization {
             switch self {
             case .moveCursor:
                 return Localization(english: "Pointing", japanese: "ポインティング")
@@ -108,25 +108,26 @@ struct Quasimode {
         }
     }
     
-    var displayString: Localization {
-        var displayString = Localization(modifierKeys.displayString)
+    var displayText: Localization {
+        var displayText = Localization(modifierKeys.displayString)
         if let keyDisplayString = key?.rawValue {
-            displayString += Localization(displayString.isEmpty ?
+            displayText += Localization(displayText.isEmpty ?
                 keyDisplayString : " " + keyDisplayString)
         }
-        let gestureDisplayString = gesture.displayString
+        let gestureDisplayString = gesture.displayText
         if !gestureDisplayString.isEmpty {
-            displayString += displayString.isEmpty ?
+            displayText += displayText.isEmpty ?
                 gestureDisplayString : Localization(" ") + gestureDisplayString
         }
-        return displayString
+        return displayText
     }
 }
+extension Quasimode: Referenceable {
+    static let name = Localization(english: "Quasimode", japanese: "擬似モード")
+}
+extension Quasimode: ObjectViewExpressionWithDisplayText {
+}
 
-/**
- # Issue
- - トラックパッドの環境設定を無効化または表示反映
- */
 struct Action {
     enum SendType {
         case begin, sending, end
@@ -179,14 +180,19 @@ extension Action: Equatable {
 }
 extension Action: Referenceable {
     static let name = Localization(english: "Action", japanese: "アクション")
+    static let comment = Localization("Issue: トラックパッドの環境設定を無効化または表示反映")
+}
+extension Action: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return name.thumbnail(withBounds: bounds, sizeType: sizeType)
+    }
 }
 
 final class ActionManager {
-    var isHiddenActions = false
     var actions: [Action] = {
         let cutHandler: (Respondable, KeyInputEvent) -> (Bool) = {
             if let copiedObjects = $0.copiedObjects(with: $1), $0.delete(with: $1) {
-                $0.copyManager?.push(copiedObjects: copiedObjects)
+                $0.sendToTop(copiedObjects: copiedObjects)
                 return true
             } else {
                 return false
@@ -194,15 +200,19 @@ final class ActionManager {
         }
         let copyHandler: (Respondable, KeyInputEvent) -> (Bool) = {
             if let copiedObjects = $0.copiedObjects(with: $1) {
-                $0.copyManager?.push(copiedObjects: copiedObjects)
+                $0.sendToTop(copiedObjects: copiedObjects)
                 return true
             } else {
                 return false
             }
         }
         let pasteHandler: (Respondable, KeyInputEvent) -> (Bool) = {
-            if let copiedObjects = $0.copyManager?.copiedObjects {
-                return $0.paste(copiedObjects, with: $1)
+            return $0.paste($0.topCopiedObjects, with: $1)
+        }
+        let referenceHandler: (Respondable, TapEvent) -> (Bool) = {
+            if let reference = $0.reference(with: $1) {
+                $0.sendToTop(reference)
+                return true
             } else {
                 return false
             }
@@ -217,13 +227,13 @@ final class ActionManager {
                        quasimode: Quasimode([.command], gesture: .drag),
                        viewQuasimode: .select,
                        drag: { $0.select(with: $1) }),
+                Action(name: Localization(english: "Select All", japanese: "すべて選択"),
+                       quasimode: Quasimode([.command], .a, gesture: .keyInput),
+                       keyInput: { $0.selectAll(with: $1) }),
                 Action(name: Localization(english: "Deselect", japanese: "選択解除"),
                        quasimode: Quasimode([.command, .shift], gesture: .drag),
                        viewQuasimode: .deselect,
                        drag: { $0.deselect(with: $1) }),
-                Action(name: Localization(english: "Select All", japanese: "すべて選択"),
-                       quasimode: Quasimode([.command], .a, gesture: .keyInput),
-                       keyInput: { $0.selectAll(with: $1) }),
                 Action(name: Localization(english: "Deselect All", japanese: "すべて選択解除"),
                        quasimode: Quasimode([.command, .shift], .a, gesture: .keyInput),
                        keyInput: { $0.deselectAll(with: $1) }),
@@ -249,11 +259,7 @@ final class ActionManager {
                 Action(name: Localization(english: "Look Up", japanese: "調べる"),
                        description: osPreferenceDescription,
                        quasimode: Quasimode(gesture: .tap),
-                       tap: {
-                        let r = $0.lookUp(with: $1)
-                        print(r?.instanceDescription)
-                        return true
-                }),
+                       tap: referenceHandler),
                 Action(name: Localization(english: "Undo", japanese: "取り消す"),
                        quasimode: Quasimode([.command], .z, gesture: .keyInput),
                        keyInput: { (receiver, _) in receiver.undo() }),
@@ -382,34 +388,90 @@ struct RotateEvent: Event {
     var rotation: CGFloat
 }
 
+final class QuasimodeView: View {
+    var quasimode: Quasimode {
+        didSet {
+            label.localization = quasimode.displayText
+            if isSizeToFit {
+                bounds = defaultBounds
+            }
+            updateLayout()
+        }
+    }
+    var isSizeToFit: Bool
+    var label: Label
+    init(quasimode: Quasimode, isSizeToFit: Bool = true) {
+        self.quasimode = quasimode
+        self.isSizeToFit = isSizeToFit
+        label = Label(text: quasimode.displayText, font: .small, frameAlignment: .right)
+        
+        super.init()
+        if isSizeToFit {
+            bounds = defaultBounds
+        }
+        replace(children: [label])
+        updateLayout()
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
+    }
+    
+    override var defaultBounds: CGRect {
+        let padding = Layout.smallPadding
+        let width = label.bounds.width + padding * 2
+        let height = label.bounds.height + padding * 2
+        return CGRect(x: 0, y: 0, width: width, height: height)
+    }
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    func updateLayout() {
+        let padding = Layout.smallPadding
+        label.frame.origin = CGPoint(x: padding,
+                                     y: bounds.height - label.frame.height - padding)
+    }
+    
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [quasimode]
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        return quasimode.reference
+    }
+}
+
 final class ActionView: View {
     var action: Action {
         didSet {
             nameLabel.localization = action.name
-            quasimodeLabel.localization = action.quasimode.displayString
+            quasimodeView.quasimode = action.quasimode
         }
     }
     
-    var nameLabel: Label, quasimodeLabel: Label
+    var nameLabel: Label, quasimodeView: QuasimodeView
     
     init(action: Action, frame: CGRect) {
         self.action = action
         nameLabel = Label(text: action.name)
-        quasimodeLabel = Label(text: action.quasimode.displayString,
-                               font: .action, frameAlignment: .right)
+        quasimodeView = QuasimodeView(quasimode: action.quasimode)
         
         super.init()
         self.frame = frame
-        replace(children: [nameLabel, quasimodeLabel])
+        replace(children: [nameLabel, quasimodeView])
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return [action]
     }
     
     override var defaultBounds: CGRect {
         let padding = Layout.basicPadding
-        let width = nameLabel.bounds.width + padding + quasimodeLabel.bounds.width
+        let width = nameLabel.bounds.width + padding + quasimodeView.bounds.width
         let height = nameLabel.frame.height + padding * 2
         return CGRect(x: 0, y: 0, width: width, height: height)
     }
@@ -422,11 +484,11 @@ final class ActionView: View {
         let padding = Layout.basicPadding
         nameLabel.frame.origin = CGPoint(x: padding,
                                          y: bounds.height - nameLabel.frame.height - padding)
-        quasimodeLabel.frame.origin = CGPoint(x: bounds.width - quasimodeLabel.frame.width - padding,
-                                              y: nameLabel.frame.origin.y)
+        quasimodeView.frame.origin = CGPoint(x: bounds.width - quasimodeView.frame.width - padding,
+                                             y: Layout.smallPadding)
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return action.reference
     }
 }
@@ -438,33 +500,16 @@ final class ActionView: View {
 final class ActionManagerView: View {
     var actionManager = ActionManager() {
         didSet {
-            isHiddenActions = actionManager.isHiddenActions
             actionsView.array = actionManager.actions
-        }
-    }
-    var isHiddenActions = false {
-        didSet {
-            guard isHiddenActions != oldValue else {
-                return
-            }
-            actionManager.isHiddenActions = isHiddenActions
-            isHiddenActionsView.bool = isHiddenActions
-            updateWithIsHiddenActions()
-            isHiddenActionsBinding?(isHiddenActions)
         }
     }
     
     static let defaultWidth = 200 + Layout.basicPadding * 2
     let classNameLabel = Label(text: ActionManager.name, font: .bold)
-    let isHiddenActionsLabel = Label(text: Localization(english: "Hidden Actions",
-                                                        japanese: "アクションの表示なし"))
-    let isHiddenActionsView = BoolView(name: Localization(english: "Hidden Actions",
-                                                          japanese: "アクションの表示なし"))
     let actionsView = ArrayView<Action>()
     
     override init() {
         super.init()
-        isHiddenActionsView.binding = { [unowned self] in self.isHiddenActions = $0.bool }
         updateWithIsHiddenActions()
     }
     
@@ -475,8 +520,7 @@ final class ActionManagerView: View {
     }
     
     override var defaultBounds: CGRect {
-        let height = Layout.basicHeight + Layout.basicPadding * 2
-            + (isHiddenActions ? 0 : actionsView.bounds.height + Layout.basicPadding)
+        let height = classNameLabel.frame.height + Layout.basicPadding * 3 + actionsView.frame.height
         return CGRect(x: 0, y: 0, width: ActionManagerView.defaultWidth, height: height)
     }
     override var bounds: CGRect {
@@ -488,37 +532,27 @@ final class ActionManagerView: View {
         let padding = Layout.basicPadding, sPadding = Layout.smallPadding
         classNameLabel.frame.origin = CGPoint(x: padding,
                                               y: bounds.height - classNameLabel.frame.height - padding)
-        let ihw = bounds.width - classNameLabel.frame.width - padding * 3
-        if isHiddenActions {
-            isHiddenActionsView.frame = CGRect(x: classNameLabel.frame.width + padding * 2, y: padding,
-                                               width: ihw, height: Layout.basicHeight)
-        } else {
-            let aw = bounds.width - padding * 2
-            let asw = aw - sPadding * 2
-            let ah = bounds.height - Layout.basicHeight - padding * 3
-            isHiddenActionsView.frame = CGRect(x: classNameLabel.frame.width + padding * 2,
-                                               y: ah + padding * 2,
-                                               width: ihw,
-                                               height: Layout.basicHeight)
-            actionsView.frame = CGRect(x: padding, y: padding, width: aw, height: ah)
-            actionsView.children.forEach { $0.frame.size.width = asw }
+        let aw = bounds.width - padding * 2
+        let asw = aw - sPadding * 2
+        let ah = max(bounds.height - classNameLabel.frame.height - padding * 3, 0)
+        actionsView.frame = CGRect(x: padding, y: padding, width: aw, height: ah)
+        actionsView.children.forEach { $0.frame.size.width = asw }
+        _ = actionsView.children.reduce(actionsView.bounds.height) {
+            let y = $0 - $1.frame.height
+            $1.frame.origin.y = y
+            return y
         }
     }
     func updateWithIsHiddenActions() {
         let padding = Layout.basicPadding, sPadding = Layout.smallPadding
-        if isHiddenActions {
-            actionsView.replace(children: [])
-            replace(children: [classNameLabel, isHiddenActionsView])
-        } else {
-            let aw = bounds.width - sPadding * 2 - padding * 2
-            let aaf = ActionManagerView.actionViewsAndSizeWith(actionManager: actionManager,
-                                                               origin: CGPoint(x: sPadding,
-                                                                               y: sPadding),
-                                                               actionWidth: aw)
-            actionsView.replace(children: aaf.views)
-            actionsView.frame.size.height = aaf.size.height + sPadding * 2
-            replace(children: [classNameLabel, isHiddenActionsView, actionsView])
-        }
+        let aw = bounds.width - sPadding * 2 - padding * 2
+        let aaf = ActionManagerView.actionViewsAndSizeWith(actionManager: actionManager,
+                                                           origin: CGPoint(x: sPadding,
+                                                                           y: sPadding),
+                                                           actionWidth: aw)
+        actionsView.replace(children: aaf.views)
+        actionsView.frame.size.height = aaf.size.height + sPadding * 2
+        replace(children: [classNameLabel, actionsView])
     }
     
     static func actionViewsAndSizeWith(actionManager: ActionManager,
@@ -539,9 +573,7 @@ final class ActionManagerView: View {
         return (actionViews, CGSize(width: actionWidth, height: y - origin.y))
     }
     
-    var isHiddenActionsBinding: ((Bool) -> (Void))? = nil
-    
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return actionManager.reference
     }
 }

@@ -170,6 +170,12 @@ extension Transform: Interpolatable {
 extension Transform: Referenceable {
     static let name = Localization(english: "Transform", japanese: "トランスフォーム")
 }
+extension Transform: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return Layer()
+    }
+}
+
 
 final class TransformView: View {
     var transform = Transform() {
@@ -265,15 +271,6 @@ final class TransformView: View {
     
     var standardTranslation = CGPoint(x: 1, y: 1)
     
-    var isLocked = false {
-        didSet {
-            xView.isLocked = isLocked
-            yView.isLocked = isLocked
-            zView.isLocked = isLocked
-            thetaView.isLocked = isLocked
-        }
-    }
-    
     var disabledRegisterUndo = true
     
     struct Binding {
@@ -308,34 +305,27 @@ final class TransformView: View {
         }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
-        return [transform]
-    }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        guard !isLocked else {
-            return false
-        }
-        for object in objects {
-            if let transform = object as? Transform {
-                guard transform != self.transform else {
-                    continue
-                }
-                set(transform, oldTransform: self.transform)
-                return true
-            }
-        }
-        return false
-    }
     func delete(with event: KeyInputEvent) -> Bool {
-        guard !isLocked else {
-            return false
-        }
         let transform = Transform()
         guard transform != self.transform else {
             return false
         }
         set(transform, oldTransform: self.transform)
         return true
+    }
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [transform]
+    }
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
+            if let transform = object as? Transform {
+                if transform != self.transform {
+                    set(transform, oldTransform: self.transform)
+                    return true
+                }
+            }
+        }
+        return false
     }
     
     private func set(_ transform: Transform, oldTransform: Transform) {

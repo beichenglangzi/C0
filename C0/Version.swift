@@ -114,13 +114,15 @@ final class VersionView: View {
         }
     }
     func updateLayout() {
+        let padding = Layout.basicPadding
+        classNameLabel.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameLabel.frame.height - padding)
         if undoCount < allCount {
-            _ = Layout.leftAlignment([classNameLabel, Padding(),
-                                      allCountLabel, Padding(), currentCountLabel],
-                                     height: frame.height)
+            _ = Layout.leftAlignment([allCountLabel, Padding(), currentCountLabel],
+                                     minX: classNameLabel.frame.maxX + padding, height: frame.height)
         } else {
-            _ = Layout.leftAlignment([classNameLabel, Padding(), allCountLabel],
-                                     height: frame.height)
+            _ = Layout.leftAlignment([allCountLabel],
+                                     minX: classNameLabel.frame.maxX + padding, height: frame.height)
         }
     }
     func updateLabel() {
@@ -140,7 +142,7 @@ final class VersionView: View {
         }
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         var reference = version.reference
         reference.classDescription += Localization("\n\n")
             + Localization(english: "Show undoable count and undoed count in parent view",

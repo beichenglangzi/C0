@@ -41,6 +41,8 @@ final class Scene: NSObject, NSCoding {
     var editMaterial: Material
     var isHiddenPrevious: Bool, isHiddenNext: Bool
     
+    var version = Version()
+    
     var viewTransform: Transform {
         didSet {
             self.scale = viewTransform.scale.x
@@ -251,7 +253,7 @@ final class Scene: NSObject, NSCoding {
         return Subtitle.vtt(subtitleTuples, timeHandler: { secondTime(withBeatTime: $0) })
     }
 }
-extension Scene: Copying {
+extension Scene: ClassCopiable {
     func copied(from copier: Copier) -> Scene {
         return Scene(frame: frame, frameRate: frameRate,
                      editMaterial: editMaterial,
@@ -330,34 +332,32 @@ final class SceneView: View {
                                            min: 1, max: 1000, numberInterval: 1, unit: " fps")
     let colorSpaceView = EnumView<ColorSpace>(enumeratedType: ColorSpace.sRGB,
                                               frame: SceneView.colorSpaceFrame,
-                                              names: ColorSpace.displayStrings)
+                                              names: ColorSpace.displayTexts)
     let isHiddenSubtitlesView = BoolView(cationBool: true,
-                                         name: Localization(english: "Hidden Subtitles",
-                                                            japanese: "字幕表示なし"), isSmall: true)
+                                         name: Localization(english: "Subtitles", japanese: "字幕"),
+                                         sizeType: .small)
     let isHiddenPreviousView = BoolView(defaultBool: true, cationBool: false,
-                                        name: Localization(english: "Hidden Previous",
-                                                           japanese: "前の表示なし"))
+                                        name: Localization(english: "Previous", japanese: "前"))
     let isHiddenNextView = BoolView(defaultBool: true, cationBool: false,
-                                    name: Localization(english: "Hidden Next",
-                                                       japanese: "次の表示なし"))
+                                    name: Localization(english: "Next", japanese: "次"))
     let soundView = SoundView()
     let drawingView = DrawingView()
     let materialManager = SceneMaterialManager()
     let transformView = TransformView()
     let wiggleView = WiggleView()
-    let subtitleView = SubtitleView(isSmall: true)
-    let effectView = EffectView(isSmall: true)
+    let subtitleView = SubtitleView(sizeType: .small)
+    let effectView = EffectView(sizeType: .small)
     
     let showAllBox = TextBox(name: Localization(english: "Unlock All Cells",
                                                 japanese: "すべてのセルのロックを解除"),
-                             isSmall: true)
+                             sizeType: .small)
     let clipCellInSelectedBox = TextBox(name: Localization(english: "Clip Cell in Selected",
                                                            japanese: "セルを選択の中へクリップ"),
-                                        isSmall: true)
+                                        sizeType: .small)
     let splitColorBox = TextBox(name: Localization(english: "Split Color", japanese: "カラーを分割"),
-                                isSmall: true)
+                                sizeType: .small)
     let splitOtherThanColorBox = TextBox(name: Localization(english: "Split Material",
-                                                            japanese: "マテリアルを分割"), isSmall: true)
+                                                            japanese: "マテリアルを分割"), sizeType: .small)
     
     override init() {
         differentialSceneDataModel = DataModel(key: differentialSceneDataModelKey)
@@ -367,7 +367,7 @@ final class SceneView: View {
         timeline.sceneDataModel = differentialSceneDataModel
         canvas.sceneDataModel = differentialSceneDataModel
         
-        versionView.version = rootUndoManager
+        versionView.version = scene.version
         
         super.init()
         bounds = defaultBounds
@@ -656,7 +656,7 @@ final class SceneView: View {
         let padding = Layout.basicPadding, sPadding = Layout.smallPadding, buttonH = Layout.basicHeight
         let h = buttonH + padding * 2
         let cs = SceneView.canvasSize, th = SceneView.timelineHeight
-        let spw = ceil(SceneView.propertyWidth * 8 / 11)
+        let spw = ceil(SceneView.propertyWidth * 0.5)
         let inWidth = cs.width + SceneView.propertyWidth + sPadding + spw + padding
         let width = inWidth + padding * 2
         let height = th + cs.height + h + padding * 2
@@ -671,7 +671,7 @@ final class SceneView: View {
         let padding = Layout.basicPadding, sPadding = Layout.smallPadding, buttonH = Layout.basicHeight
         let h = buttonH + padding * 2
         let cs = SceneView.canvasSize, th = SceneView.timelineHeight
-        let spw = ceil(SceneView.propertyWidth * 8 / 11)
+        let spw = ceil(SceneView.propertyWidth * 0.5)
 //        let height = th + cs.height + h + padding * 2
         let y = bounds.height - padding
         
@@ -831,9 +831,8 @@ final class SceneView: View {
         }
     }
     
-    var rootUndoManager = UndoManager()
     override var undoManager: UndoManager? {
-        return rootUndoManager
+        return scene.version
     }
     
     private func registerUndo(time: Beat, _ handler: @escaping (SceneView, Beat) -> Void) {

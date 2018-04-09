@@ -364,14 +364,14 @@ final class RendererManager {
                                   height: minSize.height + Layout.basicPadding * 2)
     }
 
-    var bars = [Progress]()
-    func beginProgress(_ progressBar: Progress) {
+    var bars = [ProgressNumberView]()
+    func beginProgress(_ progressBar: ProgressNumberView) {
         bars.append(progressBar)
         progressesEdgeLayer?.parent?.append(child: progressBar)
         progressBar.begin()
         updateProgresssPosition()
     }
-    func endProgress(_ progressBar: Progress) {
+    func endProgress(_ progressBar: ProgressNumberView) {
         progressBar.end()
         if let index = bars.index(where: { $0 === progressBar }) {
             bars[index].removeFromParent()
@@ -400,12 +400,13 @@ final class RendererManager {
             let renderer = SceneMovieRenderer(scene: self.scene.copied,
                                               renderSize: size, fileType: fileType, codec: codec)
             
-            let progressBar = Progress(frame: CGRect(x: 0, y: 0,
-                                                     width: self.progressWidth,
-                                                     height: Layout.basicHeight),
-                                       name: e.url.deletingPathExtension().lastPathComponent,
-                                       type: e.url.pathExtension.uppercased(),
-                                       state: Localization(english: "Exporting", japanese: "書き出し中"))
+            let progressBar = ProgressNumberView(frame: CGRect(x: 0, y: 0,
+                                                               width: self.progressWidth,
+                                                               height: Layout.basicHeight),
+                                                 name: e.url.deletingPathExtension().lastPathComponent,
+                                                 type: e.url.pathExtension.uppercased(),
+                                                 state: Localization(english: "Exporting",
+                                                                     japanese: "書き出し中"))
             let operation = BlockOperation()
             progressBar.operation = operation
             progressBar.deleteHandler = { [unowned self] in
@@ -494,7 +495,7 @@ final class RendererManager {
     }
     
     func showError(withName name: String) {
-        let progressBar = Progress()
+        let progressBar = ProgressNumberView()
         progressBar.name = name
         progressBar.state = Localization(english: "Error", japanese: "エラー")
         progressBar.nameLabel.textFrame.color = .warning

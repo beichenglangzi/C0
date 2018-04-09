@@ -135,14 +135,14 @@ final class Timeline: View {
     
     let beatsLayer = PathLayer()
     
-    let keyframeView = KeyframeView(), nodeView = NodeView(isSmall: true)
-    let tempoKeyframeView = KeyframeView(isSmall: true)
+    let keyframeView = KeyframeView(), nodeView = NodeView(sizeType: .small)
+    let tempoKeyframeView = KeyframeView(sizeType: .small)
     
     init(frame: CGRect = CGRect()) {
         tempoAnimationBox.replace(children: [tempoAnimationView])
         tempoAnimationBox.isClipped = true
         tempoAnimationView.isEdit = true
-        tempoAnimationView.isSmall = false
+        tempoAnimationView.sizeType = .regular
         tempoAnimationView.smallHeight = tempoHeight
         cutViewsBox.isClipped = true
         sumKeyTimesBox.isClipped = true
@@ -1049,7 +1049,7 @@ final class Timeline: View {
         let cutView = cutViews[scene.editCutIndex]
         let node = cutView.cut.editNode
         let track = NodeTrack(name: newNodeTrackName(with: node))
-        let animationView = cutView.newAnimationView(with: track, node: node, isSmall: true)
+        let animationView = cutView.newAnimationView(with: track, node: node, sizeType: .small)
         let trackIndex = node.editTrackIndex + 1
         insert(track, animationView, at: trackIndex, in: node, in: cutView, time: time)
         bind(in: animationView, in: cutView,
@@ -1068,7 +1068,7 @@ final class Timeline: View {
     func append(_ track: NodeTrack, in cutView: CutView) -> Bool {
         let node = cutView.cut.editNode
         let index = node.editTrackIndex
-        let animationView = cutView.newAnimationView(with: track, node: node, isSmall: false)
+        let animationView = cutView.newAnimationView(with: track, node: node, sizeType: .regular)
         insert(track, animationView, at: index + 1, in: node, in: cutView, time: time)
         bind(in: animationView, in: cutView,
              from: Cut.NodeAndTrack(node: node, trackIndex: index))
@@ -1084,7 +1084,7 @@ final class Timeline: View {
         if node.tracks.count == 0 {
             let newTrack = NodeTrack(name: newNodeTrackName(with: node))
             let animationView = cutView.newAnimationView(with: newTrack, node: node,
-                                                               isSmall: false)
+                                                               sizeType: .regular)
             insert(newTrack, animationView, at: 0, in: node, in: cutView, time: time)
             bind(in: animationView, in: cutView,
                  from: Cut.NodeAndTrack(node: node, trackIndex: trackIndex))

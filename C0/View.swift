@@ -61,8 +61,9 @@ extension Undoable {
 }
 
 protocol Editable {
-    var copyManager: CopyManager? { get }
-    func copiedObjects(with event: KeyInputEvent) -> [Any]?
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]?
+    var topCopiedObjects: [ViewExpression] { get }
+    func sendToTop(copiedObjects: [ViewExpression])
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool
     func delete(with event: KeyInputEvent) -> Bool
     func new(with event: KeyInputEvent) -> Bool
@@ -70,13 +71,11 @@ protocol Editable {
     func keyInput(with event: KeyInputEvent) -> Bool
     func run(with event: ClickEvent) -> Bool
     func bind(with event: SubClickEvent) -> Bool
-    func lookUp(with event: TapEvent) -> Reference?
+    func reference(with event: TapEvent) -> Reference?
+    func sendToTop(_ reference: Reference)
 }
 extension Editable {
-    var copyManager: CopyManager? {
-        return nil
-    }
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return nil
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
@@ -100,7 +99,7 @@ extension Editable {
     func bind(with event: SubClickEvent) -> Bool {
         return false
     }
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return nil
     }
 }
@@ -238,6 +237,111 @@ typealias PathView = PathLayer & Respondable
 typealias DrawView = DrawLayer & Respondable
 typealias RootView = Layer & RootRespondable
 
+enum SizeType {
+    case small, regular
+}
+
 protocol ViewExpression {
-    func view(withBounds bounds: CGRect, isSmall: Bool) -> View
+    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View
+}
+protocol Thumbnailable {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer
+}
+protocol ObjectViewExpression: ViewExpression, Thumbnailable, Copiable {
+}
+extension ObjectViewExpression {
+    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
+        return ObjectView(object: self,
+                          thumbnailView: thumbnail(withBounds: bounds, sizeType: sizeType),
+                          minFrame: bounds, sizeType: sizeType)
+    }
+}
+protocol ObjectViewExpressionWithDisplayText: ObjectViewExpression {
+    var displayText: Localization { get }
+}
+extension ObjectViewExpressionWithDisplayText {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return displayText.thumbnail(withBounds: bounds, sizeType: sizeType)
+    }
+}
+
+final class ObjectView<T: Copiable & ViewExpression>: View {
+    let object: T
+    
+    var sizeType: SizeType
+    let classNameLabel: Label, thumbnailView: Layer
+    init(object: T, thumbnailView: Layer?, minFrame: CGRect, thumbnailWidth: CGFloat = 40.0,
+         sizeType: SizeType = .regular) {
+        self.object = object
+        if let reference = object as? Referenceable {
+            classNameLabel = Label(text: type(of: reference).name, font: Font.bold(with: sizeType))
+        } else {
+            classNameLabel = Label(text: Localization(String(describing: type(of: object))),
+                                   font: Font.bold(with: sizeType))
+        }
+        self.thumbnailView = thumbnailView ?? Box()
+        self.sizeType = sizeType
+        
+        super.init()
+        let width = max(minFrame.width, classNameLabel.frame.width + thumbnailWidth)
+        self.frame = CGRect(origin: minFrame.origin,
+                            size: CGSize(width: width, height: minFrame.height))
+        replace(children: [classNameLabel, self.thumbnailView])
+        updateLayout()
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
+    }
+    
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    func updateLayout() {
+        let padding = Layout.padding(with: sizeType)
+        classNameLabel.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameLabel.frame.height - padding)
+        thumbnailView.frame = CGRect(x: classNameLabel.frame.maxX + padding,
+                                     y: padding,
+                                     width: bounds.width - classNameLabel.frame.width - padding * 3,
+                                     height: bounds.height - padding * 2)
+    }
+    
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return  [object.copied]
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        return (object as? Referenceable)?.reference ??
+            Reference(name: Localization(String(describing: type(of: object))))
+    }
+}
+
+final class Drager {
+    private var downPosition = CGPoint(), oldFrame = CGRect()
+    func drag(with event: DragEvent, _ layer: Layer, in parent: Layer) {
+        let p = parent.point(from: event)
+        switch event.sendType {
+        case .begin:
+            downPosition = p
+            oldFrame = layer.frame
+        case .sending:
+            let dp =  p - downPosition
+            layer.frame.origin = CGPoint(x: oldFrame.origin.x + dp.x,
+                                         y: oldFrame.origin.y + dp.y)
+        case .end:
+            let dp =  p - downPosition
+            layer.frame.origin = CGPoint(x: round(oldFrame.origin.x + dp.x),
+                                         y: round(oldFrame.origin.y + dp.y))
+        }
+    }
+}
+final class Scroller {
+    func scroll(with event: ScrollEvent, layer: Layer) {
+        layer.frame.origin += event.scrollDeltaPoint
+    }
 }

@@ -368,7 +368,7 @@ final class TempoTrack: NSObject, Track, NSCoding {
         coder.encode(keySeconds, forKey: CodingKeys.keySeconds.rawValue)
     }
 }
-extension TempoTrack: Copying {
+extension TempoTrack: ClassCopiable {
     func copied(from copier: Copier) -> TempoTrack {
         return TempoTrack(animation: animation, time: time,
                           tempoItem: copier.copied(tempoItem))
@@ -1206,7 +1206,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
                                         reciprocalAllScale: reciprocalAllScale, in: ctx)
     }
 }
-extension NodeTrack: Copying {
+extension NodeTrack: ClassCopiable {
     func copied(from copier: Copier) -> NodeTrack {
         return NodeTrack(animation: animation, name: name,
                          time: time, isHidden: isHidden,
@@ -1222,6 +1222,11 @@ extension NodeTrack: Copying {
 }
 extension NodeTrack: Referenceable {
     static let name = Localization(english: "Node Track", japanese: "ノードトラック")
+}
+extension NodeTrack: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return name.view(withBounds: bounds, sizeType: sizeType)
+    }
 }
 
 /**
@@ -1314,7 +1319,7 @@ final class DrawingItem: NSObject, TrackItem, NSCoding {
         }
     }
 }
-extension DrawingItem: Copying {
+extension DrawingItem: ClassCopiable {
     func copied(from copier: Copier) -> DrawingItem {
         return DrawingItem(drawing: copier.copied(drawing),
                            keyDrawings: keyDrawings.map { copier.copied($0) }, color: color)
@@ -1410,7 +1415,7 @@ final class CellItem: NSObject, TrackItem, NSCoding {
         }
     }
 }
-extension CellItem: Copying {
+extension CellItem: ClassCopiable {
     func copied(from copier: Copier) -> CellItem {
         return CellItem(cell: copier.copied(cell), keyGeometries: keyGeometries)
     }
@@ -1477,7 +1482,7 @@ final class MaterialItem: NSObject, TrackItem, NSCoding {
         coder.encode(keyMaterials, forKey: CodingKeys.keyMaterials.rawValue)
     }
 }
-extension MaterialItem: Copying {
+extension MaterialItem: ClassCopiable {
     func copied(from copier: Copier) -> MaterialItem {
         return MaterialItem(material: material,
                             cells: cells.map { copier.copied($0) }, keyMaterials: keyMaterials)
@@ -1544,7 +1549,7 @@ final class EffectItem: TrackItem, Codable {
         return true
     }
 }
-extension EffectItem: Copying {
+extension EffectItem: ClassCopiable {
     func copied(from copier: Copier) -> EffectItem {
         return EffectItem(effect: effect, keyEffects: keyEffects)
     }
@@ -1610,7 +1615,7 @@ final class TransformItem: TrackItem, Codable {
         return true
     }
 }
-extension TransformItem: Copying {
+extension TransformItem: ClassCopiable {
     func copied(from copier: Copier) -> TransformItem {
         return TransformItem(transform: transform, keyTransforms: keyTransforms)
     }
@@ -1676,7 +1681,7 @@ final class WiggleItem: TrackItem, Codable {
         return true
     }
 }
-extension WiggleItem: Copying {
+extension WiggleItem: ClassCopiable {
     func copied(from copier: Copier) -> WiggleItem {
         return WiggleItem(wiggle: wiggle, keyWiggles: keyWiggles)
     }
@@ -1731,7 +1736,7 @@ final class TempoItem: TrackItem, Codable {
         return tempoItem
     }
 }
-extension TempoItem: Copying {
+extension TempoItem: ClassCopiable {
     func copied(from copier: Copier) -> TempoItem {
         return TempoItem(tempo: tempo, keyTempos: keyTempos)
     }

@@ -149,13 +149,13 @@ final class CutTrack: NSObject, Track, NSCoding {
         return cutItem.keyCuts.count - 1
     }
 }
-extension CutTrack: Copying {
+extension CutTrack: Referenceable {
+    static let name = Localization(english: "Cut Track", japanese: "カットトラック")
+}
+extension CutTrack: ClassCopiable {
     func copied(from copier: Copier) -> CutTrack {
         return CutTrack(animation: animation, time: time, cutItem: copier.copied(cutItem))
     }
-}
-extension CutTrack: Referenceable {
-    static let name = Localization(english: "Cut Track", japanese: "カットトラック")
 }
 
 final class CutItem: NSObject, TrackItem, NSCoding {
@@ -201,7 +201,7 @@ final class CutItem: NSObject, TrackItem, NSCoding {
         coder.encode(cut, forKey: CodingKeys.cut.rawValue)
     }
 }
-extension CutItem: Copying {
+extension CutItem: ClassCopiable {
     func copied(from copier: Copier) -> CutItem {
         return CutItem(keyCuts: keyCuts.map { copier.copied($0) }, cut: copier.copied(cut))
     }
@@ -268,6 +268,16 @@ final class Cut: NSObject, NSCoding {
         rootNode.time = currentTime
         rootNode.isEdited = true
         editNode.isEdited = true
+        super.init()
+    }
+    
+    init(rootNode: Node, editNode: Node, subtitleTrack: SubtitleTrack,
+         currentTime: Beat, duration: Beat) {
+        self.rootNode = rootNode
+        self.editNode = editNode
+        self.subtitleTrack = subtitleTrack
+        self.currentTime = currentTime
+        self.duration = rootNode.maxDuration
         super.init()
     }
     
@@ -371,9 +381,6 @@ final class Cut: NSObject, NSCoding {
         let node: Node, trackIndex: Int
         var track: NodeTrack {
             return node.tracks[trackIndex]
-        }
-        static func ==(lhs: NodeAndTrack, rhs: NodeAndTrack) -> Bool {
-            return lhs.node == rhs.node && lhs.trackIndex == rhs.trackIndex
         }
     }
     func nodeAndTrackIndex(with nodeAndTrack: NodeAndTrack) -> Int {
@@ -492,15 +499,20 @@ final class Cut: NSObject, NSCoding {
         return rootNode.treeNodeCount - 1
     }
 }
-extension Cut: Copying {
+extension Cut: Referenceable {
+    static let name = Localization(english: "Cut", japanese: "カット")
+}
+extension Cut: ClassCopiable {
     func copied(from copier: Copier) -> Cut {
         return Cut(rootNode: copier.copied(rootNode), editNode: copier.copied(editNode),
                    subtitleTrack: copier.copied(subtitleTrack),
-                   currentTime: currentTime)
+                   currentTime: currentTime, duration: duration)
     }
 }
-extension Cut: Referenceable {
-    static let name = Localization(english: "Cut", japanese: "カット")
+extension Cut: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return duration.thumbnail(withBounds: bounds, sizeType: sizeType)
+    }
 }
 
 final class CutView: View {
@@ -511,8 +523,8 @@ final class CutView: View {
     
     private(set) var editAnimationView: AnimationView {
         didSet {
-            oldValue.isSmall = true
-            editAnimationView.isSmall = false
+            oldValue.sizeType = .small
+            editAnimationView.sizeType = .regular
             updateChildren()
         }
     }
@@ -570,16 +582,16 @@ final class CutView: View {
         }
     }
     static func animationView(with track: Track, beginBaseTime: Beat,
-                              baseTimeInterval: Beat, isSmall: Bool) -> AnimationView {
+                              baseTimeInterval: Beat, sizeType: SizeType) -> AnimationView {
         return AnimationView(track.animation,
                              beginBaseTime: beginBaseTime,
                              baseTimeInterval: baseTimeInterval,
-                             isSmall: isSmall)
+                             sizeType: sizeType)
     }
-    func newAnimationView(with track: NodeTrack, node: Node, isSmall: Bool) -> AnimationView {
+    func newAnimationView(with track: NodeTrack, node: Node, sizeType: SizeType) -> AnimationView {
         let animationView = CutView.animationView(with: track, beginBaseTime: beginBaseTime,
                                                   baseTimeInterval: baseTimeInterval,
-                                                  isSmall: isSmall)
+                                                  sizeType: sizeType)
         animationView.frame.size.width = frame.width
         bind(in: animationView, from: node, from: track)
         return animationView
@@ -589,7 +601,7 @@ final class CutView: View {
         CutView.tracks(with: node) { (node, track, index) in
             let animationView = CutView.animationView(with: track, beginBaseTime: beginBaseTime,
                                                       baseTimeInterval: baseTimeInterval,
-                                                      isSmall: false)
+                                                      sizeType: .regular)
             animationView.frame.size.width = frame.width
             bind(in: animationView, from: node, from: track)
             animationViews.append(animationView)
@@ -621,7 +633,7 @@ final class CutView: View {
             let isEdit = node === editNode && track == editNode.editTrack
             let animationView = AnimationView(track.animation,
                                               baseTimeInterval: baseTimeInterval,
-                                              isSmall: !isEdit)
+                                              sizeType: !isEdit ? .small : .regular)
             animationViews.append(animationView)
             if isEdit {
                 editAnimationView = animationView
@@ -633,7 +645,7 @@ final class CutView: View {
         subtitleAnimationView = CutView.animationView(with: cut.subtitleTrack,
                                                     beginBaseTime: beginBaseTime,
                                                     baseTimeInterval: baseTimeInterval,
-                                                    isSmall: true)
+                                                    sizeType: .small)
         
         super.init()
         clipView.replace(children: animationViews)
@@ -939,7 +951,7 @@ final class CutView: View {
         }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return [cut.copied]
     }
     

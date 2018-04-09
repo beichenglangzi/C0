@@ -219,12 +219,37 @@ extension Array {
         return array
     }
 }
-
-final class ArrayView<T>: View {
+extension Array: Referenceable where Element: Referenceable {
     static var name: Localization {
-        return Localization(english: "Array", japanese: "配列")
+        return Localization("[") + Element.name + Localization("]")
+    }
+}
+extension Array: ViewExpression & Copiable where Element: ViewExpression & Copiable {
+    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
+        return ObjectView(object: self, thumbnailView: nil, minFrame: bounds)
+    }
+}
+
+final class AnyArrayView: View {
+    var array = [ViewExpression]()
+    
+    init(children: [Layer] = [], frame: CGRect = CGRect()) {
+        super.init()
+        isClipped = true
+        self.frame = frame
+        replace(children: children)
     }
     
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return array
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        return Reference(name: Localization(english: "Array", japanese: "配列"))
+    }
+}
+
+final class ArrayView<T: Referenceable & ViewExpression>: View {
     var array = [T]()
     
     init(children: [Layer] = [], frame: CGRect = CGRect()) {
@@ -234,8 +259,12 @@ final class ArrayView<T>: View {
         replace(children: children)
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return array
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        return array.reference
     }
 }
 
@@ -244,8 +273,6 @@ final class ArrayView<T>: View {
  - ツリー操作が複雑
  */
 final class ListArrayView: View {
-    static let name = Localization(english: "Array", japanese: "配列")
-    
     private let labelLineLayer: PathLayer = {
         let lineLayer = PathLayer()
         lineLayer.fillColor = .subContent
@@ -374,8 +401,8 @@ final class ListArrayView: View {
     func delete(with event: KeyInputEvent) -> Bool {
         return deleteHandler?(self, event) ?? false
     }
-    var copiedObjectsHandler: ((ListArrayView, KeyInputEvent) -> ([Any]))?
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    var copiedObjectsHandler: ((ListArrayView, KeyInputEvent) -> ([ViewExpression]))?
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return copiedObjectsHandler?(self, event)
     }
     var pasteHandler: ((ListArrayView, [Any], KeyInputEvent) -> (Bool))?

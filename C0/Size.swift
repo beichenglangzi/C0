@@ -19,8 +19,9 @@
 
 import Foundation
 
-struct Size {
+struct Size: Equatable {
     var width = 0.0, height = 0.0
+    
     func with(width: Double) -> Size {
         return Size(width: width, height: height)
     }
@@ -34,11 +35,6 @@ struct Size {
     
     static func *(lhs: Size, rhs: Double) -> Size {
         return Size(width: lhs.width * rhs, height: lhs.height * rhs)
-    }
-}
-extension Size: Equatable {
-    static func ==(lhs: Size, rhs: Size) -> Bool {
-        return lhs.width == rhs.width && lhs.height == rhs.height
     }
 }
 extension Size: Hashable {
@@ -76,13 +72,32 @@ extension CGSize {
     init(square: CGFloat) {
         self.init(width: square, height: square)
     }
+    
+    init(_ string: String) {
+        self = NSSizeToCGSize(NSSizeFromString(string))
+    }
+    var string: String {
+        return String(NSStringFromSize(NSSizeFromCGSize(self)))
+    }
 }
 extension CGSize: Referenceable {
     static let name = Localization(english: "Size", japanese: "サイズ")
 }
+extension CGSize: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return string.view(withBounds: bounds, sizeType: sizeType)
+    }
+}
 
 final class DiscreteSizeView: View {
-    static let name = CGSize.name
+    var size = CGSize() {
+        didSet {
+            if size != oldValue {
+                widthView.number = size.width
+                heightView.number = size.height
+            }
+        }
+    }
     
     private let wLabel = Label(text: Localization("w:"))
     private let widthView = DiscreteNumberView(frame: Layout.valueFrame,
@@ -99,15 +114,6 @@ final class DiscreteSizeView: View {
         
         widthView.binding = { [unowned self] in self.setSize(with: $0) }
         heightView.binding = { [unowned self] in self.setSize(with: $0) }
-    }
-    
-    var size = CGSize() {
-        didSet {
-            if size != oldValue {
-                widthView.number = size.width
-                heightView.number = size.height
-            }
-        }
     }
     
     var defaultSize = CGSize()
@@ -132,34 +138,42 @@ final class DiscreteSizeView: View {
         }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
-        return [size]
+    func delete(with event: KeyInputEvent) -> Bool {
+        let size = defaultSize
+        if size != self.size {
+            push(size, old: self.size)
+        }
+        return true
+    }
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [size, size.string]
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
             if let size = object as? CGSize {
-                guard size != self.size else {
-                    continue
+                if size != self.size {
+                    push(size, old: self.size)
+                    return true
                 }
-                set(size, oldSize: self.size)
-                return true
+            } else if let string = object as? String {
+                let size = CGSize(string)
+                if size != self.size {
+                    push(size, old: self.size)
+                    return true
+                }
             }
         }
         return false
     }
-    func delete(with event: KeyInputEvent) -> Bool {
-        let size = defaultSize
-        guard size != self.size else {
-            return false
-        }
-        set(size, oldSize: self.size)
-        return true
-    }
     
-    func set(_ size: CGSize, oldSize: CGSize) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldSize, oldSize: size) }
+    func push(_ size: CGSize, old oldSize: CGSize) {
+        registeringUndoManager?.registerUndo(withTarget: self) { $0.push(oldSize, old: size) }
         binding?(Binding(view: self, size: size, oldSize: oldSize, type: .begin))
         self.size = size
         binding?(Binding(view: self, size: size, oldSize: oldSize, type: .end))
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        return size.reference
     }
 }

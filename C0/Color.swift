@@ -416,15 +416,17 @@ enum ColorSpace: Int8, Codable {
             return "Display P3"
         }
     }
-    var displayString: Localization {
+    var displayText: Localization {
         return Localization(description)
     }
-    static var displayStrings: [Localization] {
-        return [sRGB.displayString, displayP3.displayString]
+    static var displayTexts: [Localization] {
+        return [sRGB.displayText, displayP3.displayText]
     }
 }
 extension ColorSpace: Referenceable {
     static let name = Localization(english: "Color space", japanese: "色空間")
+}
+extension ColorSpace: ObjectViewExpressionWithDisplayText {
 }
 
 extension Color {
@@ -468,15 +470,17 @@ extension Color {
         return CGColor.with(rgb: rgb, alpha: alpha, colorSpace: CGColorSpace.with(colorSpace))
     }
 }
-extension Color: ViewExpression {
-    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
+extension Color: Copiable {
+}
+extension Color: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
         let thumbnailView = Box()
         thumbnailView.bounds = bounds
         thumbnailView.fillColor = self
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
-                          isSmall : isSmall)
+        return thumbnailView
     }
 }
+
 extension CGColor {
     static func with(rgb: RGB, alpha a: Double = 1, colorSpace: CGColorSpace? = nil) -> CGColor {
         let cs = colorSpace ?? CGColorSpaceCreateDeviceRGB()
@@ -652,14 +656,14 @@ final class ColorView: View {
     
     init(frame: CGRect = CGRect(),
          hLineWidth: CGFloat = 2.5, hWidth: CGFloat = 16.0.cf, slPadding: CGFloat? = nil,
-         isSmall: Bool = false) {
+         sizeType: SizeType = .regular) {
         
         hView = CircularNumberView(width: hWidth)
         
         if let slPadding = slPadding {
             slView.padding = slPadding
         }
-        if isSmall {
+        if sizeType == .small {
             slView.knob.radius = 4
             hView.knob.radius = 4
         }
@@ -740,22 +744,16 @@ final class ColorView: View {
     
     var disabledRegisterUndo = false
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return [color]
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
             if let color = object as? Color {
-                let oldColor = self.color
-                guard color != oldColor else {
-                    continue
+                if color != self.color {
+                    set(color, old: self.color)
+                    return true
                 }
-                setColorHandler?(Binding(colorView: self,
-                                         color: oldColor, oldColor: oldColor, type: .begin))
-                set(color, old: oldColor)
-                setColorHandler?(Binding(colorView: self,
-                                         color: color, oldColor: oldColor, type: .end))
-                return true
             }
         }
         return false
@@ -807,7 +805,7 @@ final class ColorView: View {
                                  color: color, oldColor: oldColor, type: .end))
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         var reference = color.reference
         reference.viewDescription = Localization(english: "Ring: Hue, Width: Saturation, Height: Luminance",
                                                  japanese: "輪: 色相, 横: 彩度, 縦: 輝度")

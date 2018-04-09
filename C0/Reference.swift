@@ -20,51 +20,59 @@
 import Foundation
 
 protocol Referenceable {
+    static var uninheritanceName: Localization { get }
     static var name: Localization { get }
     static var classDescription: Localization { get }
     var instanceDescription: Localization { get }
-    var viewDescription: Localization { get }
+    static var comment: Localization { get }
     var reference: Reference { get }
 }
 extension Referenceable {
+    static var uninheritanceName: Localization {
+        return name
+    }
     static var classDescription: Localization {
         return Localization()
     }
     var instanceDescription: Localization {
         return Localization()
     }
-    var viewDescription: Localization {
+    static var comment: Localization {
         return Localization()
     }
     var reference: Reference {
         return Reference(name: Self.name,
                          classDescription: Self.classDescription,
                          instanceDescription: instanceDescription,
-                         viewDescription: viewDescription)
+                         comment: Self.comment)
     }
 }
 
 struct Reference {
     var name: Localization, classDescription: Localization
-    var instanceDescription: Localization, viewDescription: Localization
+    var instanceDescription: Localization, viewDescription: Localization, comment: Localization
     init(name: Localization = Localization(),
          classDescription: Localization = Localization(),
          instanceDescription: Localization = Localization(),
-         viewDescription: Localization = Localization()) {
+         viewDescription: Localization = Localization(),
+         comment: Localization = Localization()) {
         self.name = name
         self.classDescription = classDescription
         self.instanceDescription = instanceDescription
         self.viewDescription = viewDescription
+        self.comment = comment
     }
 }
 extension Reference: Referenceable {
     static let name = Localization(english: "Reference", japanese: "情報")
+    static let comment = Localization("Issue: リファレンス表示の具体化")
+}
+extension Reference: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return name.view(withBounds: bounds, sizeType: sizeType)
+    }
 }
 
-/**
- # Issue
- - リファレンス表示の具体化
- */
 final class ReferenceView: View {
     var reference = Reference() {
         didSet {
@@ -72,13 +80,18 @@ final class ReferenceView: View {
         }
     }
     
-    let minWidth = 200.0.cf
+    let classNameLabel = Label(text: Reference.name, font: .bold)
     let nameLabel = Label()
+    let classDescriptionLabel = Label()
+    let instanceDescriptionLabel = Label()
+    let viewDescriptionLabel = Label()
+    let commentLabel = Label()
     
     init(reference: Reference = Reference()) {
         self.reference = reference
         super.init()
-        fillColor = .background
+        isClipped = true
+        replace(children: [classNameLabel, nameLabel, instanceDescriptionLabel])
         updateWithReference()
     }
     
@@ -88,28 +101,24 @@ final class ReferenceView: View {
         }
     }
     private func updateLayout() {
-        
+        let padding = Layout.basicPadding
+        classNameLabel.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameLabel.frame.height - padding)
+        var y = bounds.height - nameLabel.frame.height - padding
+        nameLabel.frame.origin = CGPoint(x: classNameLabel.frame.maxX + padding,
+                                         y: y)
+        instanceDescriptionLabel.textFrame.frameWidth
+            = (bounds.width - padding * 2 - instanceDescriptionLabel.padding * 2).d
+        y -= instanceDescriptionLabel.frame.height + padding
+        instanceDescriptionLabel.frame.origin = CGPoint(x: padding, y: y)
     }
     private func updateWithReference() {
         nameLabel.localization = reference.name
+        instanceDescriptionLabel.localization = reference.instanceDescription
+        updateLayout()
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return reference.reference
     }
-}
-
-final class ReferenceManagerView {
-    func open() {
-//        let p = event.location.integral
-//        let responder = self.responder(with: indicatedLayer(with: event))
-//        let referenceView = ReferenceView(reference: responder.lookUp(with: event))
-//        let panel = Panel(isUseHedding: true)
-//        panel.contents = [referenceView]
-//        panel.openPoint = p.integral
-//        panel.openViewPoint = rootView.point(from: event)
-//        panel.subIndicatedParent = rootView
-    }
-//    description: Localization(english: "Close: Move cursor to outside",
-//    japanese: "閉じる: カーソルを外に出す"))
 }

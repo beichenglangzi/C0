@@ -41,9 +41,9 @@ extension String: Referenceable {
     }
 }
 extension String: ViewExpression {
-    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
+    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
         return Label(frame: bounds, text: Localization(self),
-                     font: isSmall ? .small : .default, isSizeToFit: false)
+                     font: Font.default(with: sizeType), isSizeToFit: false)
     }
 }
 
@@ -251,7 +251,7 @@ final class TextView: DrawView {
         return true
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         guard let backingStore = backingStore.copy() as? NSAttributedString else {
             return nil
         }
@@ -269,9 +269,10 @@ final class TextView: DrawView {
                 binding?(Binding(view: self, text: string, oldText: oldText, type: .end))
                 
                 draw()
+                return true
             }
         }
-        return true
+        return false
     }
     
     func moveCursor(with event: MoveCursorEvent) -> Bool {
@@ -479,7 +480,7 @@ final class TextView: DrawView {
         return textFrame.typographicBounds(for: range)
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         let p = convert(event.location, from: nil)
         let textDefinition = Localization(self.textDefinition(for: p) ?? "")
         return Reference(name: Localization(english: "Text", japanese: "テキスト"),

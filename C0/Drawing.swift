@@ -122,20 +122,20 @@ final class Drawing: NSObject, NSCoding {
 extension Drawing: Referenceable {
     static let name = Localization(english: "Drawing", japanese: "ドローイング")
 }
-extension Drawing: Copying {
+extension Drawing: ClassCopiable {
     func copied(from copier: Copier) -> Drawing {
         return Drawing(lines: lines, draftLines: draftLines, selectedLineIndexes: selectedLineIndexes)
     }
 }
 extension Drawing: ViewExpression {
-    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
+    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
         let thumbnailView = DrawBox()
         thumbnailView.drawBlock = { [unowned self, unowned thumbnailView] ctx in
             self.draw(with: thumbnailView.bounds, in: ctx)
         }
         thumbnailView.bounds = bounds
         return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
-                          isSmall : isSmall)
+                          sizeType: sizeType)
     }
     func draw(with bounds: CGRect, in ctx: CGContext) {
         let imageBounds = self.imageBounds(withLineWidth: 1)
@@ -153,7 +153,7 @@ extension Drawing: ViewExpression {
 final class DrawingView: View {
     var drawing = Drawing()
     
-    var isSmall: Bool
+    var sizeType: SizeType
     private let classNameLabel: Label
     
     let changeToDraftBox = TextBox(name: Localization(english: "Change to Draft", japanese: "下書き化"))
@@ -163,17 +163,16 @@ final class DrawingView: View {
     let shapeLinesBox = PopupBox(frame: CGRect(x: 0, y: 0, width: 100.0, height: Layout.basicHeight),
                                  text: Localization(english: "Shape Lines", japanese: "図形の線"))
     
-    init(isSmall: Bool = false) {
-        self.isSmall = isSmall
-        classNameLabel = Label(text: Drawing.name, font: isSmall ? .smallBold : .bold)
+    init(sizeType: SizeType = .regular) {
+        self.sizeType = sizeType
+        classNameLabel = Label(text: Drawing.name, font: Font.bold(with: sizeType))
         super.init()
         replace(children: [classNameLabel,
                            changeToDraftBox, removeDraftBox, exchangeWithDraftBox, shapeLinesBox])
     }
     
     override var defaultBounds: CGRect {
-        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
-        let buttonH = isSmall ? Layout.smallHeight : Layout.basicHeight
+        let padding = Layout.padding(with: sizeType), buttonH = Layout.height(with: sizeType)
         return CGRect(x: 0, y: 0, width: 100,
                       height: classNameLabel.frame.height + buttonH * 4 + padding * 3)
     }
@@ -183,8 +182,7 @@ final class DrawingView: View {
         }
     }
     private func updateLayout() {
-        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
-        let buttonH = isSmall ? Layout.smallHeight : Layout.basicHeight
+        let padding = Layout.padding(with: sizeType), buttonH = Layout.height(with: sizeType)
         let px = padding, pw = bounds.width - padding * 2
         var py = bounds.height - padding
         py -= classNameLabel.frame.height
@@ -215,17 +213,16 @@ final class DrawingView: View {
     }
     var binding: ((Binding) -> ())?
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return [drawing.copied]
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
             if let drawing = object as? Drawing {
-                guard drawing != self.drawing else {
-                    continue
+                if drawing != self.drawing {
+                    set(drawing, old: self.drawing)
+                    return true
                 }
-                set(drawing, old: self.drawing)
-                return true
             }
         }
         return false
@@ -248,7 +245,7 @@ final class DrawingView: View {
         binding?(Binding(view: self, drawing: drawing, oldDrawing: oldDrawing, type: .end))
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return drawing.reference
     }
 }

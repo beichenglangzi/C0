@@ -20,7 +20,12 @@
 import Foundation
 
 extension Bool: Referenceable {
-    static let name = Localization(english: "Bool", japanese: "真理値")
+    static let name = Localization(english: "Bool", japanese: "ブール値")
+}
+extension Bool: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return (self ? "true" : "false").view(withBounds: bounds, sizeType: sizeType)
+    }
 }
 
 final class BoolView: View {
@@ -32,18 +37,18 @@ final class BoolView: View {
     var defaultBool: Bool
     var cationBool: Bool?
     
-    var isSmall: Bool
+    var sizeType: SizeType
     let nameLabel: Label
     let knob: DiscreteKnob
     
     init(bool: Bool = false, defaultBool: Bool = false, cationBool: Bool? = nil,
-         name: Localization = Localization(), isSmall: Bool = false) {
+         name: Localization = Localization(), sizeType: SizeType = .regular) {
         self.bool = bool
         self.defaultBool = bool
         self.cationBool = cationBool
-        nameLabel = Label(text: name, font: isSmall ? .small : .default)
+        nameLabel = Label(text: name, font: Font.default(with: sizeType))
         knob = DiscreteKnob()
-        self.isSmall = isSmall
+        self.sizeType = sizeType
         
         super.init()
         replace(children: [nameLabel, knob])
@@ -51,7 +56,7 @@ final class BoolView: View {
     }
     
     override var defaultBounds: CGRect {
-        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
+        let padding = Layout.padding(with: sizeType)
         return CGRect(x: 0, y: 0,
                       width: nameLabel.frame.width + padding * 2,
                       height: nameLabel.frame.height + padding * 2)
@@ -62,7 +67,7 @@ final class BoolView: View {
         }
     }
     func updateLayout() {
-        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
+        let padding = Layout.padding(with: sizeType)
         nameLabel.frame.origin = CGPoint(x: padding, y: padding)
         updateWithBool()
     }
@@ -94,7 +99,7 @@ final class BoolView: View {
         }
         return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return [bool]
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
@@ -103,12 +108,12 @@ final class BoolView: View {
                 if let bool = Bool(string) {
                     if bool != self.bool {
                         set(bool, old: self.bool)
-                        break
+                        return true
                     }
                 }
             }
         }
-        return true
+        return false
     }
     
     func run(with event: ClickEvent) -> Bool {
@@ -154,7 +159,7 @@ final class BoolView: View {
         binding?(Binding(view: self, bool: bool, oldBool: oldBool, type: .end))
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return bool.reference
     }
 }

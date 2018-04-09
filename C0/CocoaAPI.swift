@@ -30,6 +30,15 @@ struct Font {
     static let hedding0 = Font(boldMonospacedSize: 14)
     static let hedding1 = Font(boldMonospacedSize: 10)
     static let subtitle = Font(boldMonospacedSize: 20)
+    static func `default`(with sizeType: SizeType) -> Font {
+        return sizeType == .small ? small : self.default
+    }
+    static func bold(with sizeType: SizeType) -> Font {
+        return sizeType == .small ? smallBold : bold
+    }
+    static func italic(with sizeType: SizeType) -> Font {
+        return sizeType == .small ? smallItalic : italic
+    }
     
     var name: String {
         didSet {
@@ -224,7 +233,7 @@ extension URL {
     }
 }
 
-fileprivate struct C0DynamicCoder {
+fileprivate struct C0Coder {
     static let appUTI = Bundle.main.bundleIdentifier ?? "smdls.C0."
     
     static func typeKey(from object: Any) -> String {
@@ -391,8 +400,8 @@ final class C0Document: NSDocument, NSWindowDelegate {
         return windowControllers.first!.window!
     }
     weak var view: C0View!
-    var copyManagerView: CopyManagerView {
-        return view.desktopView.copyManagerView
+    var desktop: Desktop {
+        return view.desktopView.desktop
     }
     
     override init() {
@@ -450,8 +459,13 @@ final class C0Document: NSDocument, NSWindowDelegate {
         view.desktopView.sceneView.differentialSceneDataModel.didChangeIsWriteHandler = isWriteHandler
         preferenceDataModel.didChangeIsWriteHandler = isWriteHandler
         
-        copyManagerView.rootCopyManager
-            = CopyManager(copiedObjects: NSPasteboard.general.copiedObjects)
+        view.desktopView.undoManager?.disableUndoRegistration()
+        view.desktopView.push(copiedObjects: NSPasteboard.general.copiedObjects)
+        view.desktopView.undoManager?.enableUndoRegistration()
+        
+        view.desktopView.desktop.copiedObjectsBinding = { [unowned self] _ in
+            self.didSetCopiedObjects()
+        }
     }
     private func setupWindow(with preference: C0Preference) {
         window.setFrame(preference.windowFrame, display: false)
@@ -486,21 +500,25 @@ final class C0Document: NSDocument, NSWindowDelegate {
         preferenceDataModel.isWrite = true
     }
     
-    var oldChangeCountWithCopyManager = 0
+    func didSetCopiedObjects() {
+        changeCountWithCopiedObjects += 1
+    }
+    var changeCountWithCopiedObjects = 0
+    var oldChangeCountWithCopiedObjects = 0
     var oldChangeCountWithPsteboard = NSPasteboard.general.changeCount
     func windowDidBecomeMain(_ notification: Notification) {
         let pasteboard = NSPasteboard.general
         if pasteboard.changeCount != oldChangeCountWithPsteboard {
             oldChangeCountWithPsteboard = pasteboard.changeCount
-            copyManagerView.rootCopyManager.push(copiedObjects: pasteboard.copiedObjects)
-            oldChangeCountWithCopyManager = copyManagerView.changeCount
+            view.desktopView.push(copiedObjects: pasteboard.copiedObjects)
+            oldChangeCountWithCopiedObjects = changeCountWithCopiedObjects
         }
     }
     func windowDidResignMain(_ notification: Notification) {
-        if oldChangeCountWithCopyManager != copyManagerView.changeCount {
-            oldChangeCountWithCopyManager = copyManagerView.changeCount
+        if oldChangeCountWithCopiedObjects != changeCountWithCopiedObjects {
+            oldChangeCountWithCopiedObjects = changeCountWithCopiedObjects
             let pasteboard = NSPasteboard.general
-            pasteboard.set(copiedObjects: copyManagerView.copyManager.copiedObjects)
+            pasteboard.set(copiedObjects: desktop.copiedObjects)
             oldChangeCountWithPsteboard = pasteboard.changeCount
         }
     }
@@ -511,10 +529,10 @@ final class C0Document: NSDocument, NSWindowDelegate {
 }
 
 extension NSPasteboard {
-    var copiedObjects: [Any] {
-        var copiedObjects = [Any]()
+    var copiedObjects: [ViewExpression] {
+        var copiedObjects = [ViewExpression]()
         func append(with data: Data, type: NSPasteboard.PasteboardType) {
-            if let object = C0DynamicCoder.decode(from: data, forKey: type.rawValue) {
+            if let object = C0Coder.decode(from: data, forKey: type.rawValue) as? ViewExpression {
                 copiedObjects.append(object)
             }
         }
@@ -544,7 +562,7 @@ extension NSPasteboard {
         }
         return copiedObjects
     }
-    func set(copiedObjects: [Any]) {
+    func set(copiedObjects: [ViewExpression]) {
         guard !copiedObjects.isEmpty else {
             clearContents()
             return
@@ -555,8 +573,8 @@ extension NSPasteboard {
             if let string = object as? String {
                 strings.append(string)
             } else {
-                let type = C0DynamicCoder.typeKey(from: object)
-                if let data = C0DynamicCoder.encode(object, forKey: type) {
+                let type = C0Coder.typeKey(from: object)
+                if let data = C0Coder.encode(object, forKey: type) {
                     typesAndDatas.append((NSPasteboard.PasteboardType(rawValue: type), data))
                 }
             }
@@ -590,7 +608,8 @@ final class C0View: NSView, NSTextInputClient {
     let sender: Sender
     let desktopView = DesktopView()
     
-    private let isHiddenActionsKey = "isHiddenActionsKey"
+    private let isHiddenActionManagerKey = "isHiddenActionManagerKey"
+    private let isSimpleReferenceKey = "isSimpleReferenceKey"
     
     override init(frame frameRect: NSRect) {
         sender = Sender(rootView: desktopView,
@@ -612,10 +631,15 @@ final class C0View: NSView, NSTextInputClient {
             return
         }
 
-        desktopView.actionManagerView.isHiddenActions =
-            UserDefaults.standard.bool(forKey: isHiddenActionsKey)
-        desktopView.isHiddenActionsBinding = { [unowned self] in
-            UserDefaults.standard.set($0, forKey: self.isHiddenActionsKey)
+        desktopView.desktop.isHiddenActionManager =
+            UserDefaults.standard.bool(forKey: isHiddenActionManagerKey)
+        desktopView.isHiddenActionManagerBinding = { [unowned self] in
+            UserDefaults.standard.set($0, forKey: self.isHiddenActionManagerKey)
+        }
+        desktopView.desktop.isSimpleReference =
+            UserDefaults.standard.bool(forKey: isSimpleReferenceKey)
+        desktopView.isSimpleReferenceBinding = { [unowned self] in
+            UserDefaults.standard.set($0, forKey: self.isSimpleReferenceKey)
         }
         
         desktopView.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }

@@ -453,7 +453,90 @@ final class Canvas: DrawView {
         undoManager?.registerUndo(withTarget: self) { [oldTime = time] in handler($0, oldTime) }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func delete(with event: KeyInputEvent) -> Bool {
+        let point = convertToCurrentLocal(self.point(from: event))
+        if deleteCells(for: point) {
+            return true
+        }
+        if deleteSelectedDrawingLines(for: point) {
+            return true
+        }
+        if deleteDrawingLines(for: point) {
+            return true
+        }
+        return false
+    }
+    func deleteSelectedDrawingLines(for p: CGPoint) -> Bool {
+        let inNode = cut.editNode
+        let drawingItem = inNode.editTrack.drawingItem
+        guard drawingItem.drawing.isNearestSelectedLineIndexes(at: p) else {
+            return false
+        }
+        let unseletionLines = drawingItem.drawing.uneditLines
+        setSelectedLineIndexes([], oldLineIndexes: drawingItem.drawing.selectedLineIndexes,
+                               in: drawingItem.drawing, inNode, time: time)
+        set(unseletionLines, old: drawingItem.drawing.lines,
+            in: drawingItem.drawing, inNode, time: time)
+        return true
+    }
+    func deleteDrawingLines(for p: CGPoint) -> Bool {
+        let inNode = cut.editNode
+        let drawingItem = inNode.editTrack.drawingItem
+        guard !drawingItem.drawing.lines.isEmpty else {
+            return false
+        }
+        setSelectedLineIndexes([], oldLineIndexes: drawingItem.drawing.selectedLineIndexes,
+                               in: drawingItem.drawing, inNode, time: time)
+        set([], old: drawingItem.drawing.lines, in: drawingItem.drawing, inNode, time: time)
+        return true
+    }
+    func deleteCells(for point: CGPoint) -> Bool {
+        let inNode = cut.editNode
+        let ict = inNode.indicatedCellsTuple(with: point, reciprocalScale: scene.reciprocalScale)
+        switch ict.type {
+        case .selected:
+            var isChanged = false
+            for track in inNode.tracks {
+                let removeSelectedCellItems = ict.cellItems.filter {
+                    if !$0.cell.geometry.isEmpty {
+                        set(Geometry(), old: $0.cell.geometry,
+                            at: track.animation.editKeyframeIndex,
+                            in: $0, track, inNode, time: time)
+                        isChanged = true
+                        if $0.isEmptyKeyGeometries {
+                            return true
+                        }
+                    }
+                    return false
+                }
+                if !removeSelectedCellItems.isEmpty {
+                    removeCellItems(removeSelectedCellItems)
+                }
+            }
+            if isChanged {
+                return true
+            }
+        case .indicated:
+            if let cellItem = inNode.cellItem(at: point,
+                                              reciprocalScale: scene.reciprocalScale,
+                                              with: inNode.editTrack) {
+                if !cellItem.cell.geometry.isEmpty {
+                    set(Geometry(), old: cellItem.cell.geometry,
+                        at: inNode.editTrack.animation.editKeyframeIndex,
+                        in: cellItem, inNode.editTrack, inNode, time: time)
+                    if cellItem.isEmptyKeyGeometries {
+                        removeCellItems([cellItem])
+                    }
+                    return true
+                }
+            }
+        case .none:
+            break
+        }
+        return false
+    }
+    
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         let p = convertToCurrentLocal(point(from: event))
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         switch ict.type {
@@ -483,21 +566,21 @@ final class Canvas: DrawView {
         }
         let cells = cut.editNode.selectedCells(with: editCell)
         let cell = cut.editNode.rootCell.intersection(cells, isNewID: true)
-        return [cell.copied]
+        return [cell]
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
-            if let color = object as? Color {
-                return paste(color, with: event)
-            } else if let material = object as? Material {
-                return paste(material, with: event)
-            } else if let drawing = object as? Drawing {
-                return paste(drawing, with: event)
+            if let color = object as? Color, paste(color, with: event) {
+                return true
+            } else if let material = object as? Material, paste(material, with: event) {
+                return true
+            } else if let drawing = object as? Drawing, paste(drawing.copied, with: event) {
+                return true
             } else if !cut.editNode.editTrack.animation.isInterpolated {
-                if let joiningCell = object as? JoiningCell {
-                    return paste(joiningCell, with: event)
-                } else if let rootCell = object as? Cell {
-                    return paste(rootCell, with: event)
+                if let joiningCell = object as? JoiningCell, paste(joiningCell.copied, with: event) {
+                    return true
+                } else if let rootCell = object as? Cell, paste(rootCell.copied, with: event) {
+                    return true
                 }
             }
         }
@@ -539,7 +622,7 @@ final class Canvas: DrawView {
         if isPaste {
             pasteMaterialBinding?(self, material, ict.cellItems.map { $0.cell })
         }
-        return true
+        return isPaste
     }
     func paste(_ copyJoiningCell: JoiningCell, with event: KeyInputEvent) -> Bool {
         let inNode = cut.editNode
@@ -684,89 +767,6 @@ final class Canvas: DrawView {
                                     in: drawing, inNode, time: time)
         }
         return true
-    }
-    
-    func delete(with event: KeyInputEvent) -> Bool {
-        let point = convertToCurrentLocal(self.point(from: event))
-        if deleteCells(for: point) {
-            return true
-        }
-        if deleteSelectedDrawingLines(for: point) {
-            return true
-        }
-        if deleteDrawingLines(for: point) {
-            return true
-        }
-        return false
-    }
-    func deleteSelectedDrawingLines(for p: CGPoint) -> Bool {
-        let inNode = cut.editNode
-        let drawingItem = inNode.editTrack.drawingItem
-        guard drawingItem.drawing.isNearestSelectedLineIndexes(at: p) else {
-            return false
-        }
-        let unseletionLines = drawingItem.drawing.uneditLines
-        setSelectedLineIndexes([], oldLineIndexes: drawingItem.drawing.selectedLineIndexes,
-                               in: drawingItem.drawing, inNode, time: time)
-        set(unseletionLines, old: drawingItem.drawing.lines, 
-            in: drawingItem.drawing, inNode, time: time)
-        return true
-    }
-    func deleteDrawingLines(for p: CGPoint) -> Bool {
-        let inNode = cut.editNode
-        let drawingItem = inNode.editTrack.drawingItem
-        guard !drawingItem.drawing.lines.isEmpty else {
-            return false
-        }
-        setSelectedLineIndexes([], oldLineIndexes: drawingItem.drawing.selectedLineIndexes,
-                               in: drawingItem.drawing, inNode, time: time)
-        set([], old: drawingItem.drawing.lines, in: drawingItem.drawing, inNode, time: time)
-        return true
-    }
-    func deleteCells(for point: CGPoint) -> Bool {
-        let inNode = cut.editNode
-        let ict = inNode.indicatedCellsTuple(with: point, reciprocalScale: scene.reciprocalScale)
-        switch ict.type {
-        case .selected:
-            var isChanged = false
-            for track in inNode.tracks {
-                let removeSelectedCellItems = ict.cellItems.filter {
-                    if !$0.cell.geometry.isEmpty {
-                        set(Geometry(), old: $0.cell.geometry,
-                            at: track.animation.editKeyframeIndex,
-                            in: $0, track, inNode, time: time)
-                        isChanged = true
-                        if $0.isEmptyKeyGeometries {
-                            return true
-                        }
-                    }
-                    return false
-                }
-                if !removeSelectedCellItems.isEmpty {
-                    removeCellItems(removeSelectedCellItems)
-                }
-            }
-            if isChanged {
-                return true
-            }
-        case .indicated:
-            if let cellItem = inNode.cellItem(at: point,
-                                              reciprocalScale: scene.reciprocalScale,
-                                              with: inNode.editTrack) {
-                if !cellItem.cell.geometry.isEmpty {
-                    set(Geometry(), old: cellItem.cell.geometry,
-                        at: inNode.editTrack.animation.editKeyframeIndex,
-                        in: cellItem, inNode.editTrack, inNode, time: time)
-                    if cellItem.isEmptyKeyGeometries {
-                        removeCellItems([cellItem])
-                    }
-                    return true
-                }
-            }
-        case .none:
-            break
-        }
-        return false
     }
     
     private func removeCellItems(_ cellItems: [CellItem]) {
@@ -1286,7 +1286,7 @@ final class Canvas: DrawView {
         return cell.intersects(bounds.applying(currentTransform.inverted()))
     }
     
-    let materialView = MaterialView(), cellView = CellView(isSmall: true)
+    let materialView = MaterialView(), cellView = CellView(sizeType: .small)
     func bind(with event: SubClickEvent) -> Bool {
         let p = convertToCurrentLocal(point(from: event))
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
@@ -2708,7 +2708,7 @@ final class Canvas: DrawView {
         self.viewTransform = viewTransform.with(translation: translation)
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         let ict = cut.editNode.indicatedCellsTuple(with: convertToCurrentLocal(point(from: event)),
                                                    reciprocalScale: scene.reciprocalScale)
         if let cellItem = ict.cellItems.first {

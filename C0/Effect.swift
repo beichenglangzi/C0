@@ -19,41 +19,44 @@
 
 import Foundation
 
-struct Effect: Codable {
-    enum BlendType: Int8, Codable {
-        case normal, add, subtract
-        var blendMode: CGBlendMode {
-            switch self {
-            case .normal:
-                return .normal
-            case .add:
-                return .plusLighter
-            case .subtract:
-                return .plusDarker
-            }
-        }
-        var displayString: Localization {
-            switch self {
-            case .normal:
-                return Localization(english: "Normal", japanese: "通常")
-            case .add:
-                return Localization(english: "Add", japanese: "加算")
-            case .subtract:
-                return Localization(english: "Subtract", japanese: "減算")
-            }
-        }
-        static var displayStrings: [Localization] {
-            return [normal.displayString,
-                    add.displayString,
-                    subtract.displayString]
+enum BlendType: Int8, Codable, Equatable, Hashable {
+    case normal, add, subtract
+    
+    var blendMode: CGBlendMode {
+        switch self {
+        case .normal:
+            return .normal
+        case .add:
+            return .plusLighter
+        case .subtract:
+            return .plusDarker
         }
     }
-    
+    var displayText: Localization {
+        switch self {
+        case .normal:
+            return Localization(english: "Normal", japanese: "通常")
+        case .add:
+            return Localization(english: "Add", japanese: "加算")
+        case .subtract:
+            return Localization(english: "Subtract", japanese: "減算")
+        }
+    }
+    static var displayTexts: [Localization] {
+        return [normal.displayText,
+                add.displayText,
+                subtract.displayText]
+    }
+}
+extension BlendType: Referenceable {
+    static let name = Localization(english: "Blend Type", japanese: "ブレンドタイプ")
+}
+extension BlendType: ObjectViewExpressionWithDisplayText {
+}
+
+struct Effect: Codable, Equatable, Hashable {
     var blendType = BlendType.normal, blurRadius = 0.0.cf, opacity = 1.0.cf
     
-    var isEmpty: Bool {
-        return self == Effect()
-    }
     func with(_ blendType: BlendType) -> Effect {
         return Effect(blendType: blendType, blurRadius: blurRadius, opacity: opacity)
     }
@@ -64,7 +67,11 @@ struct Effect: Codable {
         return Effect(blendType: blendType, blurRadius: blurRadius, opacity: opacity)
     }
     
-    static func displayString(with keyPath: PartialKeyPath<Effect>) -> Localization {
+    var isEmpty: Bool {
+        return self == Effect()
+    }
+    
+    static func displayText(with keyPath: PartialKeyPath<Effect>) -> Localization {
         switch keyPath {
         case \Effect.blendType:
             return Localization(english: "Blend Type", japanese: "ブレンドタイプ")
@@ -75,12 +82,6 @@ struct Effect: Codable {
         default:
             fatalError("No case")
         }
-    }
-}
-extension Effect: Equatable {
-    static func ==(lhs: Effect, rhs: Effect) -> Bool {
-        return lhs.blendType == rhs.blendType
-            && lhs.blurRadius == rhs.blurRadius && lhs.opacity == rhs.opacity
     }
 }
 extension Effect: Referenceable {
@@ -117,8 +118,10 @@ extension Effect: Interpolatable {
         return Effect(blendType: blendType, blurRadius: blur, opacity: opacity)
     }
 }
-extension Effect.BlendType: Referenceable {
-    static let name = Localization(english: "Blend Type", japanese: "ブレンドタイプ")
+extension Effect: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return blendType.displayText.thumbnail(withBounds: bounds, sizeType: sizeType)
+    }
 }
 
 final class EffectView: View {
@@ -133,24 +136,24 @@ final class EffectView: View {
     
     static let defaultWidth = 140.0.cf
     
-    var isSmall: Bool
+    var sizeType: SizeType
     private let classNameLabel: Label
-    private let blendTypeView: EnumView<Effect.BlendType>
+    private let blendTypeView: EnumView<BlendType>
     private let blurLabel: Label
     private let blurView: NumberView
     private let opacityView: NumberView
     
-    init(isSmall: Bool = false) {
-        self.isSmall = isSmall
-        classNameLabel = Label(text: Effect.name, font: isSmall ? .smallBold : .bold)
-        blurLabel = Label(text: Effect.displayString(with: \Effect.blurRadius) + Localization(":"),
-                          font: isSmall ? .small : .default)
-        blurView = NumberView.widthViewWith(min: 0, max: 500, exp: 3, isSmall: isSmall)
-        opacityView = NumberView.opacityView(isSmall: isSmall)
+    init(sizeType: SizeType = .regular) {
+        self.sizeType = sizeType
+        classNameLabel = Label(text: Effect.name, font: Font.bold(with: sizeType))
+        blurLabel = Label(text: Effect.displayText(with: \Effect.blurRadius) + Localization(":"),
+                          font: Font.default(with: sizeType))
+        blurView = NumberView.widthViewWith(min: 0, max: 500, exp: 3, sizeType: sizeType)
+        opacityView = NumberView.opacityView(sizeType: sizeType)
         blendTypeView = EnumView(enumeratedType: .normal,
                                  indexHandler: { Int($0) },
-                                 rawValueHandler: { Effect.BlendType.RawValue($0) },
-                                 names: Effect.BlendType.displayStrings, isSmall: isSmall)
+                                 rawValueHandler: { BlendType.RawValue($0) },
+                                 names: BlendType.displayTexts, sizeType: sizeType)
         effect = defaultEffect
         super.init()
         replace(children: [classNameLabel,
@@ -170,10 +173,9 @@ final class EffectView: View {
     }
     
     override var defaultBounds: CGRect {
-        let height = isSmall ?
-            Layout.smallHeight * 3 + Layout.smallPadding * 2 :
-            Layout.basicHeight * 3 + Layout.basicPadding * 2
-        return CGRect(x: 0, y: 0, width: EffectView.defaultWidth, height: height)
+        let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
+        let viewHeight = height * 3 + padding * 2
+        return CGRect(x: 0, y: 0, width: EffectView.defaultWidth, height: viewHeight)
     }
     override var bounds: CGRect {
         didSet {
@@ -181,8 +183,7 @@ final class EffectView: View {
         }
     }
     func updateLayout() {
-        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
-        let h = isSmall ? Layout.smallHeight : Layout.basicHeight
+        let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
         let cw = bounds.width - padding * 2
         let rw = cw - classNameLabel.frame.width - padding
         let px = bounds.width - rw - padding
@@ -208,7 +209,7 @@ final class EffectView: View {
     var binding: ((Binding) -> ())?
     
     private var oldEffect = Effect()
-    private func setEffect(with obj: EnumView<Effect.BlendType>.Binding) {
+    private func setEffect(with obj: EnumView<BlendType>.Binding) {
         if obj.type == .begin {
             oldEffect = effect
             binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
@@ -234,17 +235,16 @@ final class EffectView: View {
         }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return [effect]
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
             if let effect = object as? Effect {
-                guard effect != self.effect else {
-                    continue
+                if effect != self.effect {
+                    set(effect, old: self.effect)
+                    return true
                 }
-                set(effect, old: self.effect)
-                return true
             }
         }
         return false
@@ -267,7 +267,7 @@ final class EffectView: View {
         binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: .end))
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return effect.reference
     }
 }

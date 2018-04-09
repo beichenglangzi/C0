@@ -28,6 +28,11 @@ typealias Number = CGFloat
 extension Number: Referenceable {
     static let name = Localization(english: "Number", japanese: "数値")
 }
+extension Number: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return String(self.d).view(withBounds: bounds, sizeType: sizeType)
+    }
+}
 
 protocol Slidable {
     var number: Number { get set }
@@ -90,7 +95,7 @@ final class NumberView: View, Slidable {
          number: Number = 0, defaultNumber: Number = 0,
          min: Number = 0, max: Number = 1, exp: Number = 1,
          numberInterval: CGFloat = 0, isInverted: Bool = false, isVertical: Bool = false,
-         isSmall: Bool = false) {
+         sizeType: SizeType = .regular) {
         
         self.number = number.clip(min: min, max: max)
         self.defaultNumber = defaultNumber
@@ -100,8 +105,8 @@ final class NumberView: View, Slidable {
         self.numberInterval = numberInterval
         self.isInverted = isInverted
         self.isVertical = isVertical
-        padding = isSmall ? 6.0.cf : 8.0.cf
-        knob = isSmall ? Knob(radius: 4) : Knob()
+        padding = sizeType == .small ? 6.0.cf : 8.0.cf
+        knob = sizeType == .small ? Knob(radius: 4) : Knob()
         
         super.init()
         append(child: knob)
@@ -177,21 +182,26 @@ final class NumberView: View, Slidable {
         }
         return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
-        return [String(number.d)]
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [number, String(number.d)]
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
-            if let string = object as? String {
-                if let number = Double(string)?.cf {
+            if let number = (object as? Number)?.clip(min: minNumber, max: maxNumber) {
+                if number != self.number {
+                    set(number, old: self.number)
+                    return true
+                }
+            } else if let string = object as? String {
+                if let number = Double(string)?.cf.clip(min: minNumber, max: maxNumber) {
                     if number != self.number {
                         set(number, old: self.number)
-                        break
+                        return true
                     }
                 }
             }
         }
-        return true
+        return false
     }
     
     func run(with event: ClickEvent) -> Bool {
@@ -237,7 +247,7 @@ final class NumberView: View, Slidable {
         binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         var reference = number.reference
         reference.viewDescription = Localization(english: "Slider", japanese: "スライダー")
         return reference
@@ -364,14 +374,6 @@ final class DiscreteNumberView: View, Slidable {
         return v.clip(min: minNumber, max: maxNumber)
     }
     
-    var isLocked = false {
-        didSet {
-            if isLocked != oldValue {
-                opacity = isLocked ? 0.35 : 1
-            }
-        }
-    }
-    
     var disabledRegisterUndo = false
     
     struct Binding {
@@ -382,45 +384,43 @@ final class DiscreteNumberView: View, Slidable {
     func delete(with event: KeyInputEvent) -> Bool {
         let number = defaultNumber.clip(min: minNumber, max: maxNumber)
         if number != self.number {
-            set(number, oldNumber: self.number)
+            set(number, old: self.number)
         }
         return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
-        return [String(number.d)]
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [number, String(number.d)]
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        guard !isLocked else {
-            return false
-        }
         for object in objects {
-            if let string = object as? String {
-                if let v = Double(string)?.cf {
-                    let number = v.clip(min: minNumber, max: maxNumber)
+            if let number = (object as? Number)?.clip(min: minNumber, max: maxNumber) {
+                if number != self.number {
+                    set(number, old: self.number)
+                    return true
+                }
+            } else if let string = object as? String {
+                if let number = Double(string)?.cf.clip(min: minNumber, max: maxNumber) {
                     if number != self.number {
-                        set(number, oldNumber: self.number)
-                        break
+                        set(number, old: self.number)
+                        return true
                     }
                 }
             }
         }
-        return true
+        return false
     }
     
     func run(with event: ClickEvent) -> Bool {
         let p = point(from: event)
         let number = self.number(at: p, old: self.number)
         if number != self.number {
-            set(number, oldNumber: self.number)
+            set(number, old: self.number)
         }
         return true
     }
     
     private var oldNumber = 0.0.cf, oldPoint = CGPoint()
     func move(with event: DragEvent) -> Bool {
-        guard !isLocked else {
-            return false
-        }
         let p = point(from: event)
         switch event.sendType {
         case .begin:
@@ -437,7 +437,7 @@ final class DiscreteNumberView: View, Slidable {
             number = self.number(at: p, old: oldNumber)
             if number != oldNumber {
                 registeringUndoManager?.registerUndo(withTarget: self) { [number, oldNumber] in
-                    $0.set(oldNumber, oldNumber: number)
+                    $0.set(oldNumber, old: number)
                 }
             }
             binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
@@ -446,14 +446,14 @@ final class DiscreteNumberView: View, Slidable {
         return true
     }
     
-    private func set(_ number: Number, oldNumber: Number) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, oldNumber: number) }
+    private func set(_ number: Number, old oldNumber: Number) {
+        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, old: number) }
         binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, type: .begin))
         self.number = number
         binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         var reference = number.reference
         reference.viewDescription = Localization(english: "Discrete Slider", japanese: "離散スライダー")
         return reference
@@ -500,7 +500,7 @@ final class CircularNumberView: PathView, Slidable {
          min: Number = -.pi, max: Number = .pi, exp: Number = 1,
          isClockwise: Bool = false, beginAngle: CGFloat = -.pi,
          numberInterval: CGFloat = 0, width: CGFloat = 16,
-         isSmall: Bool = false) {
+         sizeType: SizeType = .regular) {
         
         self.number = number
         self.defaultNumber = defaultNumber
@@ -511,7 +511,7 @@ final class CircularNumberView: PathView, Slidable {
         self.beginAngle = beginAngle
         self.numberInterval = numberInterval
         self.width = width
-        knob = isSmall ? Knob(radius: 4) : Knob()
+        knob = sizeType == .small ? Knob(radius: 4) : Knob()
         
         super.init()
         fillColor = nil
@@ -588,21 +588,26 @@ final class CircularNumberView: PathView, Slidable {
         }
         return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
-        return [String(number.d)]
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [number, String(number.d)]
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
-            if let string = object as? String {
-                if let number = Double(string)?.cf {
+            if let number = (object as? Number)?.clip(min: minNumber, max: maxNumber) {
+                if number != self.number {
+                    set(number, old: self.number)
+                    return true
+                }
+            } else if let string = object as? String {
+                if let number = Double(string)?.cf.clip(min: minNumber, max: maxNumber) {
                     if number != self.number {
                         set(number, old: self.number)
-                        break
+                        return true
                     }
                 }
             }
         }
-        return true
+        return false
     }
     
     func run(with event: ClickEvent) -> Bool {
@@ -648,9 +653,126 @@ final class CircularNumberView: PathView, Slidable {
         binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         var reference = number.reference
         reference.viewDescription = Localization(english: "Circular Slider", japanese: "円状スライダー")
         return reference
     }
 }
+
+final class ProgressNumberView: View {
+    let barLayer = Layer()
+    let barBackgroundLayer = Layer()
+    let nameLabel: Label
+    
+    init(frame: CGRect = CGRect(), backgroundColor: Color = .background,
+         name: String = "", type: String = "", state: Localization? = nil) {
+        
+        self.name = name
+        self.type = type
+        self.state = state
+        nameLabel = Label()
+        nameLabel.frame.origin = CGPoint(x: Layout.basicPadding,
+                                         y: round((frame.height - nameLabel.frame.height) / 2))
+        barLayer.frame = CGRect(x: 0, y: 0, width: 0, height: frame.height)
+        barBackgroundLayer.fillColor = .editing
+        barLayer.fillColor = .content
+        
+        super.init()
+        self.frame = frame
+        isClipped = true
+        replace(children: [nameLabel, barBackgroundLayer, barLayer])
+        updateLayout()
+    }
+    
+    var value = 0.0.cf {
+        didSet {
+            updateLayout()
+        }
+    }
+    func begin() {
+        startDate = Date()
+    }
+    func end() {}
+    var startDate: Date?
+    var remainingTime: Double? {
+        didSet {
+            updateString(with: Locale.current)
+        }
+    }
+    var computationTime = 5.0
+    var name = "" {
+        didSet {
+            updateString(with: locale)
+        }
+    }
+    var type = "" {
+        didSet {
+            updateString(with: locale)
+        }
+    }
+    var state: Localization? {
+        didSet {
+            updateString(with: locale)
+        }
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
+    }
+    
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    func updateLayout() {
+        let padding = Layout.basicPadding
+        barBackgroundLayer.frame = CGRect(x: padding, y: padding - 1,
+                                          width: (bounds.width - padding * 2), height: 1)
+        barLayer.frame = CGRect(x: padding, y: padding - 1,
+                                width: floor((bounds.width - padding * 2) * value), height: 1)
+        updateString(with: locale)
+    }
+    func updateString(with locale: Locale) {
+        var string = ""
+        if let state = state {
+            string += state.string(with: locale)
+        } else if let remainingTime = remainingTime {
+            let minutes = Int(ceil(remainingTime)) / 60
+            let seconds = Int(ceil(remainingTime)) - minutes * 60
+            if minutes == 0 {
+                let translator = Localization(english: "%@sec left",
+                                              japanese: "あと%@秒").string(with: locale)
+                string += (string.isEmpty ? "" : " ") + String(format: translator, String(seconds))
+            } else {
+                let translator = Localization(english: "%@min %@sec left",
+                                              japanese: "あと%@分%@秒").string(with: locale)
+                string += (string.isEmpty ? "" : " ") + String(format: translator,
+                                                               String(minutes), String(seconds))
+            }
+        }
+        nameLabel.string = type + "(" + name + "), "
+            + string + (string.isEmpty ? "" : ", ") + "\(Int(value * 100)) %"
+        nameLabel.frame.origin = CGPoint(x: Layout.basicPadding,
+                                         y: round((frame.height - nameLabel.frame.height) / 2))
+    }
+    
+    var deleteHandler: ((ProgressNumberView) -> (Bool))?
+    weak var operation: Operation?
+    func delete(with event: KeyInputEvent) -> Bool {
+        if let operation = operation {
+            operation.cancel()
+        }
+        return deleteHandler?(self) ?? false
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        return Reference(name: Localization(english: "Progress", japanese: "進捗"),
+                         viewDescription: Localization(english: "Stop: Send \"Cut\" action",
+                                                       japanese: "停止: \"カット\"アクションを送信"))
+    }
+}
+

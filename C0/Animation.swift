@@ -313,21 +313,30 @@ extension Animation: Equatable {
 extension Animation: Referenceable {
     static let name = Localization(english: "Animation", japanese: "アニメーション")
 }
+extension Animation: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        let text = Localization(english: "\(keyframes.count) Keyframes",
+                                japanese: "\(keyframes.count)キーフレーム")
+        return text.thumbnail(withBounds: bounds, sizeType: sizeType)
+    }
+}
 
 final class AnimationView: View {
     init(_ animation: Animation = Animation(),
          beginBaseTime: Beat = 0, baseTimeInterval: Beat = Beat(1, 16),
          origin: CGPoint = CGPoint(),
-         height: CGFloat = Layout.basicHeight, smallHeight: CGFloat = 8.0, isSmall: Bool = true) {
+         height: CGFloat = Layout.basicHeight, smallHeight: CGFloat = 8.0,
+         sizeType: SizeType = .small) {
         
         self.animation = animation
         self.beginBaseTime = beginBaseTime
         self.baseTimeInterval = baseTimeInterval
         self.height = height
         self.smallHeight = smallHeight
-        self.isSmall = isSmall
+        self.sizeType = sizeType
         super.init()
-        frame = CGRect(x: origin.x, y: origin.y, width: 0, height: isSmall ? smallHeight : height)
+        frame = CGRect(x: origin.x, y: origin.y,
+                       width: 0, height: sizeType == .small ? smallHeight : height)
         updateChildren()
     }
     
@@ -417,8 +426,8 @@ final class AnimationView: View {
     func updateChildren() {
         let height = frame.height
         let midY = height / 2, lineWidth = 2.0.cf
-        let khh = isSmall ? smallKnobHalfHeight : self.knobHalfHeight
-        let skhh = isSmall ? smallSubKnobHalfHeight : self.subKnobHalfHeight
+        let khh = sizeType == .small ? smallKnobHalfHeight : self.knobHalfHeight
+        let skhh = sizeType == .small ? smallSubKnobHalfHeight : self.subKnobHalfHeight
         let selectedStartIndex = animation.selectedKeyframeIndexes.first
             ?? animation.keyframes.count - 1
         let selectedEndIndex = animation.selectedKeyframeIndexes.last ?? 0
@@ -433,7 +442,7 @@ final class AnimationView: View {
             let width = nextX - x
             let position = CGPoint(x: x, y: midY)
             
-            if !isSmall {
+            if sizeType == .regular {
                 let keyLineColor = lineColorHandler(li.index)
                 let keyLine = AnimationView.keyLineWith(keyframe,
                                                         lineColor: keyLineColor,
@@ -508,7 +517,7 @@ final class AnimationView: View {
         
         let maxX = self.x(withTime: animation.duration)
         
-        if isSmall {
+        if sizeType == .small {
             let keyLine = Layer()
             keyLine.frame = CGRect(x: 0, y: midY - 0.5, width: maxX, height: 1)
             keyLine.fillColor = smallLineColorHandler()
@@ -560,13 +569,13 @@ final class AnimationView: View {
             updateWithHeight()
         }
     }
-    var isSmall = true {
+    var sizeType = SizeType.small {
         didSet {
             updateWithHeight()
         }
     }
     private func updateWithHeight() {
-        frame.size.height = isSmall ? smallHeight : height
+        frame.size.height = sizeType == .small ? smallHeight : height
         updateChildren()
     }
     private var isUseUpdateChildren = true
@@ -758,10 +767,6 @@ final class AnimationView: View {
     }
     var selectHandler: ((SelectBinding) -> ())?
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
-        return [animation.editKeyframe]
-    }
-    
     func delete(with event: KeyInputEvent) -> Bool {
         _ = deleteKeyframe(at: point(from: event))
         return true
@@ -810,6 +815,9 @@ final class AnimationView: View {
         removeKeyframe(at: 0)
         let keyframes = animation.keyframes.map { $0.with(time: $0.time - deltaTime) }
         set(keyframes, old: animation.keyframes)
+    }
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [animation]
     }
     
     func new(with event: KeyInputEvent) -> Bool {
@@ -1270,7 +1278,7 @@ final class AnimationView: View {
         updateChildren()
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return animation.reference
     }
 }

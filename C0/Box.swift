@@ -30,35 +30,6 @@ final class Box: View {
         replace(children: children)
     }
     
-    var canPasteImage = false
-    let minPasteImageWidth = 400.0.cf
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        var isChanged = false
-        if canPasteImage {
-            let p = self.point(from: event)
-            for object in objects {
-                if let url = object as? URL {
-                    append(child: makeImageView(url: url, position: p))
-                    isChanged = true
-                }
-            }
-        }
-        return isChanged
-    }
-    func makeImageView(url :URL, position p: CGPoint) -> ImageView {
-        let imageView = ImageView(url: url)
-        if let size = imageView.image?.size {
-            let maxWidth = max(size.width, size.height)
-            let ratio = minPasteImageWidth < maxWidth ? minPasteImageWidth / maxWidth : 1
-            let width = ceil(size.width * ratio), height = ceil(size.height * ratio)
-            imageView.frame = CGRect(x: round(p.x - width / 2),
-                                       y: round(p.y - height / 2),
-                                       width: width,
-                                       height: height)
-        }
-        return imageView
-    }
-    
     var bindHandler: ((Box, SubClickEvent) -> (Bool))?
     func bind(with event: SubClickEvent) -> Bool {
         return bindHandler?(self, event) ?? false
@@ -69,7 +40,7 @@ final class Box: View {
         return moveHandler?(self, event) ?? false
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return Reference(name: Localization(english: "Box", japanese: "ボックス"))
     }
 }
@@ -81,13 +52,13 @@ final class TextBox: View {
     let label: Label
     let highlight = HighlightLayer()
     
-    init(frame: CGRect = CGRect(), name: Localization = Localization(), isSmall: Bool = false,
+    init(frame: CGRect = CGRect(), name: Localization = Localization(), sizeType: SizeType = .regular,
          isLeftAlignment: Bool = true, leftPadding: CGFloat? = nil,
          runHandler: ((TextBox) -> (Bool))? = nil) {
         
-        self.leftPadding = leftPadding ?? (isSmall ? Layout.smallPadding : Layout.basicPadding)
+        self.leftPadding = leftPadding ?? Layout.padding(with: sizeType)
         self.runHandler = runHandler
-        self.label = Label(text: name, font: isSmall ? .small : .default, color: .locked)
+        self.label = Label(text: name, font: Font.default(with: sizeType), color: .locked)
         self.isLeftAlignment = isLeftAlignment
         let x = isLeftAlignment ? self.leftPadding : round((frame.width - label.frame.width) / 2)
         label.frame.origin = CGPoint(x: x, y: round((frame.height - label.frame.height) / 2))
@@ -124,7 +95,7 @@ final class TextBox: View {
         highlight.frame = bounds.inset(by: 0.5)
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return [label.string]
     }
     
@@ -147,7 +118,7 @@ final class TextBox: View {
         return isChanged
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return Reference(name: Localization(english: "Text Box", japanese: "テキストボックス"),
                          viewDescription: Localization(english: "Run text in the box: Click",
                                                        japanese: "ボックス内のテキストを実行: クリック"))
@@ -175,12 +146,12 @@ final class PopupBox: View {
         return arrowLayer
     } ()
     
-    var isSmall: Bool
+    var sizeType: SizeType
     let label: Label
     init(frame: CGRect, text: Localization, panel: Panel = Panel(isUseHedding: false),
-         isSmall: Bool = false) {
-        self.isSmall = isSmall
-        label = Label(text: text, font: isSmall ? .small : .default, color: .locked)
+         sizeType: SizeType = .regular) {
+        self.sizeType = sizeType
+        label = Label(text: text, font: Font.default(with: sizeType), color: .locked)
         label.frame.origin = CGPoint(x: round((frame.width - label.frame.width) / 2),
                                      y: round((frame.height - label.frame.height) / 2))
         self.panel = panel
@@ -239,13 +210,11 @@ final class PopupBox: View {
         return true
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return Reference(name: Localization(english: "Popup Box", japanese: "ポップアップボックス"))
     }
 }
 final class Panel: View {
-    static let name = Localization(english: "Panel", japanese: "パネル")
-    
     let openPointRadius = 2.0.cf
     var openPoint = CGPoint() {
         didSet {
@@ -337,5 +306,9 @@ final class Panel: View {
             frame = CGRect(origin: CGPoint(), size: size)
             replace(children: contents)
         }
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        return Reference(name: Localization(english: "Panel", japanese: "パネル"))
     }
 }

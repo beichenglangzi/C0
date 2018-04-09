@@ -173,7 +173,7 @@ final class SubtitleTrack: NSObject, Track, NSCoding {
         return KeyframeValues(subtitle: subtitleItem.keySubtitles[index])
     }
 }
-extension SubtitleTrack: Copying {
+extension SubtitleTrack: ClassCopiable {
     func copied(from copier: Copier) -> SubtitleTrack {
         return SubtitleTrack(animation: animation, time: time, subtitleItem: copier.copied(subtitleItem))
     }
@@ -244,7 +244,7 @@ final class SubtitleItem: NSObject, TrackItem, NSCoding {
         return true
     }
 }
-extension SubtitleItem: Copying {
+extension SubtitleItem: ClassCopiable {
     func copied(from copier: Copier) -> SubtitleItem {
         return SubtitleItem(keySubtitles: keySubtitles, subtitle: subtitle)
     }
@@ -253,7 +253,7 @@ extension SubtitleItem: Referenceable {
     static let name = Localization(english: "Subtitle Item", japanese: "字幕アイテム")
 }
 
-struct Subtitle: Codable {
+struct Subtitle: Codable, Equatable {
     struct Option {
         var borderColor = Color.subtitleBorder, fillColor = Color.subtitleFill
         var font = Font.subtitle
@@ -326,14 +326,13 @@ struct Subtitle: Codable {
         return vttStringWith(subtitleTuples, timeHandler: timeHandler).data(using: .utf8)
     }
 }
-extension Subtitle: Equatable {
-    static func ==(lhs: Subtitle, rhs: Subtitle) -> Bool {
-        return lhs.string == rhs.string
-            && lhs.isConnectedWithPrevious == rhs.isConnectedWithPrevious
-    }
-}
 extension Subtitle: Referenceable {
     static let name = Localization(english: "Subtitle", japanese: "字幕")
+}
+extension Subtitle: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return string.view(withBounds: bounds, sizeType: sizeType)
+    }
 }
 
 final class SubtitleView: View {
@@ -343,16 +342,16 @@ final class SubtitleView: View {
         }
     }
     
-    var isSmall: Bool
+    var sizeType: SizeType
     private let classNameLabel: Label
     private let isConnectedWithPreviousView: BoolView
-    init(isSmall: Bool = false) {
-        self.isSmall = isSmall
-        classNameLabel = Label(text: Subtitle.name, font: isSmall ? .smallBold : .bold)
+    init(sizeType: SizeType = .regular) {
+        self.sizeType = sizeType
+        classNameLabel = Label(text: Subtitle.name, font: Font.bold(with: sizeType))
         isConnectedWithPreviousView = BoolView(cationBool: true,
                                                name: Localization(english: "No Connected With Previous",
                                                                   japanese: "前と結合なし"),
-                                               isSmall: isSmall)
+                                               sizeType: sizeType)
         super.init()
         replace(children: [classNameLabel, isConnectedWithPreviousView])
         
@@ -373,11 +372,11 @@ final class SubtitleView: View {
         }
     }
     private func updateLayout() {
-        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
+        let padding = Layout.padding(with: sizeType)
         classNameLabel.frame.origin = CGPoint(x: padding,
                                               y: bounds.height - classNameLabel.frame.height - padding)
         let icpw = bounds.width - classNameLabel.frame.width - padding * 3
-        let icph = isSmall ? Layout.smallHeight : Layout.basicHeight
+        let icph = Layout.height(with: sizeType)
         isConnectedWithPreviousView.frame = CGRect(x: classNameLabel.frame.maxX + padding, y: padding,
                                                    width: icpw, height: icph)
     }
@@ -408,7 +407,7 @@ final class SubtitleView: View {
                               type: binding.type))
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return [subtitle]
     }
 }

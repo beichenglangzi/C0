@@ -129,7 +129,7 @@ final class ImageView: View {
         return true
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return image?.reference
     }
 }

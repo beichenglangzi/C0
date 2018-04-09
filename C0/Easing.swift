@@ -19,7 +19,7 @@
 
 import Foundation
 
-struct Easing: Codable {
+struct Easing: Codable, Equatable, Hashable, Copiable {
     var cp0 = CGPoint(), cp1 = CGPoint(x: 1, y: 1)
     
     func with(cp0: CGPoint) -> Easing {
@@ -64,42 +64,28 @@ struct Easing: Codable {
         return path
     }
 }
-extension Easing: Equatable {
-    static func ==(lhs: Easing, rhs: Easing) -> Bool {
-        return lhs.cp0 == rhs.cp0 && lhs.cp1 == rhs.cp1
-    }
-}
 extension Easing: Referenceable {
     static let name = Localization(english: "Easing", japanese: "イージング")
 }
-extension Easing: ViewExpression {
-    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
+extension Easing: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
         let thumbnailView = DrawBox()
         thumbnailView.drawBlock = { [unowned thumbnailView] ctx in
             self.draw(with: thumbnailView.bounds, in: ctx)
         }
         thumbnailView.bounds = bounds
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
-                          isSmall : isSmall)
+        return thumbnailView
     }
     func draw(with bounds: CGRect, in ctx: CGContext) {
         let path = self.path(in: bounds.inset(by: 5))
         ctx.addPath(path)
         ctx.setStrokeColor(Color.font.cgColor)
-        ctx.setLineWidth(2)
+        ctx.setLineWidth(1)
         ctx.strokePath()
     }
 }
 
-/**
- # Issue
- - 前後キーフレームからの傾斜スナップ
- */
 final class EasingView: View {
-    var instanceDescription: Localization {
-        return easing.instanceDescription
-    }
-    
     var easing = Easing() {
         didSet {
             if easing != oldValue {
@@ -134,9 +120,9 @@ final class EasingView: View {
         }
     }
     
-    init(frame: CGRect = CGRect(), isSmall: Bool = false) {
-        xLabel = Label(text: Localization("t"), font: isSmall ? .smallItalic : .italic)
-        yLabel = Label(text: Localization("t'"), font: isSmall ? .smallItalic : .italic)
+    init(frame: CGRect = CGRect(), sizeType: SizeType = .regular) {
+        xLabel = Label(text: Localization("t"), font: Font.italic(with: sizeType))
+        yLabel = Label(text: Localization("t'"), font: Font.italic(with: sizeType))
         super.init()
         replace(children: [xLabel, yLabel, controlLine, easingLine, axis, cp0View, cp1View])
         self.frame = frame
@@ -211,21 +197,6 @@ final class EasingView: View {
         }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
-        return [easing]
-    }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        for object in objects {
-            if let easing = object as? Easing {
-                guard easing != self.easing else {
-                    continue
-                }
-                set(easing, old: self.easing)
-                return true
-            }
-        }
-        return false
-    }
     func delete(with event: KeyInputEvent) -> Bool {
         let easing = Easing()
         guard easing != self.easing else {
@@ -233,6 +204,20 @@ final class EasingView: View {
         }
         set(easing, old: self.easing)
         return true
+    }
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [easing]
+    }
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
+            if let easing = object as? Easing {
+                if easing != self.easing {
+                    set(easing, old: self.easing)
+                    return true
+                }
+            }
+        }
+        return false
     }
     
     private func set(_ easing: Easing, old oldEasing: Easing) {
@@ -242,10 +227,11 @@ final class EasingView: View {
         binding?(Binding(view: self, easing: easing, oldEasing: oldEasing, type: .end))
     }
     
-    func lookUp(with event: TapEvent) -> Referenceable? {
+    func reference(with event: TapEvent) -> Reference? {
         var reference = easing.reference
         reference.viewDescription = Localization(english: "Horizontal axis: Time\nVertical axis: Correction time",
                                                  japanese: "横軸: 時間\n縦軸: 補正後の時間")
+        reference.comment = Localization("Issue: 前後キーフレームからの傾斜スナップ")
         return reference
     }
 }

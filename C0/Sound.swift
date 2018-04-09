@@ -50,7 +50,7 @@ final class SoundItem: TrackItem, Codable {
         self.keySounds = keySounds
     }
 }
-extension SoundItem: Copying {
+extension SoundItem: ClassCopiable {
     func copied(from copier: Copier) -> SoundItem {
         return SoundItem(sound: sound, keySounds: keySounds)
     }
@@ -174,6 +174,11 @@ extension Sound: Codable {
 }
 extension Sound: Referenceable {
     static let name = Localization(english: "Sound", japanese: "サウンド")
+}
+extension Sound: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return name.view(withBounds: bounds, sizeType: sizeType)
+    }
 }
 
 final class SoundWaveformView: Layer {
@@ -345,7 +350,7 @@ final class SoundView: View {
         set(Sound(), old: self.sound)
         return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         guard let url = sound.url else {
             return [sound]
         }
@@ -353,12 +358,12 @@ final class SoundView: View {
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
-            if let url = object as? URL, url.isConforms(uti: kUTTypeAudio as String) {
-                var sound = Sound()
-                sound.url = url
+            if let sound = object as? Sound {
                 set(sound, old: self.sound)
                 return true
-            } else if let sound = object as? Sound {
+            } else if let url = object as? URL, url.isConforms(uti: kUTTypeAudio as String) {
+                var sound = Sound()
+                sound.url = url
                 set(sound, old: self.sound)
                 return true
             }
@@ -374,7 +379,7 @@ final class SoundView: View {
                                  sound: sound, oldSound: oldSound, type: .end))
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return sound.reference
     }
 }

@@ -19,7 +19,7 @@
 
 import Foundation
 
-struct Point {
+struct Point: Equatable {
     var x = 0.0, y = 0.0
     func with(x: Double) -> Point {
         return Point(x: x, y: y)
@@ -30,11 +30,6 @@ struct Point {
     
     var isEmpty: Bool {
         return x == 0 && y == 0
-    }
-}
-extension Point: Equatable {
-    static func ==(lhs: Point, rhs: Point) -> Bool {
-        return lhs.x == rhs.x && lhs.y == rhs.y
     }
 }
 extension Point: Hashable {
@@ -79,7 +74,6 @@ extension CGPoint {
     static func intersectionLineSegment(_ p1: CGPoint, _ p2: CGPoint,
                                         _ p3: CGPoint, _ p4: CGPoint,
                                         isSegmentP3P4: Bool = true) -> CGPoint? {
-        
         let delta = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x)
         if delta != 0 {
             let u = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / delta
@@ -94,7 +88,6 @@ extension CGPoint {
     }
     static func intersectionLine(_ p1: CGPoint, _ p2: CGPoint,
                                  _ p3: CGPoint, _ p4: CGPoint) -> CGPoint? {
-        
         let d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x)
         if d == 0 {
             return nil
@@ -138,7 +131,6 @@ extension CGPoint {
     }
     static func boundsPointWithLine(ap: CGPoint, bp: CGPoint,
                                     bounds: CGRect) -> (p0: CGPoint, p1: CGPoint)? {
-        
         let p0 = CGPoint.intersectionLineSegment(CGPoint(x: bounds.minX, y: bounds.minY),
                                                  CGPoint(x: bounds.minX, y: bounds.maxY),
                                                  ap, bp, isSegmentP3P4: false)
@@ -249,9 +241,15 @@ extension CGPoint {
         return CGPoint(x: lhs.x / rhs, y: lhs.y / rhs)
     }
     
+    init(_ string: String) {
+        self = NSPointToCGPoint(NSPointFromString(string))
+    }
+    var string: String {
+        return String(NSStringFromPoint(NSPointFromCGPoint(self)))
+    }
+    
     func draw(radius r: CGFloat, lineWidth: CGFloat = 1,
               inColor: Color = .knob, outColor: Color = .border, in ctx: CGContext) {
-        
         let rect = CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)
         ctx.setFillColor(outColor.cgColor)
         ctx.fillEllipse(in: rect.insetBy(dx: -lineWidth, dy: -lineWidth))
@@ -287,17 +285,38 @@ extension CGPoint: Interpolatable {
 extension CGPoint: Referenceable {
     static let name = Localization(english: "Point", japanese: "ポイント")
 }
+extension CGPoint: Copiable {
+}
+extension CGPoint: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return string.view(withBounds: bounds, sizeType: sizeType)
+    }
+}
 
 final class PointView: View {
-    static let name = CGPoint.name
+    var point = CGPoint() {
+        didSet {
+            if point != oldValue {
+                knob.position = position(from: point)
+            }
+        }
+    }
+    var defaultPoint = CGPoint()
+    var pointAABB = AABB(minX: 0, maxX: 1, minY: 0, maxY: 1) {
+        didSet {
+            guard pointAABB.maxX - pointAABB.minX > 0 && pointAABB.maxY - pointAABB.minY > 0 else {
+                fatalError("Division by zero")
+            }
+        }
+    }
     
     var backgroundLayers = [Layer]() {
         didSet {
             replace(children: backgroundLayers + [knob])
         }
     }
-    
     let knob = Knob()
+    
     init(frame: CGRect = CGRect()) {
         super.init()
         self.frame = frame
@@ -310,32 +329,7 @@ final class PointView: View {
         }
     }
     
-    var isOutOfBounds = false {
-        didSet {
-            if isOutOfBounds != oldValue {
-                knob.fillColor = isOutOfBounds ? .warning : .knob
-            }
-        }
-    }
     var padding = 5.0.cf
-    
-    var defaultPoint = CGPoint()
-    var pointAABB = AABB(minX: 0, maxX: 1, minY: 0, maxY: 1) {
-        didSet {
-            guard pointAABB.maxX - pointAABB.minX > 0 && pointAABB.maxY - pointAABB.minY > 0 else {
-                fatalError("Division by zero")
-            }
-        }
-    }
-    var point = CGPoint() {
-        didSet {
-            isOutOfBounds = !pointAABB.contains(point)
-            if point != oldValue {
-                knob.position = isOutOfBounds ?
-                    position(from: clippedPoint(with: point)) : position(from: point)
-            }
-        }
-    }
     
     func clippedPoint(with point: CGPoint) -> CGPoint {
         return pointAABB.clippedPoint(with: point)
@@ -360,37 +354,41 @@ final class PointView: View {
     
     var disabledRegisterUndo = false
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
-        return [point]
+    func delete(with event: KeyInputEvent) -> Bool {
+        let point = defaultPoint
+        if point != self.point {
+            push(point, old: self.point)
+        }
+        return true
+    }
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [point, point.string]
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
-            if let point = object as? CGPoint {
-                guard point != self.point else {
-                    continue
+            if let unclippedPoint = object as? CGPoint {
+                let point = clippedPoint(with: unclippedPoint)
+                if point != self.point {
+                    push(point, old: self.point)
+                    return true
                 }
-                set(point, oldPoint: self.point)
-                return true
+            } else if let string = object as? String {
+                let point = clippedPoint(with: CGPoint(string))
+                if point != self.point {
+                    push(point, old: self.point)
+                    return true
+                }
             }
         }
         return false
-    }
-    func delete(with event: KeyInputEvent) -> Bool {
-        let point = defaultPoint
-        guard point != self.point else {
-            return false
-        }
-        set(point, oldPoint: self.point)
-        return true
     }
     
     func run(with event: ClickEvent) -> Bool {
         let p = self.point(from: event)
         let point = clippedPoint(with: self.point(withPosition: p))
-        guard point != self.point else {
-            return false
+        if point != self.point {
+            push(point, old: self.point)
         }
-        set(point, oldPoint: self.point)
         return true
     }
     
@@ -411,7 +409,7 @@ final class PointView: View {
             point = clippedPoint(with: self.point(withPosition: p))
             if point != oldPoint {
                 registeringUndoManager?.registerUndo(withTarget: self) { [point, oldPoint] in
-                    $0.set(oldPoint, oldPoint: point)
+                    $0.push(oldPoint, old: point)
                 }
             }
             binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .end))
@@ -420,10 +418,14 @@ final class PointView: View {
         return true
     }
     
-    func set(_ point: CGPoint, oldPoint: CGPoint) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldPoint, oldPoint: point) }
+    func push(_ point: CGPoint, old oldPoint: CGPoint) {
+        registeringUndoManager?.registerUndo(withTarget: self) { $0.push(oldPoint, old: point) }
         binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .begin))
         self.point = point
         binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .end))
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        return point.reference
     }
 }

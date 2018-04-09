@@ -1110,10 +1110,6 @@ final class Node: NSObject, NSCoding {
             point.draw(radius: 3 * reciprocalAllScale, lineWidth: reciprocalAllScale,
                        inColor: isSnap ? .snap : lineColor, outColor: .controlPointIn, in: ctx)
         }
-        static func ==(lhs: EditPoint, rhs: EditPoint) -> Bool {
-            return lhs.nearestLine == rhs.nearestLine && lhs.nearestPointIndex == rhs.nearestPointIndex
-                && lhs.lines == rhs.lines && lhs.point == rhs.point && lhs.isSnap == lhs.isSnap
-        }
     }
     private let editPointRadius = 0.5.cf, lineEditPointRadius = 1.5.cf, pointEditPointRadius = 3.0.cf
     func drawEditPoints(with editPoint: EditPoint?, isEditVertex: Bool,
@@ -1246,10 +1242,6 @@ final class Node: NSObject, NSCoding {
     
     struct EditZ: Equatable {
         var cells: [Cell], point: CGPoint, firstPoint: CGPoint, firstY: CGFloat
-        static func ==(lhs: EditZ, rhs: EditZ) -> Bool {
-            return lhs.cells == rhs.cells && lhs.point == rhs.point
-                && lhs.firstPoint == rhs.firstPoint && lhs.firstY == rhs.firstY
-        }
     }
     func drawEditZ(_ editZ: EditZ, in ctx: CGContext) {
         rootCell.depthFirstSearch(duplicate: true) { parent, cell in
@@ -1327,15 +1319,10 @@ final class Node: NSObject, NSCoding {
         static let centerRatio = 0.25.cf
         let rotatedRect: RotatedRect, anchorPoint: CGPoint
         let point: CGPoint, oldPoint: CGPoint, isCenter: Bool
+        
         func with(_ point: CGPoint) -> EditTransform {
             return EditTransform(rotatedRect: rotatedRect, anchorPoint: anchorPoint,
                                  point: point, oldPoint: oldPoint, isCenter: isCenter)
-        }
-        static func ==(lhs: EditTransform, rhs: EditTransform) -> Bool {
-            return
-                lhs.rotatedRect == rhs.rotatedRect && lhs.anchorPoint == rhs.anchorPoint
-                    && lhs.point == rhs.point && lhs.oldPoint == lhs.oldPoint
-                    && lhs.isCenter == rhs.isCenter
         }
     }
     func warpAffineTransform(with et: EditTransform) -> CGAffineTransform {
@@ -1444,7 +1431,7 @@ final class Node: NSObject, NSCoding {
         ctx.strokePath()
     }
 }
-extension Node: Copying {
+extension Node: ClassCopiable {
     func copied(from copier: Copier) -> Node {
         let node = Node(name: name,
                         parent: nil, children: children.map { copier.copied($0) },
@@ -1462,6 +1449,11 @@ extension Node: Copying {
 extension Node: Referenceable {
     static let name = Localization(english: "Node", japanese: "ノード")
 }
+extension Node: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return name.view(withBounds: bounds, sizeType: sizeType)
+    }
+}
 
 final class NodeView: View {
     var node = Node() {
@@ -1470,15 +1462,15 @@ final class NodeView: View {
         }
     }
     
-    var isSmall: Bool
+    var sizeType: SizeType
     private let classNameLabel: Label
     private let isHiddenView: BoolView
-    init(isSmall: Bool = false) {
-        self.isSmall = isSmall
-        classNameLabel = Label(text: Node.name, font: isSmall ? .smallBold : .bold)
+    init(sizeType: SizeType = .regular) {
+        self.sizeType = sizeType
+        classNameLabel = Label(text: Node.name, font: Font.bold(with: sizeType))
         isHiddenView = BoolView(cationBool: true,
                                 name: Localization(english: "Hidden", japanese: "表示なし"),
-                                isSmall: isSmall)
+                                sizeType: sizeType)
         
         super.init()
         replace(children: [classNameLabel, isHiddenView])
@@ -1498,12 +1490,12 @@ final class NodeView: View {
         }
     }
     private func updateLayout() {
-        let padding = isSmall ? Layout.smallPadding : Layout.basicPadding
+        let padding = Layout.padding(with: sizeType)
         classNameLabel.frame.origin = CGPoint(x: padding,
                                               y: bounds.height - classNameLabel.frame.height - padding)
         isHiddenView.frame = CGRect(x: classNameLabel.frame.maxX + padding, y: padding,
                                     width: bounds.width - classNameLabel.frame.width - padding * 3,
-                                    height: isSmall ? Layout.smallHeight : Layout.basicHeight)
+                                    height: Layout.height(with: sizeType))
     }
     func updateWithNode() {
         isHiddenView.bool = node.isHidden
@@ -1530,11 +1522,11 @@ final class NodeView: View {
                                     type: binding.type))
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return [node.copied]
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return node.reference
     }
 }

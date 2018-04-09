@@ -19,7 +19,7 @@
 
 import Foundation
 
-typealias EnumType = RawRepresentable & Referenceable & Equatable
+typealias EnumType = RawRepresentable & Referenceable & ViewExpression & Equatable
 
 //final class EnumView {
 //
@@ -61,6 +61,8 @@ final class EnumView<T: EnumType>: View {
     var indexHandler: ((T.RawValue) -> (Int))
     var rawValueHandler: ((Int) -> (T.RawValue?))
     
+    var sizeType: SizeType
+    let classNameLabel: Label
     var knobPaddingWidth: CGFloat
     let valueLabel: Label
     let knob: DiscreteKnob
@@ -75,7 +77,9 @@ final class EnumView<T: EnumType>: View {
          indexHandler: @escaping ((T.RawValue) -> (Int)) = { $0 as? Int ?? 0 },
          rawValueHandler: @escaping ((Int) -> (T.RawValue?)) = { $0 as? T.RawValue },
          frame: CGRect = CGRect(),
-         names: [Localization] = [], isSmall: Bool = false) {
+         names: [Localization] = [], sizeType: SizeType = .regular) {
+        
+        classNameLabel = Label(text: T.uninheritanceName, font: Font.bold(with: sizeType))
         self.enumeratedType = enumeratedType
         self.defaultEnumeratedType = defaultEnumeratedType ?? enumeratedType
         self.cationEnumeratedType = cationEnumeratedType
@@ -85,16 +89,19 @@ final class EnumView<T: EnumType>: View {
         if let cationEnumeratedType = cationEnumeratedType {
             cationIndex = indexHandler(cationEnumeratedType.rawValue)
         }
-        knobPaddingWidth = isSmall ? 12.0 : 16.0
+        knobPaddingWidth = sizeType == .small ? 12.0 : 16.0
         self.menu = Menu(names: names,
-                         knobPaddingWidth: knobPaddingWidth, width: frame.width, isSmall: isSmall)
-        self.valueLabel = Label(font: isSmall ? .small : .default, color: .locked)
-        self.knob = isSmall ?
+                         knobPaddingX: classNameLabel.frame.maxX,
+                         knobPaddingWidth: knobPaddingWidth,
+                         width: frame.width, sizeType: sizeType)
+        self.valueLabel = Label(font: Font.default(with: sizeType), color: .locked)
+        self.knob = sizeType == .small ?
             DiscreteKnob(CGSize(square: 6), lineWidth: 1) :
             DiscreteKnob(CGSize(square: 8), lineWidth: 1)
+        self.sizeType = sizeType
         super.init()
         self.frame = frame
-        replace(children: [valueLabel, lineLayer, knob])
+        replace(children: [classNameLabel, valueLabel, lineLayer, knob])
         updateKnobPosition()
         updateLabel()
     }
@@ -120,6 +127,10 @@ final class EnumView<T: EnumType>: View {
         }
     }
     private func updateLayout() {
+        let padding = Layout.padding(with: sizeType)
+        classNameLabel.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameLabel.frame.height - padding)
+        valueLabel.frame.origin.x = classNameLabel.frame.maxX + knobPaddingWidth
         valueLabel.frame.origin.y = round((bounds.height - valueLabel.frame.height) / 2)
         if menu.width != bounds.width {
             menu.width = bounds.width
@@ -127,14 +138,15 @@ final class EnumView<T: EnumType>: View {
         updateKnobPosition()
     }
     private func updateKnobPosition() {
-        lineLayer.path = CGPath(rect: CGRect(x: knobPaddingWidth / 2 - 1, y: 0,
+        let x = classNameLabel.frame.maxX + knobPaddingWidth / 2
+        lineLayer.path = CGPath(rect: CGRect(x: x - 1, y: 0,
                                              width: 2, height: bounds.height / 2), transform: nil)
-        knob.position = CGPoint(x: knobPaddingWidth / 2, y: bounds.midY)
+        knob.position = CGPoint(x: x, y: bounds.midY)
     }
     private var oldFontColor: Color?
     private func updateLabel() {
         valueLabel.localization = menu.names[index]
-        valueLabel.frame.origin = CGPoint(x: knobPaddingWidth,
+        valueLabel.frame.origin = CGPoint(x: classNameLabel.frame.maxX + knobPaddingWidth,
                                           y: round((frame.height - valueLabel.frame.height) / 2))
         if let cationIndex = cationIndex {
             if index != cationIndex {
@@ -173,16 +185,21 @@ final class EnumView<T: EnumType>: View {
         }
         return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
-        return [String(index)]
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [enumeratedType]
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
-            if let string = object as? String, let index = Int(string) {
+            if let enumeratedType = object as? T {
+                if enumeratedType != self.enumeratedType {
+                    push(enumeratedType, old: self.enumeratedType)
+                    return true
+                }
+            } else if let string = object as? String, let index = Int(string) {
                 let enumeratedType = self.enumeratedType(at: index)
                 if enumeratedType != self.enumeratedType {
                     push(enumeratedType, old: self.enumeratedType)
-                    break
+                    return true
                 }
             }
         }
@@ -283,7 +300,7 @@ final class EnumView<T: EnumType>: View {
         return true
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         var reference = enumeratedType.reference
         reference.viewDescription = Localization(english: "Select Index: Up and down drag",
                                                  japanese: "インデックスを選択: 上下ドラッグ")
@@ -299,7 +316,8 @@ final class Menu: View {
             }
             let selectedLabel = items[selectedIndex]
             selectedLayer.frame = selectedLabel.frame
-            selectedKnob.position = CGPoint(x: knobPaddingWidth / 2, y: selectedLabel.frame.midY)
+            selectedKnob.position = CGPoint(x: Layout.padding(with: sizeType) + knobPaddingX + knobPaddingWidth / 2,
+                                            y: selectedLabel.frame.midY)
         }
     }
     
@@ -313,6 +331,7 @@ final class Menu: View {
             updateItems()
         }
     }
+    let knobPaddingX: CGFloat
     let knobPaddingWidth: CGFloat
     
     let selectedLayer: Layer = {
@@ -332,17 +351,19 @@ final class Menu: View {
             updateItems()
         }
     }
-    var isSmall: Bool
+    var sizeType: SizeType
     private(set) var items = [TextBox]()
     
     init(names: [Localization] = [],
-         knobPaddingWidth: CGFloat = 18.0.cf, width: CGFloat, isSmall: Bool = false) {
+         knobPaddingX: CGFloat = 0,
+         knobPaddingWidth: CGFloat = 18.0.cf, width: CGFloat, sizeType: SizeType = .regular) {
         self.names = names
+        self.knobPaddingX = knobPaddingX
         self.knobPaddingWidth = knobPaddingWidth
         self.width = width
-        self.isSmall = isSmall
-        menuHeight = isSmall ? Layout.smallHeight : Layout.basicHeight
-        selectedKnob = isSmall ?
+        self.sizeType = sizeType
+        menuHeight = Layout.height(with: sizeType)
+        selectedKnob = sizeType == .small ?
             DiscreteKnob(CGSize(square: 6), lineWidth: 1) :
             DiscreteKnob(CGSize(square: 8), lineWidth: 1)
         super.init()
@@ -356,33 +377,36 @@ final class Menu: View {
             self.items = []
             replace(children: [])
         } else {
+            let padding = Layout.padding(with: sizeType)
+            let x = padding + knobPaddingX + knobPaddingWidth / 2
             let h = menuHeight * names.count.cf
             var y = h
             let items: [TextBox] = names.map {
                 y -= menuHeight
                 return TextBox(frame: CGRect(x: 0, y: y, width: width, height: menuHeight),
                                name: $0,
-                               isSmall: isSmall,
-                               leftPadding: knobPaddingWidth)
+                               sizeType: sizeType,
+                               leftPadding: knobPaddingX + knobPaddingWidth)
             }
             let path = CGMutablePath()
-            path.addRect(CGRect(x: knobPaddingWidth / 2 - 1, y: menuHeight / 2,
+            
+            path.addRect(CGRect(x: x - 1, y: menuHeight / 2,
                                 width: 2, height: h - menuHeight))
             items.forEach {
-                path.addRect(CGRect(x: knobPaddingWidth / 2 - 2, y: $0.frame.midY - 2,
+                path.addRect(CGRect(x: x - 2, y: $0.frame.midY - 2,
                                     width: 4, height: 4))
             }
             lineLayer.path = path
             let selectedLabel = items[selectedIndex]
             selectedLayer.frame = selectedLabel.frame
-            selectedKnob.position = CGPoint(x: knobPaddingWidth / 2, y: selectedLabel.frame.midY)
+            selectedKnob.position = CGPoint(x: x, y: selectedLabel.frame.midY)
             frame.size = CGSize(width: width, height: h)
             self.items = items
             replace(children: items + [lineLayer, selectedKnob, selectedLayer])
         }
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return Reference(name: Localization(english: "Menu", japanese: "メニュー"))
     }
 }

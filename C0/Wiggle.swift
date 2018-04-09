@@ -20,7 +20,7 @@
 import Foundation
 
 typealias RPB = CGFloat
-struct Wiggle: Codable {
+struct Wiggle: Codable, Equatable, Hashable {
     var amplitude = CGPoint(), frequency = RPB(8)
     
     func with(amplitude: CGPoint) -> Wiggle {
@@ -36,11 +36,6 @@ struct Wiggle: Codable {
     func phasePosition(with position: CGPoint, phase: CGFloat) -> CGPoint {
         let x = sin(2 * (.pi) * phase)
         return CGPoint(x: position.x + amplitude.x * x, y: position.y + amplitude.y * x)
-    }
-}
-extension Wiggle: Equatable {
-    static func ==(lhs: Wiggle, rhs: Wiggle) -> Bool {
-        return lhs.amplitude == rhs.amplitude && lhs.frequency == rhs.frequency
     }
 }
 extension Wiggle: Interpolatable {
@@ -73,10 +68,13 @@ extension Wiggle: Interpolatable {
 extension Wiggle: Referenceable {
     static let name = Localization(english: "Wiggle", japanese: "振動")
 }
+extension Wiggle: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return Layer()
+    }
+}
 
 final class WiggleView: View {
-    static let name = Wiggle.name
-    
     var wiggle = Wiggle() {
         didSet {
             if wiggle != oldValue {
@@ -107,14 +105,6 @@ final class WiggleView: View {
         xView.binding = { [unowned self] in self.setWiggle(with: $0) }
         yView.binding = { [unowned self] in self.setWiggle(with: $0) }
         frequencyView.binding = { [unowned self] in self.setWiggle(with: $0) }
-    }
-    
-    var isLocked = false {
-        didSet {
-            xView.isLocked = isLocked
-            yView.isLocked = isLocked
-            frequencyView.isLocked = isLocked
-        }
     }
     
     override var locale: Locale {
@@ -204,34 +194,27 @@ final class WiggleView: View {
         }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
-        return [wiggle]
-    }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        guard !isLocked else {
-            return false
-        }
-        for object in objects {
-            if let wiggle = object as? Wiggle {
-                guard wiggle != self.wiggle else {
-                    continue
-                }
-                set(wiggle, oldWiggle: self.wiggle)
-                return true
-            }
-        }
-        return false
-    }
     func delete(with event: KeyInputEvent) -> Bool {
-        guard !isLocked else {
-            return false
-        }
         let wiggle = Wiggle()
         guard wiggle != self.wiggle else {
             return false
         }
         set(wiggle, oldWiggle: self.wiggle)
         return true
+    }
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [wiggle]
+    }
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
+            if let wiggle = object as? Wiggle {
+                if wiggle != self.wiggle {
+                    set(wiggle, oldWiggle: self.wiggle)
+                    return true
+                }
+            }
+        }
+        return false
     }
     
     private func set(_ wiggle: Wiggle, oldWiggle: Wiggle) {
@@ -241,5 +224,9 @@ final class WiggleView: View {
         binding?(Binding(wiggleView: self, wiggle: oldWiggle, oldWiggle: oldWiggle, type: .begin))
         self.wiggle = wiggle
         binding?(Binding(wiggleView: self, wiggle: wiggle, oldWiggle: oldWiggle, type: .end))
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        return wiggle.reference
     }
 }

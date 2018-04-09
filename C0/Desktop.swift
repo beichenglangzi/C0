@@ -19,21 +19,33 @@
 
 import Foundation
 
-struct Desktop {
+final class Desktop {
+    var version = Version()
+    var copiedObjects = [ViewExpression]() {
+        didSet {
+            copiedObjectsBinding?(copiedObjects)
+        }
+    }
+    var copiedObjectsBinding: (([ViewExpression]) -> ())?
+    var isHiddenActionManager = false
+    var isSimpleReference = false
     var actionManager = ActionManager()
     var objects = [Any]()
     private enum CodingKeys: String, CodingKey {
-        case isHiddenActions
+        case isSimpleReference, isHiddenActionManager
     }
 }
 extension Desktop: Codable {
-    init(from decoder: Decoder) throws {
+    convenience init(from decoder: Decoder) throws {
+        self.init()
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        actionManager.isHiddenActions = try values.decode(Bool.self, forKey: .isHiddenActions)
+        isSimpleReference = try values.decode(Bool.self, forKey: .isSimpleReference)
+        isHiddenActionManager = try values.decode(Bool.self, forKey: .isHiddenActionManager)
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(actionManager.isHiddenActions, forKey: .isHiddenActions)
+        try container.encode(isSimpleReference, forKey: .isSimpleReference)
+        try container.encode(isHiddenActionManager, forKey: .isHiddenActionManager)
     }
 }
 extension Desktop: Referenceable {
@@ -47,6 +59,7 @@ extension Desktop: Referenceable {
 final class DesktopView: RootView {
     var desktop = Desktop() {
         didSet {
+            versionView.version = desktop.version
             actionManagerView.actionManager = desktop.actionManager
             updateLayout()
         }
@@ -85,18 +98,27 @@ final class DesktopView: RootView {
     let objectsDataModelKey = "objects"
     var objectsDataModel: DataModel
     
+    var versionWidth = 120.0.cf
     var actionWidth = ActionManagerView.defaultWidth {
         didSet {
             updateLayout()
         }
     }
-    var copyManagerViewHeight = Layout.basicHeight + Layout.basicPadding * 2 {
+    var topViewsHeight = Layout.basicHeight {
         didSet {
             updateLayout()
         }
     }
-    let actionManagerView = ActionManagerView(), copyManagerView = CopyManagerView()
-    let objectsView = ArrayView<Any>()
+    let versionView = VersionView()
+    let copiedLabel = Label(text: Localization(english: "Copied:", japanese: "コピー済み:"))
+    let copiedObjectsView = AnyArrayView()
+    let isHiddenActionManagerView = BoolView(name: Localization(english: "Action Manager",
+                                                                japanese: "アクション管理"))
+    let isSimpleReferenceView = BoolView(name: Localization(english: "Simple Reference",
+                                                            japanese: "簡易情報"))
+    let referenceView = ReferenceView()
+    let actionManagerView = ActionManagerView()
+    let objectsView = AnyArrayView()
     let sceneView = SceneView()
     
     override init() {
@@ -107,21 +129,29 @@ final class DesktopView: RootView {
         
         super.init()
         fillColor = .background
+        versionView.version = desktop.version
         
         objectsView.replace(children: [sceneView])
-        replace(children: [copyManagerView, actionManagerView, objectsView])
+        replace(children: [versionView, copiedLabel, isHiddenActionManagerView, isSimpleReferenceView,
+                           copiedObjectsView, actionManagerView, referenceView, objectsView])
         
-        actionManagerView.isHiddenActionsBinding = { [unowned self] in
-            self.update(withIsHiddenActions: $0)
-            self.isHiddenActionsBinding?($0)
+        isHiddenActionManagerView.binding = { [unowned self] in
+            self.update(withIsHiddenActionManager: $0.bool)
+            self.isHiddenActionManagerBinding?($0.bool)
         }
+        isSimpleReferenceView.binding = { [unowned self] in
+            self.update(withIsSimpleReference: $0.bool)
+            self.isSimpleReferenceBinding?($0.bool)
+        }
+        
         differentialDesktopDataModel.dataHandler = { [unowned self] in self.desktop.jsonData }
     }
     
-    var isHiddenActionsBinding: ((Bool) -> (Void))? = nil
+    var isHiddenActionManagerBinding: ((Bool) -> (Void))? = nil
+    var isSimpleReferenceBinding: ((Bool) -> (Void))? = nil
     
-    override var copyManager: CopyManager? {
-        return copyManagerView.rootCopyManager
+    override var undoManager: UndoManager? {
+        return desktop.version
     }
     
     var rootCursorPoint = CGPoint()
@@ -151,36 +181,116 @@ final class DesktopView: RootView {
     }
     private func updateLayout() {
         let padding = Layout.basicPadding
-        let ah = actionManagerView.defaultBounds.height
-        let preferenceY = bounds.height - ah - padding
-        actionManagerView.frame = CGRect(x: padding, y: preferenceY,
-                                         width: actionWidth, height: ah)
-        copyManagerView.frame = CGRect(x: padding + actionWidth,
-                                       y: bounds.height - copyManagerViewHeight - padding,
-                                       width: bounds.width - actionWidth - padding * 2,
-                                       height: copyManagerViewHeight)
-        if actionManagerView.actionManager.isHiddenActions {
+        let referenceHeight = 150.0.cf
+        let isrw = isSimpleReferenceView.defaultBounds.width
+        let ihamvw = isHiddenActionManagerView.defaultBounds.width
+        let headerY = bounds.height - topViewsHeight - padding
+        versionView.frame = CGRect(x: padding,
+                                   y: headerY,
+                                   width: versionWidth, height: topViewsHeight)
+        copiedLabel.frame.origin = CGPoint(x: versionView.frame.maxX + padding, y: headerY + padding)
+        copiedObjectsView.frame = CGRect(x: copiedLabel.frame.maxX,
+                                         y: headerY,
+                                         width: bounds.width - actionWidth - versionWidth - isrw - ihamvw - copiedLabel.frame.width - padding * 2,
+                                         height: topViewsHeight)
+        updateCopiedObjectViewPositions()
+        isSimpleReferenceView.frame = CGRect(x: copiedObjectsView.frame.maxX,
+                                             y: headerY,
+                                             width: isrw,
+                                             height: topViewsHeight)
+        isHiddenActionManagerView.frame = CGRect(x: isSimpleReferenceView.frame.maxX,
+                                                 y: headerY,
+                                                 width: ihamvw,
+                                                 height: topViewsHeight)
+        if desktop.isSimpleReference {
+            referenceView.frame = CGRect(x: isHiddenActionManagerView.frame.maxX,
+                                         y: headerY,
+                                         width: actionWidth,
+                                         height: topViewsHeight)
+        } else {
+            let h = desktop.isHiddenActionManager ? bounds.height - padding * 2 : referenceHeight
+            referenceView.frame = CGRect(x: isHiddenActionManagerView.frame.maxX,
+                                         y: bounds.height - h - padding,
+                                         width: actionWidth,
+                                         height: h)
+        }
+        if !desktop.isHiddenActionManager {
+            let h = desktop.isSimpleReference ?
+                bounds.height - isSimpleReferenceView.frame.height - padding * 2 :
+                bounds.height - referenceHeight - padding * 2
+            actionManagerView.frame = CGRect(x: isHiddenActionManagerView.frame.maxX, y: padding,
+                                             width: actionWidth, height: h)
+        }
+        
+        if desktop.isHiddenActionManager && desktop.isSimpleReference {
             objectsView.frame = CGRect(x: padding,
                                        y: padding,
                                        width: bounds.width - padding * 2,
-                                       height: bounds.height - copyManagerViewHeight - padding * 2)
+                                       height: bounds.height - topViewsHeight - padding * 2)
         } else {
-            objectsView.frame = CGRect(x: padding + actionWidth,
+            objectsView.frame = CGRect(x: padding,
                                        y: padding,
                                        width: bounds.width - (padding * 2 + actionWidth),
-                                       height: bounds.height - copyManagerViewHeight - padding * 2)
+                                       height: bounds.height - topViewsHeight - padding * 2)
         }
         objectsView.bounds.origin = CGPoint(x: -round((objectsView.frame.width / 2)),
                                             y: -round((objectsView.frame.height / 2)))
         sceneView.frame.origin = CGPoint(x: -round(sceneView.frame.width / 2),
                                          y: -round(sceneView.frame.height / 2))
     }
-    private func update(withIsHiddenActions isHiddenActions: Bool) {
+    private func update(withIsHiddenActionManager isHiddenActionManager: Bool) {
+        actionManagerView.isHidden = isHiddenActionManager
+        desktop.isHiddenActionManager = isHiddenActionManager
         updateLayout()
         differentialDesktopDataModel.isWrite = true
     }
+    private func update(withIsSimpleReference isSimpleReference: Bool) {
+        desktop.isSimpleReference = isSimpleReference
+        updateLayout()
+        differentialDesktopDataModel.isWrite = true
+    }
+    var objectViewWidth = 80.0.cf
+    private func updateCopiedObjectViews() {
+        copiedObjectsView.array = desktop.copiedObjects
+        let padding = Layout.smallPadding
+        let bounds = CGRect(x: 0,
+                            y: 0,
+                            width: objectViewWidth,
+                            height: copiedObjectsView.bounds.height - padding * 2)
+        copiedObjectsView.replace(children: desktop.copiedObjects.map {
+            $0.view(withBounds: bounds, sizeType: .small)
+        })
+        updateCopiedObjectViewPositions()
+    }
+    func updateCopiedObjectViewPositions() {
+        let padding = Layout.smallPadding
+        _ = Layout.leftAlignment(copiedObjectsView.children, minX: padding, y: padding)
+    }
+
+    override func sendToTop(copiedObjects: [ViewExpression]) {
+        push(copiedObjects: copiedObjects)
+    }
+    func push(copiedObjects: [ViewExpression]) {
+        push(copiedObjects: copiedObjects, oldCopiedObjects: desktop.copiedObjects)
+    }
+    private func push(copiedObjects: [ViewExpression], oldCopiedObjects: [ViewExpression]) {
+        undoManager?.registerUndo(withTarget: self) {
+            $0.push(copiedObjects: oldCopiedObjects, oldCopiedObjects: copiedObjects)
+        }
+        desktop.copiedObjects = copiedObjects
+        updateCopiedObjectViews()
+    }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    override func sendToTop(_ reference: Reference) {
+        push(reference, old: referenceView.reference)
+    }
+    func push(_ reference: Reference, old oldReference: Reference) {
+        undoManager?.registerUndo(withTarget: self) {
+            $0.push(oldReference, old: reference)
+        }
+        referenceView.reference = reference
+    }
+    func reference(with event: TapEvent) -> Reference? {
         return desktop.reference
     }
 }

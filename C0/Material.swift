@@ -25,7 +25,7 @@ final class Material: NSObject, NSCoding {
         var isDrawLine: Bool {
             return self == .normal
         }
-        var displayString: Localization {
+        var displayText: Localization {
             switch self {
             case .normal:
                 return Localization(english: "Normal", japanese: "通常")
@@ -41,13 +41,13 @@ final class Material: NSObject, NSCoding {
                 return Localization(english: "Subtract", japanese: "減算")
             }
         }
-        static var displayStrings: [Localization] {
-            return [normal.displayString,
-                    lineless.displayString,
-                    blur.displayString,
-                    luster.displayString,
-                    add.displayString,
-                    subtract.displayString]
+        static var displayTexts: [Localization] {
+            return [normal.displayText,
+                    lineless.displayText,
+                    blur.displayText,
+                    luster.displayText,
+                    add.displayText,
+                    subtract.displayText]
         }
     }
     
@@ -187,17 +187,19 @@ extension Material: Interpolatable {
                         lineWidth: lineWidth, opacity: opacity)
     }
 }
-extension Material: ViewExpression {
-    func view(withBounds bounds: CGRect, isSmall: Bool) -> View {
+extension Material: ClassCopiable {
+}
+extension Material: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
         let thumbnailView = Box()
         thumbnailView.bounds = bounds
         thumbnailView.fillColor = color
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
-                          isSmall : isSmall)
+        return thumbnailView
     }
 }
 extension Material.MaterialType: Referenceable {
-    static let name = Localization(english: "Material Type", japanese: "マテリアルタイプ")
+    static let uninheritanceName = Localization(english: "Type", japanese: "タイプ")
+    static let name = Keyframe.name.spacedUnion(uninheritanceName)
 }
 extension Material.MaterialType {
     var blendMode: CGBlendMode {
@@ -211,10 +213,12 @@ extension Material.MaterialType {
         }
     }
 }
+extension Material.MaterialType: ObjectViewExpressionWithDisplayText {
+}
 
 extension NumberView {
-    static func opacityView(isSmall: Bool = false) -> NumberView {
-        return NumberView(number: 1, defaultNumber: 1, min: 0, max: 1, isSmall: isSmall)
+    static func opacityView(sizeType: SizeType = .regular) -> NumberView {
+        return NumberView(number: 1, defaultNumber: 1, min: 0, max: 1, sizeType: sizeType)
     }
     private static func opacityViewLayers(with bounds: CGRect,
                                             checkerWidth: CGFloat, padding: CGFloat) -> [Layer] {
@@ -245,8 +249,8 @@ extension NumberView {
 }
 extension NumberView {
     static func widthViewWith(min: CGFloat, max: CGFloat, exp: CGFloat,
-                              isSmall: Bool = false) -> NumberView {
-        return NumberView(min: min, max: max, exp: exp, isSmall: isSmall)
+                              sizeType: SizeType = .regular) -> NumberView {
+        return NumberView(min: min, max: max, exp: exp, sizeType: sizeType)
     }
     private static func widthLayer(with bounds: CGRect,
                                    halfWidth: CGFloat, padding: CGFloat) -> Layer {
@@ -298,14 +302,14 @@ final class MaterialView: View {
         EnumView<Material.MaterialType>(enumeratedType: .normal,
                                         indexHandler: { Int($0) },
                                         rawValueHandler: { Material.MaterialType.RawValue($0) },
-                                        names: Material.MaterialType.displayStrings)
+                                        names: Material.MaterialType.displayTexts)
     private let colorView = ColorView()
     private let lineWidthView = NumberView.widthViewWith(min: Material.defaultLineWidth, max: 500,
                                                          exp: 3)
     private let opacityView = NumberView.opacityView()
     private let lineColorLabel = Label(text: Localization(english: "Line Color:",
                                                           japanese: "線のカラー:"))
-    private let lineColorView = ColorView(hLineWidth: 2, hWidth: 8, slPadding: 4, isSmall: true)
+    private let lineColorView = ColorView(hLineWidth: 2, hWidth: 8, slPadding: 4, sizeType: .small)
     
     override init() {
         material = defaultMaterial
@@ -522,17 +526,16 @@ final class MaterialView: View {
         }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [Any]? {
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return [material]
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
             if let material = object as? Material {
-                guard material.id != self.material.id else {
-                    continue
+                if material.id != self.material.id {
+                    set(material, old: self.material)
+                    return true
                 }
-                set(material, old: self.material)
-                return true
             }
         }
         return false
@@ -550,7 +553,7 @@ final class MaterialView: View {
         binding?(Binding(view: self, material: material, oldMaterial: oldMaterial, type: .end))
     }
     
-    func lookUp(with event: TapEvent) -> Reference? {
+    func reference(with event: TapEvent) -> Reference? {
         return material.reference
     }
 }
