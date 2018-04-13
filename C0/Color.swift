@@ -39,7 +39,7 @@ struct Color: Codable {
     static let rgbBlue = Color(red: 0, green: 0, blue: 1)
     static let rgbMagenta = Color(red: 1, green: 0, blue: 1)
     
-    static let background = Color(white: 0.97)
+    static let background = Color(white: 0.96)
     static let border = Color(white: 0.7)
     static let content = Color(white: 0.35)
     static let subContent = Color(white: 0.91)
@@ -119,6 +119,15 @@ struct Color: Codable {
         didSet {
             rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
             id = UUID()
+        }
+    }
+    var sl: CGPoint {
+        get {
+            return CGPoint(x: saturation, y: lightness)
+        }
+        set {
+            self.saturation = newValue.x.d
+            self.lightness = newValue.y.d
         }
     }
     var alpha: Double {
@@ -474,10 +483,10 @@ extension Color: Copiable {
 }
 extension Color: ObjectViewExpression {
     func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        let thumbnailView = Box()
-        thumbnailView.bounds = bounds
-        thumbnailView.fillColor = self
-        return thumbnailView
+        let layer = Layer()
+        layer.bounds = bounds
+        layer.fillColor = self
+        return layer
     }
 }
 
@@ -490,6 +499,7 @@ extension CGColor {
     }
 }
 extension CGColorSpace {
+    static let `default` = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
     static var labColorSpace: CGColorSpace? {
         return CGColorSpace(labWhitePoint: [0.95947, 1, 1.08883],
                             blackPoint: [0, 0, 0],
@@ -505,7 +515,7 @@ extension CGColorSpace {
     }
 }
 
-struct ColorCircle {
+struct HueCircle {
     var lineWidth: CGFloat, colorSpace: ColorSpace
     var bounds: CGRect {
         didSet {
@@ -621,28 +631,33 @@ final class ColorView: View {
         }
     }
     
-    var hLineWidth: CGFloat {
+    let hueView: CircularNumberView
+    let hueFormLayer = DrawLayer()
+    var hueFormLineWidth: CGFloat {
         didSet {
-            hCircle.lineWidth = hLineWidth
+            hueFormCircle.lineWidth = hueFormLineWidth
         }
     }
-    let hView: CircularNumberView
-    let hLayer = DrawLayer()
-    var hCircle = ColorCircle() {
+    var hueFormCircle = HueCircle() {
         didSet {
-            hLayer.draw()
+            hueFormLayer.draw()
         }
     }
     
     let slView = PointView()
-    let slColorLayer: GradientLayer = {
+    var slFormRatio = 0.82.cf {
+        didSet {
+            updateLayout()
+        }
+    }
+    let slFormColorLayer: GradientLayer = {
         let layer = GradientLayer()
         layer.gradient = Gradient(colors: [], locations: [],
                                   startPoint: CGPoint(x: 0, y: 0),
                                   endPoint: CGPoint(x: 1, y: 0))
         return layer
     } ()
-    let slBlackWhiteLayer: GradientLayer = {
+    let slFormBlackWhiteLayer: GradientLayer = {
         let layer = GradientLayer()
         layer.gradient = Gradient(colors: [Color(white: 0, alpha: 1),
                                            Color(white: 0, alpha: 0),
@@ -658,38 +673,33 @@ final class ColorView: View {
          hLineWidth: CGFloat = 2.5, hWidth: CGFloat = 16.0.cf, slPadding: CGFloat? = nil,
          sizeType: SizeType = .regular) {
         
-        hView = CircularNumberView(width: hWidth)
+        hueView = CircularNumberView(width: hWidth)
         
         if let slPadding = slPadding {
             slView.padding = slPadding
         }
         if sizeType == .small {
-            slView.knob.radius = 4
-            hView.knob.radius = 4
+            slView.formKnob.radius = 4
+            hueView.knob.radius = 4
         }
-        self.hLineWidth = hLineWidth
-        hView.width = hWidth
+        self.hueFormLineWidth = hLineWidth
+        hueView.width = hWidth
         
         super.init()
-        hLayer.fillColor = nil
-        hLayer.lineColor = nil
-        hLayer.drawBlock = { [unowned self] ctx in
-            self.hCircle.draw(in: ctx)
+        hueFormLayer.fillColor = nil
+        hueFormLayer.lineColor = nil
+        hueFormLayer.drawBlock = { [unowned self] ctx in
+            self.hueFormCircle.draw(in: ctx)
         }
-        hView.backgroundLayers = [hLayer]
-        slView.backgroundLayers = [slColorLayer, slBlackWhiteLayer]
-        replace(children: [hView, slView])
+        hueView.backgroundLayers = [hueFormLayer]
+        slView.formBackgroundLayers = [slFormColorLayer, slFormBlackWhiteLayer]
+        replace(children: [hueView, slView])
         self.frame = frame
         
-        hView.binding = { [unowned self] in self.setColor(with: $0) }
+        hueView.binding = { [unowned self] in self.setColor(with: $0) }
         slView.binding = { [unowned self] in self.setColor(with: $0) }
     }
     
-    var slRatio = 0.82.cf {
-        didSet {
-            updateLayout()
-        }
-    }
     override var bounds: CGRect {
         didSet {
             updateLayout()
@@ -701,46 +711,47 @@ final class ColorView: View {
         }
         let padding = Layout.smallPadding
         let r = floor(min(bounds.size.width, bounds.size.height) / 2) - padding
-        hView.frame = CGRect(x: padding, y: padding, width: r * 2, height: r * 2)
-        let sr = r - hView.width
-        let b2 = floor(sr * slRatio)
+        hueView.frame = CGRect(x: padding, y: padding, width: r * 2, height: r * 2)
+        let sr = r - hueView.width
+        let b2 = floor(sr * slFormRatio)
         let a2 = floor(sqrt(sr * sr - b2 * b2))
         slView.frame = CGRect(x: bounds.size.width / 2 - a2,
                               y: bounds.size.height / 2 - b2,
                               width: a2 * 2,
                               height: b2 * 2)
         let slInFrame = slView.bounds.inset(by: slView.padding)
-        slColorLayer.frame = slInFrame
-        slBlackWhiteLayer.frame = slInFrame
+        slFormColorLayer.frame = slInFrame
+        slFormBlackWhiteLayer.frame = slInFrame
         
-        hLayer.frame = hView.bounds.inset(by: ceil((hView.width - hLineWidth) / 2))
-        hCircle = ColorCircle(lineWidth: hLineWidth,
-                              bounds: hLayer.bounds,
-                              colorSpace: color.colorSpace)
+        hueFormLayer.frame = hueView.bounds.inset(by: ceil((hueView.width - hueFormLineWidth) / 2))
+        hueFormCircle = HueCircle(lineWidth: hueFormLineWidth,
+                                  bounds: hueFormLayer.bounds,
+                                  colorSpace: color.colorSpace)
         updateWithColor()
     }
     private func updateWithColor() {
         let y = Color.y(withHue: color.hue)
-        slColorLayer.gradient?.colors = [Color(hue: color.hue, saturation: 0, brightness: y),
-                                         Color(hue: color.hue, saturation: 1, brightness: 1)]
-        slBlackWhiteLayer.gradient?.locations = [0, y, y, 1]
-        hView.number = hCircle.angle(withHue: color.hue).cf
+        slFormColorLayer.gradient?.colors = [Color(hue: color.hue, saturation: 0, brightness: y),
+                                             Color(hue: color.hue, saturation: 1, brightness: 1)]
+        slFormBlackWhiteLayer.gradient?.locations = [0, y, y, 1]
+        hueView.number = hueFormCircle.angle(withHue: color.hue).cf
         slView.point = CGPoint(x: color.saturation, y: color.lightness)
     }
     private func updateWithColorSpace() {
-        slBlackWhiteLayer.gradient?.colors = [Color(white: 0, alpha: 1, colorSpace: color.colorSpace),
-                                              Color(white: 0, alpha: 0, colorSpace: color.colorSpace),
-                                              Color(white: 1, alpha: 0, colorSpace: color.colorSpace),
-                                              Color(white: 1, alpha: 1, colorSpace: color.colorSpace)]
-        hCircle = ColorCircle(lineWidth: hLineWidth,
-                              bounds: hLayer.bounds,
-                              colorSpace: color.colorSpace)
+        let colors = [Color(white: 0, alpha: 1, colorSpace: color.colorSpace),
+                      Color(white: 0, alpha: 0, colorSpace: color.colorSpace),
+                      Color(white: 1, alpha: 0, colorSpace: color.colorSpace),
+                      Color(white: 1, alpha: 1, colorSpace: color.colorSpace)]
+        slFormBlackWhiteLayer.gradient?.colors = colors
+        hueFormCircle = HueCircle(lineWidth: hueFormLineWidth,
+                                  bounds: hueFormLayer.bounds,
+                                  colorSpace: color.colorSpace)
     }
     
     struct Binding {
         let colorView: ColorView, color: Color, oldColor: Color, type: Action.SendType
     }
-    var setColorHandler: ((Binding) -> ())?
+    var setColorClosure: ((Binding) -> ())?
     
     var disabledRegisterUndo = false
     
@@ -763,10 +774,10 @@ final class ColorView: View {
         guard color != oldColor else {
             return false
         }
-        setColorHandler?(Binding(colorView: self,
+        setColorClosure?(Binding(colorView: self,
                                  color: oldColor, oldColor: oldColor, type: .begin))
         set(color, old: oldColor)
-        setColorHandler?(Binding(colorView: self,
+        setColorClosure?(Binding(colorView: self,
                                  color: color, oldColor: oldColor, type: .end))
         return true
     }
@@ -775,11 +786,11 @@ final class ColorView: View {
     private func setColor(with obj: PointView.Binding) {
         if obj.type == .begin {
             oldColor = color
-            setColorHandler?(Binding(colorView: self,
+            setColorClosure?(Binding(colorView: self,
                                      color: oldColor, oldColor: oldColor, type: .begin))
         } else {
-            color = color.with(saturation: obj.point.x.d, lightness: obj.point.y.d)
-            setColorHandler?(Binding(colorView: self,
+            color.sl = obj.point
+            setColorClosure?(Binding(colorView: self,
                                      color: color, oldColor: oldColor, type: obj.type))
         }
     }
@@ -787,21 +798,21 @@ final class ColorView: View {
     private func setColor(with obj: CircularNumberView.Binding) {
         if obj.type == .begin {
             oldColor = color
-            setColorHandler?(Binding(colorView: self,
+            setColorClosure?(Binding(colorView: self,
                                      color: oldColor, oldColor: oldColor, type: .begin))
         } else {
-            color = color.with(hue: hCircle.hue(withAngle: obj.number.d))
-            setColorHandler?(Binding(colorView: self,
+            color.hue = hueFormCircle.hue(withAngle: obj.number.d)
+            setColorClosure?(Binding(colorView: self,
                                      color: color, oldColor: oldColor, type: obj.type))
         }
     }
     
     private func set(_ color: Color, old oldColor: Color) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldColor, old: color) }
-        setColorHandler?(Binding(colorView: self,
+        setColorClosure?(Binding(colorView: self,
                                  color: oldColor, oldColor: oldColor, type: .begin))
         self.color = color
-        setColorHandler?(Binding(colorView: self,
+        setColorClosure?(Binding(colorView: self,
                                  color: color, oldColor: oldColor, type: .end))
     }
     

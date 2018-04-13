@@ -21,28 +21,17 @@ import Foundation
 
 typealias EnumType = RawRepresentable & Referenceable & ViewExpression & Equatable
 
-//final class EnumView {
-//
-//}
-
-/**
- # Issue
- - ノブの滑らかな移動
- */
 final class EnumView<T: EnumType>: View {
     var enumeratedType: T {
         didSet {
-            index = indexHandler(enumeratedType.rawValue)
+            index = indexClosure(enumeratedType.rawValue)
         }
     }
-    private var index = 0 {
+    private(set) var index = 0 {
         didSet {
-            guard index != oldValue else {
-                return
-            }
-            menu.selectedIndex = index
             if index != oldValue {
-                updateLabel()
+                updateWithEnumeratedType()
+                updateLayout()
             }
         }
     }
@@ -50,76 +39,69 @@ final class EnumView<T: EnumType>: View {
     var cationEnumeratedType: T? {
         didSet {
             if let cationEnumeratedType = cationEnumeratedType {
-                cationIndex = indexHandler(cationEnumeratedType.rawValue)
+                cationIndex = indexClosure(cationEnumeratedType.rawValue)
             } else {
                 cationIndex = nil
             }
         }
     }
     private var cationIndex: Int?
-
-    var indexHandler: ((T.RawValue) -> (Int))
-    var rawValueHandler: ((Int) -> (T.RawValue?))
+    
+    var indexClosure: ((T.RawValue) -> (Int))
+    var rawValueClosure: ((Int) -> (T.RawValue?))
     
     var sizeType: SizeType
-    let classNameLabel: Label
-    var knobPaddingWidth: CGFloat
-    let valueLabel: Label
+    
+    let classNameView: TextView
     let knob: DiscreteKnob
     private let lineLayer: PathLayer = {
         let lineLayer = PathLayer()
         lineLayer.fillColor = .content
         return lineLayer
     } ()
+    var nameViews: [TextView]
     
     init(enumeratedType: T, defaultEnumeratedType: T? = nil,
          cationEnumeratedType: T? = nil,
-         indexHandler: @escaping ((T.RawValue) -> (Int)) = { $0 as? Int ?? 0 },
-         rawValueHandler: @escaping ((Int) -> (T.RawValue?)) = { $0 as? T.RawValue },
+         indexClosure: @escaping ((T.RawValue) -> (Int)) = { $0 as? Int ?? 0 },
+         rawValueClosure: @escaping ((Int) -> (T.RawValue?)) = { $0 as? T.RawValue },
          frame: CGRect = CGRect(),
          names: [Localization] = [], sizeType: SizeType = .regular) {
         
-        classNameLabel = Label(text: T.uninheritanceName, font: Font.bold(with: sizeType))
+        classNameView = TextView(text: T.uninheritanceName, font: Font.bold(with: sizeType))
         self.enumeratedType = enumeratedType
         self.defaultEnumeratedType = defaultEnumeratedType ?? enumeratedType
         self.cationEnumeratedType = cationEnumeratedType
-        self.indexHandler = indexHandler
-        self.rawValueHandler = rawValueHandler
-        index = indexHandler(enumeratedType.rawValue)
+        self.indexClosure = indexClosure
+        self.rawValueClosure = rawValueClosure
+        index = indexClosure(enumeratedType.rawValue)
         if let cationEnumeratedType = cationEnumeratedType {
-            cationIndex = indexHandler(cationEnumeratedType.rawValue)
+            cationIndex = indexClosure(cationEnumeratedType.rawValue)
         }
-        knobPaddingWidth = sizeType == .small ? 12.0 : 16.0
-        self.menu = Menu(names: names,
-                         knobPaddingX: classNameLabel.frame.maxX,
-                         knobPaddingWidth: knobPaddingWidth,
-                         width: frame.width, sizeType: sizeType)
-        self.valueLabel = Label(font: Font.default(with: sizeType), color: .locked)
+        
+        nameViews = names.map { TextView(text: $0, font: Font.default(with: sizeType)) }
         self.knob = sizeType == .small ?
             DiscreteKnob(CGSize(square: 6), lineWidth: 1) :
             DiscreteKnob(CGSize(square: 8), lineWidth: 1)
         self.sizeType = sizeType
+        
         super.init()
         self.frame = frame
-        replace(children: [classNameLabel, valueLabel, lineLayer, knob])
-        updateKnobPosition()
-        updateLabel()
+        replace(children: [classNameView, lineLayer, knob] + nameViews)
+        updateLayout()
+        updateWithEnumeratedType()
     }
     
     override var locale: Locale {
         didSet {
-            menu.allChildrenAndSelf { $0.locale = locale }
             updateLayout()
-        }
-    }
-    override var contentsScale: CGFloat {
-        didSet {
-            menu.contentsScale = contentsScale
         }
     }
     
     override var defaultBounds: CGRect {
-        return valueLabel.textFrame.typographicBounds
+        let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
+        let nw = nameViews.reduce(0.0.cf) { $0 + $1.frame.width }
+        return CGRect(x: 0, y: 0, width: classNameView.frame.width + nw + padding * 2, height: height)
     }
     override var bounds: CGRect {
         didSet {
@@ -128,47 +110,38 @@ final class EnumView<T: EnumType>: View {
     }
     private func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        classNameLabel.frame.origin = CGPoint(x: padding,
-                                              y: bounds.height - classNameLabel.frame.height - padding)
-        valueLabel.frame.origin.x = classNameLabel.frame.maxX + knobPaddingWidth
-        valueLabel.frame.origin.y = round((bounds.height - valueLabel.frame.height) / 2)
-        if menu.width != bounds.width {
-            menu.width = bounds.width
+        classNameView.frame.origin = CGPoint(x: padding,
+                                             y: bounds.height - classNameView.frame.height - padding)
+        let path = CGMutablePath()
+        _ = nameViews.reduce(classNameView.frame.maxX + padding) {
+            $1.frame.origin = CGPoint(x: $0, y: padding)
+            path.addRect($1.frame)
+            return $0 + $1.frame.width
         }
-        updateKnobPosition()
+        lineLayer.path = path
+        
+        knob.frame = nameViews[index].frame.inset(by: -0.5)
     }
-    private func updateKnobPosition() {
-        let x = classNameLabel.frame.maxX + knobPaddingWidth / 2
-        lineLayer.path = CGPath(rect: CGRect(x: x - 1, y: 0,
-                                             width: 2, height: bounds.height / 2), transform: nil)
-        knob.position = CGPoint(x: x, y: bounds.midY)
-    }
-    private var oldFontColor: Color?
-    private func updateLabel() {
-        valueLabel.localization = menu.names[index]
-        valueLabel.frame.origin = CGPoint(x: classNameLabel.frame.maxX + knobPaddingWidth,
-                                          y: round((frame.height - valueLabel.frame.height) / 2))
-        if let cationIndex = cationIndex {
-            if index != cationIndex {
-                if let oldFontColor = oldFontColor {
-                    valueLabel.textFrame.color = oldFontColor
-                }
-            } else {
-                oldFontColor = valueLabel.textFrame.color
-                valueLabel.textFrame.color = .warning
-            }
-        }
+    private func updateWithEnumeratedType() {
+        knob.frame = nameViews[index].frame.inset(by: -0.5)
+        nameViews.forEach { $0.fillColor = .background }
+        nameViews[index].fillColor = .knob
     }
     
     func enumeratedType(at index: Int) -> T {
-        if let rawValue = rawValueHandler(index) {
+        if let rawValue = rawValueClosure(index) {
             return T(rawValue: rawValue) ?? defaultEnumeratedType
         } else {
             return defaultEnumeratedType
         }
     }
-    func index(withY y: CGFloat) -> Int {
-        return Int(y / menu.menuHeight).clip(min: 0, max: menu.names.count - 1)
+    func enumeratedType(at p: CGPoint) -> T {
+        for (i, view) in nameViews.enumerated() {
+            if view.frame.contains(p) {
+                return enumeratedType(at: i)
+            }
+        }
+        return defaultEnumeratedType
     }
     
     struct Binding {
@@ -216,72 +189,41 @@ final class EnumView<T: EnumType>: View {
                          oldEnumeratedType: oldEnumeratedType, type: .end))
     }
     
-    var willOpenMenuHandler: ((EnumView) -> ())? = nil
-    var menu: Menu
-    private var isDrag = false, oldEnumeratedType: T?, beginPoint = CGPoint()
+    func run(with event: ClickEvent) -> Bool {
+        let p = point(from: event)
+        let enumeratedType = self.enumeratedType(at: p)
+        if enumeratedType != self.enumeratedType {
+            push(enumeratedType, old: self.enumeratedType)
+        }
+        return true
+    }
+    
+    private var oldEnumeratedType: T?, oldPoint = CGPoint()
     func move(with event: DragEvent) -> Bool {
         let p = point(from: event)
         switch event.sendType {
         case .begin:
-            isDrag = false
-            
-            beginPoint = p
-            let root = self.root
-            if root !== self {
-                willOpenMenuHandler?(self)
-                valueLabel.isHidden = true
-                lineLayer.isHidden = true
-                knob.isHidden = true
-                menu.frame.origin = root.convert(CGPoint(x: 0, y: -menu.frame.height + p.y),
-                                                 from: self)
-                root.append(child: menu)
-            }
-            
-            let oldEnumeratedType = self.enumeratedType
+            knob.fillColor = .editing
+            let oldEnumeratedType = enumeratedType
             self.oldEnumeratedType = oldEnumeratedType
-            binding?(Binding(view: self, enumeratedType: oldEnumeratedType,
+            oldPoint = p
+            binding?(Binding(view: self, enumeratedType: enumeratedType,
                              oldEnumeratedType: oldEnumeratedType, type: .begin))
-            
-            let index = self.index(withY: -(p.y - beginPoint.y))
-            let enumeratedType = self.enumeratedType(at: index)
-            if enumeratedType != self.enumeratedType {
-                self.enumeratedType = enumeratedType
-                binding?(Binding(view: self, enumeratedType: enumeratedType,
-                                 oldEnumeratedType: oldEnumeratedType, type: .sending))
-            }
+            enumeratedType = self.enumeratedType(at: p)
+            binding?(Binding(view: self, enumeratedType: enumeratedType,
+                             oldEnumeratedType: oldEnumeratedType, type: .sending))
         case .sending:
-            isDrag = true
             guard let oldEnumeratedType = oldEnumeratedType else {
                 return true
             }
-            let index = self.index(withY: -(p.y - beginPoint.y))
-            let enumeratedType = self.enumeratedType(at: index)
-            if enumeratedType != self.enumeratedType {
-                self.enumeratedType = enumeratedType
-                binding?(Binding(view: self, enumeratedType: enumeratedType,
-                                 oldEnumeratedType: oldEnumeratedType, type: .sending))
-            }
+            enumeratedType = self.enumeratedType(at: p)
+            binding?(Binding(view: self, enumeratedType: enumeratedType,
+                             oldEnumeratedType: oldEnumeratedType, type: .sending))
         case .end:
             guard let oldEnumeratedType = oldEnumeratedType else {
                 return true
             }
-            let index = self.index(withY: -(p.y - beginPoint.y))
-            let enumeratedType = self.enumeratedType(at: index)
-            guard isDrag else {
-                if enumeratedType != oldEnumeratedType {
-                    self.enumeratedType = enumeratedType
-                }
-                binding?(Binding(view: self, enumeratedType: enumeratedType,
-                                 oldEnumeratedType: oldEnumeratedType, type: .end))
-                valueLabel.isHidden = false
-                lineLayer.isHidden = false
-                knob.isHidden = false
-                menu.removeFromParent()
-                return true
-            }
-            if enumeratedType != self.enumeratedType {
-                self.enumeratedType = enumeratedType
-            }
+            enumeratedType = self.enumeratedType(at: p)
             if enumeratedType != oldEnumeratedType {
                 registeringUndoManager?.registerUndo(withTarget: self) {
                     [enumeratedType, oldEnumeratedType] in
@@ -291,122 +233,12 @@ final class EnumView<T: EnumType>: View {
             }
             binding?(Binding(view: self, enumeratedType: enumeratedType,
                              oldEnumeratedType: oldEnumeratedType, type: .end))
-            
-            valueLabel.isHidden = false
-            lineLayer.isHidden = false
-            knob.isHidden = false
-            menu.removeFromParent()
+            knob.fillColor = .knob
         }
         return true
     }
     
     func reference(with event: TapEvent) -> Reference? {
-        var reference = enumeratedType.reference
-        reference.viewDescription = Localization(english: "Select Index: Up and down drag",
-                                                 japanese: "インデックスを選択: 上下ドラッグ")
-        return reference
-    }
-}
-
-final class Menu: View {
-    var selectedIndex = 0 {
-        didSet {
-            guard selectedIndex != oldValue else {
-                return
-            }
-            let selectedLabel = items[selectedIndex]
-            selectedLayer.frame = selectedLabel.frame
-            selectedKnob.position = CGPoint(x: Layout.padding(with: sizeType) + knobPaddingX + knobPaddingWidth / 2,
-                                            y: selectedLabel.frame.midY)
-        }
-    }
-    
-    var width = 0.0.cf {
-        didSet {
-            updateItems()
-        }
-    }
-    var menuHeight: CGFloat {
-        didSet {
-            updateItems()
-        }
-    }
-    let knobPaddingX: CGFloat
-    let knobPaddingWidth: CGFloat
-    
-    let selectedLayer: Layer = {
-        let layer = Layer()
-        layer.fillColor = .translucentEdit
-        return layer
-    } ()
-    let lineLayer: PathLayer = {
-        let lineLayer = PathLayer()
-        lineLayer.fillColor = .content
-        return lineLayer
-    } ()
-    let selectedKnob: DiscreteKnob
-    
-    var names = [Localization]() {
-        didSet {
-            updateItems()
-        }
-    }
-    var sizeType: SizeType
-    private(set) var items = [TextBox]()
-    
-    init(names: [Localization] = [],
-         knobPaddingX: CGFloat = 0,
-         knobPaddingWidth: CGFloat = 18.0.cf, width: CGFloat, sizeType: SizeType = .regular) {
-        self.names = names
-        self.knobPaddingX = knobPaddingX
-        self.knobPaddingWidth = knobPaddingWidth
-        self.width = width
-        self.sizeType = sizeType
-        menuHeight = Layout.height(with: sizeType)
-        selectedKnob = sizeType == .small ?
-            DiscreteKnob(CGSize(square: 6), lineWidth: 1) :
-            DiscreteKnob(CGSize(square: 8), lineWidth: 1)
-        super.init()
-        fillColor = .background
-        updateItems()
-    }
-    
-    private func updateItems() {
-        if names.isEmpty {
-            self.frame.size = CGSize(width: 10, height: 10)
-            self.items = []
-            replace(children: [])
-        } else {
-            let padding = Layout.padding(with: sizeType)
-            let x = padding + knobPaddingX + knobPaddingWidth / 2
-            let h = menuHeight * names.count.cf
-            var y = h
-            let items: [TextBox] = names.map {
-                y -= menuHeight
-                return TextBox(frame: CGRect(x: 0, y: y, width: width, height: menuHeight),
-                               name: $0,
-                               sizeType: sizeType,
-                               leftPadding: knobPaddingX + knobPaddingWidth)
-            }
-            let path = CGMutablePath()
-            
-            path.addRect(CGRect(x: x - 1, y: menuHeight / 2,
-                                width: 2, height: h - menuHeight))
-            items.forEach {
-                path.addRect(CGRect(x: x - 2, y: $0.frame.midY - 2,
-                                    width: 4, height: 4))
-            }
-            lineLayer.path = path
-            let selectedLabel = items[selectedIndex]
-            selectedLayer.frame = selectedLabel.frame
-            selectedKnob.position = CGPoint(x: x, y: selectedLabel.frame.midY)
-            frame.size = CGSize(width: width, height: h)
-            self.items = items
-            replace(children: items + [lineLayer, selectedKnob, selectedLayer])
-        }
-    }
-    
-    func reference(with event: TapEvent) -> Reference? {
-        return Reference(name: Localization(english: "Menu", japanese: "メニュー"))
+        return enumeratedType.reference
     }
 }

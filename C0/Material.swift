@@ -191,10 +191,10 @@ extension Material: ClassCopiable {
 }
 extension Material: ObjectViewExpression {
     func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        let thumbnailView = Box()
-        thumbnailView.bounds = bounds
-        thumbnailView.fillColor = color
-        return thumbnailView
+        let layer = Layer()
+        layer.bounds = bounds
+        layer.fillColor = color
+        return layer
     }
 }
 extension Material.MaterialType: Referenceable {
@@ -216,9 +216,9 @@ extension Material.MaterialType {
 extension Material.MaterialType: ObjectViewExpressionWithDisplayText {
 }
 
-extension NumberView {
-    static func opacityView(sizeType: SizeType = .regular) -> NumberView {
-        return NumberView(number: 1, defaultNumber: 1, min: 0, max: 1, sizeType: sizeType)
+extension SlidableNumberView {
+    static func opacityView(sizeType: SizeType = .regular) -> SlidableNumberView {
+        return SlidableNumberView(number: 1, defaultNumber: 1, min: 0, max: 1, sizeType: sizeType)
     }
     private static func opacityViewLayers(with bounds: CGRect,
                                             checkerWidth: CGFloat, padding: CGFloat) -> [Layer] {
@@ -241,16 +241,16 @@ extension NumberView {
     func updateOpacityLayers(withFrame frame: CGRect) {
         if self.frame != frame {
             self.frame = frame
-            backgroundLayers = NumberView.opacityViewLayers(with: frame,
+            backgroundLayers = SlidableNumberView.opacityViewLayers(with: frame,
                                                             checkerWidth: knob.radius,
                                                             padding: padding)
         }
     }
 }
-extension NumberView {
+extension SlidableNumberView {
     static func widthViewWith(min: CGFloat, max: CGFloat, exp: CGFloat,
-                              sizeType: SizeType = .regular) -> NumberView {
-        return NumberView(min: min, max: max, exp: exp, sizeType: sizeType)
+                              sizeType: SizeType = .regular) -> SlidableNumberView {
+        return SlidableNumberView(min: min, max: max, exp: exp, sizeType: sizeType)
     }
     private static func widthLayer(with bounds: CGRect,
                                    halfWidth: CGFloat, padding: CGFloat) -> Layer {
@@ -270,7 +270,7 @@ extension NumberView {
     func updateLineWidthLayers(withFrame frame: CGRect) {
         if self.frame != frame {
             self.frame = frame
-            backgroundLayers = [NumberView.widthLayer(with: frame,
+            backgroundLayers = [SlidableNumberView.widthLayer(with: frame,
                                                       halfWidth: knob.radius, padding: padding)]
         }
     }
@@ -295,34 +295,35 @@ final class MaterialView: View {
     }
     var defaultMaterial = Material()
     
-    static let defaultWidth = 140.0.cf
+    static let defaultWidth = 200.0.cf, defaultRightWidth = 60.0.cf
     
-    private let classNameLabel = Label(text: Material.name, font: .bold)
+    private let classNameView = TextView(text: Material.name, font: .bold)
     private let typeView =
         EnumView<Material.MaterialType>(enumeratedType: .normal,
-                                        indexHandler: { Int($0) },
-                                        rawValueHandler: { Material.MaterialType.RawValue($0) },
+                                        indexClosure: { Int($0) },
+                                        rawValueClosure: { Material.MaterialType.RawValue($0) },
                                         names: Material.MaterialType.displayTexts)
     private let colorView = ColorView()
-    private let lineWidthView = NumberView.widthViewWith(min: Material.defaultLineWidth, max: 500,
-                                                         exp: 3)
-    private let opacityView = NumberView.opacityView()
-    private let lineColorLabel = Label(text: Localization(english: "Line Color:",
-                                                          japanese: "線のカラー:"))
+    private let lineWidthView = SlidableNumberView.widthViewWith(min: Material.defaultLineWidth,
+                                                                 max: 500,
+                                                                 exp: 3)
+    private let opacityView = SlidableNumberView.opacityView()
+    private let classLineColorNameView = TextView(text: Localization(english: "Line Color:",
+                                                                     japanese: "線のカラー:"))
     private let lineColorView = ColorView(hLineWidth: 2, hWidth: 8, slPadding: 4, sizeType: .small)
     
     override init() {
         material = defaultMaterial
         super.init()
-        replace(children: [classNameLabel,
+        replace(children: [classNameView,
                            typeView,
-                           colorView, lineColorLabel, lineColorView,
+                           colorView, classLineColorNameView, lineColorView,
                            lineWidthView, opacityView])
         
         typeView.binding = { [unowned self] in self.setMaterial(with: $0) }
         
-        colorView.setColorHandler = { [unowned self] in self.setMaterial(with: $0) }
-        lineColorView.setColorHandler = { [unowned self] in self.setMaterial(with: $0) }
+        colorView.setColorClosure = { [unowned self] in self.setMaterial(with: $0) }
+        lineColorView.setColorClosure = { [unowned self] in self.setMaterial(with: $0) }
         
         lineWidthView.binding = { [unowned self] in self.setMaterial(with: $0) }
         opacityView.binding = { [unowned self] in self.setMaterial(with: $0) }
@@ -335,10 +336,17 @@ final class MaterialView: View {
     }
     
     override var defaultBounds: CGRect {
+        let padding = Layout.basicPadding, h = Layout.basicHeight, cw = MaterialView.defaultWidth
         return CGRect(x: 0, y: 0,
-                      width: MaterialView.defaultWidth,
-                      height: MaterialView.defaultWidth + classNameLabel.frame.height
-                        + Layout.basicHeight * 4 + Layout.basicPadding * 3)
+                      width: cw + MaterialView.defaultRightWidth + padding * 2,
+                      height: cw + classNameView.frame.height + h + padding * 2)
+    }
+    func defaultBounds(withWidth width: CGFloat) -> CGRect {
+        let padding = Layout.basicPadding, h = Layout.basicHeight
+        let cw = width - MaterialView.defaultRightWidth + padding * 2
+        return CGRect(x: 0, y: 0,
+                      width: cw + MaterialView.defaultRightWidth + padding * 2,
+                      height: cw + classNameView.frame.height + h + padding * 2)
     }
     override var bounds: CGRect {
         didSet {
@@ -346,18 +354,24 @@ final class MaterialView: View {
         }
     }
     private func updateLayout() {
-        let padding = Layout.basicPadding, h = Layout.basicHeight
-        let cw = bounds.width - padding * 2
-        let leftWidth = cw - h * 3
-        classNameLabel.frame.origin = CGPoint(x: padding, y: padding * 2 + h * 4 + cw)
-        typeView.frame = CGRect(x: padding, y: padding + h * 3 + cw, width: cw, height: h)
-        colorView.frame = CGRect(x: padding, y: padding + h * 3, width: cw, height: cw)
-        lineColorLabel.frame.origin = CGPoint(x: padding + leftWidth - lineColorLabel.frame.width,
-                                              y: padding * 2)
-        lineColorView.frame = CGRect(x: padding + leftWidth, y: padding, width: h * 3, height: h * 3)
-        let lineWidthFrame = CGRect(x: padding, y: padding + h * 2, width: leftWidth, height: h)
+        let padding = Layout.basicPadding, h = Layout.basicHeight, rw = MaterialView.defaultRightWidth
+        let cw = bounds.width - rw - padding * 2
+        classNameView.frame.origin = CGPoint(x: padding,
+                                             y: bounds.height - classNameView.frame.height - padding)
+        let tx = classNameView.frame.maxX + padding
+        typeView.frame = CGRect(x: tx,
+                                y: bounds.height - h - padding,
+                                width: bounds.width - tx - padding, height: h)
+        colorView.frame = CGRect(x: padding, y: padding, width: cw, height: cw)
+        classLineColorNameView.frame.origin = CGPoint(x: padding + cw,
+                                                      y: padding + cw - classLineColorNameView.frame.height)
+        lineColorView.frame = CGRect(x: padding + cw, y: classLineColorNameView.frame.minY - rw,
+                                     width: rw, height: rw)
+        let lineWidthFrame = CGRect(x: padding + cw, y: lineColorView.frame.minY - h,
+                                    width: rw, height: h)
         lineWidthView.updateLineWidthLayers(withFrame: lineWidthFrame)
-        let opacityFrame = CGRect(x: padding, y: padding + h, width: leftWidth, height: h)
+        let opacityFrame = CGRect(x: padding + cw, y: lineColorView.frame.minY - h * 2,
+                                  width: rw, height: h)
         opacityView.updateOpacityLayers(withFrame: opacityFrame)
     }
     
@@ -483,7 +497,7 @@ final class MaterialView: View {
         }
     }
     
-    private func setMaterial(with obj: NumberView.Binding) {
+    private func setMaterial(with obj: SlidableNumberView.Binding) {
         switch obj.view {
         case lineWidthView:
             if obj.type == .begin {

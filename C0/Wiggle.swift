@@ -83,24 +83,25 @@ final class WiggleView: View {
         }
     }
     
-    private let classNameLabel = Label(text: Wiggle.name, font: .bold)
-    private let xLabel = Label(text: Localization("x:"))
+    private let classNameView = TextView(text: Wiggle.name, font: .bold)
+    private let classXNameView = TextView(text: Localization("x:"))
     private let xView = DiscreteNumberView(frame: Layout.valueFrame,
-                                           min: 0, max: 1000, numberInterval: 0.01)
-    private let yLabel = Label(text: Localization("y:"))
+                                           min: 0, max: 1000, numberInterval: 0.01, numberOfDigits: 2)
+    private let classYNameView = TextView(text: Localization("y:"))
     private let yView = DiscreteNumberView(frame: Layout.valueFrame,
-                                           min: 0, max: 1000, numberInterval: 0.01)
-    private let frequencyLabel = Label(text: Localization("ƒ:"))
+                                           min: 0, max: 1000, numberInterval: 0.01, numberOfDigits: 2)
+    private let classFrequencyNameView = TextView(text: Localization("ƒ:"))
     private let frequencyView = DiscreteNumberView(frame: Layout.valueFrame,
                                                    min: 0.1, max: 100000,
-                                                   numberInterval: 0.1, unit: " rpb")
+                                                   numberInterval: 0.1,
+                                                   numberOfDigits: 1, unit: " rpb")
     override init() {
         frequencyView.defaultNumber = wiggle.frequency
         frequencyView.number = wiggle.frequency
         
         super.init()
-        replace(children: [classNameLabel, xLabel, xView, yLabel, yView,
-                           frequencyLabel, frequencyView])
+        replace(children: [classNameView, classXNameView, xView, classYNameView, yView,
+                           classFrequencyNameView, frequencyView])
         
         xView.binding = { [unowned self] in self.setWiggle(with: $0) }
         yView.binding = { [unowned self] in self.setWiggle(with: $0) }
@@ -116,8 +117,8 @@ final class WiggleView: View {
     var isHorizontal = false
     override var defaultBounds: CGRect {
         if isHorizontal {
-            let children = [classNameLabel, Padding(), xLabel, xView, Padding(),
-                            yLabel, yView, frequencyLabel, frequencyView]
+            let children = [classNameView, Padding(), classXNameView, xView, Padding(),
+                            classYNameView, yView, classFrequencyNameView, frequencyView]
             return CGRect(x: 0,
                           y: 0,
                           width: Layout.leftAlignmentWidth(children) + Layout.basicPadding,
@@ -135,23 +136,23 @@ final class WiggleView: View {
     }
     private func updateLayout() {
         if isHorizontal {
-            let children = [classNameLabel, Padding(), xLabel, xView, Padding(),
-                            yLabel, yView, frequencyView]
+            let children = [classNameView, Padding(), classXNameView, xView, Padding(),
+                            classYNameView, yView, frequencyView]
             _ = Layout.leftAlignment(children, height: frame.height)
         } else {
-            var y = bounds.height - Layout.basicPadding - classNameLabel.frame.height
-            classNameLabel.frame.origin = CGPoint(x: Layout.basicPadding, y: y)
+            var y = bounds.height - Layout.basicPadding - classNameView.frame.height
+            classNameView.frame.origin = CGPoint(x: Layout.basicPadding, y: y)
             y = bounds.height - Layout.basicPadding - Layout.basicHeight
-            _ = Layout.leftAlignment([frequencyLabel, frequencyView],
+            _ = Layout.leftAlignment([classFrequencyNameView, frequencyView],
                                      y: y, height: Layout.basicHeight)
             y -= Layout.basicHeight
-            _ = Layout.leftAlignment([xLabel, xView, Padding(), yLabel, yView],
+            _ = Layout.leftAlignment([classXNameView, xView, Padding(), classYNameView, yView],
                                      y: y, height: Layout.basicHeight)
             if yView.frame.maxX < bounds.width - Layout.basicPadding {
                 yView.frame.origin.x = bounds.width - Layout.basicPadding - yView.frame.width
             }
             frequencyView.frame.origin.x = yView.frame.minX
-            frequencyLabel.frame.origin.x = frequencyView.frame.minX - frequencyLabel.frame.width
+            classFrequencyNameView.frame.origin.x = frequencyView.frame.minX - classFrequencyNameView.frame.width
         }
     }
     private func updateWithWiggle() {

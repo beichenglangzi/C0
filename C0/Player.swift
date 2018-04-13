@@ -63,9 +63,9 @@ final class Player: View {
     
     private var playCutIndex = 0, playFrameTime = FrameTime(0), playIntSecond = 0
     private var playDrawCount = 0, playFrameRate = FPS(0), delayTolerance = 0.5
-    var didSetTimeHandler: ((Beat) -> (Void))? = nil
-    var didSetCutIndexHandler: ((Int) -> (Void))? = nil
-    var didSetPlayFrameRateHandler: ((Int) -> (Void))? = nil
+    var didSetTimeClosure: ((Beat) -> (Void))? = nil
+    var didSetCutIndexClosure: ((Int) -> (Void))? = nil
+    var didSetPlayFrameRateClosure: ((Int) -> (Void))? = nil
     
     private var timer = LockTimer(), oldPlayCut: Cut?
     private var oldPlayTime = Beat(0), oldTimestamp = 0.0
@@ -97,7 +97,7 @@ final class Player: View {
                 audioPlayer?.play()
                 timer.begin(interval: 1 / Second(scene.frameRate),
                             tolerance: 0.1 / Second(scene.frameRate),
-                            handler: { [unowned self] in self.updatePlayTime() })
+                            closure: { [unowned self] in self.updatePlayTime() })
                 drawLayer.draw()
             } else {
                 timer.stop()
@@ -121,7 +121,7 @@ final class Player: View {
                 playFrameRate = scene.frameRate
                 timer.begin(interval: 1 / Second(scene.frameRate),
                             tolerance: 0.1 / Second(scene.frameRate),
-                            handler: { [unowned self] in self.updatePlayTime() })
+                            closure: { [unowned self] in self.updatePlayTime() })
                 audioPlayer?.play()
             }
         }
@@ -141,11 +141,11 @@ final class Player: View {
     }
     private func updateBinding() {
         let t = currentPlayTime
-        didSetTimeHandler?(t)
+        didSetTimeClosure?(t)
         
         if let cutIndex = scene.cuts.index(of: playCut), playCutIndex != cutIndex {
             playCutIndex = cutIndex
-            didSetCutIndexHandler?(cutIndex)
+            didSetCutIndexClosure?(cutIndex)
         }
         
         if isPlaying && !isPause {
@@ -157,7 +157,7 @@ final class Player: View {
                                            Int(round(Double(playDrawCount) / deltaTime)))
                 if newPlayFrameRate != playFrameRate {
                     playFrameRate = newPlayFrameRate
-                    didSetPlayFrameRateHandler?(playFrameRate)
+                    didSetPlayFrameRateClosure?(playFrameRate)
                 }
                 oldTimestamp = newTimestamp
                 playDrawCount = 0
@@ -227,25 +227,23 @@ final class Player: View {
         }
     }
     
-    var endPlayHandler: ((Player) -> (Void))? = nil
+    var endPlayClosure: ((Player) -> (Void))? = nil
     func stop() {
         if isPlaying {
             isPlaying = false
         }
-        endPlayHandler?(self)
+        endPlayClosure?(self)
     }
 }
 
 final class SeekBar: View {
-    static let name = Localization(english: "Seek Bar", japanese: "シークバー")
-    
-    let timeLabel = Label(text: Localization("00:00"), color: .locked)
-    let frameRateLabel = Label(text: Localization("00 fps"), color: .locked)
-    let timeView = NumberView(min: 0, max: 1)
+    let timeTextView = TextView(text: Localization("00:00"), color: .locked)
+    let frameRateView = TextView(text: Localization("00 fps"), color: .locked)
+    let timeView = SlidableNumberView(min: 0, max: 1)
     
     override init() {
         super.init()
-        replace(children: [timeLabel, frameRateLabel, timeView])
+        replace(children: [timeTextView, frameRateView, timeView])
         
         timeView.disabledRegisterUndo = true
         timeView.binding = { [unowned self] in
@@ -273,11 +271,11 @@ final class SeekBar: View {
         let labelHeight = Layout.basicHeight - padding * 2
         let labelY = round((frame.height - labelHeight) / 2)
         
-        timeLabel.frame.origin = CGPoint(x: padding, y: labelY)
-        frameRateLabel.frame.origin = CGPoint(x: bounds.width - frameRateLabel.frame.width - padding,
+        timeTextView.frame.origin = CGPoint(x: padding, y: labelY)
+        frameRateView.frame.origin = CGPoint(x: bounds.width - frameRateView.frame.width - padding,
                                               y: labelY)
-        let sliderWidth = frameRateLabel.frame.minX - timeLabel.frame.maxX - padding * 2
-        timeView.frame = CGRect(x: timeLabel.frame.maxX + padding,
+        let sliderWidth = frameRateView.frame.minX - timeTextView.frame.maxX - padding * 2
+        timeView.frame = CGRect(x: timeTextView.frame.maxX + padding,
                               y: sliderY, width: sliderWidth, height: height)
         timeView.backgroundLayers = [SeekBar.sliderLayer(with: timeView.bounds,
                                                          padding: timeView.padding)]
@@ -316,9 +314,9 @@ final class SeekBar: View {
             guard second != oldValue else {
                 return
             }
-            let oldBounds = timeLabel.bounds
-            timeLabel.string = minuteSecondString(withSecond: second, frameRate: Int(frameRate))
-            if oldBounds.size != timeLabel.bounds.size {
+            let oldBounds = timeTextView.bounds
+            timeTextView.string = minuteSecondString(withSecond: second, frameRate: Int(frameRate))
+            if oldBounds.size != timeTextView.bounds.size {
                 updateLayout()
             }
         }
@@ -344,10 +342,10 @@ final class SeekBar: View {
         }
     }
     private func updateWithFrameRate() {
-        let oldBounds = frameRateLabel.bounds
-        frameRateLabel.string = String(format: "%02d fps", playFrameRate)
-        frameRateLabel.textFrame.color = playFrameRate < frameRate ? .warning : .locked
-        if oldBounds.size != frameRateLabel.bounds.size {
+        let oldBounds = frameRateView.bounds
+        frameRateView.string = String(format: "%02d fps", playFrameRate)
+        frameRateView.textFrame.color = playFrameRate < frameRate ? .warning : .locked
+        if oldBounds.size != frameRateView.bounds.size {
             updateLayout()
         }
     }

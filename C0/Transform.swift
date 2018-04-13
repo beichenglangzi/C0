@@ -186,24 +186,29 @@ final class TransformView: View {
         }
     }
     
-    private let classNameLabel = Label(text: Transform.name, font: .bold)
-    private let xLabel = Label(text: Localization("x:"))
-    private let yLabel = Label(text: Localization("y:"))
-    private let zLabel = Label(text: Localization("z:"))
-    private let thetaLabel = Label(text: Localization("θ:"))
-    private let xView = DiscreteNumberView(frame: Layout.valueFrame,
-                                           min: -10000, max: 10000, numberInterval: 0.01)
-    private let yView = DiscreteNumberView(frame: Layout.valueFrame,
-                                           min: -10000, max: 10000, numberInterval: 0.01)
-    private let zView = DiscreteNumberView(frame: Layout.valueFrame,
-                                           min: -20, max: 20, numberInterval: 0.01)
-    private let thetaView = DiscreteNumberView(frame: Layout.valueFrame,
-                                               min: -10000, max: 10000, numberInterval: 0.5, unit: "°")
+    let xView = DiscreteNumberView(frame: Layout.valueFrame,
+                                   min: -10000, max: 10000, numberInterval: 0.01, numberOfDigits: 2)
+    let yView = DiscreteNumberView(frame: Layout.valueFrame,
+                                   min: -10000, max: 10000, numberInterval: 0.01, numberOfDigits: 2)
+    let zView = DiscreteNumberView(frame: Layout.valueFrame,
+                                   min: -20, max: 20, numberInterval: 0.01, numberOfDigits: 2)
+    let thetaView = DiscreteNumberView(frame: Layout.valueFrame,
+                                       min: -10000, max: 10000, numberInterval: 0.5,
+                                       numberOfDigits: 1, unit: "°")
+    
+    var isHorizontal = false
+    private let classNameView = TextView(text: Transform.name, font: .bold)
+    private let classXNameView = TextView(text: Localization("x:"))
+    private let classYNameView = TextView(text: Localization("y:"))
+    private let classZNameView = TextView(text: Localization("z:"))
+    private let classThetaNameView = TextView(text: Localization("θ:"))
     
     override init() {
         super.init()
-        replace(children: [classNameLabel, xLabel, xView, yLabel, yView, zLabel, zView,
-                           thetaLabel, thetaView])
+        replace(children: [classNameView,
+                           classXNameView, xView, classYNameView, yView,
+                           classZNameView, zView,
+                           classThetaNameView, thetaView])
         
         xView.binding = { [unowned self] in self.setTransform(with: $0) }
         yView.binding = { [unowned self] in self.setTransform(with: $0) }
@@ -217,19 +222,18 @@ final class TransformView: View {
         }
     }
     
-    var isHorizontal = false
     override var defaultBounds: CGRect {
         if isHorizontal {
-            let children = [classNameLabel, Padding(),
-                            xLabel, xView, Padding(), yLabel, yView, Padding(),
-                            zLabel, zView, Padding(), thetaLabel, thetaView]
+            let children = [classNameView, Padding(),
+                            classXNameView, xView, Padding(), classYNameView, yView, Padding(),
+                            classZNameView, zView, Padding(), classThetaNameView, thetaView]
             return CGRect(x: 0,
                           y: 0,
                           width: Layout.leftAlignmentWidth(children) + Layout.basicPadding,
                           height: Layout.basicHeight)
         } else {
             let w = MaterialView.defaultWidth + Layout.basicPadding * 2
-            let h = Layout.basicHeight * 2 + classNameLabel.frame.height + Layout.basicPadding * 3
+            let h = Layout.basicHeight * 2 + classNameView.frame.height + Layout.basicPadding * 3
             return CGRect(x: 0, y: 0, width: w, height: h)
         }
     }
@@ -240,25 +244,26 @@ final class TransformView: View {
     }
     func updateLayout() {
         if isHorizontal {
-            let children = [classNameLabel, Padding(),
-                            xLabel, xView, Padding(), yLabel, yView, Padding(),
-                            zLabel, zView, Padding(), thetaLabel, thetaView]
+            let children = [classNameView, Padding(),
+                            classXNameView, xView, Padding(), classYNameView, yView, Padding(),
+                            classZNameView, zView, Padding(), classThetaNameView, thetaView]
             _ = Layout.leftAlignment(children, height: frame.height)
         } else {
-            var y = bounds.height - Layout.basicPadding - classNameLabel.frame.height
-            classNameLabel.frame.origin = CGPoint(x: Layout.basicPadding, y: y)
+            var y = bounds.height - Layout.basicPadding - classNameView.frame.height
+            classNameView.frame.origin = CGPoint(x: Layout.basicPadding, y: y)
             y -= Layout.basicHeight + Layout.basicPadding
-            _ = Layout.leftAlignment([xLabel, xView, Padding(), yLabel, yView],
+            _ = Layout.leftAlignment([classXNameView, xView, Padding(), classYNameView, yView],
                                      y: y, height: Layout.basicHeight)
             y -= Layout.basicHeight
-            _ = Layout.leftAlignment([zLabel, zView, Padding(), thetaLabel, thetaView],
+            _ = Layout.leftAlignment([classZNameView, zView, Padding(), classThetaNameView, thetaView],
                                      y: y, height: Layout.basicHeight)
             if yView.frame.maxX < thetaView.frame.maxX {
                 yView.frame.origin.x = thetaView.frame.minX
-                yLabel.frame.origin.x = yView.frame.minX - yLabel.frame.width
+                classYNameView.frame.origin.x = yView.frame.minX - classYNameView.frame.width
             } else {
                 thetaView.frame.origin.x = yView.frame.minX
-                thetaLabel.frame.origin.x = thetaView.frame.minX - thetaLabel.frame.width
+                classThetaNameView.frame.origin.x
+                    = thetaView.frame.minX - classThetaNameView.frame.width
             }
         }
     }

@@ -35,13 +35,13 @@ typealias Second = Double
  - 変更通知
  */
 final class Scene: NSObject, NSCoding {
+    var version = Version()
     var name: String
-    var frame: CGRect, frameRate: FPS, baseTimeInterval: Beat
-    var colorSpace: ColorSpace
+    var frame: CGRect
     var editMaterial: Material
     var isHiddenPrevious: Bool, isHiddenNext: Bool
-    
-    var version = Version()
+    var isHiddenSubtitles: Bool
+    var sound: Sound
     
     var viewTransform: Transform {
         didSet {
@@ -54,12 +54,11 @@ final class Scene: NSObject, NSCoding {
         return reciprocalViewScale / editNode.worldScale
     }
     
-    var isHiddenSubtitles: Bool
-    
-    var sound: Sound
-    
+    var frameRate: FPS
+    var baseTimeInterval: Beat
     var tempoTrack: TempoTrack
     var cutTrack: CutTrack
+//    var sunAnimation
     var editCut: Cut {
         return cutTrack.cutItem.cut
     }
@@ -69,19 +68,18 @@ final class Scene: NSObject, NSCoding {
     var editNode: Node {
         return editCut.editNode
     }
+    var timeBinding: ((Scene, Beat) -> ())?
+    var time: Beat {
+        didSet {
+            timeBinding?(self, time)
+        }
+    }
     var editCutIndex: Int {
         get {
             return cutTrack.animation.editLoopframeIndex
         }
         set {
             cutTrack.time = cutTrack.time(at: newValue)
-        }
-    }
-    
-    var timeBinding: ((Scene, Beat) -> ())?
-    var time: Beat {
-        didSet {
-            timeBinding?(self, time)
         }
     }
     var duration: Beat {
@@ -108,9 +106,9 @@ final class Scene: NSObject, NSCoding {
     }
     
     init(name: String = Localization(english: "Untitled", japanese: "名称未設定").currentString,
-         frame: CGRect = CGRect(x: -288, y: -162, width: 576, height: 324), frameRate: FPS = 24,
+         frame: CGRect = CGRect(x: -288, y: -162, width: 576, height: 324),
+         frameRate: FPS = 24,
          baseTimeInterval: Beat = Beat(1, 24),
-         colorSpace: ColorSpace = .sRGB,
          editMaterial: Material = Material(),
          isHiddenPrevious: Bool = false, isHiddenNext: Bool = false,
          isHiddenSubtitles: Bool = false,
@@ -124,7 +122,6 @@ final class Scene: NSObject, NSCoding {
         self.frame = frame
         self.frameRate = frameRate
         self.baseTimeInterval = baseTimeInterval
-        self.colorSpace = colorSpace
         self.editMaterial = editMaterial
         self.isHiddenPrevious = isHiddenPrevious
         self.isHiddenNext = isHiddenNext
@@ -140,10 +137,9 @@ final class Scene: NSObject, NSCoding {
     
     private enum CodingKeys: String, CodingKey {
         case
-        name, frame, frameRate, baseTimeInterval, tempo, colorSpace,
-        editMaterial, materials, isHiddenPrevious, isHiddenNext, isHiddenSubtitles, sound,
-        tempoTrack, cutTrack, time,
-        viewTransform
+        name, frame, frameRate, baseTimeInterval,
+        editMaterial, isHiddenPrevious, isHiddenNext, isHiddenSubtitles, sound, viewTransform,
+        tempoTrack, cutTrack, time
     }
     init?(coder: NSCoder) {
         name = coder.decodeObject(forKey: CodingKeys.name.rawValue) as? String ?? ""
@@ -151,15 +147,13 @@ final class Scene: NSObject, NSCoding {
         frameRate = coder.decodeInteger(forKey: CodingKeys.frameRate.rawValue)
         baseTimeInterval = coder.decodeDecodable(
             Beat.self, forKey: CodingKeys.baseTimeInterval.rawValue) ?? Beat(1, 16)
-        colorSpace = ColorSpace(
-            rawValue: Int8(coder.decodeInt32(forKey: CodingKeys.colorSpace.rawValue))) ?? .sRGB
         editMaterial = coder.decodeObject(
             forKey: CodingKeys.editMaterial.rawValue) as? Material ?? Material()
         isHiddenPrevious = coder.decodeBool(forKey: CodingKeys.isHiddenPrevious.rawValue)
         isHiddenNext = coder.decodeBool(forKey: CodingKeys.isHiddenNext.rawValue)
+        isHiddenSubtitles = coder.decodeBool(forKey: CodingKeys.isHiddenSubtitles.rawValue)
         viewTransform = coder.decodeDecodable(
             Transform.self, forKey: CodingKeys.viewTransform.rawValue) ?? Transform()
-        isHiddenSubtitles = coder.decodeBool(forKey: CodingKeys.isHiddenSubtitles.rawValue)
         sound = coder.decodeDecodable(Sound.self, forKey: CodingKeys.sound.rawValue) ?? Sound()
         tempoTrack = coder.decodeObject(
             forKey: CodingKeys.tempoTrack.rawValue) as? TempoTrack ?? TempoTrack()
@@ -174,12 +168,11 @@ final class Scene: NSObject, NSCoding {
         coder.encode(frame, forKey: CodingKeys.frame.rawValue)
         coder.encode(frameRate, forKey: CodingKeys.frameRate.rawValue)
         coder.encodeEncodable(baseTimeInterval, forKey: CodingKeys.baseTimeInterval.rawValue)
-        coder.encode(Int32(colorSpace.rawValue), forKey: CodingKeys.colorSpace.rawValue)
         coder.encode(editMaterial, forKey: CodingKeys.editMaterial.rawValue)
         coder.encode(isHiddenPrevious, forKey: CodingKeys.isHiddenPrevious.rawValue)
         coder.encode(isHiddenNext, forKey: CodingKeys.isHiddenNext.rawValue)
-        coder.encodeEncodable(viewTransform, forKey: CodingKeys.viewTransform.rawValue)
         coder.encode(isHiddenSubtitles, forKey: CodingKeys.isHiddenSubtitles.rawValue)
+        coder.encodeEncodable(viewTransform, forKey: CodingKeys.viewTransform.rawValue)
         coder.encodeEncodable(sound, forKey: CodingKeys.sound.rawValue)
         coder.encode(tempoTrack, forKey: CodingKeys.tempoTrack.rawValue)
         coder.encode(cutTrack, forKey: CodingKeys.cutTrack.rawValue)
@@ -250,7 +243,7 @@ final class Scene: NSObject, NSCoding {
                 return (lf.time + cutTime, nextTime - lf.time, subtitle)
             }
         }
-        return Subtitle.vtt(subtitleTuples, timeHandler: { secondTime(withBeatTime: $0) })
+        return Subtitle.vtt(subtitleTuples, timeClosure: { secondTime(withBeatTime: $0) })
     }
 }
 extension Scene: ClassCopiable {
@@ -306,20 +299,15 @@ final class SceneView: View {
             if let scene: Scene = differentialSceneDataModel.readObject() {
                 self.scene = scene
             }
-            differentialSceneDataModel.dataHandler = { [unowned self] in self.scene.differentialData }
+            differentialSceneDataModel.dataClosure = { [unowned self] in self.scene.differentialData }
         }
     }
     
-    static let colorSpaceWidth = 82.0.cf
-    static let colorSpaceFrame = CGRect(x: 0, y: Layout.basicPadding,
-                                        width: colorSpaceWidth, height: Layout.basicHeight)
-    static let rendererWidth = 80.0.cf, undoWidth = 120.0.cf
-    static let canvasSize = CGSize(width: 730, height: 480)
-    static let propertyWidth = MaterialView.defaultWidth + Layout.basicPadding * 2
-    static let buttonsWidth = 120.0.cf, timelineWidth = 430.0.cf
-    static let timelineTextBoxesWidth = 142.0.cf, timelineHeight = 190.0.cf
+    static let versionWidth = 120.0.cf, colorSpaceWidth = 82.0.cf
+    static let propertyWidth = 200.0.cf, buttonsWidth = 120.0.cf
+    static let canvasSize = CGSize(width: 730, height: 480), timelineHeight = 190.0.cf
     
-    let classNameLabel = Label(text: Scene.name, font: .bold)
+    let classNameView = TextView(text: Scene.name, font: .bold)
     let versionView = VersionView()
     
     let timeline = Timeline()
@@ -327,19 +315,25 @@ final class SceneView: View {
     let seekBar = SeekBar()
     
     let rendererManager = RendererManager()
-    let sizeView = DiscreteSizeView()
+    let sizeView = DiscreteSizeView(sizeType: .small)
     let frameRateView = DiscreteNumberView(frame: Layout.valueFrame,
-                                           min: 1, max: 1000, numberInterval: 1, unit: " fps")
-    let colorSpaceView = EnumView<ColorSpace>(enumeratedType: ColorSpace.sRGB,
-                                              frame: SceneView.colorSpaceFrame,
-                                              names: ColorSpace.displayTexts)
+                                           min: 1, max: 1000, numberInterval: 1, unit: " fps",
+                                           sizeType: .small)
+    
+    let isHiddenPreviousView = BoolView(defaultBool: true, cationBool: false,
+                                        name: Localization(english: "Previous", japanese: "前"),
+                                        boolInfo: BoolInfo.hidden)
+    let isHiddenNextView = BoolView(defaultBool: true, cationBool: false,
+                                    name: Localization(english: "Next", japanese: "次"),
+                                    boolInfo: BoolInfo.hidden)
     let isHiddenSubtitlesView = BoolView(cationBool: true,
                                          name: Localization(english: "Subtitles", japanese: "字幕"),
+                                         boolInfo: BoolInfo.hidden,
                                          sizeType: .small)
-    let isHiddenPreviousView = BoolView(defaultBool: true, cationBool: false,
-                                        name: Localization(english: "Previous", japanese: "前"))
-    let isHiddenNextView = BoolView(defaultBool: true, cationBool: false,
-                                    name: Localization(english: "Next", japanese: "次"))
+    
+    let exportSubtitlesView = ClosureView(closure: {}, name: Localization(english: "Export Subtitles",
+                                                                          japanese: "字幕を書き出す"))
+    
     let soundView = SoundView()
     let drawingView = DrawingView()
     let materialManager = SceneMaterialManager()
@@ -348,16 +342,16 @@ final class SceneView: View {
     let subtitleView = SubtitleView(sizeType: .small)
     let effectView = EffectView(sizeType: .small)
     
-    let showAllBox = TextBox(name: Localization(english: "Unlock All Cells",
-                                                japanese: "すべてのセルのロックを解除"),
-                             sizeType: .small)
-    let clipCellInSelectedBox = TextBox(name: Localization(english: "Clip Cell in Selected",
-                                                           japanese: "セルを選択の中へクリップ"),
-                                        sizeType: .small)
-    let splitColorBox = TextBox(name: Localization(english: "Split Color", japanese: "カラーを分割"),
-                                sizeType: .small)
-    let splitOtherThanColorBox = TextBox(name: Localization(english: "Split Material",
-                                                            japanese: "マテリアルを分割"), sizeType: .small)
+//    let showAllBox = TextBox(name: Localization(english: "Unlock All Cells",
+//                                                japanese: "すべてのセルのロックを解除"),
+//                             sizeType: .small)
+//    let clipCellInSelectedBox = TextBox(name: Localization(english: "Clip Cell in Selected",
+//                                                           japanese: "セルを選択の中へクリップ"),
+//                                        sizeType: .small)
+//    let splitColorBox = TextBox(name: Localization(english: "Split Color", japanese: "カラーを分割"),
+//                                sizeType: .small)
+//    let splitOtherThanColorBox = TextBox(name: Localization(english: "Split Material",
+//                                                            japanese: "マテリアルを分割"), sizeType: .small)
     
     override init() {
         differentialSceneDataModel = DataModel(key: differentialSceneDataModelKey)
@@ -373,20 +367,20 @@ final class SceneView: View {
         bounds = defaultBounds
         materialManager.sceneView = self
         
-        replace(children: [classNameLabel,
+        replace(children: [classNameView,
                            versionView,
-                           rendererManager.popupBox, sizeView, frameRateView,
+                           sizeView, frameRateView,
+                           exportSubtitlesView,
                            isHiddenPreviousView, isHiddenNextView, soundView,
                            timeline.keyframeView,
                            drawingView, canvas.materialView, transformView, wiggleView,
                            timeline.tempoView, timeline.tempoKeyframeView,
                            isHiddenSubtitlesView, subtitleView,
                            timeline.nodeView, effectView,
-                           canvas.cellView, showAllBox, clipCellInSelectedBox,
-                           splitColorBox, splitOtherThanColorBox,
+                           canvas.cellView,
                            timeline, canvas, seekBar])
         
-        differentialSceneDataModel.dataHandler = { [unowned self] in self.scene.differentialData }
+        differentialSceneDataModel.dataClosure = { [unowned self] in self.scene.differentialData }
         
         rendererManager.progressesEdgeLayer = self
         sizeView.binding = { [unowned self] in
@@ -403,13 +397,6 @@ final class SceneView: View {
         frameRateView.binding = { [unowned self] in
             self.scene.frameRate = Int($0.number)
             if $0.type == .end && $0.number != $0.oldNumber {
-                self.differentialSceneDataModel.isWrite = true
-            }
-        }
-        colorSpaceView.binding = { [unowned self] in
-            self.scene.colorSpace = $0.enumeratedType
-            self.canvas.setNeedsDisplay()
-            if $0.type == .end && $0.enumeratedType != $0.oldEnumeratedType {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
@@ -445,7 +432,7 @@ final class SceneView: View {
             }
         }
         
-        soundView.setSoundHandler = { [unowned self] in
+        soundView.setSoundClosure = { [unowned self] in
             self.scene.sound = $0.sound
             self.timeline.soundWaveformView.sound = $0.sound
             if $0.type == .end && $0.sound != $0.oldSound {
@@ -454,32 +441,6 @@ final class SceneView: View {
             if self.scene.sound.url == nil && self.canvas.player.audioPlayer?.isPlaying ?? false {
                 self.canvas.player.audioPlayer?.stop()
             }
-        }
-        
-        let children = [TextBox(name: Localization(english: "Append Square Lines",
-                                                   japanese: "正方形の線を追加"),
-                                runHandler: { [unowned self] _ in self.canvas.appendSquareLines() }),
-                        TextBox(name: Localization(english: "Append Pentagon Lines",
-                                                   japanese: "正五角形の線を追加"),
-                                runHandler: { [unowned self] _ in self.canvas.appendPentagonLines() }),
-                        TextBox(name: Localization(english: "Append Hexagon Lines",
-                                                   japanese: "正六角形の線を追加"),
-                                runHandler: { [unowned self] _ in self.canvas.appendHexagonLines() }),
-                        TextBox(name: Localization(english: "Append Circle Lines",
-                                                   japanese: "円の線を追加"),
-                                runHandler: { [unowned self] _ in self.canvas.appendCircleLines() })]
-        drawingView.shapeLinesBox.panel.replace(children: children)
-        drawingView.changeToDraftBox.runHandler = { [unowned self] _ in
-            self.canvas.changeToDraft()
-            return true
-        }
-        drawingView.removeDraftBox.runHandler = { [unowned self] _ in
-            self.canvas.removeDraft()
-            return true
-        }
-        drawingView.exchangeWithDraftBox.runHandler = { [unowned self] _ in
-            self.canvas.exchangeWithDraft()
-            return true
         }
         
         effectView.binding = { [unowned self] in
@@ -499,37 +460,37 @@ final class SceneView: View {
             self.set($0.subtitle, old: $0.oldSubtitle, type: $0.type)
         }
         
-        showAllBox.runHandler = { [unowned self] _ in
-            self.canvas.unlockAllCells()
-            return true
-        }
-        clipCellInSelectedBox.runHandler = { [unowned self] _ in
-            self.canvas.clipCellInSelected()
-            return true
-        }
-        splitColorBox.runHandler = { [unowned self] _ in
-            self.materialManager.splitColor()
-            return true
-        }
-        splitOtherThanColorBox.runHandler = { [unowned self] _ in
-            self.materialManager.splitOtherThanColor()
-            return true
-        }
+//        showAllBox.runClosure = { [unowned self] _ in
+//            self.canvas.unlockAllCells()
+//            return true
+//        }
+//        clipCellInSelectedBox.runClosure = { [unowned self] _ in
+//            self.canvas.clipCellInSelected()
+//            return true
+//        }
+//        splitColorBox.runClosure = { [unowned self] _ in
+//            self.materialManager.splitColor()
+//            return true
+//        }
+//        splitOtherThanColorBox.runClosure = { [unowned self] _ in
+//            self.materialManager.splitOtherThanColor()
+//            return true
+//        }
         
         timeline.tempoView.binding = { [unowned self] in
             self.set(BPM($0.number), old: BPM($0.oldNumber), type: $0.type)
         }
-        timeline.scrollHandler = { [unowned self] (timeline, scrollPoint, event) in
+        timeline.scrollClosure = { [unowned self] (timeline, scrollPoint, event) in
             if event.sendType == .begin && self.canvas.player.isPlaying {
                 self.canvas.player.opacity = 0.2
             } else if event.sendType == .end && self.canvas.player.opacity != 1 {
                 self.canvas.player.opacity = 1
             }
         }
-        timeline.setSceneDurationHandler = { [unowned self] in
+        timeline.setSceneDurationClosure = { [unowned self] in
             self.seekBar.maxTime = self.scene.secondTime(withBeatTime: $1)
         }
-        timeline.setEditCutItemIndexHandler = { [unowned self] _, _ in
+        timeline.setEditCutItemIndexClosure = { [unowned self] _, _ in
             self.canvas.cut = self.scene.editCut
             self.drawingView.drawing = self.scene.editNode.editTrack.drawingItem.drawing
             self.transformView.transform =
@@ -540,7 +501,7 @@ final class SceneView: View {
                 self.scene.editNode.editTrack.effectItem?.effect ?? Effect()
             self.subtitleView.subtitle = self.scene.editCut.subtitleTrack.subtitleItem.subtitle
         }
-        timeline.updateViewHandler = { [unowned self] in
+        timeline.updateViewClosure = { [unowned self] in
             if $0.isCut {
                 let p = self.canvas.cursorPoint
                 if self.canvas.contains(p) {
@@ -570,7 +531,7 @@ final class SceneView: View {
                 }
             }
         }
-        timeline.nodeView.setIsHiddenHandler = { [unowned self] in
+        timeline.nodeView.setIsHiddenClosure = { [unowned self] in
             self.setIsHiddenInNode(with: $0)
         }
         timeline.keyframeView.binding = { [unowned self] in
@@ -582,21 +543,23 @@ final class SceneView: View {
             }
         }
         
-        canvas.bindHandler = { [unowned self] _, m, _ in self.materialManager.material = m }
-        canvas.setTimeHandler = { [unowned self] _, time in self.timeline.time = time }
-        canvas.updateSceneHandler = { [unowned self] _ in
+        exportSubtitlesView.closure = { [unowned self] in _ = self.rendererManager.exportSubtitles() }
+        
+        canvas.bindClosure = { [unowned self] _, m, _ in self.materialManager.material = m }
+        canvas.setTimeClosure = { [unowned self] _, time in self.timeline.time = time }
+        canvas.updateSceneClosure = { [unowned self] _ in
             self.differentialSceneDataModel.isWrite = true
         }
-        canvas.setDraftLinesHandler = { [unowned self] _, _ in
+        canvas.setDraftLinesClosure = { [unowned self] _, _ in
             self.timeline.editCutView.updateChildren()
         }
-        canvas.setContentsScaleHandler = { [unowned self] _, contentsScale in
+        canvas.setContentsScaleClosure = { [unowned self] _, contentsScale in
             self.rendererManager.rendingContentScale = contentsScale
         }
         canvas.pasteColorBinding = { [unowned self] in self.materialManager.paste($1, in: $2) }
         canvas.pasteMaterialBinding = { [unowned self] in self.materialManager.paste($1, in: $2) }
         
-        canvas.cellView.setIsLockedHandler = { [unowned self] in
+        canvas.cellView.setIsLockedClosure = { [unowned self] in
             self.setIsLockedInCell(with: $0)
         }
         
@@ -609,10 +572,10 @@ final class SceneView: View {
                 .preview : (isSubIndicated ? .selected : .none)
         }
         
-        canvas.player.didSetTimeHandler = { [unowned self] in
+        canvas.player.didSetTimeClosure = { [unowned self] in
             self.seekBar.time = self.scene.secondTime(withBeatTime: $0)
         }
-        canvas.player.didSetPlayFrameRateHandler = { [unowned self] in
+        canvas.player.didSetPlayFrameRateClosure = { [unowned self] in
             if !self.canvas.player.isPause {
                 self.seekBar.playFrameRate = $0
             }
@@ -653,13 +616,12 @@ final class SceneView: View {
     }
     
     override var defaultBounds: CGRect {
-        let padding = Layout.basicPadding, sPadding = Layout.smallPadding, buttonH = Layout.basicHeight
+        let padding = Layout.basicPadding, buttonH = Layout.basicHeight
         let h = buttonH + padding * 2
         let cs = SceneView.canvasSize, th = SceneView.timelineHeight
-        let spw = ceil(SceneView.propertyWidth * 0.5)
-        let inWidth = cs.width + SceneView.propertyWidth + sPadding + spw + padding
+        let inWidth = cs.width + padding + SceneView.propertyWidth
         let width = inWidth + padding * 2
-        let height = th + cs.height + h + padding * 2
+        let height = th + cs.height + h + buttonH + padding * 2
         return CGRect(x: 0, y: 0, width: width, height: height)
     }
     override var bounds: CGRect {
@@ -671,19 +633,31 @@ final class SceneView: View {
         let padding = Layout.basicPadding, sPadding = Layout.smallPadding, buttonH = Layout.basicHeight
         let h = buttonH + padding * 2
         let cs = SceneView.canvasSize, th = SceneView.timelineHeight
-        let spw = ceil(SceneView.propertyWidth * 0.5)
-//        let height = th + cs.height + h + padding * 2
-        let y = bounds.height - padding
+        let pw = SceneView.propertyWidth
+        let y = bounds.height - buttonH - padding
         
-        classNameLabel.frame.origin = CGPoint(x: padding,
-                                              y: bounds.height - classNameLabel.frame.height - padding)
-//        versionView.frame.size = CGSize(width: SceneView.undoWidth, height: buttonH)
-//        rendererManager.popupBox.frame.size = CGSize(width: SceneView.rendererWidth, height: buttonH)
-//        let properties: [Layer] = [versionView, Padding(),
-//                                   rendererManager.popupBox, sizeView, frameRateView]
-//        properties.forEach { $0.frame.size.height = h }
-//        _ = Layout.leftAlignment(properties, minX: classNameLabel.frame.maxX + padding, y: y - h, height: h)
-//        let pnx = frameRateView.frame.maxX + padding, soundWidth = 200.0.cf
+        let soundWidth = 120.0.cf
+        let kh = 120.0.cf
+        
+        classNameView.frame.origin = CGPoint(x: padding,
+                                             y: bounds.height - classNameView.frame.height - padding)
+        
+        var topX = bounds.width - padding
+        let topY = bounds.height - buttonH - padding
+        let esw = exportSubtitlesView.defaultBounds.width
+        topX -= esw
+        exportSubtitlesView.frame = CGRect(x: topX, y: y, width: esw, height: buttonH)
+        topX -= padding
+        topX -= soundWidth
+        soundView.frame = CGRect(x: topX, y: y, width: soundWidth, height: buttonH)
+        let ihnw = isHiddenNextView.defaultBounds.width
+        topX -= ihnw + padding
+        isHiddenNextView.frame = CGRect(x: topX, y: topY, width: ihnw, height: buttonH)
+        let ihpw = isHiddenPreviousView.defaultBounds.width
+        topX -= ihpw
+        isHiddenPreviousView.frame = CGRect(x: topX, y: topY, width: ihnw, height: buttonH)
+        topX = classNameView.frame.maxX + padding
+        versionView.frame = CGRect(x: topX, y: y, width: SceneView.versionWidth, height: buttonH)
         
         var ty = y
         ty -= th
@@ -693,25 +667,37 @@ final class SceneView: View {
         ty -= h
         seekBar.frame = CGRect(x: padding, y: ty, width: cs.width, height: h)
         
-        let px = padding * 2 + cs.width, pw = SceneView.propertyWidth, propertyMaxY = y - buttonH
+        let px = padding * 2 + cs.width, propertyMaxY = y
         var py = propertyMaxY
-        let kh = 150.0.cf
-        
-        Layout.autoHorizontalAlignment([isHiddenPreviousView, isHiddenNextView],
-                                       in: CGRect(x: px, y: y - buttonH,
-                                                  width: pw + spw + sPadding, height: buttonH))
-        
+        let sh = Layout.smallHeight
+        let sph = sh + Layout.smallPadding * 2
+        py -= sph
+        sizeView.frame = CGRect(x: px, y: py, width: sizeView.defaultBounds.width, height: sph)
+        frameRateView.frame = CGRect(x: sizeView.frame.maxX, y: py,
+                                     width: bounds.width - sizeView.frame.maxX - padding, height: sph)
+        py -= sh
+        isHiddenSubtitlesView.frame = CGRect(x: px, y: py, width: pw, height: sh)
+        py -= sPadding
+        py -= sph
+        timeline.tempoView.frame = CGRect(x: px, y: py, width: pw, height: sph)
+        let tkh = ceil(kh * 0.6)
+        py -= tkh
+        timeline.tempoKeyframeView.frame = CGRect(x: px, y: py, width: pw, height: tkh)
         py -= padding
         py -= kh
         timeline.keyframeView.frame = CGRect(x: px, y: py, width: pw, height: kh)
+        py -= sPadding
+        let eh = effectView.defaultBounds.height
+        py -= eh
+        effectView.frame = CGRect(x: px, y: py, width: pw, height: eh)
         py -= padding
         let dh = drawingView.defaultBounds.height
         py -= dh
         drawingView.frame = CGRect(x: px, y: py, width:pw, height: dh)
         py -= padding
-        let mh = canvas.materialView.defaultBounds.height
+        let mh = canvas.materialView.defaultBounds(withWidth: pw).height
         py -= mh
-        canvas.materialView.frame = CGRect(x: px, y: py, width:pw, height: mh)
+        canvas.materialView.frame = CGRect(x: px, y: py, width: pw, height: mh)
         py -= padding
         let trb = transformView.defaultBounds
         py -= trb.height
@@ -721,64 +707,11 @@ final class SceneView: View {
         py -= wb.height
         wiggleView.frame = CGRect(x: px, y: py, width: wb.width, height: wb.height)
         
-        let spx = px + SceneView.propertyWidth + sPadding, sh = Layout.smallHeight
-        let sph = sh + Layout.smallPadding * 2
-        var spy = propertyMaxY
-//        let tew = Layout.valueWidth
-//        spy -= sPadding
-        spy -= padding
-        spy -= buttonH
-        versionView.frame = CGRect(x: spx, y: spy,
-                                   width: spw, height: buttonH)
-        spy -= sPadding
-        spy -= sph
-        rendererManager.popupBox.frame = CGRect(x: spx, y: spy,
-                                                width: spw, height: sph)
-        spy -= sph
-        sizeView.frame = CGRect(x: spx, y: spy,
-                                width: spw, height: sph)
-        spy -= sph
-        frameRateView.frame = CGRect(x: spx, y: spy,
-                                       width: spw, height: sph)
-//        let properties: [Layer] = [versionView, Padding(),
-//                                   rendererManager.popupBox, sizeView, frameRateView]
-//        properties.forEach { $0.frame.size.height = h }
-//        _ = Layout.leftAlignment(properties, minX: classNameLabel.frame.maxX + padding, y: y - h, height: h)
-        spy -= sh
-        isHiddenSubtitlesView.frame = CGRect(x: spx, y: spy, width: spw, height: sh)
-        
-        spy -= sph
-        soundView.frame = CGRect(x: spx, y: spy, width: spw, height: sph)
-        spy -= sPadding
-        spy -= sph
-        timeline.tempoView.frame = CGRect(x: spx, y: spy, width: spw, height: sph)
-        let tkh = ceil(kh * 0.6)
-        spy -= tkh
-        timeline.tempoKeyframeView.frame = CGRect(x: spx, y: spy, width: spw, height: tkh)
-        spy -= sPadding
-        spy -= sph
-        subtitleView.frame = CGRect(x: spx, y: spy, width: spw, height: sph)
-        spy -= sPadding
-        spy -= sph
-        timeline.nodeView.frame = CGRect(x: spx, y: spy, width: spw, height: sph)
-        spy -= sPadding
-        let eh = effectView.defaultBounds.height
-        spy -= eh
-        effectView.frame = CGRect(x: spx, y: spy, width: spw, height: eh)
-        spy -= sPadding
+        subtitleView.frame = CGRect(x: px, y: padding + sph, width: pw, height: sph)
+        timeline.nodeView.frame = CGRect(x: px + 100, y: padding, width: pw, height: sph)
         let ch = canvas.cellView.defaultBounds.height
-        spy -= ch
-        canvas.cellView.frame = CGRect(x: spx, y: spy, width: spw, height: ch)
-        
-        spy -= sPadding
-        spy -= sh
-        showAllBox.frame = CGRect(x: spx, y: spy, width: spw, height: sh)
-        spy -= sh
-        clipCellInSelectedBox.frame = CGRect(x: spx, y: spy, width: spw, height: sh)
-        spy -= sh
-        splitColorBox.frame = CGRect(x: spx, y: spy, width: spw, height: sh)
-        spy -= sh
-        splitOtherThanColorBox.frame = CGRect(x: spx, y: spy, width: spw, height: sh)
+        py -= ch
+        canvas.cellView.frame = CGRect(x: px, y: padding, width: pw, height: ch)
     }
     private func updateWithScene() {
         scene.timeBinding = { [unowned self] (_, time) in self.update(withTime: time) }
@@ -790,7 +723,6 @@ final class SceneView: View {
         canvas.scene = scene
         sizeView.size = scene.frame.size
         frameRateView.number = scene.frameRate.cf
-        colorSpaceView.enumeratedType = scene.colorSpace
         isHiddenPreviousView.bool = scene.isHiddenPrevious
         isHiddenNextView.bool = scene.isHiddenNext
         isHiddenSubtitlesView.bool = scene.isHiddenSubtitles
@@ -835,9 +767,9 @@ final class SceneView: View {
         return scene.version
     }
     
-    private func registerUndo(time: Beat, _ handler: @escaping (SceneView, Beat) -> Void) {
+    private func registerUndo(time: Beat, _ closure: @escaping (SceneView, Beat) -> Void) {
         undoManager?.registerUndo(withTarget: self) { [oldTime = self.time] in
-            handler($0, oldTime)
+            closure($0, oldTime)
         }
         self.time = time
     }
@@ -1381,8 +1313,6 @@ final class SceneMaterialManager {
     }
     
     init() {
-        animationBox.deleteHandler = { [unowned self] _, _ in self.removeAnimation() }
-        animationBox.newHandler = { [unowned self] _, _ in self.appendAnimation() }
     }
     
     var material: Material {
@@ -1938,8 +1868,6 @@ final class SceneMaterialManager {
             _set(materialTuple.material.with(opacity: opacity), in: materialTuple)
         }
     }
-    
-    let animationBox = TextBox()
     
     var isAnimatedMaterial: Bool {
         for materialItem in scene.editNode.editTrack.materialItems {

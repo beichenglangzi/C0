@@ -92,7 +92,7 @@ final class Node: NSObject, NSCoding {
     let key: UUID
     var differentialDataModel: DataModel {
         didSet {
-            differentialDataModel.dataHandler = { [unowned self] in self.differential.data }
+            differentialDataModel.dataClosure = { [unowned self] in self.differential.data }
         }
     }
     func read() {
@@ -159,50 +159,50 @@ final class Node: NSObject, NSCoding {
             children.forEach { $0.parent = self }
         }
     }
-    func allChildren(_ handler: (Node) -> Void) {
-        func allChildrenRecursion(_ node: Node, _ handler: (Node) -> Void) {
-            node.children.forEach { allChildrenRecursion($0, handler) }
-            handler(node)
+    func allChildren(_ closure: (Node) -> Void) {
+        func allChildrenRecursion(_ node: Node, _ closure: (Node) -> Void) {
+            node.children.forEach { allChildrenRecursion($0, closure) }
+            closure(node)
         }
-        children.forEach { allChildrenRecursion($0, handler) }
+        children.forEach { allChildrenRecursion($0, closure) }
     }
-    func allChildrenAndSelf(_ handler: (Node) -> Void) {
-        func allChildrenRecursion(_ node: Node, _ handler: (Node) -> Void) {
-            node.children.forEach { allChildrenRecursion($0, handler) }
-            handler(node)
+    func allChildrenAndSelf(_ closure: (Node) -> Void) {
+        func allChildrenRecursion(_ node: Node, _ closure: (Node) -> Void) {
+            node.children.forEach { allChildrenRecursion($0, closure) }
+            closure(node)
         }
-        allChildrenRecursion(self, handler)
+        allChildrenRecursion(self, closure)
     }
-    func allChildren(_ handler: (Node, inout Bool) -> ()) {
+    func allChildren(_ closure: (Node, inout Bool) -> ()) {
         var stop = false
-        func allChildrenRecursion(_ node: Node, _ handler: (Node, inout Bool) -> ()) {
+        func allChildrenRecursion(_ node: Node, _ closure: (Node, inout Bool) -> ()) {
             for child in node.children {
-                allChildrenRecursion(child, handler)
+                allChildrenRecursion(child, closure)
                 if stop {
                     return
                 }
             }
-            handler(node, &stop)
+            closure(node, &stop)
             if stop {
                 return
             }
         }
         for child in children {
-            allChildrenRecursion(child, handler)
+            allChildrenRecursion(child, closure)
             if stop {
                 return
             }
         }
     }
-    func allParentsAndSelf(_ handler: ((Node) -> ())) {
-        handler(self)
-        parent?.allParentsAndSelf(handler)
+    func allParentsAndSelf(_ closure: ((Node) -> ())) {
+        closure(self)
+        parent?.allParentsAndSelf(closure)
     }
-    func allParentsAndSelf(_ handler: ((Node) -> (Bool))) {
-        if handler(self) {
+    func allParentsAndSelf(_ closure: ((Node) -> (Bool))) {
+        if closure(self) {
             return
         }
-        parent?.allParentsAndSelf(handler)
+        parent?.allParentsAndSelf(closure)
     }
     var treeNode: TreeNode<Node> {
         return TreeNode(self, children: children.map { $0.treeNode })
@@ -268,7 +268,7 @@ final class Node: NSObject, NSCoding {
     }
     func cellRemoveManager(with cellItem: CellItem) -> CellRemoveManager {
         var cells = [cellItem.cell]
-        cellItem.cell.depthFirstSearch(duplicate: false, handler: { parent, cell in
+        cellItem.cell.depthFirstSearch(duplicate: false, closure: { parent, cell in
             let parents = rootCell.parents(with: cell)
             if parents.count == 1 {
                 cells.append(cell)
@@ -395,7 +395,7 @@ final class Node: NSObject, NSCoding {
         self.time = time
         super.init()
         children.forEach { $0.parent = self }
-        differentialDataModel.dataHandler = { [unowned self] in self.differential.data }
+        differentialDataModel.dataClosure = { [unowned self] in self.differential.data }
     }
     
     private enum CodingKeys: String, CodingKey {
@@ -1101,10 +1101,11 @@ final class Node: NSObject, NSCoding {
     
     struct EditPoint: Equatable {
         let nearestLine: Line, nearestPointIndex: Int, lines: [Line], point: CGPoint, isSnap: Bool
+        
         func draw(withReciprocalAllScale reciprocalAllScale: CGFloat,
                   lineColor: Color, in ctx: CGContext) {
             for line in lines {
-                ctx.setFillColor((line === nearestLine ? lineColor : Color.subSelected).cgColor)
+                ctx.setFillColor((line == nearestLine ? lineColor : Color.subSelected).cgColor)
                 line.draw(size: 2 * reciprocalAllScale, in: ctx)
             }
             point.draw(radius: 3 * reciprocalAllScale, lineWidth: reciprocalAllScale,
@@ -1463,17 +1464,17 @@ final class NodeView: View {
     }
     
     var sizeType: SizeType
-    private let classNameLabel: Label
+    private let classNameView: TextView
     private let isHiddenView: BoolView
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
-        classNameLabel = Label(text: Node.name, font: Font.bold(with: sizeType))
+        classNameView = TextView(text: Node.name, font: Font.bold(with: sizeType))
         isHiddenView = BoolView(cationBool: true,
-                                name: Localization(english: "Hidden", japanese: "表示なし"),
+                                boolInfo: BoolInfo.hidden,
                                 sizeType: sizeType)
         
         super.init()
-        replace(children: [classNameLabel, isHiddenView])
+        replace(children: [classNameView, isHiddenView])
         
         isHiddenView.binding = { [unowned self] in self.setIsHidden(with: $0) }
     }
@@ -1491,10 +1492,10 @@ final class NodeView: View {
     }
     private func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        classNameLabel.frame.origin = CGPoint(x: padding,
-                                              y: bounds.height - classNameLabel.frame.height - padding)
-        isHiddenView.frame = CGRect(x: classNameLabel.frame.maxX + padding, y: padding,
-                                    width: bounds.width - classNameLabel.frame.width - padding * 3,
+        classNameView.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameView.frame.height - padding)
+        isHiddenView.frame = CGRect(x: classNameView.frame.maxX + padding, y: padding,
+                                    width: bounds.width - classNameView.frame.width - padding * 3,
                                     height: Layout.height(with: sizeType))
     }
     func updateWithNode() {
@@ -1507,7 +1508,7 @@ final class NodeView: View {
         let nodeView: NodeView, isHidden: Bool, oldIsHidden: Bool
         let inNode: Node, type: Action.SendType
     }
-    var setIsHiddenHandler: ((Binding) -> ())?
+    var setIsHiddenClosure: ((Binding) -> ())?
     
     private var oldNode = Node()
     
@@ -1517,7 +1518,7 @@ final class NodeView: View {
         } else {
             node.isHidden = binding.bool
         }
-        setIsHiddenHandler?(Binding(nodeView: self, isHidden: binding.bool,
+        setIsHiddenClosure?(Binding(nodeView: self, isHidden: binding.bool,
                                     oldIsHidden: binding.oldBool, inNode: oldNode,
                                     type: binding.type))
     }
@@ -1537,16 +1538,16 @@ final class NodeView: View {
  */
 final class NodeTreeManager {
     init() {
-        nodesView.nameHandler = { [unowned self] in
+        nodesView.nameClosure = { [unowned self] in
             return Localization(self.cut.node(atTreeNodeIndex: $0).name)
         }
-        nodesView.treeLevelHandler = { [unowned self] in
+        nodesView.treeLevelClosure = { [unowned self] in
             var i = 0
             self.cut.node(atTreeNodeIndex: $0).allParentsAndSelf { _ in i += 1 }
             return i - 2
         }
-        nodesView.copiedObjectsHandler = { [unowned self] _, _ in [self.cut.editNode.copied] }
-        nodesView.moveHandler = { [unowned self] in return self.moveNode(with: $1) }
+        nodesView.copiedObjectsClosure = { [unowned self] _, _ in [self.cut.editNode.copied] }
+        nodesView.moveClosure = { [unowned self] in return self.moveNode(with: $1) }
     }
     
     var cut = Cut() {
@@ -1574,7 +1575,7 @@ final class NodeTreeManager {
         let toNode: Node, fromNode: Node, beginNode: Node
         let type: Action.SendType
     }
-    var setNodesHandler: ((NodesBinding) -> ())?
+    var setNodesClosure: ((NodesBinding) -> ())?
     
     let moveHeight = 8.0.cf
     
@@ -1599,7 +1600,7 @@ final class NodeTreeManager {
             maxMovableNodeIndex = beginTreeNode.movableCount - 1
             
             oldP = p
-            setNodesHandler?(NodesBinding(nodeTreeView: self,
+            setNodesClosure?(NodesBinding(nodeTreeView: self,
                                           node: cut.editNode,
                                           index: oldIndex, oldIndex: oldIndex, beginIndex: beginIndex,
                                           toNode: oldParent, fromNode: oldParent, beginNode: oldParent,
@@ -1616,7 +1617,7 @@ final class NodeTreeManager {
                 || (event.sendType == .end && ini != beginMovableNodeIndex) {
                 
                 let parent = tuple.parent.object
-                setNodesHandler?(NodesBinding(nodeTreeView: self,
+                setNodesClosure?(NodesBinding(nodeTreeView: self,
                                               node: cut.editNode,
                                               index: tuple.insertIndex, oldIndex: oldIndex,
                                               beginIndex: beginIndex,
@@ -1639,17 +1640,17 @@ final class TracksManager {
     let tracksView = ListArrayView()
     
     init() {
-        tracksView.nameHandler = { [unowned self] in
+        tracksView.nameClosure = { [unowned self] in
             let tracks = self.node.tracks
             guard $0 < tracks.count else {
                 return Localization()
             }
             return Localization(tracks[$0].name)
         }
-        tracksView.copiedObjectsHandler = { [unowned self] _, _ in
+        tracksView.copiedObjectsClosure = { [unowned self] _, _ in
             return [self.node.editTrack.copied]
         }
-        tracksView.moveHandler = { [unowned self] in return self.moveTrack(with: $1) }
+        tracksView.moveClosure = { [unowned self] in return self.moveTrack(with: $1) }
     }
     
     var node = Node() {
@@ -1674,7 +1675,7 @@ final class TracksManager {
         let track: NodeTrack, index: Int, oldIndex: Int, beginIndex: Int
         let inNode: Node, type: Action.SendType
     }
-    var setTracksHandler: ((NodeTracksBinding) -> ())?
+    var setTracksClosure: ((NodeTracksBinding) -> ())?
     
     var moveHeight = 8.0.cf
     private var oldIndex = 0, beginIndex = 0, oldP = CGPoint()
@@ -1690,7 +1691,7 @@ final class TracksManager {
             beginIndex = oldIndex
             editTrack = oldInNode.editTrack
             oldP = p
-            setTracksHandler?(NodeTracksBinding(tracksManager: self,
+            setTracksClosure?(NodeTracksBinding(tracksManager: self,
                                                 track: oldInNode.editTrack,
                                                 index: oldIndex,
                                                 oldIndex: oldIndex,
@@ -1703,7 +1704,7 @@ final class TracksManager {
             let d = p.y - oldP.y
             let i = (beginIndex + Int(d / moveHeight)).clip(min: 0, max: oldTracks.count - 1)
             if i != oldIndex || (event.sendType == .end && i != beginIndex) {
-                setTracksHandler?(NodeTracksBinding(tracksManager: self,
+                setTracksClosure?(NodeTracksBinding(tracksManager: self,
                                                     track: editTrack,
                                                     index: i,
                                                     oldIndex: oldIndex,

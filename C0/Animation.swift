@@ -405,9 +405,9 @@ final class AnimationView: View {
         return layer
     }
     
-    var lineColorHandler: ((Int) -> (Color)) = { _ in .content }
-    var smallLineColorHandler: (() -> (Color)) = { .content }
-    var knobColorHandler: ((Int) -> (Color)) = { _ in .knob }
+    var lineColorClosure: ((Int) -> (Color)) = { _ in .content }
+    var smallLineColorClosure: (() -> (Color)) = { .content }
+    var knobColorClosure: ((Int) -> (Color)) = { _ in .knob }
     private var knobs = [DiscreteKnob]()
     let editLayer: Layer = {
         let layer = Layer()
@@ -443,7 +443,7 @@ final class AnimationView: View {
             let position = CGPoint(x: x, y: midY)
             
             if sizeType == .regular {
-                let keyLineColor = lineColorHandler(li.index)
+                let keyLineColor = lineColorClosure(li.index)
                 let keyLine = AnimationView.keyLineWith(keyframe,
                                                         lineColor: keyLineColor,
                                                         baseWidth: baseWidth,
@@ -487,7 +487,7 @@ final class AnimationView: View {
             
             if i > 0 {
                 let fillColor = li.loopingCount > 0 || li.index == editingKeyframeIndex ?
-                    Color.editing : knobColorHandler(li.index)
+                    Color.editing : knobColorClosure(li.index)
                 let lineColor = ((li.time + beginBaseTime) / baseTimeInterval).isInteger ?
                     Color.border : Color.warning
                 let knob = AnimationView.knob(from: position,
@@ -520,7 +520,7 @@ final class AnimationView: View {
         if sizeType == .small {
             let keyLine = Layer()
             keyLine.frame = CGRect(x: 0, y: midY - 0.5, width: maxX, height: 1)
-            keyLine.fillColor = smallLineColorHandler()
+            keyLine.fillColor = smallLineColorClosure()
             keyLine.lineColor = nil
             keyLines.append(keyLine)
         }
@@ -751,27 +751,27 @@ final class AnimationView: View {
         let keyframe: Keyframe, index: Int, setType: SetKeyframeType
         let animation: Animation, oldAnimation: Animation, type: Action.SendType
     }
-    var setKeyframeHandler: ((SetKeyframeBinding) -> ())?
+    var setKeyframeClosure: ((SetKeyframeBinding) -> ())?
     
     struct SlideBinding {
         let animationView: AnimationView
         let keyframeIndex: Int?, deltaTime: Beat, oldTime: Beat
         let animation: Animation, oldAnimation: Animation, type: Action.SendType
     }
-    var slideHandler: ((SlideBinding) -> ())?
+    var slideClosure: ((SlideBinding) -> ())?
     
     struct SelectBinding {
         let animationView: AnimationView
         let selectedIndexes: [Int], oldSelectedIndexes: [Int]
         let animation: Animation, oldAnimation: Animation, type: Action.SendType
     }
-    var selectHandler: ((SelectBinding) -> ())?
+    var selectClosure: ((SelectBinding) -> ())?
     
     func delete(with event: KeyInputEvent) -> Bool {
         _ = deleteKeyframe(at: point(from: event))
         return true
     }
-    var noRemovedHandler: ((AnimationView) -> (Bool))?
+    var noRemovedClosure: ((AnimationView) -> (Bool))?
     func deleteKeyframe(withTime time: Beat) -> Bool {
         let lf = animation.loopedKeyframeIndex(withTime: time)
         if lf.interTime == 0 {
@@ -805,7 +805,7 @@ final class AnimationView: View {
                 }
                 isChanged = true
             } else {
-                isChanged = noRemovedHandler?(self) ?? false
+                isChanged = noRemovedClosure?(self) ?? false
             }
         }
         return isChanged
@@ -824,7 +824,7 @@ final class AnimationView: View {
         _ = splitKeyframe(withTime: time(withX: point(from: event).x))
         return true
     }
-    var splitKeyframeLabelHandler: ((Keyframe, Int) -> (Keyframe.Label))?
+    var splitKeyframeLabelClosure: ((Keyframe, Int) -> (Keyframe.Label))?
     func splitKeyframe(withTime time: Beat) -> Bool {
         guard time < animation.duration else {
             return false
@@ -841,7 +841,7 @@ final class AnimationView: View {
                                       interpolation: k.interpolation, loop: k.loop, label: k.label)
         let splitKeyframe1 = Keyframe(time: time, easing: newEaing.b1,
                                       interpolation: k.interpolation, loop: k.loop,
-                                      label: splitKeyframeLabelHandler?(k, ki.index) ?? .main)
+                                      label: splitKeyframeLabelClosure?(k, ki.index) ?? .main)
         replace(splitKeyframe0, at: ki.index)
         insert(splitKeyframe1, at: ki.index + 1)
         let indexes = animation.selectedKeyframeIndexes
@@ -863,13 +863,13 @@ final class AnimationView: View {
         }
         isUseUpdateChildren = false
         let oldAnimation = animation
-        setKeyframeHandler?(SetKeyframeBinding(animationView: self,
+        setKeyframeClosure?(SetKeyframeBinding(animationView: self,
                                                keyframe: keyframe, index: index,
                                                setType: .replace,
                                                animation: oldAnimation,
                                                oldAnimation: oldAnimation, type: .begin))
         animation.keyframes[index] = keyframe
-        setKeyframeHandler?(SetKeyframeBinding(animationView: self,
+        setKeyframeClosure?(SetKeyframeBinding(animationView: self,
                                                keyframe: keyframe, index: index,
                                                setType: .replace,
                                                animation: animation,
@@ -883,13 +883,13 @@ final class AnimationView: View {
         }
         isUseUpdateChildren = false
         let oldAnimation = animation
-        setKeyframeHandler?(SetKeyframeBinding(animationView: self,
+        setKeyframeClosure?(SetKeyframeBinding(animationView: self,
                                                keyframe: keyframe, index: index,
                                                setType: .insert,
                                                animation: oldAnimation,
                                                oldAnimation: oldAnimation, type: .begin))
         animation.keyframes.insert(keyframe, at: index)
-        setKeyframeHandler?(SetKeyframeBinding(animationView: self,
+        setKeyframeClosure?(SetKeyframeBinding(animationView: self,
                                                keyframe: keyframe, index: index,
                                                setType: .insert,
                                                animation: animation,
@@ -903,14 +903,14 @@ final class AnimationView: View {
         }
         isUseUpdateChildren = false
         let oldAnimation = animation
-        setKeyframeHandler?(SetKeyframeBinding(animationView: self,
+        setKeyframeClosure?(SetKeyframeBinding(animationView: self,
                                                keyframe: oldAnimation.keyframes[index],
                                                index: index,
                                                setType: .remove,
                                                animation: oldAnimation,
                                                oldAnimation: oldAnimation, type: .begin))
         animation.keyframes.remove(at: index)
-        setKeyframeHandler?(SetKeyframeBinding(animationView: self,
+        setKeyframeClosure?(SetKeyframeBinding(animationView: self,
                                                keyframe: oldAnimation.keyframes[index],
                                                index: index,
                                                setType: .remove,
@@ -974,7 +974,7 @@ final class AnimationView: View {
             dragObject.minDeltaTime = preTime - time
             dragObject.oldAnimation = animation
             dragObject.oldTime = time
-            slideHandler?(SlideBinding(animationView: self,
+            slideClosure?(SlideBinding(animationView: self,
                                        keyframeIndex: keyframeIndex,
                                        deltaTime: deltaTime,
                                        oldTime: dragObject.oldTime,
@@ -989,7 +989,7 @@ final class AnimationView: View {
             isUseUpdateChildren = false
             animation.keyframes = nks
             animation.duration = dragObject.oldAnimation.duration + deltaTime
-            slideHandler?(SlideBinding(animationView: self,
+            slideClosure?(SlideBinding(animationView: self,
                                        keyframeIndex: keyframeIndex,
                                        deltaTime: deltaTime,
                                        oldTime: dragObject.oldTime,
@@ -1021,7 +1021,7 @@ final class AnimationView: View {
             isUseUpdateChildren = false
             animation.keyframes = newKeyframes
             animation.duration = dragObject.oldAnimation.duration + deltaTime
-            slideHandler?(SlideBinding(animationView: self,
+            slideClosure?(SlideBinding(animationView: self,
                                        keyframeIndex: keyframeIndex,
                                        deltaTime: deltaTime,
                                        oldTime: dragObject.oldTime,
@@ -1046,7 +1046,7 @@ final class AnimationView: View {
             dragObject.minDeltaTime = preTime - time
             dragObject.oldAnimation = animation
             dragObject.oldTime = time
-            slideHandler?(SlideBinding(animationView: self,
+            slideClosure?(SlideBinding(animationView: self,
                                        keyframeIndex: nil,
                                        deltaTime: deltaTime,
                                        oldTime: dragObject.oldTime,
@@ -1056,7 +1056,7 @@ final class AnimationView: View {
             isDrag = true
             isUseUpdateChildren = false
             animation.duration = dragObject.oldAnimation.duration + deltaTime
-            slideHandler?(SlideBinding(animationView: self,
+            slideClosure?(SlideBinding(animationView: self,
                                        keyframeIndex: nil,
                                        deltaTime: deltaTime,
                                        oldTime: dragObject.oldTime,
@@ -1078,7 +1078,7 @@ final class AnimationView: View {
             }
             isUseUpdateChildren = false
             animation.duration = dragObject.oldAnimation.duration + deltaTime
-            slideHandler?(SlideBinding(animationView: self,
+            slideClosure?(SlideBinding(animationView: self,
                                        keyframeIndex: nil,
                                        deltaTime: deltaTime,
                                        oldTime: dragObject.oldTime,
@@ -1185,7 +1185,7 @@ final class AnimationView: View {
             selectObject.startPoint = p
             selectObject.oldAnimation = animation
             selectedLayer?.frame = CGRect(origin: p, size: CGSize())
-            selectHandler?(SelectBinding(animationView: self,
+            selectClosure?(SelectBinding(animationView: self,
                                          selectedIndexes: animation.selectedKeyframeIndexes,
                                          oldSelectedIndexes: animation.selectedKeyframeIndexes,
                                          animation: animation, oldAnimation: animation,
@@ -1199,7 +1199,7 @@ final class AnimationView: View {
             animation.selectedKeyframeIndexes = selectedIndex(at: p,
                                                               with: selectObject,
                                                               isDeselect: isDeselect)
-            selectHandler?(SelectBinding(animationView: self,
+            selectClosure?(SelectBinding(animationView: self,
                                          selectedIndexes: animation.selectedKeyframeIndexes,
                                          oldSelectedIndexes: selectObject.oldAnimation.selectedKeyframeIndexes,
                                          animation: animation,
@@ -1218,7 +1218,7 @@ final class AnimationView: View {
             }
             isUseUpdateChildren = false
             animation.selectedKeyframeIndexes = newIndexes
-            selectHandler?(SelectBinding(animationView: self,
+            selectClosure?(SelectBinding(animationView: self,
                                          selectedIndexes: animation.selectedKeyframeIndexes,
                                          oldSelectedIndexes: selectObject.oldAnimation.selectedKeyframeIndexes,
                                          animation: animation,
@@ -1262,13 +1262,13 @@ final class AnimationView: View {
         }
         isUseUpdateChildren = false
         let oldAnimation = animation
-        selectHandler?(SelectBinding(animationView: self,
+        selectClosure?(SelectBinding(animationView: self,
                                      selectedIndexes: oldSelectedIndexes,
                                      oldSelectedIndexes: oldSelectedIndexes,
                                      animation: animation, oldAnimation: animation,
                                      type: .begin))
         animation.selectedKeyframeIndexes = selectedIndexes
-        selectHandler?(SelectBinding(animationView: self,
+        selectClosure?(SelectBinding(animationView: self,
                                      selectedIndexes: animation.selectedKeyframeIndexes,
                                      oldSelectedIndexes: oldSelectedIndexes,
                                      animation: animation,

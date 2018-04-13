@@ -518,8 +518,9 @@ extension Cut: ObjectViewExpression {
 final class CutView: View {
     static let name = Cut.name
     
-    let classNameLabel = Label(text: Cut.name, font: .smallBold), indexLabel = Label(font: .small)
-    let clipView = Box()
+    let classNameView = TextView(text: Cut.name, font: .smallBold)
+    let indexNameView = TextView(font: .small)
+    let clipView = Layer()
     
     private(set) var editAnimationView: AnimationView {
         didSet {
@@ -544,35 +545,35 @@ final class CutView: View {
         }
         return animationViews
     }
-    func tracks(handler: (Node, NodeTrack, Int) -> ()) {
-        CutView.tracks(with: cut, handler: handler)
+    func tracks(closure: (Node, NodeTrack, Int) -> ()) {
+        CutView.tracks(with: cut, closure: closure)
     }
-    func tracks(from node: Node, handler: (Node, NodeTrack, Int) -> ()) {
-        CutView.tracks(from: node, with: cut, handler: handler)
+    func tracks(from node: Node, closure: (Node, NodeTrack, Int) -> ()) {
+        CutView.tracks(from: node, with: cut, closure: closure)
     }
-    static func tracks(with node: Node, handler: (Node, NodeTrack, Int) -> ()) {
+    static func tracks(with node: Node, closure: (Node, NodeTrack, Int) -> ()) {
         var i = 0
         node.allChildrenAndSelf { aNode in
             aNode.tracks.forEach { track in
-                handler(aNode, track, i)
+                closure(aNode, track, i)
                 i += 1
             }
         }
     }
-    static func tracks(with cut: Cut, handler: (Node, NodeTrack, Int) -> ()) {
+    static func tracks(with cut: Cut, closure: (Node, NodeTrack, Int) -> ()) {
         var i = 0
         cut.rootNode.allChildren { node in
             node.tracks.forEach { track in
-                handler(node, track, i)
+                closure(node, track, i)
                 i += 1
             }
         }
     }
-    static func tracks(from node: Node, with cut: Cut, handler: (Node, NodeTrack, Int) -> ()) {
+    static func tracks(from node: Node, with cut: Cut, closure: (Node, NodeTrack, Int) -> ()) {
         tracks(with: cut) { (aNode, track, i) in
             aNode.allParentsAndSelf { (n) -> (Bool) in
                 if node == n {
-                    handler(aNode, track, i)
+                    closure(aNode, track, i)
                     return true
                 } else {
                     return false
@@ -615,8 +616,8 @@ final class CutView: View {
          baseWidth: CGFloat, baseTimeInterval: Beat,
          knobHalfHeight: CGFloat, subKnobHalfHeight: CGFloat, maxLineWidth: CGFloat, height: CGFloat) {
         
-        classNameLabel.fillColor = nil
-        indexLabel.fillColor = nil
+        classNameView.fillColor = nil
+        indexNameView.fillColor = nil
         clipView.isClipped = true
         
         self.cut = cut
@@ -649,7 +650,7 @@ final class CutView: View {
         
         super.init()
         clipView.replace(children: animationViews)
-        replace(children: [clipView, classNameLabel, indexLabel])
+        replace(children: [clipView, classNameView, indexNameView])
         frame.size.height = height
         updateLayout()
         updateWithDuration()
@@ -668,7 +669,7 @@ final class CutView: View {
             }
             return textView
         }
-        subtitleAnimationView.setKeyframeHandler = { [unowned self] ab in
+        subtitleAnimationView.setKeyframeClosure = { [unowned self] ab in
             guard ab.type == .end else {
                 return
             }
@@ -714,7 +715,7 @@ final class CutView: View {
                 break
             }
         }
-        subtitleAnimationView.slideHandler = {
+        subtitleAnimationView.slideClosure = {
             cut.subtitleTrack.replace($0.animation.keyframes)
         }
         
@@ -737,16 +738,16 @@ final class CutView: View {
     var subtitleKeyframeBinding: ((SubtitleKeyframeBinding) -> ())?
     
     func bind(in animationView: AnimationView, from node: Node, from track: NodeTrack) {
-        animationView.splitKeyframeLabelHandler = { (keyframe, _) in
+        animationView.splitKeyframeLabelClosure = { (keyframe, _) in
             track.isEmptyGeometryWithCells(at: keyframe.time) ? .main : .sub
         }
-        animationView.lineColorHandler = { _ in
+        animationView.lineColorClosure = { _ in
             track.transformItem != nil ? .camera : .content
         }
-        animationView.smallLineColorHandler = {
+        animationView.smallLineColorClosure = {
             track.transformItem != nil ? .camera : .content
         }
-        animationView.knobColorHandler = {
+        animationView.knobColorClosure = {
             track.drawingItem.keyDrawings[$0].draftLines.isEmpty ? .knob : .timelineDraft
         }
     }
@@ -798,7 +799,7 @@ final class CutView: View {
     
     func updateLayout() {
         let sp = Layout.smallPadding
-        clipView.frame = CGRect(x: 0, y: 0, width: frame.width, height: classNameLabel.frame.minY - sp)
+        clipView.frame = CGRect(x: 0, y: 0, width: frame.width, height: classNameView.frame.minY - sp)
         updateWithNamePosition()
         updateChildren()
     }
@@ -809,13 +810,13 @@ final class CutView: View {
     }
     func updateWithNamePosition() {
         let padding = Layout.smallPadding
-        classNameLabel.frame.origin = CGPoint(x: nameX,
-                                              y: bounds.height - classNameLabel.frame.height - padding)
-        indexLabel.frame.origin = CGPoint(x: classNameLabel.frame.maxX + padding,
-                                          y: bounds.height - classNameLabel.frame.height - padding)
+        classNameView.frame.origin = CGPoint(x: nameX,
+                                              y: bounds.height - classNameView.frame.height - padding)
+        indexNameView.frame.origin = CGPoint(x: classNameView.frame.maxX + padding,
+                                          y: bounds.height - classNameView.frame.height - padding)
     }
     func updateIndex(_ i: Int) {
-        indexLabel.localization = Localization("\(i)")
+        indexNameView.localization = Localization("\(i)")
     }
     func updateChildren() {
         guard let index = animationViews.index(of: editAnimationView) else {
@@ -943,11 +944,11 @@ final class CutView: View {
     
     var isUseUpdateChildren = true
     
-    var removeTrackHandler: ((CutView, Int, Node) -> ())?
+    var removeTrackClosure: ((CutView, Int, Node) -> ())?
     func removeTrack() {
         let node = cut.editNode
         if node.tracks.count > 1 {
-            removeTrackHandler?(self, node.editTrackIndex, node)
+            removeTrackClosure?(self, node.editTrackIndex, node)
         }
     }
     
@@ -955,14 +956,14 @@ final class CutView: View {
         return [cut.copied]
     }
     
-    var pasteHandler: ((CutView, [Any]) -> (Bool))?
+    var pasteClosure: ((CutView, [Any]) -> (Bool))?
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        return pasteHandler?(self, objects) ?? false
+        return pasteClosure?(self, objects) ?? false
     }
     
-    var deleteHandler: ((CutView) -> (Bool))?
+    var deleteClosure: ((CutView) -> (Bool))?
     func delete(with event: KeyInputEvent) -> Bool {
-        return deleteHandler?(self) ?? false
+        return deleteClosure?(self) ?? false
     }
     
     private var isScrollTrack = false
@@ -982,7 +983,7 @@ final class CutView: View {
         let nodeAndTrack: Cut.NodeAndTrack, oldNodeAndTrack: Cut.NodeAndTrack
         let type: Action.SendType
     }
-    var scrollHandler: ((ScrollBinding) -> ())?
+    var scrollClosure: ((ScrollBinding) -> ())?
     
     private struct ScrollObject {
         var oldP = CGPoint(), deltaScrollY = 0.0.cf
@@ -1003,7 +1004,7 @@ final class CutView: View {
             let editNodeAndTrack = self.editNodeAndTrack
             scrollObject.oldNodeAndTrack = editNodeAndTrack
             scrollObject.oldNodeAndTrackIndex = cut.nodeAndTrackIndex(with: editNodeAndTrack)
-            scrollHandler?(ScrollBinding(cutView: self,
+            scrollClosure?(ScrollBinding(cutView: self,
                                          nodeAndTrack: editNodeAndTrack,
                                          oldNodeAndTrack: editNodeAndTrack,
                                          type: .begin))
@@ -1019,7 +1020,7 @@ final class CutView: View {
                 isUseUpdateChildren = false
                 scrollObject.nodeAndTrackIndex = i
                 editNodeAndTrack = cut.nodeAndTrack(atNodeAndTrackIndex: i)
-                scrollHandler?(ScrollBinding(cutView: self,
+                scrollClosure?(ScrollBinding(cutView: self,
                                              nodeAndTrack: editNodeAndTrack,
                                              oldNodeAndTrack: oldEditNodeAndTrack,
                                              type: .sending))
@@ -1035,7 +1036,7 @@ final class CutView: View {
                 .clip(min: 0, max: maxIndex)
             isUseUpdateChildren = false
             editNodeAndTrack = cut.nodeAndTrack(atNodeAndTrackIndex: i)
-            scrollHandler?(ScrollBinding(cutView: self,
+            scrollClosure?(ScrollBinding(cutView: self,
                                          nodeAndTrack: editNodeAndTrack,
                                          oldNodeAndTrack: oldEditNodeAndTrack,
                                          type: .end))
@@ -1052,13 +1053,13 @@ final class CutView: View {
         registeringUndoManager?.registerUndo(withTarget: self) {
             $0.set(oldEditNodeAndTrack, old: editNodeAndTrack)
         }
-        scrollHandler?(ScrollBinding(cutView: self,
+        scrollClosure?(ScrollBinding(cutView: self,
                                      nodeAndTrack: oldEditNodeAndTrack,
                                      oldNodeAndTrack: oldEditNodeAndTrack,
                                      type: .begin))
         isUseUpdateChildren = false
         self.editNodeAndTrack = editNodeAndTrack
-        scrollHandler?(ScrollBinding(cutView: self,
+        scrollClosure?(ScrollBinding(cutView: self,
                                      nodeAndTrack: oldEditNodeAndTrack,
                                      oldNodeAndTrack: editNodeAndTrack,
                                      type: .end))

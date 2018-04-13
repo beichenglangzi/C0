@@ -119,22 +119,22 @@ final class DataModel {
         return nil
     }
     
-    var didChangeIsWriteHandler: ((DataModel, Bool) -> Void)? = nil
+    var didChangeIsWriteClosure: ((DataModel, Bool) -> Void)? = nil
     var isWrite = false {
         didSet {
             if isWrite != oldValue {
-                didChangeIsWriteHandler?(self, isWrite)
+                didChangeIsWriteClosure?(self, isWrite)
             }
         }
     }
-    var dataHandler: () -> Data? = { nil }
+    var dataClosure: () -> Data? = { nil }
     func writeAllFileWrappers() {
         write()
         children.forEach { $0.value.writeAllFileWrappers() }
     }
     func write() {
         if isWrite {
-            if let data = dataHandler(), let parentFileWrapper = parent?.fileWrapper {
+            if let data = dataClosure(), let parentFileWrapper = parent?.fileWrapper {
                 parentFileWrapper.removeFileWrapper(fileWrapper)
                 fileWrapper = FileWrapper(regularFileWithContents: data)
                 fileWrapper.preferredFilename = key

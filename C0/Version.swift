@@ -43,7 +43,7 @@ final class VersionView: View {
                     if undoManager.groupingLevel == 0 {
                         self.undoCount += 1
                         self.allCount = self.undoCount
-                        self.updateLabel()
+                        self.updateWithVersion()
                     }
                 }
             }
@@ -52,7 +52,7 @@ final class VersionView: View {
                                        object: version, queue: nil) { [unowned self] in
                 if let undoManager = $0.object as? UndoManager, undoManager == self.version {
                     self.undoCount -= 1
-                    self.updateLabel()
+                    self.updateWithVersion()
                 }
             }
             
@@ -60,37 +60,30 @@ final class VersionView: View {
                                        object: version, queue: nil) { [unowned self] in
                 if let undoManager = $0.object as? UndoManager, undoManager == self.version {
                     self.undoCount += 1
-                    self.updateLabel()
+                    self.updateWithVersion()
                 }
             }
             
-            updateLabel()
+            updateWithVersion()
         }
     }
+    var undoCount = 0, allCount = 0
     private var undoGroupToken: NSObjectProtocol?
     private var undoToken: NSObjectProtocol?, redoToken: NSObjectProtocol?
     override var undoManager: UndoManager? {
         return version
     }
     
-    override var locale: Locale {
-        didSet {
-            updateLayout()
-        }
-    }
-    
-    var undoCount = 0, allCount = 0
-    
-    let classNameLabel = Label(text: Version.name, font: .bold)
-    let allCountLabel = Label(text: Localization("0"))
-    let currentCountLabel = Label(color: .warning)
+    let classNameView = TextView(text: Version.name, font: .bold)
+    let allCountView = TextView(text: Localization("0"))
+    let currentCountView = TextView(color: .warning)
     
     override init() {
-        _ = Layout.leftAlignment([classNameLabel, Padding(), allCountLabel],
+        _ = Layout.leftAlignment([classNameView, Padding(), allCountView],
                                  height: Layout.basicHeight)
         super.init()
         isClipped = true
-        replace(children: [classNameLabel, allCountLabel])
+        replace(children: [classNameView, allCountView])
     }
     
     deinit {
@@ -108,6 +101,12 @@ final class VersionView: View {
         }
     }
     
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
+    }
+    
     override var bounds: CGRect {
         didSet {
             updateLayout()
@@ -115,28 +114,28 @@ final class VersionView: View {
     }
     func updateLayout() {
         let padding = Layout.basicPadding
-        classNameLabel.frame.origin = CGPoint(x: padding,
-                                              y: bounds.height - classNameLabel.frame.height - padding)
+        classNameView.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameView.frame.height - padding)
         if undoCount < allCount {
-            _ = Layout.leftAlignment([allCountLabel, Padding(), currentCountLabel],
-                                     minX: classNameLabel.frame.maxX + padding, height: frame.height)
+            _ = Layout.leftAlignment([allCountView, Padding(), currentCountView],
+                                     minX: classNameView.frame.maxX + padding, height: frame.height)
         } else {
-            _ = Layout.leftAlignment([allCountLabel],
-                                     minX: classNameLabel.frame.maxX + padding, height: frame.height)
+            _ = Layout.leftAlignment([allCountView],
+                                     minX: classNameView.frame.maxX + padding, height: frame.height)
         }
     }
-    func updateLabel() {
+    func updateWithVersion() {
         if undoCount < allCount {
-            allCountLabel.localization = Localization("\(allCount)")
-            currentCountLabel.localization = Localization("\(undoCount - allCount)")
-            if currentCountLabel.parent == nil {
-                replace(children: [classNameLabel, allCountLabel, currentCountLabel])
+            allCountView.localization = Localization("\(allCount)")
+            currentCountView.localization = Localization("\(undoCount - allCount)")
+            if currentCountView.parent == nil {
+                replace(children: [classNameView, allCountView, currentCountView])
                 updateLayout()
             }
         } else {
-            allCountLabel.localization = Localization("\(allCount)")
-            if currentCountLabel.parent != nil {
-                replace(children: [classNameLabel, allCountLabel])
+            allCountView.localization = Localization("\(allCount)")
+            if currentCountView.parent != nil {
+                replace(children: [classNameView, allCountView])
                 updateLayout()
             }
         }
@@ -144,9 +143,8 @@ final class VersionView: View {
     
     func reference(with event: TapEvent) -> Reference? {
         var reference = version.reference
-        reference.classDescription += Localization("\n\n")
-            + Localization(english: "Show undoable count and undoed count in parent view",
-                           japanese: "親表示での取り消し可能回数、取り消し済み回数を表示")
+        reference.classDescription  = Localization(english: "Show undoable count and undoed count in parent view",
+                                                   japanese: "親表示での取り消し可能回数、取り消し済み回数を表示")
         return reference
     }
 }

@@ -158,33 +158,33 @@ final class KeyframeView: View {
     }
     
     var sizeType: SizeType
-    let classNameLabel: Label
+    let classNameView: TextView
     let easingView: EasingView
     let interpolationView: EnumView<Keyframe.Interpolation>
     let loopView: EnumView<Keyframe.Loop>
     let labelView: EnumView<Keyframe.Label>
     
     init(sizeType: SizeType = .regular) {
-        classNameLabel = Label(text: Keyframe.name, font: Font.bold(with: sizeType))
+        classNameView = TextView(text: Keyframe.name, font: Font.bold(with: sizeType))
         easingView = EasingView(sizeType: sizeType)
         interpolationView = EnumView(enumeratedType: .spline,
-                                     indexHandler: { Int($0) },
-                                     rawValueHandler: { Keyframe.Interpolation.RawValue($0) },
+                                     indexClosure: { Int($0) },
+                                     rawValueClosure: { Keyframe.Interpolation.RawValue($0) },
                                      names: Keyframe.Interpolation.displayTexts,
                                      sizeType: sizeType)
         loopView = EnumView(enumeratedType: .none,
-                            indexHandler: { Int($0) },
-                            rawValueHandler: { Keyframe.Loop.RawValue($0) },
+                            indexClosure: { Int($0) },
+                            rawValueClosure: { Keyframe.Loop.RawValue($0) },
                             names: Keyframe.Loop.displayTexts,
                             sizeType: sizeType)
         labelView = EnumView(enumeratedType: .main,
-                             indexHandler: { Int($0) },
-                             rawValueHandler: { Keyframe.Label.RawValue($0) },
+                             indexClosure: { Int($0) },
+                             rawValueClosure: { Keyframe.Label.RawValue($0) },
                              names: Keyframe.Label.displayTexts,
                              sizeType: sizeType)
         self.sizeType = sizeType
         super.init()
-        replace(children: [classNameLabel, easingView, interpolationView, loopView, labelView])
+        replace(children: [classNameView, easingView, interpolationView, loopView, labelView])
         interpolationView.binding = { [unowned self] in self.setKeyframe(with: $0) }
         loopView.binding = { [unowned self] in self.setKeyframe(with: $0) }
         labelView.binding = { [unowned self] in self.setKeyframe(with: $0) }
@@ -199,16 +199,15 @@ final class KeyframeView: View {
     private func updateLayout() {
         let padding = Layout.padding(with: sizeType)
         let w = bounds.width - padding * 2, h = Layout.height(with: sizeType)
-        var y = bounds.height - classNameLabel.frame.height - padding
-        classNameLabel.frame.origin = CGPoint(x: padding, y: y)
-        y -= h + padding
+        var y = bounds.height - classNameView.frame.height - padding
+        classNameView.frame.origin = CGPoint(x: padding, y: y)
+        labelView.frame = CGRect(x: classNameView.frame.maxX + padding, y: y - padding * 2,
+                                 width: w - classNameView.frame.width - padding, height: h)
+        y -= h + padding * 2
         interpolationView.frame = CGRect(x: padding, y: y, width: w, height: h)
         y -= h
         loopView.frame = CGRect(x: padding, y: y, width: w, height: h)
-        y -= h
-        labelView.frame = CGRect(x: padding, y: y, width: w, height: h)
-        easingView.frame = CGRect(x: padding, y: padding,
-                                    width: w, height: y - padding)
+        easingView.frame = CGRect(x: padding, y: padding, width: w, height: y - padding)
     }
     private func updateWithKeyframeOption() {
         labelView.enumeratedType = keyframe.label

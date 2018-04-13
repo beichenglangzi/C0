@@ -34,6 +34,75 @@ extension Number: ObjectViewExpression {
     }
 }
 
+final class NumberView: View {
+    var number: Number {
+        didSet {
+            updateWithNumber()
+        }
+    }
+    
+    var unit: String {
+        didSet {
+            updateWithNumber()
+        }
+    }
+    var numberOfDigits: Int {
+        didSet {
+            updateWithNumber()
+        }
+    }
+    
+    let stringView: TextView
+    var sizeType: SizeType
+    
+    init(number: Number = 0,
+         numberOfDigits: Int = 0, unit: String = "", font: Font = .default,
+         frame: CGRect = CGRect(), sizeType: SizeType) {
+        
+        self.number = number
+        self.numberOfDigits = numberOfDigits
+        self.unit = unit
+        self.sizeType = sizeType
+        stringView = TextView(font: font, frameAlignment: .right, alignment: .right)
+        
+        super.init()
+        isClipped = true
+        replace(children: [stringView])
+        self.frame = frame
+    }
+    
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    private func updateLayout() {
+        let padding = Layout.padding(with: sizeType)
+        stringView.frame.origin = CGPoint(x: bounds.width - stringView.frame.width - padding,
+                                          y: bounds.height - stringView.frame.height - padding)
+        updateWithNumber()
+    }
+    private func updateWithNumber() {
+        if numberOfDigits == 0 {
+            let string = number - floor(number) > 0 ?
+                String(format: "%g", number) + "\(unit)" :
+                "\(Int(number))" + "\(unit)"
+            stringView.localization = Localization(string)
+        } else {
+            let string = String(format: "%.\(numberOfDigits)f", number) + "\(unit)"
+            stringView.localization = Localization(string)
+        }
+    }
+    
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [number, String(number.d)]
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        return number.reference
+    }
+}
+
 protocol Slidable {
     var number: Number { get set }
     var defaultNumber: Number { get }
@@ -42,7 +111,7 @@ protocol Slidable {
     var exp: Number { get }
 }
 
-final class NumberView: View, Slidable {
+final class SlidableNumberView: View, Slidable {
     var number: Number {
         didSet {
             updateWithNumber()
@@ -171,7 +240,7 @@ final class NumberView: View, Slidable {
     var disabledRegisterUndo = false
     
     struct Binding {
-        let view: NumberView, number: Number, oldNumber: Number, type: Action.SendType
+        let view: SlidableNumberView, number: Number, oldNumber: Number, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
     
@@ -291,6 +360,7 @@ final class DiscreteNumberView: View, Slidable {
     
     var numberInterval: CGFloat, isInverted: Bool, isVertical: Bool
     
+    var sizeType: SizeType
     private var knobLineFrame = CGRect()
     private let labelPaddingX = Layout.basicPadding, knobPadding = 3.0.cf
     private var numberX = 1.5.cf
@@ -302,13 +372,13 @@ final class DiscreteNumberView: View, Slidable {
         return lineLayer
     } ()
     
-    let label: Label
+    let stringView: TextView
     
     init(frame: CGRect = CGRect(),
          number: Number = 0, defaultNumber: Number = 0,
          min: Number = 0, max: Number = 1, exp: Number = 1,
          numberInterval: Number = 1, isInverted: Bool = false, isVertical: Bool = false,
-         numberOfDigits: Int = 0, unit: String = "", font: Font = .default) {
+         numberOfDigits: Int = 0, unit: String = "", sizeType: SizeType = .regular) {
         
         self.number = number.clip(min: min, max: max)
         self.defaultNumber = defaultNumber
@@ -320,13 +390,13 @@ final class DiscreteNumberView: View, Slidable {
         self.isVertical = isVertical
         self.numberOfDigits = numberOfDigits
         self.unit = unit
-        label = Label(font: font)
-        label.frame.origin = CGPoint(x: labelPaddingX,
-                                     y: round((frame.height - label.frame.height) / 2))
+        stringView = TextView(font: Font.default(with: sizeType),
+                              frameAlignment: .right, alignment: .right)
+        self.sizeType = sizeType
         
         super.init()
         isClipped = true
-        replace(children: [label, lineLayer, knob])
+        replace(children: [stringView, lineLayer, knob])
         self.frame = frame
     }
     
@@ -338,16 +408,19 @@ final class DiscreteNumberView: View, Slidable {
     private func updateLayout() {
         knobLineFrame = CGRect(x: 5, y: 2, width: bounds.width - 10, height: 1)
         lineLayer.frame = knobLineFrame
-        label.frame.origin.y = round((bounds.height - label.frame.height) / 2)
-        
+        stringView.frame.origin = CGPoint(x: bounds.width - stringView.frame.width - labelPaddingX,
+                                     y: round((bounds.height - stringView.frame.height) / 2))
         updateWithNumber()
     }
     private func updateWithNumber() {
-        if number - floor(number) > 0 {
-            label.localization = Localization(String(format: numberOfDigits == 0 ?
-                "%g" : "%.\(numberOfDigits)f", number) + "\(unit)")
+        if numberOfDigits == 0 {
+            let string = number - floor(number) > 0 ?
+                String(format: "%g", number) + "\(unit)" :
+                "\(Int(number))" + "\(unit)"
+            stringView.localization = Localization(string)
         } else {
-            label.localization = Localization("\(Int(number))" + "\(unit)")
+            let string = String(format: "%.\(numberOfDigits)f", number) + "\(unit)"
+            stringView.localization = Localization(string)
         }
         if number < defaultNumber {
             let x = (knobLineFrame.width / 2) * (number - minNumber) / (defaultNumber - minNumber)
@@ -663,7 +736,7 @@ final class CircularNumberView: PathView, Slidable {
 final class ProgressNumberView: View {
     let barLayer = Layer()
     let barBackgroundLayer = Layer()
-    let nameLabel: Label
+    let nameView: TextView
     
     init(frame: CGRect = CGRect(), backgroundColor: Color = .background,
          name: String = "", type: String = "", state: Localization? = nil) {
@@ -671,9 +744,9 @@ final class ProgressNumberView: View {
         self.name = name
         self.type = type
         self.state = state
-        nameLabel = Label()
-        nameLabel.frame.origin = CGPoint(x: Layout.basicPadding,
-                                         y: round((frame.height - nameLabel.frame.height) / 2))
+        nameView = TextView()
+        nameView.frame.origin = CGPoint(x: Layout.basicPadding,
+                                        y: round((frame.height - nameView.frame.height) / 2))
         barLayer.frame = CGRect(x: 0, y: 0, width: 0, height: frame.height)
         barBackgroundLayer.fillColor = .editing
         barLayer.fillColor = .content
@@ -681,7 +754,7 @@ final class ProgressNumberView: View {
         super.init()
         self.frame = frame
         isClipped = true
-        replace(children: [nameLabel, barBackgroundLayer, barLayer])
+        replace(children: [nameView, barBackgroundLayer, barLayer])
         updateLayout()
     }
     
@@ -754,19 +827,19 @@ final class ProgressNumberView: View {
                                                                String(minutes), String(seconds))
             }
         }
-        nameLabel.string = type + "(" + name + "), "
+        nameView.string = type + "(" + name + "), "
             + string + (string.isEmpty ? "" : ", ") + "\(Int(value * 100)) %"
-        nameLabel.frame.origin = CGPoint(x: Layout.basicPadding,
-                                         y: round((frame.height - nameLabel.frame.height) / 2))
+        nameView.frame.origin = CGPoint(x: Layout.basicPadding,
+                                         y: round((frame.height - nameView.frame.height) / 2))
     }
     
-    var deleteHandler: ((ProgressNumberView) -> (Bool))?
+    var deleteClosure: ((ProgressNumberView) -> (Bool))?
     weak var operation: Operation?
     func delete(with event: KeyInputEvent) -> Bool {
         if let operation = operation {
             operation.cancel()
         }
-        return deleteHandler?(self) ?? false
+        return deleteClosure?(self) ?? false
     }
     
     func reference(with event: TapEvent) -> Reference? {
@@ -775,4 +848,3 @@ final class ProgressNumberView: View {
                                                        japanese: "停止: \"カット\"アクションを送信"))
     }
 }
-

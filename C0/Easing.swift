@@ -69,7 +69,7 @@ extension Easing: Referenceable {
 }
 extension Easing: ObjectViewExpression {
     func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        let thumbnailView = DrawBox()
+        let thumbnailView = DrawLayer()
         thumbnailView.drawBlock = { [unowned thumbnailView] ctx in
             self.draw(with: thumbnailView.bounds, in: ctx)
         }
@@ -94,7 +94,7 @@ final class EasingView: View {
         }
     }
     
-    private let xLabel: Label, yLabel: Label
+    private let classXNameView: TextView, classYNameView: TextView
     private let controlLine: PathLayer = {
         let controlLine = PathLayer()
         controlLine.lineColor = .content
@@ -121,10 +121,11 @@ final class EasingView: View {
     }
     
     init(frame: CGRect = CGRect(), sizeType: SizeType = .regular) {
-        xLabel = Label(text: Localization("t"), font: Font.italic(with: sizeType))
-        yLabel = Label(text: Localization("t'"), font: Font.italic(with: sizeType))
+        classXNameView = TextView(text: Localization("t"), font: Font.italic(with: sizeType))
+        classYNameView = TextView(text: Localization("t'"), font: Font.italic(with: sizeType))
         super.init()
-        replace(children: [xLabel, yLabel, controlLine, easingLine, axis, cp0View, cp1View])
+        replace(children: [classXNameView, classYNameView,
+                           controlLine, easingLine, axis, cp0View, cp1View])
         self.frame = frame
         
         cp0View.binding = { [unowned self] in self.setEasing(with: $0) }
@@ -148,16 +149,16 @@ final class EasingView: View {
         let path = CGMutablePath()
         let sp = Layout.smallPadding
         path.addLines(between: [CGPoint(x: padding + cp0View.padding,
-                                        y: bounds.height - padding - yLabel.frame.height - sp),
+                                        y: bounds.height - padding - classYNameView.frame.height - sp),
                                 CGPoint(x: padding + cp0View.padding,
                                         y: padding + cp0View.padding),
-                                CGPoint(x: bounds.width - padding - xLabel.frame.width - sp,
+                                CGPoint(x: bounds.width - padding - classXNameView.frame.width - sp,
                                         y: padding + cp0View.padding)])
         axis.path = path
-        xLabel.frame.origin = CGPoint(x: bounds.width - padding - xLabel.frame.width,
+        classXNameView.frame.origin = CGPoint(x: bounds.width - padding - classXNameView.frame.width,
                                       y: padding)
-        yLabel.frame.origin = CGPoint(x: padding,
-                                      y: bounds.height - padding - yLabel.frame.height)
+        classYNameView.frame.origin = CGPoint(x: padding,
+                                      y: bounds.height - padding - classYNameView.frame.height)
         updateWithEasing()
     }
     private func updateWithEasing() {
@@ -171,10 +172,10 @@ final class EasingView: View {
         let knobLinePath = CGMutablePath()
         knobLinePath.addLines(between: [CGPoint(x: cp0View.frame.minX + cp0View.padding,
                                                 y: cp0View.frame.minY + cp0View.padding),
-                                        cp0View.knob.position + cp0View.frame.origin])
+                                        cp0View.formKnob.position + cp0View.frame.origin])
         knobLinePath.addLines(between: [CGPoint(x: cp1View.frame.maxX - cp1View.padding,
                                                 y: cp1View.frame.maxY - cp1View.padding),
-                                        cp1View.knob.position + cp1View.frame.origin])
+                                        cp1View.formKnob.position + cp1View.frame.origin])
         controlLine.path = knobLinePath
     }
     
@@ -229,8 +230,8 @@ final class EasingView: View {
     
     func reference(with event: TapEvent) -> Reference? {
         var reference = easing.reference
-        reference.viewDescription = Localization(english: "Horizontal axis: Time\nVertical axis: Correction time",
-                                                 japanese: "横軸: 時間\n縦軸: 補正後の時間")
+        reference.viewDescription = Localization(english: "Horizontal axis t: Time\nVertical axis t': Correction time",
+                                                 japanese: "横軸t: 時間\n縦軸t': 補正後の時間")
         reference.comment = Localization("Issue: 前後キーフレームからの傾斜スナップ")
         return reference
     }

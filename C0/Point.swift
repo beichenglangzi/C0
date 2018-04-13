@@ -297,7 +297,7 @@ final class PointView: View {
     var point = CGPoint() {
         didSet {
             if point != oldValue {
-                knob.position = position(from: point)
+                formKnob.position = position(from: point)
             }
         }
     }
@@ -310,26 +310,26 @@ final class PointView: View {
         }
     }
     
-    var backgroundLayers = [Layer]() {
+    var formBackgroundLayers = [Layer]() {
         didSet {
-            replace(children: backgroundLayers + [knob])
+            replace(children: formBackgroundLayers + [formKnob])
         }
     }
-    let knob = Knob()
+    let formKnob = Knob()
+    
+    var padding = 5.0.cf
     
     init(frame: CGRect = CGRect()) {
         super.init()
         self.frame = frame
-        append(child: knob)
+        append(child: formKnob)
     }
     
     override var bounds: CGRect {
         didSet {
-            knob.position = position(from: point)
+            formKnob.position = position(from: point)
         }
     }
-    
-    var padding = 5.0.cf
     
     func clippedPoint(with point: CGPoint) -> CGPoint {
         return pointAABB.clippedPoint(with: point)
@@ -397,7 +397,7 @@ final class PointView: View {
         let p = self.point(from: event)
         switch event.sendType {
         case .begin:
-            knob.fillColor = .editing
+            formKnob.fillColor = .editing
             oldPoint = point
             binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .begin))
             point = clippedPoint(with: self.point(withPosition: p))
@@ -413,7 +413,144 @@ final class PointView: View {
                 }
             }
             binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .end))
-            knob.fillColor = .knob
+            formKnob.fillColor = .knob
+        }
+        return true
+    }
+    
+    func push(_ point: CGPoint, old oldPoint: CGPoint) {
+        registeringUndoManager?.registerUndo(withTarget: self) { $0.push(oldPoint, old: point) }
+        binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .begin))
+        self.point = point
+        binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .end))
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        return point.reference
+    }
+}
+
+final class DiscretePointView: View {
+    var point = CGPoint() {
+        didSet {
+            if point != oldValue {
+                formKnob.position = position(from: point)
+            }
+        }
+    }
+    var defaultPoint = CGPoint()
+    var pointAABB = AABB(minX: 0, maxX: 1, minY: 0, maxY: 1) {
+        didSet {
+            guard pointAABB.maxX - pointAABB.minX > 0 && pointAABB.maxY - pointAABB.minY > 0 else {
+                fatalError("Division by zero")
+            }
+        }
+    }
+    
+    var formBackgroundLayers = [Layer]() {
+        didSet {
+            replace(children: formBackgroundLayers + [formKnob])
+        }
+    }
+    let formKnob = Knob()
+    
+    var padding = 5.0.cf
+    
+    init(frame: CGRect = CGRect()) {
+        super.init()
+        self.frame = frame
+        append(child: formKnob)
+    }
+    
+    override var bounds: CGRect {
+        didSet {
+            formKnob.position = position(from: point)
+        }
+    }
+    
+    func clippedPoint(with point: CGPoint) -> CGPoint {
+        return pointAABB.clippedPoint(with: point)
+    }
+    func point(withPosition position: CGPoint) -> CGPoint {
+        let inB = bounds.inset(by: padding)
+        let x = pointAABB.width * (position.x - inB.origin.x) / inB.width + pointAABB.minX
+        let y = pointAABB.height * (position.y - inB.origin.y) / inB.height + pointAABB.minY
+        return CGPoint(x: x, y: y)
+    }
+    func position(from point: CGPoint) -> CGPoint {
+        let inB = bounds.inset(by: padding)
+        let x = inB.width * (point.x - pointAABB.minX) / pointAABB.width + inB.origin.x
+        let y = inB.height * (point.y - pointAABB.minY) / pointAABB.height + inB.origin.y
+        return CGPoint(x: x, y: y)
+    }
+    
+    struct Binding {
+        let view: DiscretePointView, point: CGPoint, oldPoint: CGPoint, type: Action.SendType
+    }
+    var binding: ((Binding) -> ())?
+    
+    var disabledRegisterUndo = false
+    
+    func delete(with event: KeyInputEvent) -> Bool {
+        let point = defaultPoint
+        if point != self.point {
+            push(point, old: self.point)
+        }
+        return true
+    }
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [point, point.string]
+    }
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
+            if let unclippedPoint = object as? CGPoint {
+                let point = clippedPoint(with: unclippedPoint)
+                if point != self.point {
+                    push(point, old: self.point)
+                    return true
+                }
+            } else if let string = object as? String {
+                let point = clippedPoint(with: CGPoint(string))
+                if point != self.point {
+                    push(point, old: self.point)
+                    return true
+                }
+            }
+        }
+        return false
+    }
+    
+    func run(with event: ClickEvent) -> Bool {
+        let p = self.point(from: event)
+        let point = clippedPoint(with: self.point(withPosition: p))
+        if point != self.point {
+            push(point, old: self.point)
+        }
+        return true
+    }
+    
+    private var oldPoint = CGPoint()
+    func move(with event: DragEvent) -> Bool {
+        let p = self.point(from: event)
+        switch event.sendType {
+        case .begin:
+            formKnob.fillColor = .editing
+            oldPoint = point
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .begin))
+            point = clippedPoint(with: self.point(withPosition: p))
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .sending))
+        case .sending:
+            point = clippedPoint(with: self.point(withPosition: p))
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .sending))
+        case .end:
+            point = clippedPoint(with: self.point(withPosition: p))
+            if point != oldPoint {
+                registeringUndoManager?.registerUndo(withTarget: self) { [point, oldPoint] in
+                    $0.push(oldPoint, old: point)
+                }
+            }
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .end))
+            formKnob.fillColor = .knob
         }
         return true
     }

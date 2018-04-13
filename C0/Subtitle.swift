@@ -297,12 +297,12 @@ struct Subtitle: Codable, Equatable {
     }
     
     static func vttStringWith(_ subtitleTuples: [(time: Beat, duration: Beat, subtitle: Subtitle)],
-                              timeHandler: (Beat) -> (Second)) -> String {
+                              timeClosure: (Beat) -> (Second)) -> String {
         return subtitleTuples.reduce(into: "WEBVTT") {
             guard !$1.subtitle.isEmpty else {
                 return
             }
-            let beginTime = timeHandler($1.time), endTime = timeHandler($1.time + $1.duration)
+            let beginTime = timeClosure($1.time), endTime = timeClosure($1.time + $1.duration)
             func timeString(withSecond second: Double) -> String {
                 let s = Int(second)
                 let mm = s / 60
@@ -322,8 +322,8 @@ struct Subtitle: Codable, Equatable {
         }
     }
     static func vtt(_ subtitleTuples: [(time: Beat, duration: Beat, subtitle: Subtitle)],
-                    timeHandler: (Beat) -> (Second)) -> Data? {
-        return vttStringWith(subtitleTuples, timeHandler: timeHandler).data(using: .utf8)
+                    timeClosure: (Beat) -> (Second)) -> Data? {
+        return vttStringWith(subtitleTuples, timeClosure: timeClosure).data(using: .utf8)
     }
 }
 extension Subtitle: Referenceable {
@@ -343,17 +343,17 @@ final class SubtitleView: View {
     }
     
     var sizeType: SizeType
-    private let classNameLabel: Label
+    private let classNameView: TextView
     private let isConnectedWithPreviousView: BoolView
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
-        classNameLabel = Label(text: Subtitle.name, font: Font.bold(with: sizeType))
+        classNameView = TextView(text: Subtitle.name, font: Font.bold(with: sizeType))
         isConnectedWithPreviousView = BoolView(cationBool: true,
                                                name: Localization(english: "No Connected With Previous",
                                                                   japanese: "前と結合なし"),
                                                sizeType: sizeType)
         super.init()
-        replace(children: [classNameLabel, isConnectedWithPreviousView])
+        replace(children: [classNameView, isConnectedWithPreviousView])
         
         isConnectedWithPreviousView.binding = { [unowned self] in
             self.setIsConnectedWithPrevious(with: $0)
@@ -373,11 +373,11 @@ final class SubtitleView: View {
     }
     private func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        classNameLabel.frame.origin = CGPoint(x: padding,
-                                              y: bounds.height - classNameLabel.frame.height - padding)
-        let icpw = bounds.width - classNameLabel.frame.width - padding * 3
+        classNameView.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameView.frame.height - padding)
+        let icpw = bounds.width - classNameView.frame.width - padding * 3
         let icph = Layout.height(with: sizeType)
-        isConnectedWithPreviousView.frame = CGRect(x: classNameLabel.frame.maxX + padding, y: padding,
+        isConnectedWithPreviousView.frame = CGRect(x: classNameView.frame.maxX + padding, y: padding,
                                                    width: icpw, height: icph)
     }
     func updateWithSubtitle() {

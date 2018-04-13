@@ -28,6 +28,16 @@ extension Bool: ObjectViewExpression {
     }
 }
 
+struct BoolInfo {
+    var trueName = Localization(), falseName = Localization()
+    static let `default` = BoolInfo(trueName: Localization(english: "True", japanese: "真"),
+                                    falseName: Localization(english: "False", japanese: "偽"))
+    static let hidden = BoolInfo(trueName: Localization(english: "Hidden", japanese: "隠し済み"),
+                                 falseName: Localization(english: "Shown", japanese: "表示済み"))
+    static let locked = BoolInfo(trueName: Localization(english: "Locked", japanese: "ロック済み"),
+                                 falseName: Localization(english: "Unlocked", japanese: "未ロック"))
+}
+
 final class BoolView: View {
     var bool: Bool {
         didSet {
@@ -38,28 +48,47 @@ final class BoolView: View {
     var cationBool: Bool?
     
     var sizeType: SizeType
-    let nameLabel: Label
+    let parentClassTextView: TextView
+    var boolInfo: BoolInfo {
+        didSet {
+            parentClassTrueNameView.localization = boolInfo.trueName
+            parentClassFalseNameView.localization = boolInfo.falseName
+        }
+    }
+    let parentClassTrueNameView: TextView
+    let parentClassFalseNameView: TextView
     let knob: DiscreteKnob
+    let lineLayer = PathLayer()
     
     init(bool: Bool = false, defaultBool: Bool = false, cationBool: Bool? = nil,
-         name: Localization = Localization(), sizeType: SizeType = .regular) {
+         name: Localization = Localization(), boolInfo: BoolInfo = BoolInfo(),
+         sizeType: SizeType = .regular) {
         self.bool = bool
         self.defaultBool = bool
         self.cationBool = cationBool
-        nameLabel = Label(text: name, font: Font.default(with: sizeType))
+        parentClassTextView = TextView(text: name + Localization(":"),
+                                       font: Font.default(with: sizeType))
+        self.boolInfo = boolInfo
+        parentClassTrueNameView = TextView(text: boolInfo.trueName,
+                                           font: Font.default(with: sizeType))
+        parentClassFalseNameView = TextView(text: boolInfo.falseName,
+                                            font: Font.default(with: sizeType))
         knob = DiscreteKnob()
         self.sizeType = sizeType
+        lineLayer.lineColor = .content
+        lineLayer.lineWidth = 1
         
         super.init()
-        replace(children: [nameLabel, knob])
+        replace(children: [parentClassTextView, lineLayer, knob,
+                           parentClassTrueNameView, parentClassFalseNameView])
         updateLayout()
     }
     
     override var defaultBounds: CGRect {
         let padding = Layout.padding(with: sizeType)
         return CGRect(x: 0, y: 0,
-                      width: nameLabel.frame.width + padding * 2,
-                      height: nameLabel.frame.height + padding * 2)
+                      width: parentClassTextView.frame.width + parentClassFalseNameView.frame.width + parentClassTrueNameView.frame.width + padding * 3 + 1 * 4,
+                      height: parentClassTextView.frame.height + padding * 2)
     }
     override var bounds: CGRect {
         didSet {
@@ -68,20 +97,29 @@ final class BoolView: View {
     }
     func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        nameLabel.frame.origin = CGPoint(x: padding, y: padding)
+        parentClassTextView.frame.origin = CGPoint(x: padding, y: padding)
+        parentClassFalseNameView.frame.origin = CGPoint(x: parentClassTextView.frame.maxX + padding + 1, y: padding)
+        parentClassTrueNameView.frame.origin = CGPoint(x: parentClassFalseNameView.frame.maxX + 2,
+                                                       y: padding)
+        let path = CGMutablePath()
+        path.addRect(parentClassFalseNameView.frame.inset(by: -0.5))
+        path.addRect(parentClassTrueNameView.frame.inset(by: -0.5))
+        lineLayer.path = path
         updateWithBool()
     }
     func updateWithBool() {
-        knob.position = !bool ?
-            CGPoint(x: (bounds.minX + bounds.midX) / 2, y: 3) :
-            CGPoint(x: (bounds.midX + bounds.maxX) / 2, y: 3)
+        knob.frame = !bool ?
+            parentClassFalseNameView.frame.inset(by: -1) :
+            parentClassTrueNameView.frame.inset(by: -1)
         if let cationBool = cationBool {
-            nameLabel.textFrame.color = cationBool == bool ? .warning : .locked
+            parentClassTextView.textFrame.color = cationBool == bool ? .warning : .locked
         }
+        parentClassFalseNameView.fillColor = !bool ? .knob : .background
+        parentClassTrueNameView.fillColor = bool ? .knob : .background
     }
     
     func bool(at p: CGPoint) -> Bool {
-        return p.x > bounds.midX
+        return !parentClassFalseNameView.frame.contains(p)
     }
     
     var disabledRegisterUndo = false
@@ -95,7 +133,7 @@ final class BoolView: View {
     func delete(with event: KeyInputEvent) -> Bool {
         let bool = defaultBool
         if bool != self.bool {
-            set(bool, old: self.bool)
+            push(bool, old: self.bool)
         }
         return true
     }
@@ -107,7 +145,7 @@ final class BoolView: View {
             if let string = object as? String {
                 if let bool = Bool(string) {
                     if bool != self.bool {
-                        set(bool, old: self.bool)
+                        push(bool, old: self.bool)
                         return true
                     }
                 }
@@ -120,7 +158,7 @@ final class BoolView: View {
         let p = point(from: event)
         let bool = self.bool(at: p)
         if bool != self.bool {
-            set(bool, old: self.bool)
+            push(bool, old: self.bool)
         }
         return true
     }
@@ -143,7 +181,7 @@ final class BoolView: View {
             bool = self.bool(at: p)
             if bool != oldBool {
                 registeringUndoManager?.registerUndo(withTarget: self) { [bool, oldBool] in
-                    $0.set(oldBool, old: bool)
+                    $0.push(oldBool, old: bool)
                 }
             }
             binding?(Binding(view: self, bool: bool, oldBool: oldBool, type: .end))
@@ -152,8 +190,8 @@ final class BoolView: View {
         return true
     }
     
-    private func set(_ bool: Bool, old oldBool: Bool) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldBool, old: bool) }
+    private func push(_ bool: Bool, old oldBool: Bool) {
+        registeringUndoManager?.registerUndo(withTarget: self) { $0.push(oldBool, old: bool) }
         binding?(Binding(view: self, bool: oldBool, oldBool: oldBool, type: .begin))
         self.bool = bool
         binding?(Binding(view: self, bool: bool, oldBool: oldBool, type: .end))

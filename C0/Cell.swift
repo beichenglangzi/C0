@@ -112,29 +112,29 @@ final class Cell: NSObject, NSCoding {
     }
     
     private var depthFirstSearched = false
-    func depthFirstSearch(duplicate: Bool, handler: (_ parent: Cell, _ cell: Cell) -> Void) {
+    func depthFirstSearch(duplicate: Bool, closure: (_ parent: Cell, _ cell: Cell) -> Void) {
         if duplicate {
-            depthFirstSearchDuplicateRecursion(handler)
+            depthFirstSearchDuplicateRecursion(closure)
         } else {
-            depthFirstSearchRecursion(handler: handler)
+            depthFirstSearchRecursion(closure: closure)
             resetDepthFirstSearch()
         }
     }
-    private func depthFirstSearchRecursion(handler: (_ parent: Cell, _ cell: Cell) -> Void) {
+    private func depthFirstSearchRecursion(closure: (_ parent: Cell, _ cell: Cell) -> Void) {
         for child in children {
             if !child.depthFirstSearched {
                 child.depthFirstSearched = true
-                handler(self, child)
-                child.depthFirstSearchRecursion(handler: handler)
+                closure(self, child)
+                child.depthFirstSearchRecursion(closure: closure)
             }
         }
     }
     private func depthFirstSearchDuplicateRecursion(
-        _ handler: (_ parent: Cell, _ cell: Cell) -> Void) {
+        _ closure: (_ parent: Cell, _ cell: Cell) -> Void) {
         
         for child in children {
-            handler(self, child)
-            child.depthFirstSearchDuplicateRecursion(handler)
+            closure(self, child)
+            child.depthFirstSearchDuplicateRecursion(closure)
         }
     }
     private func resetDepthFirstSearch() {
@@ -153,27 +153,27 @@ final class Cell: NSObject, NSCoding {
         return cells
     }
     func allCells(isReversed: Bool = false, usingLock: Bool = false,
-                  handler: (Cell, _ stop: inout Bool) -> Void) {
+                  closure: (Cell, _ stop: inout Bool) -> Void) {
         var stop = false
-        allCellsRecursion(&stop, isReversed: isReversed, usingLock: usingLock, handler: handler)
+        allCellsRecursion(&stop, isReversed: isReversed, usingLock: usingLock, closure: closure)
     }
     private func allCellsRecursion(_ aStop: inout Bool, isReversed: Bool, usingLock: Bool,
-                                   handler: (Cell, _ stop: inout Bool) -> Void) {
+                                   closure: (Cell, _ stop: inout Bool) -> Void) {
         let children = isReversed ? self.children.reversed() : self.children
         for child in children {
             if usingLock ? child.isEditable : true {
                 child.allCellsRecursion(&aStop, isReversed: isReversed, usingLock: usingLock,
-                                        handler: handler)
+                                        closure: closure)
                 if aStop {
                     return
                 }
-                handler(child, &aStop)
+                closure(child, &aStop)
                 if aStop {
                     return
                 }
             } else {
                 child.allCellsRecursion(&aStop, isReversed: isReversed, usingLock: usingLock,
-                                        handler: handler)
+                                        closure: closure)
                 if aStop {
                     return
                 }
@@ -646,7 +646,7 @@ extension Cell: Referenceable {
 }
 extension Cell: ViewExpression {
     func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
-        let thumbnailView = DrawBox()
+        let thumbnailView = DrawLayer()
         thumbnailView.drawBlock = { [unowned self, unowned thumbnailView] ctx in
             self.draw(with: thumbnailView.bounds, in: ctx)
         }
@@ -701,7 +701,7 @@ extension JoiningCell: ClassCopiable {
 }
 extension JoiningCell: ObjectViewExpression {
     func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        let thumbnailView = DrawBox()
+        let thumbnailView = DrawLayer()
         thumbnailView.drawBlock = { [unowned cell, unowned thumbnailView] ctx in
             cell.draw(with: thumbnailView.bounds, in: ctx)
         }
@@ -718,17 +718,17 @@ final class CellView: View {
     }
     
     var sizeType: SizeType
-    private let classNameLabel: Label
+    private let classNameView: TextView
     private let isLockedView: BoolView
     
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
-        classNameLabel = Label(text: Cell.name, font: Font.bold(with: sizeType))
+        classNameView = TextView(text: Cell.name, font: Font.bold(with: sizeType))
         isLockedView = BoolView(cationBool: true,
-                                name: Localization(english: "Locked", japanese: "ロック済"),
+                                boolInfo: BoolInfo.locked,
                                 sizeType: sizeType)
         super.init()
-        replace(children: [classNameLabel, isLockedView])
+        replace(children: [classNameView, isLockedView])
         
         isLockedView.binding = { [unowned self] in self.setIsLocked(with: $0) }
     }
@@ -741,7 +741,7 @@ final class CellView: View {
     
     override var defaultBounds: CGRect {
         let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
-        let tlw = classNameLabel.frame.width + isLockedView.frame.width + padding * 3
+        let tlw = classNameView.frame.width + isLockedView.frame.width + padding * 3
         return CGRect(x: 0, y: 0, width: tlw, height: h + padding * 2)
     }
     override var bounds: CGRect {
@@ -751,10 +751,10 @@ final class CellView: View {
     }
     private func updateLayout() {
         let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
-        let tlw = bounds.width - classNameLabel.frame.width - padding * 3
-        classNameLabel.frame.origin = CGPoint(x: padding,
-                                              y: bounds.height - classNameLabel.frame.height - padding)
-        isLockedView.frame = CGRect(x: classNameLabel.frame.maxX + padding, y: padding,
+        let tlw = bounds.width - classNameView.frame.width - padding * 3
+        classNameView.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameView.frame.height - padding)
+        isLockedView.frame = CGRect(x: classNameView.frame.maxX + padding, y: padding,
                                     width: tlw, height: h)
     }
     func updateWithCell() {
@@ -768,7 +768,7 @@ final class CellView: View {
         let isLocked: Bool, oldIsLocked: Bool
         let inCell: Cell, type: Action.SendType
     }
-    var setIsLockedHandler: ((Binding) -> ())?
+    var setIsLockedClosure: ((Binding) -> ())?
     
     private var oldCell = Cell()
     
@@ -778,17 +778,17 @@ final class CellView: View {
         } else {
             cell.isLocked = binding.bool
         }
-        setIsLockedHandler?(Binding(cellView: self,
+        setIsLockedClosure?(Binding(cellView: self,
                                     isLocked: binding.bool,
                                     oldIsLocked: binding.oldBool,
                                     inCell: oldCell,
                                     type: binding.type))
     }
     
-    var copiedObjectsHandler: ((CellView, KeyInputEvent) -> [ViewExpression]?)?
+    var copiedObjectsClosure: ((CellView, KeyInputEvent) -> [ViewExpression]?)?
     func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        if let copiedObjectsHandler = copiedObjectsHandler {
-            return copiedObjectsHandler(self, event)
+        if let copiedObjectsClosure = copiedObjectsClosure {
+            return copiedObjectsClosure(self, event)
         } else {
             return [cell.copied]
         }

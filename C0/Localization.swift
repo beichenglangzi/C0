@@ -89,7 +89,7 @@ extension Localization: Referenceable {
 }
 extension Localization: ObjectViewExpression {
     func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return Label(frame: bounds, text: self,
-                     font: Font.default(with: sizeType), isSizeToFit: false)
+        return TextView(text: self, font: Font.default(with: sizeType),
+                        frame: bounds, isSizeToFit: false)
     }
 }

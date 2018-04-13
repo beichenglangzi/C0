@@ -79,6 +79,10 @@ extension CGSize {
     var string: String {
         return String(NSStringFromSize(NSSizeFromCGSize(self)))
     }
+    
+    static let effectiveFieldSizeOfView = CGSize(width: tan(.pi * (30.0 / 2) / 180),
+                                                 height: tan(.pi * (20.0 / 2) / 180))
+    
 }
 extension CGSize: Referenceable {
     static let name = Localization(english: "Size", japanese: "サイズ")
@@ -98,25 +102,53 @@ final class DiscreteSizeView: View {
             }
         }
     }
+    var defaultSize = CGSize()
     
-    private let wLabel = Label(text: Localization("w:"))
-    private let widthView = DiscreteNumberView(frame: Layout.valueFrame,
-                                               min: 1, max: 10000, numberInterval: 1)
-    private let hLabel = Label(text: Localization("h:"))
-    private let heightView = DiscreteNumberView(frame: Layout.valueFrame,
-                                                min: 1, max: 10000, numberInterval: 1)
-    override init() {
-        super.init()
-        let size = Layout.leftAlignment([wLabel, widthView, Padding(), hLabel, heightView],
-                                        height: Layout.basicHeight + Layout.basicPadding * 2)
-        frame.size = CGSize(width: size.width + Layout.basicPadding, height: size.height)
-        replace(children: [wLabel, widthView, hLabel, heightView])
+    var sizeType: SizeType
+    let classWidthNameView: TextView
+    let widthView: DiscreteNumberView
+    let classHeightNameView: TextView
+    let heightView: DiscreteNumberView
+    init(sizeType: SizeType) {
+        self.sizeType = sizeType
         
+        classWidthNameView = TextView(text: Localization("w:"), font: Font.default(with: sizeType))
+        widthView = DiscreteNumberView(frame: Layout.valueFrame, min: 1, max: 10000,
+                                       numberInterval: 1, sizeType: sizeType)
+        classHeightNameView = TextView(text: Localization("h:"), font: Font.default(with: sizeType))
+        heightView = DiscreteNumberView(frame: Layout.valueFrame,
+                                        min: 1, max: 10000, numberInterval: 1, sizeType: sizeType)
+        
+        super.init()
+        replace(children: [classWidthNameView, widthView, classHeightNameView, heightView])
         widthView.binding = { [unowned self] in self.setSize(with: $0) }
         heightView.binding = { [unowned self] in self.setSize(with: $0) }
+        updateLayout()
     }
     
-    var defaultSize = CGSize()
+    override var defaultBounds: CGRect {
+        let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
+        return CGRect(x: 0, y: 0,
+                      width: classWidthNameView.frame.width + widthView.frame.width + classHeightNameView.frame.width + heightView.frame.width + padding * 3,
+                      height: height + padding * 2)
+    }
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    func updateLayout() {
+        let padding = Layout.padding(with: sizeType)
+        var x = padding
+        classWidthNameView.frame.origin = CGPoint(x: x, y: padding)
+        x += classWidthNameView.frame.width
+        widthView.frame.origin = CGPoint(x: x, y: padding)
+        x += widthView.frame.width + padding
+        classHeightNameView.frame.origin = CGPoint(x: x, y: padding)
+        x += classHeightNameView.frame.width
+        heightView.frame.origin = CGPoint(x: x, y: padding)
+        x += heightView.frame.width + padding
+    }
     
     struct Binding {
         let view: DiscreteSizeView

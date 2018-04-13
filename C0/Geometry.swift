@@ -278,14 +278,14 @@ final class Geometry: NSObject, NSCoding {
         return lines.isEmpty
     }
     
-    func clip(in ctx: CGContext, handler: () -> Void) {
+    func clip(in ctx: CGContext, closure: () -> Void) {
         guard !path.isEmpty else {
             return
         }
         ctx.saveGState()
         ctx.addPath(path)
         ctx.clip()
-        handler()
+        closure()
         ctx.restoreGState()
     }
     func addPath(in ctx: CGContext) {

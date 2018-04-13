@@ -43,10 +43,8 @@ final class SceneImageRendedrer {
     }
     
     var image: CGImage? {
-        guard
-            let colorSpace = CGColorSpace.with(scene.colorSpace),
-            let ctx = CGContext.bitmap(with: renderSize, colorSpace) else {
-                return nil
+        guard let ctx = CGContext.bitmap(with: renderSize, CGColorSpace.default) else {
+            return nil
         }
         drawLayer.render(in: ctx)
         return ctx.makeImage()
@@ -96,13 +94,11 @@ final class SceneMovieRenderer {
     var screenTransform = Transform()
     
     func writeMovie(to url: URL,
-                    progressHandler: @escaping (CGFloat, UnsafeMutablePointer<Bool>) -> Void,
-                    completionHandler: @escaping (Error?) -> ()) throws {
-        guard
-            let colorSpace = CGColorSpace.with(scene.colorSpace),
-            let colorSpaceProfile = colorSpace.iccData else {
-                throw NSError(domain: AVFoundationErrorDomain,
-                              code: AVError.Code.exportFailed.rawValue)
+                    progressClosure: @escaping (CGFloat, UnsafeMutablePointer<Bool>) -> Void,
+                    completionClosure: @escaping (Error?) -> ()) throws {
+        let colorSpace = CGColorSpace.default
+        guard let colorSpaceProfile = colorSpace.iccData else {
+            throw NSError(domain: AVFoundationErrorDomain, code: AVError.Code.exportFailed.rawValue)
         }
         
         let fileManager = FileManager.default
@@ -143,7 +139,7 @@ final class SceneMovieRenderer {
         for i in 0 ..< allFrameCount {
             autoreleasepool {
                 while !writerInput.isReadyForMoreMediaData {
-                    progressHandler(i.cf / (allFrameCount - 1).cf, &stop)
+                    progressClosure(i.cf / (allFrameCount - 1).cf, &stop)
                     if stop {
                         append = false
                         return
@@ -182,7 +178,7 @@ final class SceneMovieRenderer {
             if !append {
                 break
             }
-            progressHandler(i.cf / (allFrameCount - 1).cf, &stop)
+            progressClosure(i.cf / (allFrameCount - 1).cf, &stop)
             if stop {
                 break
             }
@@ -205,7 +201,7 @@ final class SceneMovieRenderer {
                 if let audioURL = self.scene.sound.url {
                     do {
                         try self.wrireAudio(to: url, self.fileType, audioURL: audioURL) { error in
-                            completionHandler(error)
+                            completionClosure(error)
                         }
                     } catch {
                         if fileManager.fileExists(atPath: url.path) {
@@ -213,13 +209,13 @@ final class SceneMovieRenderer {
                         }
                     }
                 } else {
-                    completionHandler(nil)
+                    completionClosure(nil)
                 }
             }
         }
     }
     func wrireAudio(to videoURL: URL, _ fileType: AVFileType, audioURL: URL,
-                    completionHandler: @escaping (Error?) -> ()) throws {
+                    completionClosure: @escaping (Error?) -> ()) throws {
         
         let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(videoURL.lastPathComponent)
@@ -258,9 +254,9 @@ final class SceneMovieRenderer {
                 if fileManager.fileExists(atPath: tempURL.path) {
                     try fileManager.removeItem(at: tempURL)
                 }
-                completionHandler(assetExportSession.error)
+                completionClosure(assetExportSession.error)
             } catch {
-                completionHandler(error)
+                completionClosure(error)
             }
         }
     }
@@ -270,20 +266,10 @@ final class RendererManager {
     weak var progressesEdgeLayer: Layer?
     lazy var scene = Scene()
     var rendingContentScale = 1.0.cf
-    let popupBox: PopupBox
     
     var renderQueue = OperationQueue()
     
     init() {
-        popupBox = PopupBox(frame: CGRect(x: 0, y: 0, width: 100.0, height: Layout.basicHeight),
-                            text: Localization(english: "Export", japanese: "書き出し"))
-        popupBox.isSubIndicatedHandler = { [unowned self] isSubIndicated in
-            if isSubIndicated {
-                self.updatePopupBox(withRendingContentScale: self.rendingContentScale)
-            } else {
-                self.popupBox.panel.replace(children: [])
-            }
-        }
     }
     deinit {
         renderQueue.cancelAllOperations()
@@ -295,73 +281,73 @@ final class RendererManager {
         let size720p = CGSize(width: floor((size.width * 720) / size.height), height: 720)
         let size1080p = CGSize(width: floor((size.width * 1080) / size.height), height: 1080)
         let size2160p = CGSize(width: floor((size.width * 2160) / size.height), height: 2160)
-        
+        "Movie x1 x2 720p 1080p 2160p"
         let s2String = "w: \(Int(size2.width)) px, h: \(Int(size2.height)) px"
         let s720String = "w: \(Int(size720p.width)) px, h: 720 px"
         let s1080String = "w: \(Int(size1080p.width)) px, h: 1080 px"
         let s2160String = "w: \(Int(size2160p.width)) px, h: 2160 px"
         
-        let s2Text = Localization(english: "Export Movie(\(s2String))",
-                                  japanese: "動画として書き出す(\(s2String))")
-        let s2Handler: (TextBox) -> (Bool) = { [unowned self] in
-            self.exportMovie(message: $0.label.string, size: size2, isSelectedCutOnly: false)
-        }
-        let s720Text = Localization(english: "Export Movie(\(s720String))",
-                                    japanese: "動画として書き出す(\(s720String))")
-        let s720Handler: (TextBox) -> (Bool) = { [unowned self] in
-            self.exportMovie(message: $0.label.string, size: size720p, isSelectedCutOnly: false)
-        }
-        let s1080Text = Localization(english: "Export Movie(\(s1080String))",
-                                     japanese: "動画として書き出す(\(s1080String))")
-        let s1080Handler: (TextBox) -> (Bool) = { [unowned self] in
-            self.exportMovie(message: $0.label.string, size: size1080p, isSelectedCutOnly: false)
-        }
-        let s2160Text = Localization(english: "Export Movie(\(s2160String))",
-                                     japanese: "動画として書き出す(\(s2160String))")
-        let s2160Handler: (TextBox) -> (Bool) = { [unowned self] in
-            self.exportMovie(message: $0.label.string, size: size2160p, isSelectedCutOnly: false)
-        }
-        
-        let s2IText = Localization(english: "Export Image(\(s2String))",
-                                   japanese: "画像として書き出す(\(s2String))")
-        let s2IHandler: (TextBox) -> (Bool) = { [unowned self] in
-            self.exportImage(message: $0.label.string, size: size2)
-        }
-        let s720IText = Localization(english: "Export Image(\(s720String))",
-                                     japanese: "画像として書き出す(\(s720String))")
-        let s720IHandler: (TextBox) -> (Bool) = { [unowned self] in
-            self.exportImage(message: $0.label.string, size: size720p)
-        }
-        let s1080IText = Localization(english: "Export Image(\(s1080String))",
-                                      japanese: "画像として書き出す(\(s1080String))")
-        let s1080IHandler: (TextBox) -> (Bool) = { [unowned self] in
-            self.exportImage(message: $0.label.string, size: size1080p)
-        }
-        let s2160IText = Localization(english: "Export Image(\(s2160String))",
-                                      japanese: "画像として書き出す(\(s2160String))")
-        let s2160IHandler: (TextBox) -> (Bool) = { [unowned self] in
-            self.exportImage(message: $0.label.string, size: size2160p)
-        }
-        
-        let subtitleText = Localization(english: "Export Subtitle", japanese: "字幕として書き出す")
-        let subtitleHandler: (TextBox) -> (Bool) =  { [unowned self] in
-            self.exportSubtitle(message: $0.label.string)
-        }
-        
-        let panel = self.popupBox.panel
-        panel.replace(children: [TextBox(name: s2Text, runHandler: s2Handler),
-                                 TextBox(name: s720Text, runHandler: s720Handler),
-                                 TextBox(name: s1080Text, runHandler: s1080Handler),
-                                 TextBox(name: s2160Text, runHandler: s2160Handler),
-                                 TextBox(name: s2IText, runHandler: s2IHandler),
-                                 TextBox(name: s720IText, runHandler: s720IHandler),
-                                 TextBox(name: s1080IText, runHandler: s1080IHandler),
-                                 TextBox(name: s2160IText, runHandler: s2160IHandler),
-                                 TextBox(name: subtitleText, runHandler: subtitleHandler)])
-        var minSize = CGSize()
-        Layout.topAlignment(panel.children, minSize: &minSize)
-        panel.frame.size = CGSize(width: minSize.width + Layout.basicPadding * 2,
-                                  height: minSize.height + Layout.basicPadding * 2)
+//        let s2Text = Localization(english: "Export Movie(\(s2String))",
+//                                  japanese: "動画として書き出す(\(s2String))")
+//        let s2Closure: (TextBox) -> (Bool) = { [unowned self] in
+//            self.exportMovie(message: $0.label.string, size: size2, isSelectedCutOnly: false)
+//        }
+//        let s720Text = Localization(english: "Export Movie(\(s720String))",
+//                                    japanese: "動画として書き出す(\(s720String))")
+//        let s720Closure: (TextBox) -> (Bool) = { [unowned self] in
+//            self.exportMovie(message: $0.label.string, size: size720p, isSelectedCutOnly: false)
+//        }
+//        let s1080Text = Localization(english: "Export Movie(\(s1080String))",
+//                                     japanese: "動画として書き出す(\(s1080String))")
+//        let s1080Closure: (TextBox) -> (Bool) = { [unowned self] in
+//            self.exportMovie(message: $0.label.string, size: size1080p, isSelectedCutOnly: false)
+//        }
+//        let s2160Text = Localization(english: "Export Movie(\(s2160String))",
+//                                     japanese: "動画として書き出す(\(s2160String))")
+//        let s2160Closure: (TextBox) -> (Bool) = { [unowned self] in
+//            self.exportMovie(message: $0.label.string, size: size2160p, isSelectedCutOnly: false)
+//        }
+//
+//        let s2IText = Localization(english: "Export Image(\(s2String))",
+//                                   japanese: "画像として書き出す(\(s2String))")
+//        let s2IClosure: (TextBox) -> (Bool) = { [unowned self] in
+//            self.exportImage(message: $0.label.string, size: size2)
+//        }
+//        let s720IText = Localization(english: "Export Image(\(s720String))",
+//                                     japanese: "画像として書き出す(\(s720String))")
+//        let s720IClosure: (TextBox) -> (Bool) = { [unowned self] in
+//            self.exportImage(message: $0.label.string, size: size720p)
+//        }
+//        let s1080IText = Localization(english: "Export Image(\(s1080String))",
+//                                      japanese: "画像として書き出す(\(s1080String))")
+//        let s1080IClosure: (TextBox) -> (Bool) = { [unowned self] in
+//            self.exportImage(message: $0.label.string, size: size1080p)
+//        }
+//        let s2160IText = Localization(english: "Export Image(\(s2160String))",
+//                                      japanese: "画像として書き出す(\(s2160String))")
+//        let s2160IClosure: (TextBox) -> (Bool) = { [unowned self] in
+//            self.exportImage(message: $0.label.string, size: size2160p)
+//        }
+//
+//        let subtitleText = Localization(english: "Export Subtitle", japanese: "字幕として書き出す")
+//        let subtitleClosure: (TextBox) -> (Bool) =  { [unowned self] in
+//            self.exportSubtitle(message: $0.label.string)
+//        }
+//
+//        let panel = self.popupBox.panel
+//        panel.replace(children: [TextBox(name: s2Text, runClosure: s2Closure),
+//                                 TextBox(name: s720Text, runClosure: s720Closure),
+//                                 TextBox(name: s1080Text, runClosure: s1080Closure),
+//                                 TextBox(name: s2160Text, runClosure: s2160Closure),
+//                                 TextBox(name: s2IText, runClosure: s2IClosure),
+//                                 TextBox(name: s720IText, runClosure: s720IClosure),
+//                                 TextBox(name: s1080IText, runClosure: s1080IClosure),
+//                                 TextBox(name: s2160IText, runClosure: s2160IClosure),
+//                                 TextBox(name: subtitleText, runClosure: subtitleClosure)])
+//        var minSize = CGSize()
+//        Layout.topAlignment(panel.children, minSize: &minSize)
+//        panel.frame.size = CGSize(width: minSize.width + Layout.basicPadding * 2,
+//                                  height: minSize.height + Layout.basicPadding * 2)
     }
 
     var bars = [ProgressNumberView]()
@@ -409,14 +395,14 @@ final class RendererManager {
                                                                      japanese: "書き出し中"))
             let operation = BlockOperation()
             progressBar.operation = operation
-            progressBar.deleteHandler = { [unowned self] in
+            progressBar.deleteClosure = { [unowned self] in
                 self.endProgress($0)
                 return true
             }
             self.beginProgress(progressBar)
             
             operation.addExecutionBlock() { [unowned operation] in
-                let progressHandler: (CGFloat, UnsafeMutablePointer<Bool>) -> () =
+                let progressClosure: (CGFloat, UnsafeMutablePointer<Bool>) -> () =
                 { (totalProgress, stop) in
                     if operation.isCancelled {
                         stop.pointee = true
@@ -426,7 +412,7 @@ final class RendererManager {
                         }
                     }
                 }
-                let completionHandler: (Error?) -> () = { (error) in
+                let completionClosure: (Error?) -> () = { (error) in
                     do {
                         if let error = error {
                             throw error
@@ -442,18 +428,18 @@ final class RendererManager {
                     } catch {
                         OperationQueue.main.addOperation() {
                             progressBar.state = Localization(english: "Error", japanese: "エラー")
-                            progressBar.nameLabel.textFrame.color = .warning
+                            progressBar.nameView.textFrame.color = .warning
                         }
                     }
                 }
                 do {
                     try renderer.writeMovie(to: e.url,
-                                            progressHandler: progressHandler,
-                                            completionHandler: completionHandler)
+                                            progressClosure: progressClosure,
+                                            completionClosure: completionClosure)
                 } catch {
                     OperationQueue.main.addOperation() {
                         progressBar.state = Localization(english: "Error", japanese: "エラー")
-                        progressBar.nameLabel.textFrame.color = .warning
+                        progressBar.nameView.textFrame.color = .warning
                     }
                 }
             }
@@ -480,7 +466,9 @@ final class RendererManager {
         return true
     }
     
-    func exportSubtitle(message: String?) -> Bool {
+    func exportSubtitles() -> Bool {
+        let message = Localization(english: "Export Subtitles",
+                                   japanese: "字幕として書き出す").currentString
         URL.file(message: message, name: nil, fileTypes: ["vtt"]) { [unowned self] exportURL in
             let vttData = self.scene.vtt
             do {
@@ -498,8 +486,8 @@ final class RendererManager {
         let progressBar = ProgressNumberView()
         progressBar.name = name
         progressBar.state = Localization(english: "Error", japanese: "エラー")
-        progressBar.nameLabel.textFrame.color = .warning
-        progressBar.deleteHandler = { [unowned self] in
+        progressBar.nameView.textFrame.color = .warning
+        progressBar.deleteClosure = { [unowned self] in
             self.endProgress($0)
             return true
         }

@@ -306,18 +306,18 @@ final class SoundWaveformView: Layer {
 final class SoundView: View {
     var sound = Sound() {
         didSet {
-            soundLabel.localization = sound.url != nil ?
+            nameView.localization = sound.url != nil ?
                 Localization(sound.name) : Localization(english: "Empty", japanese: "空")
         }
     }
     
-    let classNameLabel = Label(text: Sound.name, font: .bold)
-    let soundLabel = Label(text: Localization(english: "Empty", japanese: "空"))
+    let classNameView = TextView(text: Sound.name, font: .bold)
+    let nameView = TextView(text: Localization(english: "Empty", japanese: "空"))
     
     override init() {
         super.init()
         isClipped = true
-        replace(children: [classNameLabel, soundLabel])
+        replace(children: [classNameView, nameView])
         updateLayout()
     }
     
@@ -333,7 +333,7 @@ final class SoundView: View {
         }
     }
     private func updateLayout() {
-        _ = Layout.leftAlignment([classNameLabel, Padding(), soundLabel], height: frame.height)
+        _ = Layout.leftAlignment([classNameView, Padding(), nameView], height: frame.height)
     }
     
     var disabledRegisterUndo = false
@@ -341,7 +341,7 @@ final class SoundView: View {
     struct Binding {
         let soundView: SoundView, sound: Sound, oldSound: Sound, type: Action.SendType
     }
-    var setSoundHandler: ((Binding) -> ())?
+    var setSoundClosure: ((Binding) -> ())?
     
     func delete(with event: KeyInputEvent) -> Bool {
         guard sound.url != nil else {
@@ -372,10 +372,10 @@ final class SoundView: View {
     }
     private func set(_ sound: Sound, old oldSound: Sound) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldSound, old: sound) }
-        setSoundHandler?(Binding(soundView: self,
+        setSoundClosure?(Binding(soundView: self,
                                  sound: oldSound, oldSound: oldSound, type: .begin))
         self.sound = sound
-        setSoundHandler?(Binding(soundView: self,
+        setSoundClosure?(Binding(soundView: self,
                                  sound: sound, oldSound: oldSound, type: .end))
     }
     

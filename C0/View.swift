@@ -247,7 +247,7 @@ protocol ViewExpression {
 protocol Thumbnailable {
     func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer
 }
-protocol ObjectViewExpression: ViewExpression, Thumbnailable, Copiable {
+protocol ObjectViewExpression: ViewExpression, Thumbnailable, Referenceable, Copiable {
 }
 extension ObjectViewExpression {
     func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
@@ -265,28 +265,23 @@ extension ObjectViewExpressionWithDisplayText {
     }
 }
 
-final class ObjectView<T: Copiable & ViewExpression>: View {
+final class ObjectView<T: Copiable & ViewExpression & Referenceable>: View {
     let object: T
     
     var sizeType: SizeType
-    let classNameLabel: Label, thumbnailView: Layer
+    let classNameView: TextView, thumbnailView: Layer
     init(object: T, thumbnailView: Layer?, minFrame: CGRect, thumbnailWidth: CGFloat = 40.0,
          sizeType: SizeType = .regular) {
         self.object = object
-        if let reference = object as? Referenceable {
-            classNameLabel = Label(text: type(of: reference).name, font: Font.bold(with: sizeType))
-        } else {
-            classNameLabel = Label(text: Localization(String(describing: type(of: object))),
-                                   font: Font.bold(with: sizeType))
-        }
-        self.thumbnailView = thumbnailView ?? Box()
+        classNameView = TextView(text: type(of: object).name, font: Font.bold(with: sizeType))
+        self.thumbnailView = thumbnailView ?? Layer()
         self.sizeType = sizeType
         
         super.init()
-        let width = max(minFrame.width, classNameLabel.frame.width + thumbnailWidth)
+        let width = max(minFrame.width, classNameView.frame.width + thumbnailWidth)
         self.frame = CGRect(origin: minFrame.origin,
                             size: CGSize(width: width, height: minFrame.height))
-        replace(children: [classNameLabel, self.thumbnailView])
+        replace(children: [classNameView, self.thumbnailView])
         updateLayout()
     }
     
@@ -303,11 +298,11 @@ final class ObjectView<T: Copiable & ViewExpression>: View {
     }
     func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        classNameLabel.frame.origin = CGPoint(x: padding,
-                                              y: bounds.height - classNameLabel.frame.height - padding)
-        thumbnailView.frame = CGRect(x: classNameLabel.frame.maxX + padding,
+        classNameView.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameView.frame.height - padding)
+        thumbnailView.frame = CGRect(x: classNameView.frame.maxX + padding,
                                      y: padding,
-                                     width: bounds.width - classNameLabel.frame.width - padding * 3,
+                                     width: bounds.width - classNameView.frame.width - padding * 3,
                                      height: bounds.height - padding * 2)
     }
     
@@ -316,8 +311,7 @@ final class ObjectView<T: Copiable & ViewExpression>: View {
     }
     
     func reference(with event: TapEvent) -> Reference? {
-        return (object as? Referenceable)?.reference ??
-            Reference(name: Localization(String(describing: type(of: object))))
+        return object.reference
     }
 }
 

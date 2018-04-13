@@ -1,5 +1,5 @@
 # C0
-Modeless Animatable Tool
+Modeless Tool
 
 [ダウンロード](https://github.com/smdls/C0/releases/download/v0.3.0/C0-0.3.0.zip)  (macOS 10.11.2以降, トラックパッド必須, Retinaディスプレイ推奨)
 
@@ -15,9 +15,11 @@ Modeless Animatable Tool
 人が道具に対して方法を強制させるわけでもなく、道具が人に方法を強制させるわけでもない設計
 
 ## 特徴
-- モードレスドローイング
+- Rects UI
 - インディケーション選択
+- 手書き2Dアニメーション制作
 - オーバーシュートのない補間
+- モードレスなドローイング
 - 輝度を軸にしたカラーピッカー
 
 ## 開発環境

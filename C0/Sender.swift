@@ -88,10 +88,10 @@ final class Sender: Sendable {
         return rootView.at(p) ?? rootView
     }
     func responder(with beginLayer: Layer,
-                   handler: (Respondable) -> (Bool) = { _ in true }) -> Respondable {
+                   closure: (Respondable) -> (Bool) = { _ in true }) -> Respondable {
         var responder: Respondable?
         beginLayer.allParentsAndSelf { (layer, stop) in
-            if let r = layer as? Respondable, handler(r) {
+            if let r = layer as? Respondable, closure(r) {
                 responder = r
                 stop = true
             }
@@ -120,10 +120,10 @@ final class Sender: Sendable {
         _ = responder(with: indicatedLayer) { $0.moveCursor(with: event) }
     }
     
-    var setCursorHandler: (((sender: Sender, cursor: Cursor, oldCursor: Cursor)) -> ())?
+    var setCursorClosure: (((sender: Sender, cursor: Cursor, oldCursor: Cursor)) -> ())?
     var cursor = Cursor.arrow {
         didSet {
-            setCursorHandler?((self, cursor, oldValue))
+            setCursorClosure?((self, cursor, oldValue))
         }
     }
     

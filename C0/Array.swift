@@ -38,44 +38,44 @@ final class TreeNode<T: Equatable>: Equatable {
             children.forEach { $0.parent = self }
         }
     }
-    func allChildren(_ handler: (TreeNode<T>) -> Void) {
-        func allChildrenRecursion(_ node: TreeNode<T>, _ handler: (TreeNode<T>) -> Void) {
-            node.children.forEach { allChildrenRecursion($0, handler) }
-            handler(node)
+    func allChildren(_ closure: (TreeNode<T>) -> Void) {
+        func allChildrenRecursion(_ node: TreeNode<T>, _ closure: (TreeNode<T>) -> Void) {
+            node.children.forEach { allChildrenRecursion($0, closure) }
+            closure(node)
         }
-        children.forEach { allChildrenRecursion($0, handler) }
+        children.forEach { allChildrenRecursion($0, closure) }
     }
-    func allChildrenAndSelf(_ handler: (TreeNode<T>) -> Void) {
-        func allChildrenRecursion(_ node: TreeNode<T>, _ handler: (TreeNode<T>) -> Void) {
-            node.children.forEach { allChildrenRecursion($0, handler) }
-            handler(node)
+    func allChildrenAndSelf(_ closure: (TreeNode<T>) -> Void) {
+        func allChildrenRecursion(_ node: TreeNode<T>, _ closure: (TreeNode<T>) -> Void) {
+            node.children.forEach { allChildrenRecursion($0, closure) }
+            closure(node)
         }
-        allChildrenRecursion(self, handler)
+        allChildrenRecursion(self, closure)
     }
-    func allChildren(_ handler: (TreeNode<T>, inout Bool) -> ()) {
+    func allChildren(_ closure: (TreeNode<T>, inout Bool) -> ()) {
         var stop = false
-        func allChildrenRecursion(_ node: TreeNode<T>, _ handler: (TreeNode<T>, inout Bool) -> ()) {
+        func allChildrenRecursion(_ node: TreeNode<T>, _ closure: (TreeNode<T>, inout Bool) -> ()) {
             for child in node.children {
-                allChildrenRecursion(child, handler)
+                allChildrenRecursion(child, closure)
                 if stop {
                     return
                 }
             }
-            handler(node, &stop)
+            closure(node, &stop)
             if stop {
                 return
             }
         }
         for child in children {
-            allChildrenRecursion(child, handler)
+            allChildrenRecursion(child, closure)
             if stop {
                 return
             }
         }
     }
-    func allParentsAndSelf(_ handler: ((TreeNode<T>) -> ())) {
-        handler(self)
-        parent?.allParentsAndSelf(handler)
+    func allParentsAndSelf(_ closure: ((TreeNode<T>) -> ())) {
+        closure(self)
+        parent?.allParentsAndSelf(closure)
     }
     
     func at(_ object: T) -> TreeNode<T> {
@@ -219,14 +219,14 @@ extension Array {
         return array
     }
 }
-extension Array: Referenceable where Element: Referenceable {
+
+extension Array: ViewExpression & Copiable & Referenceable
+where Element: ViewExpression & Copiable & Referenceable {
     static var name: Localization {
         return Localization("[") + Element.name + Localization("]")
     }
-}
-extension Array: ViewExpression & Copiable where Element: ViewExpression & Copiable {
     func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
-        return ObjectView(object: self, thumbnailView: nil, minFrame: bounds)
+        return ObjectView(object: self, thumbnailView: nil, minFrame: bounds, sizeType: sizeType)
     }
 }
 
@@ -249,7 +249,7 @@ final class AnyArrayView: View {
     }
 }
 
-final class ArrayView<T: Referenceable & ViewExpression>: View {
+final class ArrayView<T: Referenceable & ViewExpression & Copiable>: View {
     var array = [T]()
     
     init(children: [Layer] = [], frame: CGRect = CGRect()) {
@@ -273,7 +273,7 @@ final class ArrayView<T: Referenceable & ViewExpression>: View {
  - ツリー操作が複雑
  */
 final class ListArrayView: View {
-    private let labelLineLayer: PathLayer = {
+    private let nameLineLayer: PathLayer = {
         let lineLayer = PathLayer()
         lineLayer.fillColor = .subContent
         return lineLayer
@@ -284,7 +284,7 @@ final class ListArrayView: View {
         return lineLayer
     } ()
     private let knob = DiscreteKnob(CGSize(width: 8, height: 8), lineWidth: 1)
-    private var labels = [Label](), levelLabels = [Label]()
+    private var nameViews = [TextView](), treeLevelTextViews = [TextView]()
     func set(selectedIndex: Int, count: Int) {
         let isUpdate = self.selectedIndex != selectedIndex || self.count != count
         self.selectedIndex = selectedIndex
@@ -296,12 +296,12 @@ final class ListArrayView: View {
     }
     private(set) var selectedIndex = 0
     private(set) var count = 0
-    var nameHandler: ((Int) -> (Localization))? {
+    var nameClosure: ((Int) -> (Localization))? {
         didSet {
             updateLayout()
         }
     }
-    var treeLevelHandler: ((Int) -> (Int))?
+    var treeLevelClosure: ((Int) -> (Int))?
     private let knobPaddingWidth = 16.0.cf
     
     override init() {
@@ -331,7 +331,7 @@ final class ListArrayView: View {
     }
     
     func updateLayout() {
-        guard selectedIndex < count, count > 0, let nameHandler = nameHandler else {
+        guard selectedIndex < count, count > 0, let nameClosure = nameClosure else {
             return
         }
         let minI = Int(floor(flootIndex(atY: bounds.minY)))
@@ -340,10 +340,10 @@ final class ListArrayView: View {
         let maxIndex = min(maxI, count - 1)
         let knobLineX = knobPaddingWidth / 2
         
-        let labelLinePath = CGMutablePath(), llh = 1.0.cf
+        let nameLinePath = CGMutablePath(), llh = 1.0.cf
         (minIndex - 1...maxIndex + 1).forEach {
-            labelLinePath.addRect(CGRect(x: 0, y: y(at: $0) - llh / 2,
-                                         width: bounds.width, height: llh))
+            nameLinePath.addRect(CGRect(x: 0, y: y(at: $0) - llh / 2,
+                                        width: bounds.width, height: llh))
         }
         
         let knobLinePath = CGMutablePath(), lw = 2.0.cf
@@ -364,58 +364,57 @@ final class ListArrayView: View {
             }
         }
         
-        let padding = treeLevelHandler != nil ? 12.0.cf : 0.0.cf
-        let labels: [Label] = (minIndex...maxIndex).map {
-            let label = Label(text: nameHandler($0))
-            label.fillColor = nil
-            label.frame.origin = CGPoint(x: knobPaddingWidth + padding, y: y(at: $0))
-            return label
+        let padding = treeLevelClosure != nil ? 12.0.cf : 0.0.cf
+        nameViews = (minIndex...maxIndex).map {
+            let nameView = TextView(text: nameClosure($0))
+            nameView.fillColor = nil
+            nameView.frame.origin = CGPoint(x: knobPaddingWidth + padding, y: y(at: $0))
+            return nameView
         }
         
-        var treeLabels: [Label]
-        if let treeLevelHandler = treeLevelHandler {
-            treeLabels = (minIndex...maxIndex).map {
-                let label = Label(text: Localization("\(treeLevelHandler($0))"))
-                label.fillColor = nil
-                label.frame.origin = CGPoint(x: knobPaddingWidth, y: y(at: $0))
+        if let treeLevelClosure = treeLevelClosure {
+            treeLevelTextViews = (minIndex...maxIndex).map {
+                let treeLevelTextView = TextView(text: Localization("\(treeLevelClosure($0))"))
+                treeLevelTextView.fillColor = nil
+                treeLevelTextView.frame.origin = CGPoint(x: knobPaddingWidth, y: y(at: $0))
                 knobLinePath.addRect(CGRect(x: knobPaddingWidth / 2 - 2,
-                                            y: label.frame.midY - 2,
+                                            y: treeLevelTextView.frame.midY - 2,
                                             width: 4,
                                             height: 4))
-                return label
+                return treeLevelTextView
             }
         } else {
-            treeLabels = []
+            treeLevelTextViews = []
         }
         
-        labelLineLayer.path = labelLinePath
+        nameLineLayer.path = nameLinePath
         knobLineLayer.path = knobLinePath
         
         knob.position = CGPoint(x: knobLineX, y: bounds.midY)
         
-        replace(children: [labelLineLayer, knobLineLayer, knob]
-            + treeLabels as [Layer] + labels as [Layer])
+        replace(children: [nameLineLayer, knobLineLayer, knob]
+            + treeLevelTextViews as [Layer] + nameViews as [Layer])
     }
     
-    var deleteHandler: ((ListArrayView, KeyInputEvent) -> (Bool))?
+    var deleteClosure: ((ListArrayView, KeyInputEvent) -> (Bool))?
     func delete(with event: KeyInputEvent) -> Bool {
-        return deleteHandler?(self, event) ?? false
+        return deleteClosure?(self, event) ?? false
     }
-    var copiedObjectsHandler: ((ListArrayView, KeyInputEvent) -> ([ViewExpression]))?
+    var copiedObjectsClosure: ((ListArrayView, KeyInputEvent) -> ([ViewExpression]))?
     func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        return copiedObjectsHandler?(self, event)
+        return copiedObjectsClosure?(self, event)
     }
-    var pasteHandler: ((ListArrayView, [Any], KeyInputEvent) -> (Bool))?
+    var pasteClosure: ((ListArrayView, [Any], KeyInputEvent) -> (Bool))?
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        return pasteHandler?(self, objects, event) ?? false
+        return pasteClosure?(self, objects, event) ?? false
     }
-    var newHandler: ((ListArrayView, KeyInputEvent) -> (Bool))?
+    var newClosure: ((ListArrayView, KeyInputEvent) -> (Bool))?
     func new(with event: KeyInputEvent) -> Bool {
-        return newHandler?(self, event) ?? false
+        return newClosure?(self, event) ?? false
     }
     
-    var moveHandler: ((ListArrayView, DragEvent) -> (Bool))?
+    var moveClosure: ((ListArrayView, DragEvent) -> (Bool))?
     func move(with event: DragEvent) -> Bool {
-        return moveHandler?(self, event) ?? false
+        return moveClosure?(self, event) ?? false
     }
 }

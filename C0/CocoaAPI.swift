@@ -183,11 +183,11 @@ extension Cursor: Equatable {
 }
 
 extension NSImage {
-    convenience init(size: CGSize, handler: (CGContext) -> Void) {
+    convenience init(size: CGSize, closure: (CGContext) -> Void) {
         self.init(size: size)
         lockFocus()
         if let ctx = NSGraphicsContext.current?.cgContext {
-            handler(ctx)
+            closure(ctx)
         }
         unlockFocus()
     }
@@ -212,7 +212,7 @@ extension URL {
     static func file(message: String?,
                      name: String?,
                      fileTypes: [String],
-                     completionHandler handler: @escaping (URL.File) -> (Void)) {
+                     completionClosure closure: @escaping (URL.File) -> (Void)) {
         guard let window = NSApp.mainWindow else {
             return
         }
@@ -225,7 +225,7 @@ extension URL {
         savePanel.allowedFileTypes = fileTypes
         savePanel.beginSheetModal(for: window) { [unowned savePanel] result in
             if result == .OK, let url = savePanel.url {
-                handler(URL.File(url: url,
+                closure(URL.File(url: url,
                                  name: savePanel.nameFieldStringValue,
                                  isExtensionHidden: savePanel.isExtensionHidden))
             }
@@ -257,18 +257,34 @@ fileprivate struct C0Coder {
             return try? decoder.decode(Transform.self, from: data)
         case typeKey(from: Wiggle.self):
             return try? decoder.decode(Wiggle.self, from: data)
+        case typeKey(from: Effect.self):
+            return try? decoder.decode(Effect.self, from: data)
         case typeKey(from: Line.self):
             return try? decoder.decode(Line.self, from: data)
         case typeKey(from: Color.self):
             return try? decoder.decode(Color.self, from: data)
         case typeKey(from: URL.self):
             return try? decoder.decode(URL.self, from: data)
+        case typeKey(from: CGFloat.self):
+            return try? decoder.decode(URL.self, from: data)
+        case typeKey(from: CGSize.self):
+            return try? decoder.decode(URL.self, from: data)
+        case typeKey(from: CGPoint.self):
+            return try? decoder.decode(URL.self, from: data)
+        case typeKey(from: Bool.self):
+            return try? decoder.decode(URL.self, from: data)
+        case typeKey(from: [Line].self):
+            return try? decoder.decode([Line].self, from: data)
         default:
             return nil
         }
     }
     static func encode(_ object: Any, forKey key: String) -> Data? {
-        if let coding = object as? NSCoding {
+        if let codable = object as? [Line] {
+            return codable.jsonData
+        } else if object is [Action] {
+            return nil
+        } else if let coding = object as? NSCoding {
             return coding.data
         } else if let codable = object as? Encodable {
             return codable.jsonData
@@ -316,11 +332,11 @@ final class C0Application: NSApplication {
     func applicationDidFinishLaunching(_ notification: Notification) {
         updateString(with: Locale.current)
         let nc = NotificationCenter.default
-        let localeHandler: (Notification) -> Void = { [unowned self] _ in
+        let localeClosure: (Notification) -> Void = { [unowned self] _ in
             self.updateString(with: Locale.current)
         }
         localToken = nc.addObserver(forName: NSLocale.currentLocaleDidChangeNotification,
-                                    object: nil, queue: nil, using: localeHandler)
+                                    object: nil, queue: nil, using: localeClosure)
     }
     deinit {
         if let localToken = localToken {
@@ -386,12 +402,12 @@ final class C0Document: NSDocument, NSWindowDelegate {
             if let preference: C0Preference = preferenceDataModel.readObject() {
                 self.preference = preference
             }
-            preferenceDataModel.didChangeIsWriteHandler = { [unowned self] (_, isWrite) in
+            preferenceDataModel.didChangeIsWriteClosure = { [unowned self] (_, isWrite) in
                 if isWrite {
                     self.updateChangeCount(.changeDone)
                 }
             }
-            preferenceDataModel.dataHandler = { [unowned self] in self.preference.jsonData }
+            preferenceDataModel.dataClosure = { [unowned self] in self.preference.jsonData }
         }
     }
     private var preference = C0Preference()
@@ -409,12 +425,12 @@ final class C0Document: NSDocument, NSWindowDelegate {
         rootDataModel = DataModel(key: rootDataModelKey, directoryWith: [preferenceDataModel])
         
         super.init()
-        preferenceDataModel.didChangeIsWriteHandler = { [unowned self] (_, isWrite) in
+        preferenceDataModel.didChangeIsWriteClosure = { [unowned self] (_, isWrite) in
             if isWrite {
                 self.updateChangeCount(.changeDone)
             }
         }
-        preferenceDataModel.dataHandler = { [unowned self] in self.preference.jsonData }
+        preferenceDataModel.dataClosure = { [unowned self] in self.preference.jsonData }
     }
     convenience init(type typeName: String) throws {
         self.init()
@@ -450,14 +466,14 @@ final class C0Document: NSDocument, NSWindowDelegate {
         
         undoManager = view.desktopView.sceneView.undoManager
         
-        let isWriteHandler: (DataModel, Bool) -> Void = { [unowned self] (_, isWrite) in
+        let isWriteClosure: (DataModel, Bool) -> Void = { [unowned self] (_, isWrite) in
             if isWrite {
                 self.updateChangeCount(.changeDone)
             }
         }
-        view.desktopView.differentialDesktopDataModel.didChangeIsWriteHandler = isWriteHandler
-        view.desktopView.sceneView.differentialSceneDataModel.didChangeIsWriteHandler = isWriteHandler
-        preferenceDataModel.didChangeIsWriteHandler = isWriteHandler
+        view.desktopView.differentialDesktopDataModel.didChangeIsWriteClosure = isWriteClosure
+        view.desktopView.sceneView.differentialSceneDataModel.didChangeIsWriteClosure = isWriteClosure
+        preferenceDataModel.didChangeIsWriteClosure = isWriteClosure
         
         view.desktopView.undoManager?.disableUndoRegistration()
         view.desktopView.push(copiedObjects: NSPasteboard.general.copiedObjects)
@@ -532,7 +548,10 @@ extension NSPasteboard {
     var copiedObjects: [ViewExpression] {
         var copiedObjects = [ViewExpression]()
         func append(with data: Data, type: NSPasteboard.PasteboardType) {
-            if let object = C0Coder.decode(from: data, forKey: type.rawValue) as? ViewExpression {
+            let object = C0Coder.decode(from: data, forKey: type.rawValue)
+            if let object = object as? [Line] {
+                copiedObjects.append(object)
+            } else if let object = object as? ViewExpression {
                 copiedObjects.append(object)
             }
         }
@@ -631,19 +650,19 @@ final class C0View: NSView, NSTextInputClient {
             return
         }
 
-        desktopView.desktop.isHiddenActionManager =
-            UserDefaults.standard.bool(forKey: isHiddenActionManagerKey)
         desktopView.isHiddenActionManagerBinding = { [unowned self] in
             UserDefaults.standard.set($0, forKey: self.isHiddenActionManagerKey)
         }
-        desktopView.desktop.isSimpleReference =
-            UserDefaults.standard.bool(forKey: isSimpleReferenceKey)
+        desktopView.update(withIsHiddenActionManager:
+            UserDefaults.standard.bool(forKey: isHiddenActionManagerKey))
         desktopView.isSimpleReferenceBinding = { [unowned self] in
             UserDefaults.standard.set($0, forKey: self.isSimpleReferenceKey)
         }
+        desktopView.update(withIsSimpleReference:
+            UserDefaults.standard.bool(forKey: isSimpleReferenceKey))
         
         desktopView.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }
-        sender.setCursorHandler = {
+        sender.setCursorClosure = {
             if $0.cursor.nsCursor != NSCursor.current {
                 $0.cursor.nsCursor.set()
             }
@@ -906,7 +925,7 @@ final class C0View: NSView, NSTextInputClient {
     func characterIndex(for point: NSPoint) -> Int {
         if let editText = editTextView {
             let p = editText.convert(convertFromTopScreen(point), from: nil)
-            return editText.characterIndex(for: p)
+            return editText.editCharacterIndex(for: p)
         } else {
             return 0
         }

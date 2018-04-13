@@ -46,19 +46,19 @@ final class Canvas: DrawView {
         }
     }
     
-    var setContentsScaleHandler: ((Canvas, CGFloat) -> ())?
+    var setContentsScaleClosure: ((Canvas, CGFloat) -> ())?
     override var contentsScale: CGFloat {
         didSet {
             player.contentsScale = contentsScale
-            setContentsScaleHandler?(self, contentsScale)
+            setContentsScaleClosure?(self, contentsScale)
         }
     }
     
     override init() {
         super.init()
         drawBlock = { [unowned self] in self.draw(in: $0) }
-        player.endPlayHandler = { [unowned self] _ in self.isOpenedPlayer = false }
-        cellView.copiedObjectsHandler = { [unowned self] _, _ in self.copiedCells() }
+        player.endPlayClosure = { [unowned self] _ in self.isOpenedPlayer = false }
+        cellView.copiedObjectsClosure = { [unowned self] _, _ in self.copiedCells() }
     }
     
     var cursor = Cursor.stroke
@@ -329,13 +329,13 @@ final class Canvas: DrawView {
         }
     }
     
-    var setTimeHandler: ((Canvas, Beat) -> ())?
+    var setTimeClosure: ((Canvas, Beat) -> ())?
     var time: Beat {
         get {
             return scene.time
         }
         set {
-            setTimeHandler?(self, newValue)
+            setTimeClosure?(self, newValue)
         }
     }
     var isHiddenPrevious: Bool {
@@ -367,10 +367,10 @@ final class Canvas: DrawView {
         }
     }
     private func updateWithScene() {
-        updateSceneHandler?(self)
+        updateSceneClosure?(self)
         setNeedsDisplay()
     }
-    var updateSceneHandler: ((Canvas) -> ())?
+    var updateSceneClosure: ((Canvas) -> ())?
     
     var currentTransform: CGAffineTransform {
         var affine = CGAffineTransform.identity
@@ -449,8 +449,8 @@ final class Canvas: DrawView {
         }
     }
     
-    private func registerUndo(_ handler: @escaping (Canvas, Beat) -> Void) {
-        undoManager?.registerUndo(withTarget: self) { [oldTime = time] in handler($0, oldTime) }
+    private func registerUndo(_ closure: @escaping (Canvas, Beat) -> Void) {
+        undoManager?.registerUndo(withTarget: self) { [oldTime = time] in closure($0, oldTime) }
     }
     
     func delete(with event: KeyInputEvent) -> Bool {
@@ -575,6 +575,8 @@ final class Canvas: DrawView {
             } else if let material = object as? Material, paste(material, with: event) {
                 return true
             } else if let drawing = object as? Drawing, paste(drawing.copied, with: event) {
+                return true
+            } else if let lines = object as? [Line], paste(lines, with: event) {
                 return true
             } else if !cut.editNode.editTrack.animation.isInterpolated {
                 if let joiningCell = object as? JoiningCell, paste(joiningCell.copied, with: event) {
@@ -731,6 +733,9 @@ final class Canvas: DrawView {
         return true
     }
     func paste(_ copyDrawing: Drawing, with event: KeyInputEvent) -> Bool {
+        return paste(copyDrawing.lines, with: event)
+    }
+    func paste(_ copyLines: [Line], with event: KeyInputEvent) -> Bool {
         let p = convertToCurrentLocal(point(from: event))
         let inNode = cut.editNode
         let ict = inNode.indicatedCellsTuple(with : p, reciprocalScale: scene.reciprocalScale)
@@ -747,7 +752,7 @@ final class Canvas: DrawView {
                                                                 pressure: 1),
                                                    Line.Control(point: previousLine.lastPoint,
                                                                 pressure: 1)])
-            let geometry = Geometry(lines: [unionSegmentLine] + copyDrawing.lines,
+            let geometry = Geometry(lines: [unionSegmentLine] + copyLines,
                                     scale: scene.scale)
             let lines = geometry.lines.withRemovedFirst()
             let geometris = Geometry.geometriesWithInserLines(with: cellItem.keyGeometries,
@@ -759,8 +764,8 @@ final class Canvas: DrawView {
         } else {
             let drawing = inNode.editTrack.drawingItem.drawing
             let oldCount = drawing.lines.count
-            let lineIndexes = (0 ..< copyDrawing.lines.count).map { $0 + oldCount }
-            set(drawing.lines + copyDrawing.lines,
+            let lineIndexes = (0 ..< copyLines.count).map { $0 + oldCount }
+            set(drawing.lines + copyLines,
                      old: drawing.lines, in: drawing, inNode, time: time)
             setSelectedLineIndexes(drawing.selectedLineIndexes + lineIndexes,
                                     oldLineIndexes: drawing.selectedLineIndexes,
@@ -885,7 +890,7 @@ final class Canvas: DrawView {
         let lki = track.animation.loopedKeyframeIndex(withTime: cut.currentTime)
         let keyGeometries = track.emptyKeyGeometries.withReplaced(geometry, at: lki.keyframeIndex)
         
-        let newMaterial = Material(color: Color.random(colorSpace: scene.colorSpace))
+        let newMaterial = Material(color: Color.random())
         let newCellItem = CellItem(cell: Cell(geometry: geometry, material: newMaterial),
                                    keyGeometries: keyGeometries)
         
@@ -1149,7 +1154,7 @@ final class Canvas: DrawView {
             }
         }
     }
-    var setDraftLinesHandler: ((Canvas, Drawing) -> ())? = nil
+    var setDraftLinesClosure: ((Canvas, Drawing) -> ())? = nil
     private func setDraftLines(_ lines: [Line], old oldLines: [Line],
                                in drawing: Drawing, _ node: Node, time: Beat) {
         registerUndo { $0.setDraftLines(oldLines, old: lines, in: drawing, node, time: $1) }
@@ -1157,7 +1162,7 @@ final class Canvas: DrawView {
         drawing.draftLines = lines
         node.differentialDataModel.isWrite = true
         setNeedsDisplay()
-        setDraftLinesHandler?(self, drawing)
+        setDraftLinesClosure?(self, drawing)
     }
     private func set(_ lines: [Line], old oldLines: [Line],
                           in drawing: Drawing, _ node: Node, time: Beat) {
@@ -1297,7 +1302,7 @@ final class Canvas: DrawView {
         }
         return true
     }
-    var bindHandler: ((Canvas, Material, Cell?) -> ())?
+    var bindClosure: ((Canvas, Material, Cell?) -> ())?
     func bind(_ material: Material, _ editCell: Cell?, time: Beat) {
         registerUndo { [oec = editCell] in $0.bind($0.materialView.material, oec, time: $1) }
         self.time = time
@@ -1305,7 +1310,7 @@ final class Canvas: DrawView {
         cellView.cell = editCell ?? Cell()
         self.editCell = editCell
         updateEditCellBindingLine()
-        bindHandler?(self, material, editCell)
+        bindClosure?(self, material, editCell)
     }
     
     func updateEditCellBindingLine() {
@@ -2700,9 +2705,9 @@ final class Canvas: DrawView {
         updateEditView(with: convertToCurrentLocal(point(from: event)))
         return true
     }
-    func zoom(at p: CGPoint, handler: () -> ()) {
+    func zoom(at p: CGPoint, closure: () -> ()) {
         let point = convertToCurrentLocal(p)
-        handler()
+        closure()
         let newPoint = convertFromCurrentLocal(point)
         let translation = viewTransform.translation - (newPoint - p)
         self.viewTransform = viewTransform.with(translation: translation)

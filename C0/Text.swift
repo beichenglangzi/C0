@@ -42,8 +42,8 @@ extension String: Referenceable {
 }
 extension String: ViewExpression {
     func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
-        return Label(frame: bounds, text: Localization(self),
-                     font: Font.default(with: sizeType), isSizeToFit: false)
+        return TextView(text: Localization(self), font: Font.default(with: sizeType),
+                        frame: bounds, isSizeToFit: false)
     }
 }
 
@@ -51,7 +51,6 @@ extension String: ViewExpression {
  # Issue
  - モードレス文字入力
  */
-typealias Label = TextView
 final class TextView: DrawView {
     var localization: Localization {
         didSet {
@@ -103,11 +102,10 @@ final class TextView: DrawView {
     var isLocked = true
     var baseFont: Font, baselineDelta: CGFloat, height: CGFloat, padding: CGFloat
     
-    init(frame: CGRect = CGRect(),
-         text localization: Localization = Localization(),
+    init(text localization: Localization = Localization(),
          font: Font = .default, color: Color = .locked,
          frameAlignment: CTTextAlignment = .left, alignment: CTTextAlignment = .natural,
-         padding: CGFloat = 1, isSizeToFit: Bool = true) {
+         frame: CGRect = CGRect(), padding: CGFloat = 1, isSizeToFit: Bool = true) {
         
         self.localization = localization
         self.padding = padding
@@ -149,7 +147,7 @@ final class TextView: DrawView {
     }
     
     func word(for p: CGPoint) -> String {
-        let characterIndex = self.characterIndex(for: p)
+        let characterIndex = self.characterIndex(for: convertToLocal(p))
         var range = NSRange()
         if characterIndex >= selectedRange.location
             && characterIndex < NSMaxRange(selectedRange) {
@@ -172,9 +170,20 @@ final class TextView: DrawView {
     }
     func textDefinition(for p: CGPoint) -> String? {
         let string = self.string as CFString
-        let characterIndex = self.characterIndex(for: p)
-        let range = DCSGetTermRangeInString(nil, string, characterIndex)
-        return DCSCopyTextDefinition(nil, string, range)?.takeRetainedValue() as String?
+        let characterIndex = self.characterIndex(for: convertToLocal(p))
+        let range = DCSGetTermRangeInString(nil, string, characterIndex + 1)
+        if range.location != kCFNotFound {
+            return DCSCopyTextDefinition(nil, string, range)?.takeRetainedValue() as String?
+        } else {
+            return nil
+        }
+    }
+    
+    func convertToLocal(_ point: CGPoint) -> CGPoint {
+        return point - CGPoint(x: padding, y: bounds.height - height - padding)
+    }
+    func convertFromLocal(_ point: CGPoint) -> CGPoint {
+        return point + CGPoint(x: padding, y: bounds.height - height - padding)
     }
     
     func updateTextFrame() {
@@ -286,23 +295,23 @@ final class TextView: DrawView {
         guard !isLocked else {
             return false
         }
-        let beginHandler: () -> () = { [unowned self] in
+        let beginClosure: () -> () = { [unowned self] in
             self.oldText = self.string
             self.binding?(Binding(view: self,
                                   text: self.oldText, oldText: self.oldText, type: .begin))
         }
-        let waitHandler: () -> () = { [unowned self] in
+        let waitClosure: () -> () = { [unowned self] in
             self.binding?(Binding(view: self,
                                   text: self.string, oldText: self.oldText, type: .sending))
         }
-        let endHandler: () -> () = { [unowned self] in
+        let endClosure: () -> () = { [unowned self] in
             self.binding?(Binding(view: self,
                                   text: self.string, oldText: self.oldText, type: .end))
         }
         timer.begin(endDuration: 1,
-                    beginHandler: beginHandler,
-                    waitHandler: waitHandler,
-                    endHandler: endHandler)
+                    beginClosure: beginClosure,
+                    waitClosure: waitClosure,
+                    endClosure: endClosure)
         return true
     }
     
@@ -459,18 +468,16 @@ final class TextView: DrawView {
     }
     
     func editCharacterIndex(for p: CGPoint) -> Int {
-        let index = characterIndex(for: p)
-        let offset = characterFraction(for: p)
-        return offset < 0.5 ? index : index + 1
+        return textFrame.editCharacterIndex(for: convertToLocal(p))
     }
-    func characterIndex(for point: CGPoint) -> Int {
-        return textFrame.characterIndex(for: point)
+    func characterIndex(for p: CGPoint) -> Int {
+        return textFrame.characterIndex(for: convertToLocal(p))
     }
-    func characterFraction(for point: CGPoint) -> CGFloat {
-        return textFrame.characterFraction(for: point)
+    func characterFraction(for p: CGPoint) -> CGFloat {
+        return textFrame.characterFraction(for: convertToLocal(p))
     }
-    func characterOffset(for point: CGPoint) -> CGFloat {
-        let i = characterIndex(for: point)
+    func characterOffset(for p: CGPoint) -> CGFloat {
+        let i = characterIndex(for: convertToLocal(p))
         return textFrame.characterOffset(at: i)
     }
     func baselineDelta(at i: Int) -> CGFloat {
@@ -570,13 +577,13 @@ struct TextFrame {
         let length = attributedString.length
         var range = CFRange(), h = 0.0.cf
         var ls = [(ctLine: CTLine, ascent: CGFloat, descent: CGFloat, leading: CGFloat)]()
-        while range.maxLength < length {
+        while range.maxLocation < length {
             range.length = CTTypesetterSuggestLineBreak(typesetter, range.location, width)
             let ctLine = CTTypesetterCreateLine(typesetter, range)
             var ascent = 0.0.cf, descent = 0.0.cf, leading =  0.0.cf
             _ = CTLineGetTypographicBounds(ctLine, &ascent, &descent, &leading)
             ls.append((ctLine, ascent, descent, leading))
-            range = CFRange(location: range.maxLength, length: 0)
+            range = CFRange(location: range.maxLocation, length: 0)
             h += ascent + descent + leading
         }
         var origin = CGPoint()
@@ -602,6 +609,19 @@ struct TextFrame {
         return lastLine
     }
 
+    func editCharacterIndex(for point: CGPoint) -> Int {
+        guard !lines.isEmpty else {
+            return 0
+        }
+        for line in lines {
+            let bounds = line.typographicBounds
+            let tb = CGRect(origin: line.origin + bounds.origin, size: bounds.size)
+            if point.y >= tb.minY {
+                return line.editCharacterIndex(for: point - tb.origin)
+            }
+        }
+        return attributedString.length - 1
+    }
     func characterIndex(for point: CGPoint) -> Int {
         guard !lines.isEmpty else {
             return 0
@@ -709,12 +729,26 @@ struct TextLine {
             return $0.unionNoEmpty(CGRect(origin: origin + bounds.origin, size: bounds.size))
         }
     }
-    func characterIndex(for point: CGPoint) -> Int {
+    func editCharacterIndex(for point: CGPoint) -> Int {
         return CTLineGetStringIndexForPosition(ctLine, point)
+    }
+    func characterIndex(for point: CGPoint) -> Int {
+        let range = CTLineGetStringRange(ctLine)
+        guard range.length > 0 else {
+            return range.location
+        }
+        for i in range.location..<range.maxLocation {
+            var offset = 0.0.cf
+            CTLineGetOffsetForStringIndex(ctLine, i + 1, &offset)
+            if point.x < offset {
+                return i
+            }
+        }
+        return range.maxLocation - 1
     }
     func characterFraction(for point: CGPoint) -> CGFloat {
         let i = characterIndex(for: point)
-        if i < CTLineGetStringRange(ctLine).maxLength {
+        if i < CTLineGetStringRange(ctLine).maxLocation {
             let x = characterOffset(at: i)
             let nextX = characterOffset(at: i + 1)
             return (point.x - x) / (nextX - x)
@@ -722,7 +756,7 @@ struct TextLine {
         return 0.0
     }
     func characterOffset(at i: Int) -> CGFloat {
-        var offset = 0.5.cf
+        var offset = 0.0.cf
         CTLineGetOffsetForStringIndex(ctLine, i, &offset)
         return offset
     }
@@ -742,7 +776,7 @@ struct TextLine {
 }
 
 extension CFRange {
-    var maxLength: Int {
+    var maxLocation: Int {
         return location + length
     }
 }

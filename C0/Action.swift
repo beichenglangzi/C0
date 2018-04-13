@@ -188,9 +188,9 @@ extension Action: ObjectViewExpression {
     }
 }
 
-final class ActionManager {
+struct ActionManager {
     var actions: [Action] = {
-        let cutHandler: (Respondable, KeyInputEvent) -> (Bool) = {
+        let cutClosure: (Respondable, KeyInputEvent) -> (Bool) = {
             if let copiedObjects = $0.copiedObjects(with: $1), $0.delete(with: $1) {
                 $0.sendToTop(copiedObjects: copiedObjects)
                 return true
@@ -198,7 +198,7 @@ final class ActionManager {
                 return false
             }
         }
-        let copyHandler: (Respondable, KeyInputEvent) -> (Bool) = {
+        let copyClosure: (Respondable, KeyInputEvent) -> (Bool) = {
             if let copiedObjects = $0.copiedObjects(with: $1) {
                 $0.sendToTop(copiedObjects: copiedObjects)
                 return true
@@ -206,10 +206,10 @@ final class ActionManager {
                 return false
             }
         }
-        let pasteHandler: (Respondable, KeyInputEvent) -> (Bool) = {
+        let pasteClosure: (Respondable, KeyInputEvent) -> (Bool) = {
             return $0.paste($0.topCopiedObjects, with: $1)
         }
-        let referenceHandler: (Respondable, TapEvent) -> (Bool) = {
+        let referenceClosure: (Respondable, TapEvent) -> (Bool) = {
             if let reference = $0.reference(with: $1) {
                 $0.sendToTop(reference)
                 return true
@@ -259,7 +259,7 @@ final class ActionManager {
                 Action(name: Localization(english: "Look Up", japanese: "調べる"),
                        description: osPreferenceDescription,
                        quasimode: Quasimode(gesture: .tap),
-                       tap: referenceHandler),
+                       tap: referenceClosure),
                 Action(name: Localization(english: "Undo", japanese: "取り消す"),
                        quasimode: Quasimode([.command], .z, gesture: .keyInput),
                        keyInput: { (receiver, _) in receiver.undo() }),
@@ -268,13 +268,13 @@ final class ActionManager {
                        keyInput: { (receiver, _) in receiver.redo() }),
                 Action(name: Localization(english: "Cut", japanese: "カット"),
                        quasimode: Quasimode([.command], .x, gesture: .keyInput),
-                       keyInput: cutHandler),
+                       keyInput: cutClosure),
                 Action(name: Localization(english: "Copy", japanese: "コピー"),
                        quasimode: Quasimode([.command], .c, gesture: .keyInput),
-                       keyInput: copyHandler),
+                       keyInput: copyClosure),
                 Action(name: Localization(english: "Paste", japanese: "ペースト"),
                        quasimode: Quasimode([.command], .v, gesture: .keyInput),
-                       keyInput: pasteHandler),
+                       keyInput: pasteClosure),
                 Action(name: Localization(english: "New", japanese: "新規"),
                        quasimode: Quasimode([.command], .d, gesture: .keyInput),
                        keyInput: { $0.new(with: $1) }),
@@ -391,25 +391,27 @@ struct RotateEvent: Event {
 final class QuasimodeView: View {
     var quasimode: Quasimode {
         didSet {
-            label.localization = quasimode.displayText
+            formTextView.localization = quasimode.displayText
             if isSizeToFit {
                 bounds = defaultBounds
             }
             updateLayout()
         }
     }
+    
     var isSizeToFit: Bool
-    var label: Label
+    var formTextView: TextView
+    
     init(quasimode: Quasimode, isSizeToFit: Bool = true) {
         self.quasimode = quasimode
         self.isSizeToFit = isSizeToFit
-        label = Label(text: quasimode.displayText, font: .small, frameAlignment: .right)
+        formTextView = TextView(text: quasimode.displayText, font: .small, frameAlignment: .right)
         
         super.init()
         if isSizeToFit {
             bounds = defaultBounds
         }
-        replace(children: [label])
+        replace(children: [formTextView])
         updateLayout()
     }
     
@@ -421,8 +423,8 @@ final class QuasimodeView: View {
     
     override var defaultBounds: CGRect {
         let padding = Layout.smallPadding
-        let width = label.bounds.width + padding * 2
-        let height = label.bounds.height + padding * 2
+        let width = formTextView.bounds.width + padding * 2
+        let height = formTextView.bounds.height + padding * 2
         return CGRect(x: 0, y: 0, width: width, height: height)
     }
     override var bounds: CGRect {
@@ -432,8 +434,8 @@ final class QuasimodeView: View {
     }
     func updateLayout() {
         let padding = Layout.smallPadding
-        label.frame.origin = CGPoint(x: padding,
-                                     y: bounds.height - label.frame.height - padding)
+        formTextView.frame.origin = CGPoint(x: padding,
+                                     y: bounds.height - formTextView.frame.height - padding)
     }
     
     func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
@@ -448,21 +450,21 @@ final class QuasimodeView: View {
 final class ActionView: View {
     var action: Action {
         didSet {
-            nameLabel.localization = action.name
+            nameView.localization = action.name
             quasimodeView.quasimode = action.quasimode
         }
     }
     
-    var nameLabel: Label, quasimodeView: QuasimodeView
+    var nameView: TextView, quasimodeView: QuasimodeView
     
     init(action: Action, frame: CGRect) {
         self.action = action
-        nameLabel = Label(text: action.name)
+        nameView = TextView(text: action.name)
         quasimodeView = QuasimodeView(quasimode: action.quasimode)
         
         super.init()
         self.frame = frame
-        replace(children: [nameLabel, quasimodeView])
+        replace(children: [nameView, quasimodeView])
     }
     
     func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
@@ -471,8 +473,8 @@ final class ActionView: View {
     
     override var defaultBounds: CGRect {
         let padding = Layout.basicPadding
-        let width = nameLabel.bounds.width + padding + quasimodeView.bounds.width
-        let height = nameLabel.frame.height + padding * 2
+        let width = nameView.bounds.width + padding + quasimodeView.bounds.width
+        let height = nameView.frame.height + padding * 2
         return CGRect(x: 0, y: 0, width: width, height: height)
     }
     override var bounds: CGRect {
@@ -482,8 +484,8 @@ final class ActionView: View {
     }
     func updateLayout() {
         let padding = Layout.basicPadding
-        nameLabel.frame.origin = CGPoint(x: padding,
-                                         y: bounds.height - nameLabel.frame.height - padding)
+        nameView.frame.origin = CGPoint(x: padding,
+                                         y: bounds.height - nameView.frame.height - padding)
         quasimodeView.frame.origin = CGPoint(x: bounds.width - quasimodeView.frame.width - padding,
                                              y: Layout.smallPadding)
     }
@@ -505,7 +507,7 @@ final class ActionManagerView: View {
     }
     
     static let defaultWidth = 200 + Layout.basicPadding * 2
-    let classNameLabel = Label(text: ActionManager.name, font: .bold)
+    let classNameView = TextView(text: ActionManager.name, font: .bold)
     let actionsView = ArrayView<Action>()
     
     override init() {
@@ -520,7 +522,7 @@ final class ActionManagerView: View {
     }
     
     override var defaultBounds: CGRect {
-        let height = classNameLabel.frame.height + Layout.basicPadding * 3 + actionsView.frame.height
+        let height = classNameView.frame.height + Layout.basicPadding * 3 + actionsView.frame.height
         return CGRect(x: 0, y: 0, width: ActionManagerView.defaultWidth, height: height)
     }
     override var bounds: CGRect {
@@ -530,14 +532,14 @@ final class ActionManagerView: View {
     }
     func updateLayout() {
         let padding = Layout.basicPadding, sPadding = Layout.smallPadding
-        classNameLabel.frame.origin = CGPoint(x: padding,
-                                              y: bounds.height - classNameLabel.frame.height - padding)
+        classNameView.frame.origin = CGPoint(x: padding,
+                                              y: bounds.height - classNameView.frame.height - padding)
         let aw = bounds.width - padding * 2
         let asw = aw - sPadding * 2
-        let ah = max(bounds.height - classNameLabel.frame.height - padding * 3, 0)
+        let ah = max(bounds.height - classNameView.frame.height - padding * 3, 0)
         actionsView.frame = CGRect(x: padding, y: padding, width: aw, height: ah)
         actionsView.children.forEach { $0.frame.size.width = asw }
-        _ = actionsView.children.reduce(actionsView.bounds.height) {
+        _ = actionsView.children.reduce(actionsView.bounds.height - sPadding) {
             let y = $0 - $1.frame.height
             $1.frame.origin.y = y
             return y
@@ -552,14 +554,14 @@ final class ActionManagerView: View {
                                                            actionWidth: aw)
         actionsView.replace(children: aaf.views)
         actionsView.frame.size.height = aaf.size.height + sPadding * 2
-        replace(children: [classNameLabel, actionsView])
+        replace(children: [classNameView, actionsView])
     }
     
     static func actionViewsAndSizeWith(actionManager: ActionManager,
                                        origin: CGPoint,
                                        actionWidth: CGFloat) -> (views: [ActionView], size: CGSize) {
         var y = origin.y
-        let actionViews: [ActionView] = actionManager.actions.reversed().compactMap {
+        let actionViews: [ActionView] = actionManager.actions.compactMap {
             guard $0.quasimode.gesture != .none else {
                 y += Layout.basicPadding
                 return nil

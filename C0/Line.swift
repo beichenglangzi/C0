@@ -23,18 +23,19 @@ import Foundation
  # Issue
  - 円が崩れない自動筆圧
  */
-final class Line: Codable {
-    struct Control {
+struct Line: Codable {
+    struct Control: Equatable, Hashable {
         var point = CGPoint(), pressure = 1.0.cf
         
         func mid(_ other: Control) -> Control {
             return Control(point: point.mid(other.point), pressure: (pressure + other.pressure) / 2)
         }
     }
-    let controls: [Control], imageBounds: CGRect, firstAngle: CGFloat, lastAngle: CGFloat
+    let controls: [Control]
+    let imageBounds: CGRect, firstAngle: CGFloat, lastAngle: CGFloat
     
-    convenience init(bezier: Bezier2,
-                     p0Pressure: CGFloat, cpPressure: CGFloat, p1Pressure: CGFloat) {
+    init(bezier: Bezier2,
+         p0Pressure: CGFloat, cpPressure: CGFloat, p1Pressure: CGFloat) {
         self.init(controls: [Control(point: bezier.p0, pressure: p0Pressure),
                              Control(point: bezier.cp, pressure: cpPressure),
                              Control(point: bezier.p1, pressure: p1Pressure)])
@@ -398,28 +399,28 @@ final class Line: Codable {
         }
         return bs
     }
-    func allBeziers(_ handler: (_ bezier: Bezier2, _ index: Int, _ stop: inout Bool) -> Void) {
+    func allBeziers(_ closure: (_ bezier: Bezier2, _ index: Int, _ stop: inout Bool) -> Void) {
         var stop = false
         if controls.count < 3 {
-            handler(Bezier2.linear(firstPoint, lastPoint), 0, &stop)
+            closure(Bezier2.linear(firstPoint, lastPoint), 0, &stop)
         } else if controls.count == 3 {
-            handler(Bezier2(p0: controls[0].point,
+            closure(Bezier2(p0: controls[0].point,
                             cp: controls[1].point, p1: controls[2].point), 0, &stop)
         } else {
             var connectP = controls[1].point.mid(controls[2].point)
-            handler(Bezier2(p0: controls[0].point, cp: controls[1].point, p1: connectP), 0, &stop)
+            closure(Bezier2(p0: controls[0].point, cp: controls[1].point, p1: connectP), 0, &stop)
             if stop {
                 return
             }
             for i in 1 ..< controls.count - 3 {
                 let newConnectP = controls[i + 1].point.mid(controls[i + 2].point)
-                handler(Bezier2(p0: connectP, cp: controls[i + 1].point, p1: newConnectP), i, &stop)
+                closure(Bezier2(p0: connectP, cp: controls[i + 1].point, p1: newConnectP), i, &stop)
                 if stop {
                     return
                 }
                 connectP = newConnectP
             }
-            handler(Bezier2(p0: connectP,
+            closure(Bezier2(p0: connectP,
                             cp: controls[controls.count - 2].point,
                             p1: controls[controls.count - 1].point), controls.count - 3, &stop)
         }
@@ -492,14 +493,14 @@ final class Line: Codable {
         let n0 = 1 - m0, n1 = 1 - m1, p0 = controls[bi].point, p2 = controls[bi + 2].point
         return (4 * xp - n0 * p0 - m1 * p2) / (m0 + n1 + 2)
     }
-    func allEditPoints(_ handler: (CGPoint, Int) -> Void) {
-        handler(firstPoint, 0)
+    func allEditPoints(_ closure: (CGPoint, Int) -> Void) {
+        closure(firstPoint, 0)
         if controls.count > 2 {
             allBeziers { bezier, i, stop in
-                handler(bezier.position(withT: 0.5), i + 1)
+                closure(bezier.position(withT: 0.5), i + 1)
             }
         }
-        handler(lastPoint, controls.count - 1)
+        closure(lastPoint, controls.count - 1)
     }
     
     func isReverse(from other: Line) -> Bool {
@@ -769,12 +770,14 @@ extension Line.Control: Codable {
         try container.encode(pressure)
     }
 }
+extension Line: Equatable {
+    static func ==(lhs: Line, rhs: Line) -> Bool {
+        return lhs.controls == rhs.controls
+    }
+}
 extension Line: Hashable {
     var hashValue: Int {
-        return ObjectIdentifier(self).hashValue
-    }
-    static func ==(lhs: Line, rhs: Line) -> Bool {
-        return lhs === rhs
+        return Hash.uniformityHashValue(with: controls.map { $0.hashValue })
     }
 }
 extension Line: Referenceable {
@@ -838,6 +841,93 @@ extension Line: Interpolatable {
             } else {
                 return controls[i - minD]
             }
+        }
+    }
+}
+extension Line: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        let thumbnailView = DrawLayer()
+        thumbnailView.drawBlock = { [unowned thumbnailView] ctx in
+            self.draw(with: thumbnailView.bounds, in: ctx)
+        }
+        thumbnailView.bounds = bounds
+        return thumbnailView
+    }
+    func draw(with bounds: CGRect, in ctx: CGContext) {
+        let imageBounds = self.visibleImageBounds(withLineWidth: 1)
+        let c = CGAffineTransform.centering(from: imageBounds, to: bounds.inset(by: 5))
+        ctx.concatenate(c.affine)
+        draw(size: 0.5 / c.scale, in: ctx)
+    }
+}
+
+extension Array where Element == Line {
+    static let triangleName = Localization(english: "Triangle", japanese: "正三角形")
+    static let squareName = Localization(english: "Square", japanese: "正方形")
+    static let pentagonName = Localization(english: "Pentagon", japanese: "正五角形")
+    static let hexagonName = Localization(english: "Hexagon", japanese: "正六角形")
+    static let circleName = Localization(english: "Circle", japanese: "円")
+    
+    static func triangle(centerPosition cp: CGPoint = CGPoint(),
+                         radius r: CGFloat = 50.0.cf) -> [Line] {
+        return regularPolygon(centerPosition: cp, radius: r, count: 3)
+    }
+    static func square(centerPosition cp: CGPoint = CGPoint(),
+                       polygonRadius r: CGFloat = 50.0.cf) -> [Line] {
+        let p0 = CGPoint(x: cp.x - r, y: cp.y - r), p1 = CGPoint(x: cp.x + r, y: cp.y - r)
+        let p2 = CGPoint(x: cp.x - r, y: cp.y + r), p3 = CGPoint(x: cp.x + r, y: cp.y + r)
+        let l0 = Line(controls: [Line.Control(point: p0, pressure: 1),
+                                 Line.Control(point: p1, pressure: 1)])
+        let l1 = Line(controls: [Line.Control(point: p1, pressure: 1),
+                                 Line.Control(point: p3, pressure: 1)])
+        let l2 = Line(controls: [Line.Control(point: p3, pressure: 1),
+                                 Line.Control(point: p2, pressure: 1)])
+        let l3 = Line(controls: [Line.Control(point: p2, pressure: 1),
+                                 Line.Control(point: p0, pressure: 1)])
+        return [l0, l1, l2, l3]
+    }
+    static func pentagon(centerPosition cp: CGPoint = CGPoint(),
+                         radius r: CGFloat = 50.0.cf) -> [Line] {
+        return regularPolygon(centerPosition: cp, radius: r, count: 5)
+    }
+    static func hexagon(centerPosition cp: CGPoint = CGPoint(),
+                        radius r: CGFloat = 50.0.cf) -> [Line] {
+        return regularPolygon(centerPosition: cp, radius: r, count: 6)
+    }
+    static func circle(centerPosition cp: CGPoint = CGPoint(),
+                       radius r: CGFloat = 50.0.cf) -> [Line] {
+        let count = 8
+        let theta = .pi / count.cf
+        let fp = CGPoint(x: cp.x, y: cp.y + r)
+        let points = [CGPoint].circle(centerPosition: cp,
+                                      radius: r / cos(theta),
+                                      firstAngle: .pi / 2 + theta,
+                                      count: count)
+        let newPoints = [fp] + points + [fp]
+        return [Line(controls: newPoints.map { Line.Control(point: $0, pressure: 1) })]
+    }
+    static func regularPolygon(centerPosition cp: CGPoint = CGPoint(), radius r: CGFloat = 50.0.cf,
+                               firstAngle: CGFloat = .pi / 2, count: Int) -> [Line] {
+        let points = [CGPoint].circle(centerPosition: cp, radius: r,
+                                      firstAngle: firstAngle, count: count)
+        return points.enumerated().map {
+            let p0 = $0.element, i = $0.offset
+            let p1 = i + 1 < points.count ? points[i + 1] : points[0]
+            return Line(controls: [Line.Control(point: p0, pressure: 1),
+                                   Line.Control(point: p1, pressure: 1)])
+        }
+    }
+}
+extension Array where Element == CGPoint {
+    static func circle(centerPosition cp: CGPoint = CGPoint(),
+                       radius r: CGFloat = 50.0.cf,
+                       firstAngle: CGFloat = .pi / 2,
+                       count: Int) -> [CGPoint] {
+        var angle = firstAngle, theta = (2 * .pi) / count.cf
+        return (0 ..< count).map { _ in
+            let p = CGPoint(x: cp.x + r * cos(angle), y: cp.y + r * sin(angle))
+            angle += theta
+            return p
         }
     }
 }

@@ -25,6 +25,7 @@ import Foundation
  */
 final class Drawing: NSObject, NSCoding {
     var lines: [Line], draftLines: [Line], selectedLineIndexes: [Int]
+    
     init(lines: [Line] = [], draftLines: [Line] = [], selectedLineIndexes: [Int] = []) {
         self.lines = lines
         self.draftLines = draftLines
@@ -129,7 +130,7 @@ extension Drawing: ClassCopiable {
 }
 extension Drawing: ViewExpression {
     func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
-        let thumbnailView = DrawBox()
+        let thumbnailView = DrawLayer()
         thumbnailView.drawBlock = { [unowned self, unowned thumbnailView] ctx in
             self.draw(with: thumbnailView.bounds, in: ctx)
         }
@@ -154,27 +155,40 @@ final class DrawingView: View {
     var drawing = Drawing()
     
     var sizeType: SizeType
-    private let classNameLabel: Label
+    private let classNameView: TextView
     
-    let changeToDraftBox = TextBox(name: Localization(english: "Change to Draft", japanese: "下書き化"))
-    let removeDraftBox = TextBox(name: Localization(english: "Remove Draft", japanese: "下書きを削除"))
-    let exchangeWithDraftBox = TextBox(name: Localization(english: "Exchange with Draft",
-                                                          japanese: "下書きと交換"))
-    let shapeLinesBox = PopupBox(frame: CGRect(x: 0, y: 0, width: 100.0, height: Layout.basicHeight),
-                                 text: Localization(english: "Shape Lines", japanese: "図形の線"))
+    let linesView = ArrayView<Line>()
+    let draftLinesView = ArrayView<Line>()
+    
+    let changeToDraftView = ClosureView(name: Localization(english: "Change to Draft",
+                                                           japanese: "下書き化"))
+    let removeDraftView = ClosureView(name: Localization(english: "Remove Draft",
+                                                         japanese: "下書きを削除"))
+    let exchangeWithDraftView = ClosureView(name: Localization(english: "Exchange with Draft",
+                                                               japanese: "下書きと交換"))
+    let triangleLinesView = [Line].triangle().view(withBounds: CGRect(), sizeType: .small)
+    let squareLinesView = [Line].square().view(withBounds: CGRect(), sizeType: .small)
+    let pentagonLinesView = [Line].pentagon().view(withBounds: CGRect(), sizeType: .small)
+    let hexagonLinesView = [Line].hexagon().view(withBounds: CGRect(), sizeType: .small)
+    let circleLinesView = [Line].circle().view(withBounds: CGRect(), sizeType: .small)
     
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
-        classNameLabel = Label(text: Drawing.name, font: Font.bold(with: sizeType))
+        classNameView = TextView(text: Drawing.name, font: Font.bold(with: sizeType))
         super.init()
-        replace(children: [classNameLabel,
-                           changeToDraftBox, removeDraftBox, exchangeWithDraftBox, shapeLinesBox])
+        changeToDraftView.closure = { [unowned self] in self.changeToDraft() }
+        removeDraftView.closure = { [unowned self] in self.removeDraft() }
+        exchangeWithDraftView.closure = { [unowned self] in self.exchangeWithDraft() }
+        replace(children: [classNameView,
+                           linesView, draftLinesView,
+                           changeToDraftView, removeDraftView, exchangeWithDraftView,
+                           squareLinesView])
     }
     
     override var defaultBounds: CGRect {
         let padding = Layout.padding(with: sizeType), buttonH = Layout.height(with: sizeType)
         return CGRect(x: 0, y: 0, width: 100,
-                      height: classNameLabel.frame.height + buttonH * 4 + padding * 3)
+                      height: classNameView.frame.height + buttonH * 4 + padding * 3)
     }
     override var bounds: CGRect {
         didSet {
@@ -185,24 +199,17 @@ final class DrawingView: View {
         let padding = Layout.padding(with: sizeType), buttonH = Layout.height(with: sizeType)
         let px = padding, pw = bounds.width - padding * 2
         var py = bounds.height - padding
-        py -= classNameLabel.frame.height
-        classNameLabel.frame.origin = CGPoint(x: padding, y: py)
+        py -= classNameView.frame.height
+        classNameView.frame.origin = CGPoint(x: padding, y: py)
         py -= padding
         py -= buttonH
-        changeToDraftBox.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
+        changeToDraftView.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
         py -= buttonH
-        removeDraftBox.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
+        removeDraftView.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
         py -= buttonH
-        exchangeWithDraftBox.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
+        exchangeWithDraftView.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
         py -= buttonH
-        shapeLinesBox.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
-        
-        var minSize = CGSize()
-        Layout.topAlignment(shapeLinesBox.panel.children, minSize: &minSize)
-        minSize.width = max(changeToDraftBox.frame.width, minSize.width + padding * 2)
-        shapeLinesBox.panel.frame.size = CGSize(width: minSize.width,
-                                                height: minSize.height + padding * 2)
-        shapeLinesBox.panel.children.forEach { $0.frame.size.width = minSize.width - padding * 2 }
+        squareLinesView.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
     }
     
     var disabledRegisterUndo = true
@@ -213,6 +220,16 @@ final class DrawingView: View {
     }
     var binding: ((Binding) -> ())?
     
+    func changeToDraft() {
+        
+    }
+    func removeDraft() {
+        
+    }
+    func exchangeWithDraft() {
+        
+    }
+    
     func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
         return [drawing.copied]
     }
@@ -220,7 +237,7 @@ final class DrawingView: View {
         for object in objects {
             if let drawing = object as? Drawing {
                 if drawing != self.drawing {
-                    set(drawing, old: self.drawing)
+                    set(drawing.copied, old: self.drawing)
                     return true
                 }
             }

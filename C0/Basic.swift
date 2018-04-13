@@ -34,18 +34,18 @@ extension Data: Referenceable {
 final class LockTimer {
     private var count = 0
     private(set) var wait = false
-    func begin(endDuration: Second, beginHandler: () -> Void,
-               waitHandler: () -> Void, endHandler: @escaping () -> Void) {
+    func begin(endDuration: Second, beginClosure: () -> Void,
+               waitClosure: () -> Void, endClosure: @escaping () -> Void) {
         if wait {
-            waitHandler()
+            waitClosure()
             count += 1
         } else {
-            beginHandler()
+            beginClosure()
             wait = true
         }
         DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + endDuration) {
             if self.count == 0 {
-                endHandler()
+                endClosure()
                 self.wait = false
             } else {
                 self.count -= 1
@@ -55,12 +55,11 @@ final class LockTimer {
     private(set) var inUse = false
     private weak var timer: Timer?
     func begin(interval: Second, repeats: Bool = true,
-               tolerance: Second = 0.0, handler: @escaping () -> Void) {
+               tolerance: Second = 0.0, closure: @escaping () -> Void) {
         let time = interval + CFAbsoluteTimeGetCurrent()
+        let rInterval = repeats ? interval : 0
         let timer = CFRunLoopTimerCreateWithHandler(kCFAllocatorDefault,
-                                                    time, repeats ? interval : 0, 0, 0) { _ in
-                                                        handler()
-        }
+                                                    time, rInterval, 0, 0) { _ in closure() }
         CFRunLoopAddTimer(CFRunLoopGetCurrent(), timer, .commonModes)
         self.timer = timer
         inUse = true

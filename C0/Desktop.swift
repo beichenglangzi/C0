@@ -61,6 +61,8 @@ final class DesktopView: RootView {
         didSet {
             versionView.version = desktop.version
             actionManagerView.actionManager = desktop.actionManager
+            isSimpleReferenceView.bool = desktop.isSimpleReference
+            isHiddenActionManagerView.bool = desktop.isHiddenActionManager
             updateLayout()
         }
     }
@@ -92,7 +94,7 @@ final class DesktopView: RootView {
             if let desktop: Desktop = differentialDesktopDataModel.readObject() {
                 self.desktop = desktop
             }
-            differentialDesktopDataModel.dataHandler = { [unowned self] in self.desktop.jsonData }
+            differentialDesktopDataModel.dataClosure = { [unowned self] in self.desktop.jsonData }
         }
     }
     let objectsDataModelKey = "objects"
@@ -110,12 +112,18 @@ final class DesktopView: RootView {
         }
     }
     let versionView = VersionView()
-    let copiedLabel = Label(text: Localization(english: "Copied:", japanese: "コピー済み:"))
+    let classCopiedObjectsNameView = TextView(text: Localization(english: "Copied:",
+                                                                 japanese: "コピー済み:"))
     let copiedObjectsView = AnyArrayView()
     let isHiddenActionManagerView = BoolView(name: Localization(english: "Action Manager",
-                                                                japanese: "アクション管理"))
-    let isSimpleReferenceView = BoolView(name: Localization(english: "Simple Reference",
-                                                            japanese: "簡易情報"))
+                                                                japanese: "アクション管理"),
+                                             boolInfo: BoolInfo.hidden)
+    let isSimpleReferenceView = BoolView(name: Localization(english: "Reference",
+                                                            japanese: "情報"),
+                                         boolInfo: BoolInfo(trueName: Localization(english: "Outline",
+                                                                                   japanese: "概略"),
+                                                            falseName: Localization(english: "detail",
+                                                                                    japanese: "詳細")))
     let referenceView = ReferenceView()
     let actionManagerView = ActionManagerView()
     let objectsView = AnyArrayView()
@@ -132,8 +140,9 @@ final class DesktopView: RootView {
         versionView.version = desktop.version
         
         objectsView.replace(children: [sceneView])
-        replace(children: [versionView, copiedLabel, isHiddenActionManagerView, isSimpleReferenceView,
-                           copiedObjectsView, actionManagerView, referenceView, objectsView])
+        replace(children: [versionView, classCopiedObjectsNameView, copiedObjectsView,
+                           isHiddenActionManagerView, isSimpleReferenceView,
+                           actionManagerView, referenceView, objectsView])
         
         isHiddenActionManagerView.binding = { [unowned self] in
             self.update(withIsHiddenActionManager: $0.bool)
@@ -144,7 +153,7 @@ final class DesktopView: RootView {
             self.isSimpleReferenceBinding?($0.bool)
         }
         
-        differentialDesktopDataModel.dataHandler = { [unowned self] in self.desktop.jsonData }
+        differentialDesktopDataModel.dataClosure = { [unowned self] in self.desktop.jsonData }
     }
     
     var isHiddenActionManagerBinding: ((Bool) -> (Void))? = nil
@@ -188,10 +197,11 @@ final class DesktopView: RootView {
         versionView.frame = CGRect(x: padding,
                                    y: headerY,
                                    width: versionWidth, height: topViewsHeight)
-        copiedLabel.frame.origin = CGPoint(x: versionView.frame.maxX + padding, y: headerY + padding)
-        copiedObjectsView.frame = CGRect(x: copiedLabel.frame.maxX,
+        classCopiedObjectsNameView.frame.origin = CGPoint(x: versionView.frame.maxX + padding, y: headerY + padding)
+        let cw = max(bounds.width - actionWidth - versionWidth - isrw - ihamvw - classCopiedObjectsNameView.frame.width - padding * 3, 0)
+        copiedObjectsView.frame = CGRect(x: classCopiedObjectsNameView.frame.maxX,
                                          y: headerY,
-                                         width: bounds.width - actionWidth - versionWidth - isrw - ihamvw - copiedLabel.frame.width - padding * 2,
+                                         width: cw,
                                          height: topViewsHeight)
         updateCopiedObjectViewPositions()
         isSimpleReferenceView.frame = CGRect(x: copiedObjectsView.frame.maxX,
@@ -238,13 +248,13 @@ final class DesktopView: RootView {
         sceneView.frame.origin = CGPoint(x: -round(sceneView.frame.width / 2),
                                          y: -round(sceneView.frame.height / 2))
     }
-    private func update(withIsHiddenActionManager isHiddenActionManager: Bool) {
+    func update(withIsHiddenActionManager isHiddenActionManager: Bool) {
         actionManagerView.isHidden = isHiddenActionManager
         desktop.isHiddenActionManager = isHiddenActionManager
         updateLayout()
         differentialDesktopDataModel.isWrite = true
     }
-    private func update(withIsSimpleReference isSimpleReference: Bool) {
+    func update(withIsSimpleReference isSimpleReference: Bool) {
         desktop.isSimpleReference = isSimpleReference
         updateLayout()
         differentialDesktopDataModel.isWrite = true
@@ -267,6 +277,9 @@ final class DesktopView: RootView {
         _ = Layout.leftAlignment(copiedObjectsView.children, minX: padding, y: padding)
     }
 
+    override var topCopiedObjects: [ViewExpression] {
+        return desktop.copiedObjects
+    }
     override func sendToTop(copiedObjects: [ViewExpression]) {
         push(copiedObjects: copiedObjects)
     }

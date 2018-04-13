@@ -99,20 +99,20 @@ class Layer {
         self.parent = nil
     }
     
-    func allChildrenAndSelf(_ handler: (Layer) -> Void) {
-        func allChildrenRecursion(_ child: Layer, _ handler: (Layer) -> Void) {
-            child.children.forEach { allChildrenRecursion($0, handler) }
-            handler(child)
+    func allChildrenAndSelf(_ closure: (Layer) -> Void) {
+        func allChildrenRecursion(_ child: Layer, _ closure: (Layer) -> Void) {
+            child.children.forEach { allChildrenRecursion($0, closure) }
+            closure(child)
         }
-        allChildrenRecursion(self, handler)
+        allChildrenRecursion(self, closure)
     }
-    func allParentsAndSelf(handler: (Layer, inout Bool) -> Void) {
+    func allParentsAndSelf(closure: (Layer, inout Bool) -> Void) {
         var stop = false
-        handler(self, &stop)
+        closure(self, &stop)
         if stop {
             return
         }
-        parent?.allParentsAndSelf(handler: handler)
+        parent?.allParentsAndSelf(closure: closure)
     }
     var root: Layer {
         return parent?.root ?? self
@@ -325,9 +325,9 @@ class Layer {
     }
     var isSubIndicated = false
     weak var subIndicatedParent: Layer?
-    func allSubIndicatedParentsAndSelf(handler: (Layer) -> Void) {
-        handler(self)
-        (subIndicatedParent ?? parent)?.allSubIndicatedParentsAndSelf(handler: handler)
+    func allSubIndicatedParentsAndSelf(closure: (Layer) -> Void) {
+        closure(self)
+        (subIndicatedParent ?? parent)?.allSubIndicatedParentsAndSelf(closure: closure)
     }
     
     var cursorPoint: CGPoint {
@@ -567,10 +567,10 @@ private final class _CADrawLayer: CALayer {
         }
         drawBlock?(ctx)
     }
-    func safetySetNeedsDisplay(_ handler: () -> Void) {
+    func safetySetNeedsDisplay(_ closure: () -> Void) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        handler()
+        closure()
         setNeedsDisplay()
         CATransaction.commit()
     }
@@ -647,24 +647,24 @@ extension CALayer {
         return layer
     }
     
-    func allSublayers(_ handler: (CALayer) -> Void) {
-        func allSublayersRecursion(_ layer: CALayer, _ handler: (CALayer) -> Void) {
+    func allSublayers(_ closure: (CALayer) -> Void) {
+        func allSublayersRecursion(_ layer: CALayer, _ closure: (CALayer) -> Void) {
             if let sublayers = layer.sublayers {
                 for sublayer in sublayers {
-                    allSublayersRecursion(sublayer, handler)
+                    allSublayersRecursion(sublayer, closure)
                 }
             }
-            handler(layer)
+            closure(layer)
         }
-        allSublayersRecursion(self, handler)
+        allSublayersRecursion(self, closure)
     }
 }
 
 extension CATransaction {
-    static func disableAnimation(_ handler: () -> Void) {
+    static func disableAnimation(_ closure: () -> Void) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        handler()
+        closure()
         CATransaction.commit()
     }
 }

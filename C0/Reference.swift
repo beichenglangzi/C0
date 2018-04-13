@@ -80,18 +80,33 @@ final class ReferenceView: View {
         }
     }
     
-    let classNameLabel = Label(text: Reference.name, font: .bold)
-    let nameLabel = Label()
-    let classDescriptionLabel = Label()
-    let instanceDescriptionLabel = Label()
-    let viewDescriptionLabel = Label()
-    let commentLabel = Label()
+    let classNameView = TextView(text: Reference.name, font: .bold)
+    let nameView = TextView()
+    let classClassDescriptionView = TextView(text: Localization(english: "Class Description:",
+                                                                japanese: "クラス説明:"),
+                                             font: .small)
+    let classDescriptionView = TextView()
+    let classInstanceDescriptionView = TextView(text: Localization(english: "Instance Description:",
+                                                                   japanese: "インスタンス説明:"),
+                                                font: .small)
+    let instanceDescriptionView = TextView()
+    let classViewDescriptionView = TextView(text: Localization(english: "View Description:",
+                                                               japanese: "表示説明:"),
+                                            font: .small)
+    let viewDescriptionView = TextView()
+    let classCommentView = TextView(text: Localization(english: "Comment:", japanese: "コメント:"),
+                                    font: .small)
+    let commentView = TextView()
     
     init(reference: Reference = Reference()) {
         self.reference = reference
         super.init()
         isClipped = true
-        replace(children: [classNameLabel, nameLabel, instanceDescriptionLabel])
+        replace(children: [classNameView, nameView,
+                           classClassDescriptionView, classDescriptionView,
+                           classInstanceDescriptionView, instanceDescriptionView,
+                           classViewDescriptionView, viewDescriptionView,
+                           classCommentView, commentView])
         updateWithReference()
     }
     
@@ -102,19 +117,42 @@ final class ReferenceView: View {
     }
     private func updateLayout() {
         let padding = Layout.basicPadding
-        classNameLabel.frame.origin = CGPoint(x: padding,
-                                              y: bounds.height - classNameLabel.frame.height - padding)
-        var y = bounds.height - nameLabel.frame.height - padding
-        nameLabel.frame.origin = CGPoint(x: classNameLabel.frame.maxX + padding,
+        classNameView.frame.origin = CGPoint(x: padding,
+                                             y: bounds.height - classNameView.frame.height - padding)
+        
+        let frameWidth = (bounds.width - padding * 2 - instanceDescriptionView.padding * 2).d
+        classDescriptionView.textFrame.frameWidth = frameWidth
+        instanceDescriptionView.textFrame.frameWidth = frameWidth
+        viewDescriptionView.textFrame.frameWidth = frameWidth
+        commentView.textFrame.frameWidth = frameWidth
+        
+        var y = bounds.height - nameView.frame.height - padding
+        nameView.frame.origin = CGPoint(x: classNameView.frame.maxX + padding,
                                          y: y)
-        instanceDescriptionLabel.textFrame.frameWidth
-            = (bounds.width - padding * 2 - instanceDescriptionLabel.padding * 2).d
-        y -= instanceDescriptionLabel.frame.height + padding
-        instanceDescriptionLabel.frame.origin = CGPoint(x: padding, y: y)
+        y = bounds.height - classNameView.frame.height - padding
+        y -= classClassDescriptionView.frame.height
+        classClassDescriptionView.frame.origin = CGPoint(x: padding, y: y)
+        y -= classDescriptionView.frame.height
+        classDescriptionView.frame.origin = CGPoint(x: padding, y: y)
+        y -= padding + classInstanceDescriptionView.frame.height
+        classInstanceDescriptionView.frame.origin = CGPoint(x: padding, y: y)
+        y -= instanceDescriptionView.frame.height + padding
+        instanceDescriptionView.frame.origin = CGPoint(x: padding, y: y)
+        y -= padding + classViewDescriptionView.frame.height
+        classViewDescriptionView.frame.origin = CGPoint(x: padding, y: y)
+        y -= viewDescriptionView.frame.height + padding
+        viewDescriptionView.frame.origin = CGPoint(x: padding, y: y)
+        y -= padding + classCommentView.frame.height
+        classCommentView.frame.origin = CGPoint(x: padding, y: y)
+        y -= commentView.frame.height + padding
+        commentView.frame.origin = CGPoint(x: padding, y: y)
     }
     private func updateWithReference() {
-        nameLabel.localization = reference.name
-        instanceDescriptionLabel.localization = reference.instanceDescription
+        nameView.localization = reference.name
+        classDescriptionView.localization = reference.classDescription
+        instanceDescriptionView.localization = reference.instanceDescription
+        viewDescriptionView.localization = reference.viewDescription
+        commentView.localization = reference.comment
         updateLayout()
     }
     

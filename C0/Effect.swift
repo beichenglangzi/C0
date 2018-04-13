@@ -137,28 +137,28 @@ final class EffectView: View {
     static let defaultWidth = 140.0.cf
     
     var sizeType: SizeType
-    private let classNameLabel: Label
+    private let classNameView: TextView
     private let blendTypeView: EnumView<BlendType>
-    private let blurLabel: Label
-    private let blurView: NumberView
-    private let opacityView: NumberView
+    private let classBlurNameView: TextView
+    private let blurView: SlidableNumberView
+    private let opacityView: SlidableNumberView
     
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
-        classNameLabel = Label(text: Effect.name, font: Font.bold(with: sizeType))
-        blurLabel = Label(text: Effect.displayText(with: \Effect.blurRadius) + Localization(":"),
-                          font: Font.default(with: sizeType))
-        blurView = NumberView.widthViewWith(min: 0, max: 500, exp: 3, sizeType: sizeType)
-        opacityView = NumberView.opacityView(sizeType: sizeType)
+        classNameView = TextView(text: Effect.name, font: Font.bold(with: sizeType))
+        let blurPropertyText = Effect.displayText(with: \Effect.blurRadius) + Localization(":")
+        classBlurNameView = TextView(text: blurPropertyText, font: Font.default(with: sizeType))
+        blurView = SlidableNumberView.widthViewWith(min: 0, max: 500, exp: 3, sizeType: sizeType)
+        opacityView = SlidableNumberView.opacityView(sizeType: sizeType)
         blendTypeView = EnumView(enumeratedType: .normal,
-                                 indexHandler: { Int($0) },
-                                 rawValueHandler: { BlendType.RawValue($0) },
+                                 indexClosure: { Int($0) },
+                                 rawValueClosure: { BlendType.RawValue($0) },
                                  names: BlendType.displayTexts, sizeType: sizeType)
         effect = defaultEffect
         super.init()
-        replace(children: [classNameLabel,
+        replace(children: [classNameView,
                            blendTypeView,
-                           blurLabel, blurView,
+                           classBlurNameView, blurView,
                            opacityView])
         
         blurView.binding = { [unowned self] in self.setEffect(with: $0) }
@@ -174,7 +174,7 @@ final class EffectView: View {
     
     override var defaultBounds: CGRect {
         let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
-        let viewHeight = height * 3 + padding * 2
+        let viewHeight = height * 2 + padding * 2
         return CGRect(x: 0, y: 0, width: EffectView.defaultWidth, height: viewHeight)
     }
     override var bounds: CGRect {
@@ -185,14 +185,20 @@ final class EffectView: View {
     func updateLayout() {
         let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
         let cw = bounds.width - padding * 2
-        let rw = cw - classNameLabel.frame.width - padding
+        let rw = cw - classNameView.frame.width - padding
         let px = bounds.width - rw - padding
-        classNameLabel.frame.origin = CGPoint(x: padding,
-                                              y: bounds.height - classNameLabel.frame.height - padding)
-        blendTypeView.frame = CGRect(x: px, y: padding + h * 2, width: rw, height: h)
-        blurLabel.frame.origin = CGPoint(x: px - blurLabel.frame.width, y: padding * 2 + h)
-        blurView.updateLineWidthLayers(withFrame: CGRect(x: px, y: padding + h, width: rw, height: h))
-        opacityView.updateOpacityLayers(withFrame: CGRect(x: px, y: padding, width: rw, height: h))
+        classNameView.frame.origin = CGPoint(x: padding,
+                                             y: bounds.height - classNameView.frame.height - padding)
+        blendTypeView.frame = CGRect(x: px, y: padding + h, width: rw, height: h)
+        classBlurNameView.frame.origin = CGPoint(x: padding,
+                                                 y: padding * 2)
+        let blurW = ceil((cw - classBlurNameView.frame.width) / 2)
+        blurView.updateLineWidthLayers(withFrame: CGRect(x: classBlurNameView.frame.maxX, y: padding,
+                                                         width: blurW, height: h))
+        opacityView.updateOpacityLayers(withFrame: CGRect(x: blurView.frame.maxX,
+                                                          y: padding,
+                                                          width: bounds.width - blurView.frame.maxX - padding,
+                                                          height: h))
     }
     private func updateWithEffect() {
         blurView.number = effect.blurRadius
@@ -218,7 +224,7 @@ final class EffectView: View {
             binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: obj.type))
         }
     }
-    private func setEffect(with obj: NumberView.Binding) {
+    private func setEffect(with obj: SlidableNumberView.Binding) {
         if obj.type == .begin {
             oldEffect = effect
             binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
