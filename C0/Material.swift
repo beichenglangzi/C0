@@ -277,8 +277,7 @@ extension SlidableNumberView {
 }
 
 /**
- # Issue
- - 「線の強さ」を追加
+ Issue: 「線の強さ」を追加
  */
 final class MaterialView: View {
     var material: Material {
@@ -360,8 +359,8 @@ final class MaterialView: View {
                                              y: bounds.height - classNameView.frame.height - padding)
         let tx = classNameView.frame.maxX + padding
         typeView.frame = CGRect(x: tx,
-                                y: bounds.height - h - padding,
-                                width: bounds.width - tx - padding, height: h)
+                                y: bounds.height - h * 2 - padding,
+                                width: bounds.width - tx - padding, height: h * 2)
         colorView.frame = CGRect(x: padding, y: padding, width: cw, height: cw)
         classLineColorNameView.frame.origin = CGPoint(x: padding + cw,
                                                       y: padding + cw - classLineColorNameView.frame.height)

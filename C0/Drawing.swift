@@ -20,8 +20,7 @@
 import Foundation
 
 /**
- # Issue
- - 変更通知またはイミュータブル化またはstruct化
+ Issue: 変更通知またはイミュータブル化またはstruct化
  */
 final class Drawing: NSObject, NSCoding {
     var lines: [Line], draftLines: [Line], selectedLineIndexes: [Int]
@@ -148,47 +147,44 @@ extension Drawing: ViewExpression {
 }
 
 /**
- # Issue
- - DraftArray、下書き化などのコマンドを排除
+ Issue: DraftArray、下書き化などのコマンドを排除
  */
 final class DrawingView: View {
-    var drawing = Drawing()
+    var drawing = Drawing() {
+        didSet {
+            linesView.array = drawing.lines
+            draftLinesView.array = drawing.draftLines
+        }
+    }
     
     var sizeType: SizeType
-    private let classNameView: TextView
-    
-    let linesView = ArrayView<Line>()
-    let draftLinesView = ArrayView<Line>()
-    
+    let formClassNameView: TextView
+    let linesView = ArrayCountView<Line>()
+    let formClassDraftLinesNameView = TextView(text: Localization(english: "Draft Lines:",
+                                                                  japanese: "下書き線:"))
+    let draftLinesView = ArrayCountView<Line>()
     let changeToDraftView = ClosureView(name: Localization(english: "Change to Draft",
                                                            japanese: "下書き化"))
-    let removeDraftView = ClosureView(name: Localization(english: "Remove Draft",
-                                                         japanese: "下書きを削除"))
     let exchangeWithDraftView = ClosureView(name: Localization(english: "Exchange with Draft",
                                                                japanese: "下書きと交換"))
-    let triangleLinesView = [Line].triangle().view(withBounds: CGRect(), sizeType: .small)
-    let squareLinesView = [Line].square().view(withBounds: CGRect(), sizeType: .small)
-    let pentagonLinesView = [Line].pentagon().view(withBounds: CGRect(), sizeType: .small)
-    let hexagonLinesView = [Line].hexagon().view(withBounds: CGRect(), sizeType: .small)
-    let circleLinesView = [Line].circle().view(withBounds: CGRect(), sizeType: .small)
     
-    init(sizeType: SizeType = .regular) {
+    init(drawing: Drawing = Drawing(), sizeType: SizeType = .regular) {
         self.sizeType = sizeType
-        classNameView = TextView(text: Drawing.name, font: Font.bold(with: sizeType))
+        formClassNameView = TextView(text: Drawing.name, font: Font.bold(with: sizeType))
+        
         super.init()
         changeToDraftView.closure = { [unowned self] in self.changeToDraft() }
-        removeDraftView.closure = { [unowned self] in self.removeDraft() }
         exchangeWithDraftView.closure = { [unowned self] in self.exchangeWithDraft() }
-        replace(children: [classNameView,
-                           linesView, draftLinesView,
-                           changeToDraftView, removeDraftView, exchangeWithDraftView,
-                           squareLinesView])
+        replace(children: [formClassNameView,
+                           linesView,
+                           formClassDraftLinesNameView, draftLinesView,
+                           changeToDraftView, exchangeWithDraftView])
     }
     
     override var defaultBounds: CGRect {
         let padding = Layout.padding(with: sizeType), buttonH = Layout.height(with: sizeType)
         return CGRect(x: 0, y: 0, width: 100,
-                      height: classNameView.frame.height + buttonH * 4 + padding * 3)
+                      height: buttonH * 4 + padding * 2)
     }
     override var bounds: CGRect {
         didSet {
@@ -199,17 +195,23 @@ final class DrawingView: View {
         let padding = Layout.padding(with: sizeType), buttonH = Layout.height(with: sizeType)
         let px = padding, pw = bounds.width - padding * 2
         var py = bounds.height - padding
-        py -= classNameView.frame.height
-        classNameView.frame.origin = CGPoint(x: padding, y: py)
-        py -= padding
+        py -= formClassNameView.frame.height
+        formClassNameView.frame.origin = CGPoint(x: padding, y: py)
+        let lsdb = linesView.defaultBounds
+        py = bounds.height - padding
+        py -= lsdb.height
+        linesView.frame = CGRect(x: bounds.maxX - lsdb.width - padding, y: py,
+                                 width: lsdb.width, height: lsdb.height)
+        py -= lsdb.height
+        draftLinesView.frame = CGRect(x: bounds.maxX - lsdb.width - padding, y: py,
+                                      width: lsdb.width, height: lsdb.height)
+        let fcdlnvw = formClassDraftLinesNameView.frame.width
+        formClassDraftLinesNameView.frame.origin = CGPoint(x: draftLinesView.frame.minX - fcdlnvw,
+                                                           y: py + padding)
         py -= buttonH
         changeToDraftView.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
         py -= buttonH
-        removeDraftView.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
-        py -= buttonH
         exchangeWithDraftView.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
-        py -= buttonH
-        squareLinesView.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
     }
     
     var disabledRegisterUndo = true
@@ -221,9 +223,6 @@ final class DrawingView: View {
     var binding: ((Binding) -> ())?
     
     func changeToDraft() {
-        
-    }
-    func removeDraft() {
         
     }
     func exchangeWithDraft() {

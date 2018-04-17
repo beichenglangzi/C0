@@ -20,8 +20,7 @@
 import Foundation
 
 /**
- # Issue
- - 円が崩れない自動筆圧
+ Issue: 円が崩れない自動筆圧
  */
 struct Line: Codable {
     struct Control: Equatable, Hashable {

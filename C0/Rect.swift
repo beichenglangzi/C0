@@ -29,13 +29,6 @@ struct Rect: Equatable {
         self.init(origin: Point(x: x, y: y), size: Size(width: width, height: height))
     }
     
-    func with(origin: Point) -> Rect {
-        return Rect(origin: origin, size: size)
-    }
-    func with(_ size: Size) -> Rect {
-        return Rect(origin: origin, size: size)
-    }
-    
     func insetBy(dx: Double, dy: Double) -> Rect {
         return Rect(x: minX + dx, y: minY + dy,
                     width: width - dx * 2, height: height - dy * 2)
@@ -180,17 +173,29 @@ struct AABB: Codable {
     }
     func nearestDistance²(_ p: CGPoint) -> CGFloat {
         if p.x < minX {
-            return p.y < minY ?
-                hypot²(minX - p.x, minY - p.y) :
-                (p.y <= maxY ? (minX - p.x).² : hypot²(minX - p.x, maxY - p.y))
+            if p.y < minY {
+                return hypot²(minX - p.x, minY - p.y)
+            } else if p.y <= maxY {
+                return (minX - p.x).²
+            } else {
+                return hypot²(minX - p.x, p.y - maxY)
+            }
         } else if p.x <= maxX {
-            return p.y < minY ?
-                (minY - p.y).² :
-                (p.y <= maxY ? 0 : (minY - p.y).²)
+            if p.y < minY {
+                return (minY - p.y).²
+            } else if p.y <= maxY {
+                return 0
+            } else {
+                return (p.y - maxY).²
+            }
         } else {
-            return p.y < minY ?
-                hypot²(maxX - p.x, minY - p.y) :
-                (p.y <= maxY ? (maxX - p.x).² : hypot²(maxX - p.x, maxY - p.y))
+            if p.y < minY {
+                return hypot²(maxX - p.x, minY - p.y)
+            } else if p.y <= maxY {
+                return (maxX - p.x).²
+            } else {
+                return hypot²(p.x - maxX, p.y - maxY)
+            }
         }
     }
     func intersects(_ other: AABB) -> Bool {

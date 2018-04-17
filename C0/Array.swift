@@ -260,7 +260,70 @@ final class ArrayView<T: Referenceable & ViewExpression & Copiable>: View {
     }
     
     func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        return array
+        return [array.copied]
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        return array.reference
+    }
+}
+
+final class ArrayCountView<T: Referenceable & ViewExpression & Copiable>: View {
+    var array = [T]() {
+        didSet {
+            countView.number = RealNumber(array.count)
+        }
+    }
+    
+    var sizeType: SizeType
+    let classNameView: TextView
+    let classCountNameView: TextView
+    let countView: RealNumberView
+    
+    init(array: [T] = [], frame: CGRect = CGRect(),
+         sizeType: SizeType = .regular) {
+        self.array = array
+        classNameView = TextView(text: [T].name, font: Font.bold(with: sizeType))
+        classCountNameView = TextView(text: Localization(english: "Count:", japanese: "個数:"),
+                                      font: Font.default(with: sizeType))
+        countView = RealNumberView(number: RealNumber(array.count), numberOfDigits: 0,
+                                   sizeType: sizeType)
+        self.sizeType = sizeType
+        
+        super.init()
+        isClipped = true
+        self.frame = frame
+        replace(children: [classNameView, classCountNameView, countView])
+    }
+    
+    override var locale: Locale {
+        didSet {
+            updateLayout()
+        }
+    }
+    
+    var width = 40.0.cf
+    override var defaultBounds: CGRect {
+        let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
+        return CGRect(x: 0, y: 0, width: classNameView.frame.width + classCountNameView.frame.width + width + padding * 3, height: h)
+    }
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    func updateLayout() {
+        let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
+        classNameView.frame.origin = CGPoint(x: padding,
+                                             y: bounds.height - classNameView.frame.height - padding)
+        classCountNameView.frame.origin = CGPoint(x: classNameView.frame.maxX + padding,
+                                                  y: padding)
+        countView.frame = CGRect(x: classCountNameView.frame.maxX, y: padding,
+                                 width: width, height: h - padding * 2)
+    }
+    
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [array.copied]
     }
     
     func reference(with event: TapEvent) -> Reference? {
@@ -269,8 +332,7 @@ final class ArrayView<T: Referenceable & ViewExpression & Copiable>: View {
 }
 
 /**
- # Issue
- - ツリー操作が複雑
+ Issue: ツリー操作が複雑
  */
 final class ListArrayView: View {
     private let nameLineLayer: PathLayer = {

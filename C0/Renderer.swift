@@ -132,7 +132,7 @@ final class SceneMovieRenderer {
         }
         writer.startSession(atSourceTime: kCMTimeZero)
         
-        let allFrameCount = (scene.duration.p * scene.frameRate) / scene.duration.q
+        let allFrameCount = scene.frameTime(withBeatTime: scene.duration)
         let timeScale = Int32(scene.frameRate)
         
         var append = false, stop = false
@@ -274,82 +274,7 @@ final class RendererManager {
     deinit {
         renderQueue.cancelAllOperations()
     }
-
-    func updatePopupBox(withRendingContentScale rendingContentScale: CGFloat) {
-        let size = self.scene.frame.size
-        let size2 = size * rendingContentScale
-        let size720p = CGSize(width: floor((size.width * 720) / size.height), height: 720)
-        let size1080p = CGSize(width: floor((size.width * 1080) / size.height), height: 1080)
-        let size2160p = CGSize(width: floor((size.width * 2160) / size.height), height: 2160)
-        "Movie x1 x2 720p 1080p 2160p"
-        let s2String = "w: \(Int(size2.width)) px, h: \(Int(size2.height)) px"
-        let s720String = "w: \(Int(size720p.width)) px, h: 720 px"
-        let s1080String = "w: \(Int(size1080p.width)) px, h: 1080 px"
-        let s2160String = "w: \(Int(size2160p.width)) px, h: 2160 px"
-        
-//        let s2Text = Localization(english: "Export Movie(\(s2String))",
-//                                  japanese: "動画として書き出す(\(s2String))")
-//        let s2Closure: (TextBox) -> (Bool) = { [unowned self] in
-//            self.exportMovie(message: $0.label.string, size: size2, isSelectedCutOnly: false)
-//        }
-//        let s720Text = Localization(english: "Export Movie(\(s720String))",
-//                                    japanese: "動画として書き出す(\(s720String))")
-//        let s720Closure: (TextBox) -> (Bool) = { [unowned self] in
-//            self.exportMovie(message: $0.label.string, size: size720p, isSelectedCutOnly: false)
-//        }
-//        let s1080Text = Localization(english: "Export Movie(\(s1080String))",
-//                                     japanese: "動画として書き出す(\(s1080String))")
-//        let s1080Closure: (TextBox) -> (Bool) = { [unowned self] in
-//            self.exportMovie(message: $0.label.string, size: size1080p, isSelectedCutOnly: false)
-//        }
-//        let s2160Text = Localization(english: "Export Movie(\(s2160String))",
-//                                     japanese: "動画として書き出す(\(s2160String))")
-//        let s2160Closure: (TextBox) -> (Bool) = { [unowned self] in
-//            self.exportMovie(message: $0.label.string, size: size2160p, isSelectedCutOnly: false)
-//        }
-//
-//        let s2IText = Localization(english: "Export Image(\(s2String))",
-//                                   japanese: "画像として書き出す(\(s2String))")
-//        let s2IClosure: (TextBox) -> (Bool) = { [unowned self] in
-//            self.exportImage(message: $0.label.string, size: size2)
-//        }
-//        let s720IText = Localization(english: "Export Image(\(s720String))",
-//                                     japanese: "画像として書き出す(\(s720String))")
-//        let s720IClosure: (TextBox) -> (Bool) = { [unowned self] in
-//            self.exportImage(message: $0.label.string, size: size720p)
-//        }
-//        let s1080IText = Localization(english: "Export Image(\(s1080String))",
-//                                      japanese: "画像として書き出す(\(s1080String))")
-//        let s1080IClosure: (TextBox) -> (Bool) = { [unowned self] in
-//            self.exportImage(message: $0.label.string, size: size1080p)
-//        }
-//        let s2160IText = Localization(english: "Export Image(\(s2160String))",
-//                                      japanese: "画像として書き出す(\(s2160String))")
-//        let s2160IClosure: (TextBox) -> (Bool) = { [unowned self] in
-//            self.exportImage(message: $0.label.string, size: size2160p)
-//        }
-//
-//        let subtitleText = Localization(english: "Export Subtitle", japanese: "字幕として書き出す")
-//        let subtitleClosure: (TextBox) -> (Bool) =  { [unowned self] in
-//            self.exportSubtitle(message: $0.label.string)
-//        }
-//
-//        let panel = self.popupBox.panel
-//        panel.replace(children: [TextBox(name: s2Text, runClosure: s2Closure),
-//                                 TextBox(name: s720Text, runClosure: s720Closure),
-//                                 TextBox(name: s1080Text, runClosure: s1080Closure),
-//                                 TextBox(name: s2160Text, runClosure: s2160Closure),
-//                                 TextBox(name: s2IText, runClosure: s2IClosure),
-//                                 TextBox(name: s720IText, runClosure: s720IClosure),
-//                                 TextBox(name: s1080IText, runClosure: s1080IClosure),
-//                                 TextBox(name: s2160IText, runClosure: s2160IClosure),
-//                                 TextBox(name: subtitleText, runClosure: subtitleClosure)])
-//        var minSize = CGSize()
-//        Layout.topAlignment(panel.children, minSize: &minSize)
-//        panel.frame.size = CGSize(width: minSize.width + Layout.basicPadding * 2,
-//                                  height: minSize.height + Layout.basicPadding * 2)
-    }
-
+    
     var bars = [ProgressNumberView]()
     func beginProgress(_ progressBar: ProgressNumberView) {
         bars.append(progressBar)
@@ -378,7 +303,7 @@ final class RendererManager {
     
     func exportMovie(message: String?, name: String? = nil, size: CGSize,
                      fileType: AVFileType = .mp4, codec: String = AVVideoCodecH264,
-                     isSelectedCutOnly: Bool) -> Bool {
+                     isSelectedCutOnly: Bool = false) -> Bool {
         guard let utType = SceneMovieRenderer.UTTypeWithAVFileType(fileType) else {
             return true
         }

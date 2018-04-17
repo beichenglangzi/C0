@@ -20,8 +20,7 @@
 import Foundation
 
 /**
- # Issue
- - 変更通知またはイミュータブル化またはstruct化
+ Issue: 変更通知またはイミュータブル化またはstruct化
  */
 protocol Track: Animatable {
     var animation: Animation { get }
@@ -1011,6 +1010,11 @@ final class NodeTrack: NSObject, Track, NSCoding {
         return cell.material
     }
     
+    var imageBounds: CGRect {
+        return cellItems.reduce(CGRect()) { $0.unionNoEmpty($1.cell.imageBounds) }
+            .unionNoEmpty(drawingItem.imageBounds)
+    }
+    
     func snapCells(with cell: Cell) -> [Cell] {
         var cells = self.cells
         var snapedCells = cells.compactMap { $0 !== cell && $0.isSnaped(cell) ? $0 : nil }
@@ -1150,11 +1154,6 @@ final class NodeTrack: NSObject, Track, NSCoding {
         return minPoint
     }
     
-    var imageBounds: CGRect {
-        return cellItems.reduce(CGRect()) { $0.unionNoEmpty($1.cell.imageBounds) }
-            .unionNoEmpty(drawingItem.imageBounds)
-    }
-    
     func drawPreviousNext(isHiddenPrevious: Bool, isHiddenNext: Bool,
                           time: Beat, reciprocalScale: CGFloat, in ctx: CGContext) {
         let index = animation.loopedKeyframeIndex(withTime: time).keyframeIndex
@@ -1192,7 +1191,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
     }
     func drawTransparentCellLines(withReciprocalScale reciprocalScale: CGFloat, in ctx: CGContext) {
         cellItems.forEach {
-            $0.cell.geometry.drawLines(withColor: Color.border,
+            $0.cell.geometry.drawLines(withColor: Color.getSetBorder,
                                        reciprocalScale: reciprocalScale, in: ctx)
             $0.cell.geometry.drawPathLine(withReciprocalScale: reciprocalScale, in: ctx)
         }
@@ -1230,8 +1229,7 @@ extension NodeTrack: ObjectViewExpression {
 }
 
 /**
- # Issue
- - 変更通知またはイミュータブル化またはstruct化
+ Issue: 変更通知またはイミュータブル化またはstruct化
  */
 protocol TrackItem {
     func step(_ f0: Int)
@@ -1743,4 +1741,88 @@ extension TempoItem: ClassCopiable {
 }
 extension TempoItem: Referenceable {
     static let name = Localization(english: "Tempo Item", japanese: "テンポアイテム")
+}
+
+final class TracksManager {
+    let tracksView = ListArrayView()
+    
+    init() {
+        tracksView.nameClosure = { [unowned self] in
+            let tracks = self.node.tracks
+            guard $0 < tracks.count else {
+                return Localization()
+            }
+            return Localization(tracks[$0].name)
+        }
+        tracksView.copiedObjectsClosure = { [unowned self] _, _ in
+            return [self.node.editTrack.copied]
+        }
+        tracksView.moveClosure = { [unowned self] in return self.moveTrack(with: $1) }
+    }
+    
+    var node = Node() {
+        didSet {
+            if node != oldValue {
+                updateWithTracks(isAlwaysUpdate: true)
+            }
+        }
+    }
+    
+    func updateWithTracks(isAlwaysUpdate: Bool = false) {
+        tracksView.set(selectedIndex: node.editTrackIndex, count: node.tracks.count)
+        if isAlwaysUpdate {
+            tracksView.updateLayout()
+        }
+    }
+    
+    var disabledRegisterUndo = true
+    
+    struct NodeTracksBinding {
+        let tracksManager: TracksManager
+        let track: NodeTrack, index: Int, oldIndex: Int, beginIndex: Int
+        let inNode: Node, type: Action.SendType
+    }
+    var setTracksClosure: ((NodeTracksBinding) -> ())?
+    
+    var moveHeight = 8.0.cf
+    private var oldIndex = 0, beginIndex = 0, oldP = CGPoint()
+    private weak var editTrack: NodeTrack?
+    private var oldInNode = Node(), oldTracks = [NodeTrack]()
+    func moveTrack(with event: DragEvent) -> Bool {
+        let p = tracksView.point(from: event)
+        switch event.sendType {
+        case .begin:
+            oldInNode = node
+            oldTracks = oldInNode.tracks
+            oldIndex = oldInNode.editTrackIndex
+            beginIndex = oldIndex
+            editTrack = oldInNode.editTrack
+            oldP = p
+            setTracksClosure?(NodeTracksBinding(tracksManager: self,
+                                                track: oldInNode.editTrack,
+                                                index: oldIndex,
+                                                oldIndex: oldIndex,
+                                                beginIndex: beginIndex,
+                                                inNode: oldInNode, type: .begin))
+        case .sending, .end:
+            guard let editTrack = editTrack else {
+                return true
+            }
+            let d = p.y - oldP.y
+            let i = (beginIndex + Int(d / moveHeight)).clip(min: 0, max: oldTracks.count - 1)
+            if i != oldIndex || (event.sendType == .end && i != beginIndex) {
+                setTracksClosure?(NodeTracksBinding(tracksManager: self,
+                                                    track: editTrack,
+                                                    index: i,
+                                                    oldIndex: oldIndex,
+                                                    beginIndex: beginIndex,
+                                                    inNode: oldInNode, type: event.sendType))
+                oldIndex = i
+            }
+            if event.sendType == .end {
+                oldTracks = []
+            }
+        }
+        return true
+    }
 }

@@ -79,27 +79,6 @@ struct Keyframe: Codable, Equatable, Hashable {
     var easing = Easing()
     var interpolation = Interpolation.spline, loop = Loop.none, label = Label.main
     
-    func with(time: Beat) -> Keyframe {
-        return Keyframe(time: time, easing: easing,
-                        interpolation: interpolation, loop: loop, label: label)
-    }
-    func with(_ easing: Easing) -> Keyframe {
-        return Keyframe(time: time, easing: easing,
-                        interpolation: interpolation, loop: loop, label: label)
-    }
-    func with(_ interpolation: Interpolation) -> Keyframe {
-        return Keyframe(time: time, easing: easing,
-                        interpolation: interpolation, loop: loop, label: label)
-    }
-    func with(_ loop: Loop) -> Keyframe {
-        return Keyframe(time: time, easing: easing,
-                        interpolation: interpolation, loop: loop, label: label)
-    }
-    func with(_ label: Label) -> Keyframe {
-        return Keyframe(time: time, easing: easing,
-                        interpolation: interpolation, loop: loop, label: label)
-    }
-    
     static func index(time t: Beat,
                       with keyframes: [Keyframe]) -> (index: Int, interTime: Beat, duration: Beat) {
         var oldT = Beat(0)
@@ -249,7 +228,7 @@ final class KeyframeView: View {
             self.binding?(Binding(view: self,
                                   keyframe: oldKeyframe, oldKeyframe: oldKeyframe, type: .begin))
         } else {
-            keyframe = keyframe.with(binding.easing)
+            keyframe.easing = binding.easing
             self.binding?(Binding(view: self,
                                   keyframe: keyframe, oldKeyframe: oldKeyframe, type: binding.type))
         }

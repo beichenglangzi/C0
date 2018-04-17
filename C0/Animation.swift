@@ -489,7 +489,7 @@ final class AnimationView: View {
                 let fillColor = li.loopingCount > 0 || li.index == editingKeyframeIndex ?
                     Color.editing : knobColorClosure(li.index)
                 let lineColor = ((li.time + beginBaseTime) / baseTimeInterval).isInteger ?
-                    Color.border : Color.warning
+                    Color.getSetBorder : Color.warning
                 let knob = AnimationView.knob(from: position,
                                               fillColor: fillColor,
                                               lineColor: lineColor,
@@ -528,7 +528,7 @@ final class AnimationView: View {
         let durationFillColor = editingKeyframeIndex == animation.keyframes.count ?
             Color.editing : Color.knob
         let durationLineColor = ((animation.duration + beginBaseTime) / baseTimeInterval).isInteger ?
-            Color.border : Color.warning
+            Color.getSetBorder : Color.warning
         let durationKnob = AnimationView.knob(from: CGPoint(x: maxX, y: midY),
                                               fillColor: durationFillColor,
                                               lineColor: durationLineColor,
@@ -552,11 +552,11 @@ final class AnimationView: View {
         for (i, li) in animation.loopFrames.enumerated() {
             if i > 0 {
                 knobs[i - 1].lineColor = ((li.time + beginBaseTime) / baseTimeInterval).isInteger ?
-                    Color.border : Color.warning
+                    Color.getSetBorder : Color.warning
             }
         }
         knobs.last?.lineColor = ((animation.duration + beginBaseTime) / baseTimeInterval).isInteger ?
-            Color.border : Color.warning
+            Color.getSetBorder : Color.warning
     }
     
     var height: CGFloat {
@@ -813,7 +813,11 @@ final class AnimationView: View {
     private func deleteFirstKeyframe() {
         let deltaTime = animation.keyframes[1].time
         removeKeyframe(at: 0)
-        let keyframes = animation.keyframes.map { $0.with(time: $0.time - deltaTime) }
+        let keyframes: [Keyframe] = animation.keyframes.map {
+            var keyframe = $0
+            keyframe.time -= deltaTime
+            return keyframe
+        }
         set(keyframes, old: animation.keyframes)
     }
     func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
@@ -984,7 +988,7 @@ final class AnimationView: View {
             isDrag = true
             var nks = dragObject.oldAnimation.keyframes
             (keyframeIndex ..< nks.count).forEach {
-                nks[$0] = nks[$0].with(time: nks[$0].time + deltaTime)
+                nks[$0].time += deltaTime
             }
             isUseUpdateChildren = false
             animation.keyframes = nks
@@ -1007,7 +1011,7 @@ final class AnimationView: View {
             if deltaTime != 0 {
                 var nks = dragObject.oldAnimation.keyframes
                 (keyframeIndex ..< nks.count).forEach {
-                    nks[$0] = nks[$0].with(time: nks[$0].time + deltaTime)
+                    nks[$0].time += deltaTime
                 }
                 registeringUndoManager?.registerUndo(withTarget: self) { [dragObject] in
                     $0.set(dragObject.oldAnimation.keyframes, old: nks,

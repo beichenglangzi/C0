@@ -23,8 +23,6 @@ protocol Referenceable {
     static var uninheritanceName: Localization { get }
     static var name: Localization { get }
     static var classDescription: Localization { get }
-    var instanceDescription: Localization { get }
-    static var comment: Localization { get }
     var reference: Reference { get }
 }
 extension Referenceable {
@@ -34,38 +32,26 @@ extension Referenceable {
     static var classDescription: Localization {
         return Localization()
     }
-    var instanceDescription: Localization {
-        return Localization()
-    }
-    static var comment: Localization {
-        return Localization()
-    }
     var reference: Reference {
-        return Reference(name: Self.name,
-                         classDescription: Self.classDescription,
-                         instanceDescription: instanceDescription,
-                         comment: Self.comment)
+        return Reference(name: Self.name, classDescription: Self.classDescription)
     }
 }
 
+/**
+ Issue: リファレンス表示の具体化
+ */
 struct Reference {
-    var name: Localization, classDescription: Localization
-    var instanceDescription: Localization, viewDescription: Localization, comment: Localization
+    var name: Localization, classDescription: Localization, viewDescription: Localization
     init(name: Localization = Localization(),
          classDescription: Localization = Localization(),
-         instanceDescription: Localization = Localization(),
-         viewDescription: Localization = Localization(),
-         comment: Localization = Localization()) {
+         viewDescription: Localization = Localization()) {
         self.name = name
         self.classDescription = classDescription
-        self.instanceDescription = instanceDescription
         self.viewDescription = viewDescription
-        self.comment = comment
     }
 }
 extension Reference: Referenceable {
     static let name = Localization(english: "Reference", japanese: "情報")
-    static let comment = Localization("Issue: リファレンス表示の具体化")
 }
 extension Reference: ObjectViewExpression {
     func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
@@ -86,17 +72,10 @@ final class ReferenceView: View {
                                                                 japanese: "クラス説明:"),
                                              font: .small)
     let classDescriptionView = TextView()
-    let classInstanceDescriptionView = TextView(text: Localization(english: "Instance Description:",
-                                                                   japanese: "インスタンス説明:"),
-                                                font: .small)
-    let instanceDescriptionView = TextView()
     let classViewDescriptionView = TextView(text: Localization(english: "View Description:",
                                                                japanese: "表示説明:"),
                                             font: .small)
     let viewDescriptionView = TextView()
-    let classCommentView = TextView(text: Localization(english: "Comment:", japanese: "コメント:"),
-                                    font: .small)
-    let commentView = TextView()
     
     init(reference: Reference = Reference()) {
         self.reference = reference
@@ -104,9 +83,7 @@ final class ReferenceView: View {
         isClipped = true
         replace(children: [classNameView, nameView,
                            classClassDescriptionView, classDescriptionView,
-                           classInstanceDescriptionView, instanceDescriptionView,
-                           classViewDescriptionView, viewDescriptionView,
-                           classCommentView, commentView])
+                           classViewDescriptionView, viewDescriptionView])
         updateWithReference()
     }
     
@@ -120,11 +97,9 @@ final class ReferenceView: View {
         classNameView.frame.origin = CGPoint(x: padding,
                                              y: bounds.height - classNameView.frame.height - padding)
         
-        let frameWidth = (bounds.width - padding * 2 - instanceDescriptionView.padding * 2).d
+        let frameWidth = (bounds.width - padding * 2).d
         classDescriptionView.textFrame.frameWidth = frameWidth
-        instanceDescriptionView.textFrame.frameWidth = frameWidth
         viewDescriptionView.textFrame.frameWidth = frameWidth
-        commentView.textFrame.frameWidth = frameWidth
         
         var y = bounds.height - nameView.frame.height - padding
         nameView.frame.origin = CGPoint(x: classNameView.frame.maxX + padding,
@@ -134,25 +109,15 @@ final class ReferenceView: View {
         classClassDescriptionView.frame.origin = CGPoint(x: padding, y: y)
         y -= classDescriptionView.frame.height
         classDescriptionView.frame.origin = CGPoint(x: padding, y: y)
-        y -= padding + classInstanceDescriptionView.frame.height
-        classInstanceDescriptionView.frame.origin = CGPoint(x: padding, y: y)
-        y -= instanceDescriptionView.frame.height + padding
-        instanceDescriptionView.frame.origin = CGPoint(x: padding, y: y)
         y -= padding + classViewDescriptionView.frame.height
         classViewDescriptionView.frame.origin = CGPoint(x: padding, y: y)
-        y -= viewDescriptionView.frame.height + padding
+        y -= viewDescriptionView.frame.height
         viewDescriptionView.frame.origin = CGPoint(x: padding, y: y)
-        y -= padding + classCommentView.frame.height
-        classCommentView.frame.origin = CGPoint(x: padding, y: y)
-        y -= commentView.frame.height + padding
-        commentView.frame.origin = CGPoint(x: padding, y: y)
     }
     private func updateWithReference() {
-        nameView.localization = reference.name
-        classDescriptionView.localization = reference.classDescription
-        instanceDescriptionView.localization = reference.instanceDescription
-        viewDescriptionView.localization = reference.viewDescription
-        commentView.localization = reference.comment
+        nameView.text = reference.name
+        classDescriptionView.text = reference.classDescription
+        viewDescriptionView.text = reference.viewDescription
         updateLayout()
     }
     

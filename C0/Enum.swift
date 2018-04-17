@@ -100,7 +100,7 @@ final class EnumView<T: EnumType>: View {
     
     override var defaultBounds: CGRect {
         let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
-        let nw = nameViews.reduce(0.0.cf) { $0 + $1.frame.width }
+        let nw = nameViews.reduce(0.0.cf) { $0 + $1.frame.width } + (nameViews.count - 1).cf * padding
         return CGRect(x: 0, y: 0, width: classNameView.frame.width + nw + padding * 2, height: height)
     }
     override var bounds: CGRect {
@@ -113,19 +113,31 @@ final class EnumView<T: EnumType>: View {
         classNameView.frame.origin = CGPoint(x: padding,
                                              y: bounds.height - classNameView.frame.height - padding)
         let path = CGMutablePath()
+        let h = Layout.height(with: sizeType) - padding * 2
+        var y = bounds.height - padding - h
         _ = nameViews.reduce(classNameView.frame.maxX + padding) {
-            $1.frame.origin = CGPoint(x: $0, y: padding)
+            let x: CGFloat
+            if $0 + $1.frame.width + padding > bounds.width {
+                x = padding
+                y -= h + padding
+            } else {
+                x = $0
+            }
+            $1.frame.origin = CGPoint(x: x, y: y)
             path.addRect($1.frame)
-            return $0 + $1.frame.width
+            return x + $1.frame.width + padding
         }
         lineLayer.path = path
         
-        knob.frame = nameViews[index].frame.inset(by: -0.5)
+        knob.frame = nameViews[index].frame.inset(by: -1)
     }
     private func updateWithEnumeratedType() {
-        knob.frame = nameViews[index].frame.inset(by: -0.5)
+        knob.frame = nameViews[index].frame.inset(by: -1)
         nameViews.forEach { $0.fillColor = .background }
         nameViews[index].fillColor = .knob
+        nameViews.enumerated().forEach {
+            $0.element.textFrame.color = $0.offset == index ? .locked : .subLocked
+        }
     }
     
     func enumeratedType(at index: Int) -> T {
@@ -136,12 +148,15 @@ final class EnumView<T: EnumType>: View {
         }
     }
     func enumeratedType(at p: CGPoint) -> T {
+        var minI = 0, minD = CGFloat.infinity
         for (i, view) in nameViews.enumerated() {
-            if view.frame.contains(p) {
-                return enumeratedType(at: i)
+            let d = view.frame.distance²(p)
+            if d < minD {
+                minI = i
+                minD = d
             }
         }
-        return defaultEnumeratedType
+        return enumeratedType(at: minI)
     }
     
     struct Binding {

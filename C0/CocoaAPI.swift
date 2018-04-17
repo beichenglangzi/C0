@@ -62,7 +62,7 @@ struct Font {
         self.init(NSFont.monospacedDigitSystemFont(ofSize: size, weight: .medium))
     }
     init(boldMonospacedSize size: CGFloat) {
-        self.init(NSFont.monospacedDigitSystemFont(ofSize: size, weight: .bold))
+        self.init(NSFont.monospacedDigitSystemFont(ofSize: size, weight: .heavy))
     }
     init(italicMonospacedSize size: CGFloat) {
         let font = NSFont.monospacedDigitSystemFont(ofSize: size, weight: .medium)
@@ -382,8 +382,7 @@ final class C0Application: NSApplication {
 }
 
 /**
- # Issue
- - NSDocument廃止
+ Issue: NSDocument廃止
  */
 final class C0Document: NSDocument, NSWindowDelegate {
     let rootDataModelKey = "root"
@@ -801,8 +800,8 @@ final class C0View: NSView, NSTextInputClient {
 
     override func cursorUpdate(with event: NSEvent) {
         sender.sendMoveCursor(with: moveEventWith(.sending, event))
-        if sender.indicatedResponder.cursor.nsCursor != NSCursor.current {
-            sender.indicatedResponder.cursor.nsCursor.set()
+        if sender.indicatedResponders[0].cursor.nsCursor != NSCursor.current {
+            sender.indicatedResponders[0].cursor.nsCursor.set()
         }
     }
     override func mouseMoved(with event: NSEvent) {

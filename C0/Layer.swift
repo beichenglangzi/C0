@@ -26,11 +26,9 @@ final class Screen {
 }
 
 /**
- # Issue
- ## Version 0.4
- - QuartzCoreを廃止し、MetalでGPUレンダリング
- - リニアワークフロー、マクロ拡散光
- - GradientLayer, PathLayerなどをLayerに統合
+ Issue: QuartzCoreを廃止し、MetalでGPUレンダリング
+ Issue: リニアワークフロー、マクロ拡散光
+ Issue: GradientLayer, PathLayerなどをLayerに統合
  */
 class Layer {
     fileprivate var caLayer: CALayer
@@ -127,10 +125,12 @@ class Layer {
             guard isUseDidSetBounds && bounds != oldValue else {
                 return
             }
-            isUseDidSetFrame = false
-            frame.size = bounds.size
+            if frame.size != bounds.size {
+                isUseDidSetFrame = false
+                frame.size = bounds.size
+                isUseDidSetFrame = true
+            }
             caLayer.bounds = bounds
-            isUseDidSetFrame = true
         }
     }
     var frame = CGRect() {
@@ -138,10 +138,12 @@ class Layer {
             guard isUseDidSetFrame && frame != oldValue else {
                 return
             }
-            isUseDidSetBounds = false
-            bounds.size = frame.size
+            if bounds.size != frame.size {
+                isUseDidSetBounds = false
+                bounds.size = frame.size
+                isUseDidSetBounds = true
+            }
             caLayer.frame = frame
-            isUseDidSetBounds = true
         }
     }
     var position: CGPoint {
@@ -228,7 +230,7 @@ class Layer {
         }
     }
     
-    var lineColor: Color? = .border {
+    var lineColor: Color? = .getSetBorder {
         didSet {
             guard lineColor != oldValue else {
                 return
@@ -310,7 +312,7 @@ class Layer {
             updateLineColorWithIsIndicated()
         }
     }
-    var noIndicatedLineColor: Color? = .border {
+    var noIndicatedLineColor: Color? = .getSetBorder {
         didSet {
             updateLineColorWithIsIndicated()
         }
@@ -329,6 +331,8 @@ class Layer {
         closure(self)
         (subIndicatedParent ?? parent)?.allSubIndicatedParentsAndSelf(closure: closure)
     }
+    
+    var isForm = false
     
     var cursorPoint: CGPoint {
         if let parent = parent {
@@ -382,7 +386,7 @@ final class Knob: Layer {
     init(radius: CGFloat = 5, lineWidth: CGFloat = 1) {
         super.init()
         fillColor = .knob
-        lineColor = .border
+        lineColor = .getSetBorder
         self.lineWidth = lineWidth
         self.radius = radius
     }
@@ -401,7 +405,7 @@ final class DiscreteKnob: Layer {
     init(_ size: CGSize = CGSize(width: 5, height: 10), lineWidth: CGFloat = 1) {
         super.init()
         fillColor = .knob
-        lineColor = .border
+        lineColor = .getSetBorder
         self.lineWidth = lineWidth
         frame.size = size
     }
@@ -529,7 +533,7 @@ extension C0View {
 }
 
 private final class _CADrawLayer: CALayer {
-    init(backgroundColor: Color? = .background, borderColor: Color? = .border) {
+    init(backgroundColor: Color? = .background, borderColor: Color? = .getSetBorder) {
         super.init()
         self.needsDisplayOnBoundsChange = true
         self.drawsAsynchronously = true
@@ -600,33 +604,13 @@ extension CALayer {
         return layer
     }
     static func interface(backgroundColor: Color? = nil,
-                          borderColor: Color? = .border) -> CALayer {
+                          borderColor: Color? = .getSetBorder) -> CALayer {
         let layer = CALayer()
         layer.isOpaque = true
         layer.actions = disabledAnimationActions
         layer.borderWidth = borderColor == nil ? 0.0 : 0.5
         layer.backgroundColor = backgroundColor?.cgColor
         layer.borderColor = borderColor?.cgColor
-        return layer
-    }
-    static func knob(radius r: CGFloat = 5, lineWidth l: CGFloat = 1) -> CALayer {
-        let layer = CALayer()
-        layer.actions = disabledAnimationActions
-        layer.backgroundColor = Color.knob.cgColor
-        layer.borderColor = Color.border.cgColor
-        layer.borderWidth = l
-        layer.cornerRadius = r
-        layer.bounds = CGRect(x: 0, y: 0, width: r * 2, height: r * 2)
-        return layer
-    }
-    static func discreteKnob(width w: CGFloat = 5, height h: CGFloat = 10,
-                           lineWidth l: CGFloat = 1) -> CALayer {
-        let layer = CALayer()
-        layer.actions = disabledAnimationActions
-        layer.backgroundColor = Color.knob.cgColor
-        layer.borderColor = Color.border.cgColor
-        layer.borderWidth = l
-        layer.bounds = CGRect(x: 0, y: 0, width: w, height: h)
         return layer
     }
     

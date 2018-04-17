@@ -21,12 +21,6 @@ import Foundation
 
 struct Point: Equatable {
     var x = 0.0, y = 0.0
-    func with(x: Double) -> Point {
-        return Point(x: x, y: y)
-    }
-    func with(y: Double) -> Point {
-        return Point(x: x, y: y)
-    }
     
     var isEmpty: Bool {
         return x == 0 && y == 0
@@ -249,7 +243,7 @@ extension CGPoint {
     }
     
     func draw(radius r: CGFloat, lineWidth: CGFloat = 1,
-              inColor: Color = .knob, outColor: Color = .border, in ctx: CGContext) {
+              inColor: Color = .knob, outColor: Color = .getSetBorder, in ctx: CGContext) {
         let rect = CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)
         ctx.setFillColor(outColor.cgColor)
         ctx.fillEllipse(in: rect.insetBy(dx: -lineWidth, dy: -lineWidth))
@@ -434,62 +428,110 @@ final class DiscretePointView: View {
     var point = CGPoint() {
         didSet {
             if point != oldValue {
-                formKnob.position = position(from: point)
+                xView.model = point.x
+                yView.model = point.y
             }
         }
     }
     var defaultPoint = CGPoint()
-    var pointAABB = AABB(minX: 0, maxX: 1, minY: 0, maxY: 1) {
-        didSet {
-            guard pointAABB.maxX - pointAABB.minX > 0 && pointAABB.maxY - pointAABB.minY > 0 else {
-                fatalError("Division by zero")
-            }
-        }
-    }
     
-    var formBackgroundLayers = [Layer]() {
-        didSet {
-            replace(children: formBackgroundLayers + [formKnob])
-        }
-    }
-    let formKnob = Knob()
-    
-    var padding = 5.0.cf
-    
-    init(frame: CGRect = CGRect()) {
+    var sizeType: SizeType
+    let classXNameView: TextView
+    let xView: DiscreteRealNumberView
+    let classYNameView: TextView
+    let yView: DiscreteRealNumberView
+    init(point: CGPoint = CGPoint(), defaultPoint: CGPoint = CGPoint(),
+         minPoint: CGPoint = CGPoint(x: -10000, y: -10000),
+         maxPoint: CGPoint = CGPoint(x: 10000, y: 10000),
+         xEXP: RealNumber = 1, yEXP: RealNumber = 1,
+         xInterval: RealNumber = 1, xNumberOfDigits: Int = 0, xUnit: String = "",
+         yInterval: RealNumber = 1, yNumberOfDigits: Int = 0, yUnit: String = "",
+         frame: CGRect = CGRect(),
+         sizeType: SizeType = .regular) {
+        self.sizeType = sizeType
+        
+        classXNameView = TextView(text: Localization("x:"), font: Font.default(with: sizeType))
+        xView = DiscreteRealNumberView(model: point.x,
+                                       option: RealNumberOption(defaultModel: defaultPoint.x,
+                                                                minModel: minPoint.x,
+                                                                maxModel: maxPoint.x,
+                                                                modelInterval: xInterval,
+                                                                exp: xEXP,
+                                                                numberOfDigits: xNumberOfDigits,
+                                                                unit: xUnit),
+                                       frame: Layout.valueFrame(with: sizeType),
+                                       sizeType: sizeType)
+        classYNameView = TextView(text: Localization("y:"), font: Font.default(with: sizeType))
+        yView = DiscreteRealNumberView(model: point.y,
+                                       option: RealNumberOption(defaultModel: defaultPoint.y,
+                                                                minModel: minPoint.y,
+                                                                maxModel: maxPoint.y,
+                                                                modelInterval: yInterval,
+                                                                exp: yEXP,
+                                                                numberOfDigits: yNumberOfDigits,
+                                                                unit: yUnit),
+                                       frame: Layout.valueFrame(with: sizeType),
+                                       sizeType: sizeType)
+        
         super.init()
-        self.frame = frame
-        append(child: formKnob)
+        replace(children: [classXNameView, xView, classYNameView, yView])
+        xView.binding = { [unowned self] in self.setPoint(with: $0) }
+        yView.binding = { [unowned self] in self.setPoint(with: $0) }
+        updateLayout()
     }
     
+    override var defaultBounds: CGRect {
+        let padding = Layout.padding(with: sizeType)
+        let valueFrame = Layout.valueFrame(with: sizeType)
+        let xWidth = classXNameView.frame.width + valueFrame.width
+        let yWidth = classYNameView.frame.height + valueFrame.width
+        return CGRect(x: 0,
+                      y: 0,
+                      width: max(xWidth, yWidth) + padding * 2,
+                      height: valueFrame.height * 2 + padding * 2)
+    }
     override var bounds: CGRect {
         didSet {
-            formKnob.position = position(from: point)
+            updateLayout()
         }
     }
-    
-    func clippedPoint(with point: CGPoint) -> CGPoint {
-        return pointAABB.clippedPoint(with: point)
-    }
-    func point(withPosition position: CGPoint) -> CGPoint {
-        let inB = bounds.inset(by: padding)
-        let x = pointAABB.width * (position.x - inB.origin.x) / inB.width + pointAABB.minX
-        let y = pointAABB.height * (position.y - inB.origin.y) / inB.height + pointAABB.minY
-        return CGPoint(x: x, y: y)
-    }
-    func position(from point: CGPoint) -> CGPoint {
-        let inB = bounds.inset(by: padding)
-        let x = inB.width * (point.x - pointAABB.minX) / pointAABB.width + inB.origin.x
-        let y = inB.height * (point.y - pointAABB.minY) / pointAABB.height + inB.origin.y
-        return CGPoint(x: x, y: y)
+    func updateLayout() {
+        let padding = Layout.padding(with: sizeType)
+        let valueFrame = Layout.valueFrame(with: sizeType)
+        var x = bounds.width - padding, y = bounds.height - padding
+        x -= valueFrame.width
+        y -= valueFrame.height
+        xView.frame.origin = CGPoint(x: x, y: y)
+        x -= classXNameView.frame.width
+        classXNameView.frame.origin = CGPoint(x: x, y: y + padding)
+        y -= valueFrame.height
+        yView.frame.origin = CGPoint(x: x, y: y)
+        x -= classYNameView.frame.width
+        classYNameView.frame.origin = CGPoint(x: x, y: y + padding)
     }
     
     struct Binding {
-        let view: DiscretePointView, point: CGPoint, oldPoint: CGPoint, type: Action.SendType
+        let view: DiscretePointView
+        let point: CGPoint, oldPoint: CGPoint, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
     
     var disabledRegisterUndo = false
+    
+    private var oldPoint = CGPoint()
+    private func setPoint(with obj: DiscreteRealNumberView.Binding<RealNumber>) {
+        if obj.type == .begin {
+            oldPoint = point
+            binding?(Binding(view: self, point: oldPoint, oldPoint: oldPoint, type: .begin))
+        } else {
+            if obj.view == xView {
+                point.x = obj.model
+            } else {
+                point.y = obj.model
+            }
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: obj.type))
+        }
+    }
     
     func delete(with event: KeyInputEvent) -> Bool {
         let point = defaultPoint
@@ -503,14 +545,13 @@ final class DiscretePointView: View {
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
-            if let unclippedPoint = object as? CGPoint {
-                let point = clippedPoint(with: unclippedPoint)
+            if let point = object as? CGPoint {
                 if point != self.point {
                     push(point, old: self.point)
                     return true
                 }
             } else if let string = object as? String {
-                let point = clippedPoint(with: CGPoint(string))
+                let point = CGPoint(string)
                 if point != self.point {
                     push(point, old: self.point)
                     return true
@@ -518,41 +559,6 @@ final class DiscretePointView: View {
             }
         }
         return false
-    }
-    
-    func run(with event: ClickEvent) -> Bool {
-        let p = self.point(from: event)
-        let point = clippedPoint(with: self.point(withPosition: p))
-        if point != self.point {
-            push(point, old: self.point)
-        }
-        return true
-    }
-    
-    private var oldPoint = CGPoint()
-    func move(with event: DragEvent) -> Bool {
-        let p = self.point(from: event)
-        switch event.sendType {
-        case .begin:
-            formKnob.fillColor = .editing
-            oldPoint = point
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .begin))
-            point = clippedPoint(with: self.point(withPosition: p))
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .sending))
-        case .sending:
-            point = clippedPoint(with: self.point(withPosition: p))
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .sending))
-        case .end:
-            point = clippedPoint(with: self.point(withPosition: p))
-            if point != oldPoint {
-                registeringUndoManager?.registerUndo(withTarget: self) { [point, oldPoint] in
-                    $0.push(oldPoint, old: point)
-                }
-            }
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .end))
-            formKnob.fillColor = .knob
-        }
-        return true
     }
     
     func push(_ point: CGPoint, old oldPoint: CGPoint) {

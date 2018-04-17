@@ -19,6 +19,71 @@
 
 import Foundation
 
+struct Variable {
+    var rawValue: String
+    init(_ rawValue: String) {
+        self.rawValue = rawValue
+    }
+    static let x = Variable("x"), y = Variable("y"), z = Variable("z")
+}
+extension Variable: ViewExpression {
+    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
+        return rawValue.view(withBounds: bounds, sizeType: sizeType)
+    }
+}
+struct Expression {
+    enum Operator: String {
+        case addition = "+", subtraction = "-", multiplication = "⋅", division = ""
+    }
+    var value: ViewExpression
+    var nextOperator: Operator?
+    var next: Expression? {
+        get {
+            return _expression as? Expression
+        }
+        set {
+            _expression = newValue
+        }
+    }
+    private var _expression: Any?
+    init(_ value: ViewExpression) {
+        self.value = value
+    }
+    static func +(_ lhs: Expression, _ rhs: Expression) -> Expression {
+        var lhs = lhs
+        lhs.next = rhs
+        lhs.nextOperator = .addition
+        return lhs
+    }
+}
+extension Expression: ViewExpression {
+    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
+        return ExpressionView(expression: self, bounds: bounds, sizeType: sizeType)
+    }
+}
+
+final class ExpressionView: View {
+    var expression: Expression
+    
+    init(expression: Expression = Expression(0), bounds: CGRect = CGRect(),
+         sizeType: SizeType = .regular) {
+        self.expression = expression
+        
+        super.init()
+        var views = [View]()
+        var ex = expression
+        views.append(ex.value.view(withBounds: CGRect(), sizeType: sizeType))
+        while let next = ex.next, let nextOperator = ex.nextOperator {
+            if !(nextOperator == .multiplication && next.value is Variable) {
+                views.append(nextOperator.rawValue.view(withBounds: CGRect(), sizeType: sizeType))
+            }
+            views.append(next.value.view(withBounds: CGRect(), sizeType: sizeType))
+            ex = next
+        }
+        replace(children: views)
+    }
+}
+
 func hypot²<T: BinaryFloatingPoint>(_ lhs: T, _ rhs: T) -> T {
     return lhs * lhs + rhs * rhs
 }
@@ -31,211 +96,6 @@ protocol Interpolatable {
                            with ms: Monospline) -> Self
     static func lastMonospline(_ f0: Self, _ f1: Self, _ f2: Self,
                                with ms: Monospline) -> Self
-}
-
-extension Comparable {
-    func clip(min: Self, max: Self) -> Self {
-        return self < min ? min : (self > max ? max : self)
-    }
-    func isOver(old: Self, new: Self) -> Bool {
-        return (new >= self && old < self) || (new <= self && old > self)
-    }
-}
-
-extension Int {
-    var cf: CGFloat {
-        return CGFloat(self)
-    }
-    var d: Double {
-        return Double(self)
-    }
-}
-extension Float {
-    var cf: CGFloat {
-        return CGFloat(self)
-    }
-    var d: Double {
-        return Double(self)
-    }
-}
-extension Double {
-    var cf: CGFloat {
-        return CGFloat(self)
-    }
-}
-extension CGFloat {
-    var d: Double {
-        return Double(self)
-    }
-}
-
-protocol AdditiveGroup: Equatable {
-    static func +(lhs: Self, rhs: Self) -> Self
-    static func -(lhs: Self, rhs: Self) -> Self
-    prefix static func -(x: Self) -> Self
-}
-extension AdditiveGroup {
-    static func -(lhs: Self, rhs: Self) -> Self {
-        return (lhs + (-rhs))
-    }
-}
-
-extension Int {
-    static func gcd(_ m: Int, _ n: Int) -> Int {
-        return n == 0 ? m : gcd(n, m % n)
-    }
-}
-extension Int: Interpolatable {
-    static func linear(_ f0: Int, _ f1: Int, t: CGFloat) -> Int {
-        return Int(CGFloat.linear(CGFloat(f0), CGFloat(f1), t: t))
-    }
-    static func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) -> Int {
-        return Int(CGFloat.firstMonospline(CGFloat(f1), CGFloat(f2), CGFloat(f3), with: ms))
-    }
-    static func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) -> Int {
-        return Int(CGFloat.monospline(CGFloat(f0), CGFloat(f1), CGFloat(f2), CGFloat(f3), with: ms))
-    }
-    static func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) -> Int {
-        return Int(CGFloat.lastMonospline(CGFloat(f0), CGFloat(f1), CGFloat(f2), with: ms))
-    }
-}
-
-struct Hash {
-    static func uniformityHashValue(with hashValues: [Int]) -> Int {
-        return Int(bitPattern: hashValues.reduce(into: UInt(bitPattern: 0), unionHashValues))
-    }
-    static func unionHashValues(_ lhs: inout UInt, _ rhs: Int) {
-        #if arch(arm64) || arch(x86_64)
-            let magicValue: UInt = 0x9e3779b97f4a7c15
-        #else
-            let magicValue: UInt = 0x9e3779b9
-        #endif
-        let urhs = UInt(bitPattern: rhs)
-        lhs ^= urhs &+ magicValue &+ (lhs << 6) &+ (lhs >> 2)
-    }
-}
-
-extension Double {
-    static func random(min: Double, max: Double) -> Double {
-        return (max - min) * (Double(arc4random_uniform(UInt32.max)) / Double(UInt32.max)) + min
-    }
-}
-extension CGFloat {
-    func interval(scale: CGFloat) -> CGFloat {
-        if scale == 0 {
-            return self
-        } else {
-            let t = floor(self / scale) * scale
-            return self - t > scale / 2 ? t + scale : t
-        }
-    }
-    func differenceRotation(_ other: CGFloat) -> CGFloat {
-        let a = self - other
-        return a + (a > .pi ? -2 * (.pi) : (a < -.pi ? 2 * (.pi) : 0))
-    }
-    var clipRotation: CGFloat {
-        return self < -.pi ? self + 2 * (.pi) : (self > .pi ? self - 2 * (.pi) : self)
-    }
-    func isApproximatelyEqual(other: CGFloat, roundingError: CGFloat = 0.0000000001) -> Bool {
-        return abs(self - other) < roundingError
-    }
-    var ²: CGFloat {
-        return self * self
-    }
-    func loopValue(other: CGFloat, begin: CGFloat = 0, end: CGFloat = 1) -> CGFloat {
-        if other < self {
-            let value = (other - begin) + (end - self)
-            return self - other < value ? self : self - (end - begin)
-        } else {
-            let value = (self - begin) + (end - other)
-            return other - self < value ? self : self + (end - begin)
-        }
-    }
-    func loopValue(begin: CGFloat = 0, end: CGFloat = 1) -> CGFloat {
-        return self < begin ? self + (end - begin) : (self > end ? self - (end - begin) : self)
-    }
-    static func random(min: CGFloat, max: CGFloat) -> CGFloat {
-        return (max - min) * (CGFloat(arc4random_uniform(UInt32.max)) / CGFloat(UInt32.max)) + min
-    }
-    static func bilinear(x: CGFloat, y: CGFloat,
-                         a: CGFloat, b: CGFloat, c: CGFloat, d: CGFloat) -> CGFloat {
-        return x * y * (a - b - c + d) + x * (b - a) + y * (c - a) + a
-    }
-    
-    static func simpsonIntegral(splitHalfCount m: Int, a: CGFloat, b: CGFloat,
-                                f: (CGFloat) -> (CGFloat)) -> CGFloat {
-        let n = CGFloat(2 * m)
-        let h = (b - a) / n
-        func x(at i: Int) -> CGFloat {
-            return a + CGFloat(i) * h
-        }
-        let s0 = 2 * (1..<m - 1).reduce(0.0.cf) { $0 + f(x(at: 2 * $1)) }
-        let s1 = 4 * (1..<m).reduce(0.0.cf) { $0 + f(x(at: 2 * $1 - 1)) }
-        return (h / 3) * (f(a) + s0 + s1 + f(b))
-    }
-    static func simpsonIntegralB(splitHalfCount m: Int, a: CGFloat, maxB: CGFloat,
-                                 s: CGFloat, bisectionCount: Int = 3,
-                                 f: (CGFloat) -> (CGFloat)) -> CGFloat {
-        let n = 2 * m
-        let h = (maxB - a) / CGFloat(n)
-        func x(at i: Int) -> CGFloat {
-            return a + CGFloat(i) * h
-        }
-        let h3 = h / 3
-        var a = a
-        var fa = f(a), allS = 0.0.cf
-        for i in (0..<m) {
-            let ab = x(at: i * 2 + 1), b = x(at: i * 2 + 2)
-            let fab = f(ab), fb = f(b)
-            let abS = fa + 4 * fab + fb
-            let nAllS = allS + abS
-            if h3 * nAllS >= s {
-                let hAllS = h3 * allS
-                var bA = a, bB = b
-                var fbA = fa
-                for _ in (0..<bisectionCount) {
-                    let bAB = (bA + bB) / 2
-                    let bS = fbA + 4 * f((bA + bAB) / 2) + f(bAB)
-                    let hBS = hAllS + ((bB - bA) / 6) * bS
-                    if hBS >= s {
-                        bA = bAB
-                        fbA = f(bA)
-                    } else {
-                        bB = bAB
-                    }
-                }
-                return bA
-            }
-            allS = nAllS
-            a = b
-            fa = fb
-        }
-        return maxB
-    }
-}
-extension CGFloat: Interpolatable {
-    static func linear(_ f0: CGFloat, _ f1: CGFloat, t: CGFloat) -> CGFloat {
-        return f0 * (1 - t) + f1 * t
-    }
-    static func firstMonospline(_ f1: CGFloat, _ f2: CGFloat, _ f3: CGFloat,
-                                with ms: Monospline) -> CGFloat {
-        return ms.firstInterpolatedValue(f1, f2, f3)
-    }
-    static func monospline(_ f0: CGFloat, _ f1: CGFloat, _ f2: CGFloat, _ f3: CGFloat,
-                           with ms: Monospline) -> CGFloat {
-        return ms.interpolatedValue(f0, f1, f2, f3)
-    }
-    static func lastMonospline(_ f0: CGFloat, _ f1: CGFloat, _ f2: CGFloat,
-                              with ms: Monospline) -> CGFloat {
-        return ms.lastInterpolatedValue(f0, f1, f2)
-    }
-    
-    static func integralLinear(_ f0: CGFloat, _ f1: CGFloat, a: CGFloat, b: CGFloat) -> CGFloat {
-        let f01 = f1 - f0
-        let fa = a * (f01 * a / 2 + f0)
-        let fb = b * (f01 * b / 2 + f0)
-        return fb - fa
-    }
 }
 
 struct Monospline {
@@ -383,10 +243,416 @@ struct Monospline {
     }
 }
 
+extension Comparable {
+    func clip(min: Self, max: Self) -> Self {
+        return self < min ? min : (self > max ? max : self)
+    }
+    func isOver(old: Self, new: Self) -> Bool {
+        return (new >= self && old < self) || (new <= self && old > self)
+    }
+}
+
+protocol OneDimensionalOption {
+    associatedtype Model
+    var defaultModel: Model { get }
+    var minModel: Model { get }
+    var maxModel: Model { get }
+    func model(with string: String) -> Model?
+    func string(with model: Model) -> String
+    func text(with model: Model) -> Text
+    func ratio(with model: Model) -> CGFloat
+    func ratioFromDefaultModel(with model: Model) -> CGFloat
+    func model(withDelta delta: CGFloat, oldModel: Model) -> Model
+    func model(withRatio ratio: CGFloat) -> Model
+}
+
+/**
+ Issue: スクロールによる値の変更
+ */
+final class DiscreteOneDimensionalView
+    <T: Comparable & ViewExpression & Referenceable, U: OneDimensionalOption>: View where U.Model == T {
+    var model: T {
+        didSet {
+            updateWithModel()
+        }
+    }
+    var option: U
+    
+    enum Orientation {
+        case leftHanded, rightHanded
+    }
+    enum LayoutOrientation {
+        case horizontal, vertical
+    }
+    var sizeType: SizeType
+    var interval = 1.5.cf
+    var orientation: Orientation, layoutOrientation: LayoutOrientation
+    private var knobLineFrame = CGRect()
+    private let labelPaddingX: CGFloat, knobPadding: CGFloat
+    private let knob = DiscreteKnob(CGSize(width: 6, height: 4), lineWidth: 1)
+    private let lineLayer: Layer = {
+        let lineLayer = Layer()
+        lineLayer.lineColor = .content
+        return lineLayer
+    } ()
+    let formStringView: TextView
+    
+    init(model: T, option: U,
+         orientation: Orientation = .rightHanded,
+         layoutOrientation: LayoutOrientation = .horizontal,
+         frame: CGRect = CGRect(),
+         sizeType: SizeType = .regular) {
+        
+        self.model = model.clip(min: option.minModel, max: option.maxModel)
+        self.option = option
+        self.orientation = orientation
+        self.layoutOrientation = layoutOrientation
+        self.knobPadding = sizeType == .small ? 2.0.cf : 3.0.cf
+        labelPaddingX = Layout.padding(with: sizeType)
+        formStringView = TextView(font: Font.default(with: sizeType),
+                                  frameAlignment: .right, alignment: .right)
+        self.sizeType = sizeType
+        
+        super.init()
+        updateWithModel()
+        isClipped = true
+        replace(children: [formStringView, lineLayer, knob])
+        self.frame = frame
+    }
+    
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    private func updateLayout() {
+        let paddingX = sizeType == .small ? 3.0.cf : 5.0.cf
+        knobLineFrame = CGRect(x: paddingX, y: sizeType == .small ? 1 : 2,
+                               width: bounds.width - paddingX * 2, height: 1)
+        lineLayer.frame = knobLineFrame
+        formStringView.frame.origin = CGPoint(x: bounds.width - formStringView.frame.width - labelPaddingX,
+                                          y: round((bounds.height - formStringView.frame.height) / 2))
+        
+    }
+    func updateWithModel() {
+        updateString()
+        updateknob()
+    }
+    func updateString() {
+        formStringView.text = option.text(with: model)
+    }
+    func updateknob() {
+        let x = knobLineFrame.width * option.ratioFromDefaultModel(with: model) + knobLineFrame.minX
+        knob.position = CGPoint(x: round(x), y: knobPadding)
+    }
+    
+    private func model(at p: CGPoint, old oldModel: T) -> T {
+        let d = layoutOrientation == .vertical ? p.y - oldPoint.y : p.x - oldPoint.x
+        let delta = orientation == .rightHanded ? d : -d
+        return option.model(withDelta: delta / interval, oldModel: oldModel)
+    }
+    
+    var disabledRegisterUndo = false
+    
+    struct Binding<T> {
+        let view: DiscreteOneDimensionalView, model: T, oldModel: T, type: Action.SendType
+    }
+    var binding: ((Binding<T>) -> ())?
+    
+    func delete(with event: KeyInputEvent) -> Bool {
+        let model = option.defaultModel.clip(min: option.minModel, max: option.maxModel)
+        if model != self.model {
+            set(model, old: self.model)
+        }
+        return true
+    }
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [model, option.string(with: model)]
+    }
+    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+        for object in objects {
+            if let model = (object as? T)?.clip(min: option.minModel, max: option.maxModel) {
+                if model != self.model {
+                    set(model, old: self.model)
+                    return true
+                }
+            } else if let string = object as? String {
+                if let model = option.model(with: string)?.clip(min: option.minModel,
+                                                                max: option.maxModel) {
+                    if model != self.model {
+                        set(model, old: self.model)
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+    
+    func run(with event: ClickEvent) -> Bool {
+        let p = point(from: event)
+        let model = self.model(at: p, old: self.model)
+        if model != self.model {
+            set(model, old: self.model)
+        }
+        return true
+    }
+    
+    private var oldModel: T?, oldPoint = CGPoint()
+    func move(with event: DragEvent) -> Bool {
+        let p = point(from: event)
+        switch event.sendType {
+        case .begin:
+            knob.fillColor = .editing
+            let oldModel = model
+            self.oldModel = oldModel
+            oldPoint = p
+            binding?(Binding(view: self, model: model, oldModel: oldModel, type: .begin))
+            model = self.model(at: p, old: oldModel)
+            binding?(Binding(view: self, model: model, oldModel: oldModel, type: .sending))
+        case .sending:
+            guard let oldModel = oldModel else {
+                return true
+            }
+            model = self.model(at: p, old: oldModel)
+            binding?(Binding(view: self, model: model, oldModel: oldModel, type: .sending))
+        case .end:
+            guard let oldModel = oldModel else {
+                return true
+            }
+            model = self.model(at: p, old: oldModel)
+            if model != oldModel {
+                registeringUndoManager?.registerUndo(withTarget: self) { [model, oldModel] in
+                    $0.set(oldModel, old: model)
+                }
+            }
+            binding?(Binding(view: self, model: model, oldModel: oldModel, type: .end))
+            knob.fillColor = .knob
+        }
+        return true
+    }
+    
+    private func set(_ model: T, old oldModel: T) {
+        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldModel, old: model) }
+        binding?(Binding(view: self, model: oldModel, oldModel: oldModel, type: .begin))
+        self.model = model
+        binding?(Binding(view: self, model: model, oldModel: oldModel, type: .end))
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        var reference = model.reference
+        reference.viewDescription = Localization(english: "Discrete Slider", japanese: "離散スライダー")
+        return reference
+    }
+}
+
+extension Int {
+    var cf: CGFloat {
+        return CGFloat(self)
+    }
+    var d: Double {
+        return Double(self)
+    }
+}
+extension Float {
+    var cf: CGFloat {
+        return CGFloat(self)
+    }
+    var d: Double {
+        return Double(self)
+    }
+}
+extension Double {
+    var cf: CGFloat {
+        return CGFloat(self)
+    }
+}
+extension CGFloat {
+    var d: Double {
+        return Double(self)
+    }
+}
+
+protocol AdditiveGroup: Equatable {
+    static func +(lhs: Self, rhs: Self) -> Self
+    static func -(lhs: Self, rhs: Self) -> Self
+    prefix static func -(x: Self) -> Self
+}
+extension AdditiveGroup {
+    static func -(lhs: Self, rhs: Self) -> Self {
+        return (lhs + (-rhs))
+    }
+}
+
+extension Int {
+    static func gcd(_ m: Int, _ n: Int) -> Int {
+        return n == 0 ? m : gcd(n, m % n)
+    }
+}
+extension Int: Interpolatable {
+    static func linear(_ f0: Int, _ f1: Int, t: CGFloat) -> Int {
+        return Int(CGFloat.linear(CGFloat(f0), CGFloat(f1), t: t))
+    }
+    static func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) -> Int {
+        return Int(CGFloat.firstMonospline(CGFloat(f1), CGFloat(f2), CGFloat(f3), with: ms))
+    }
+    static func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) -> Int {
+        return Int(CGFloat.monospline(CGFloat(f0), CGFloat(f1), CGFloat(f2), CGFloat(f3), with: ms))
+    }
+    static func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) -> Int {
+        return Int(CGFloat.lastMonospline(CGFloat(f0), CGFloat(f1), CGFloat(f2), with: ms))
+    }
+}
+extension Int: Referenceable {
+    static let name = Localization(english: "Integer", japanese: "整数")
+}
+extension Int: ObjectViewExpression {
+    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+        return String(self).view(withBounds: bounds, sizeType: sizeType)
+    }
+}
+
+struct Hash {
+    static func uniformityHashValue(with hashValues: [Int]) -> Int {
+        return Int(bitPattern: hashValues.reduce(into: UInt(bitPattern: 0), unionHashValues))
+    }
+    static func unionHashValues(_ lhs: inout UInt, _ rhs: Int) {
+        #if arch(arm64) || arch(x86_64)
+            let magicValue: UInt = 0x9e3779b97f4a7c15
+        #else
+            let magicValue: UInt = 0x9e3779b9
+        #endif
+        let urhs = UInt(bitPattern: rhs)
+        lhs ^= urhs &+ magicValue &+ (lhs << 6) &+ (lhs >> 2)
+    }
+}
+
+extension Double {
+    static func random(min: Double, max: Double) -> Double {
+        return (max - min) * (Double(arc4random_uniform(UInt32.max)) / Double(UInt32.max)) + min
+    }
+}
+extension CGFloat {
+    func interval(scale: CGFloat) -> CGFloat {
+        if scale == 0 {
+            return self
+        } else {
+            let t = floor(self / scale) * scale
+            return self - t > scale / 2 ? t + scale : t
+        }
+    }
+    func differenceRotation(_ other: CGFloat) -> CGFloat {
+        let a = self - other
+        return a + (a > .pi ? -2 * (.pi) : (a < -.pi ? 2 * (.pi) : 0))
+    }
+    var clipRotation: CGFloat {
+        return self < -.pi ? self + 2 * (.pi) : (self > .pi ? self - 2 * (.pi) : self)
+    }
+    func isApproximatelyEqual(other: CGFloat, roundingError: CGFloat = 0.0000000001) -> Bool {
+        return abs(self - other) < roundingError
+    }
+    var ²: CGFloat {
+        return self * self
+    }
+    func loopValue(other: CGFloat, begin: CGFloat = 0, end: CGFloat = 1) -> CGFloat {
+        if other < self {
+            let value = (other - begin) + (end - self)
+            return self - other < value ? self : self - (end - begin)
+        } else {
+            let value = (self - begin) + (end - other)
+            return other - self < value ? self : self + (end - begin)
+        }
+    }
+    func loopValue(begin: CGFloat = 0, end: CGFloat = 1) -> CGFloat {
+        return self < begin ? self + (end - begin) : (self > end ? self - (end - begin) : self)
+    }
+    static func random(min: CGFloat, max: CGFloat) -> CGFloat {
+        return (max - min) * (CGFloat(arc4random_uniform(UInt32.max)) / CGFloat(UInt32.max)) + min
+    }
+    static func bilinear(x: CGFloat, y: CGFloat,
+                         a: CGFloat, b: CGFloat, c: CGFloat, d: CGFloat) -> CGFloat {
+        return x * y * (a - b - c + d) + x * (b - a) + y * (c - a) + a
+    }
+    
+    static func simpsonIntegral(splitHalfCount m: Int, a: CGFloat, b: CGFloat,
+                                f: (CGFloat) -> (CGFloat)) -> CGFloat {
+        let n = CGFloat(2 * m)
+        let h = (b - a) / n
+        func x(at i: Int) -> CGFloat {
+            return a + CGFloat(i) * h
+        }
+        let s0 = 2 * (1..<m - 1).reduce(0.0.cf) { $0 + f(x(at: 2 * $1)) }
+        let s1 = 4 * (1..<m).reduce(0.0.cf) { $0 + f(x(at: 2 * $1 - 1)) }
+        return (h / 3) * (f(a) + s0 + s1 + f(b))
+    }
+    static func simpsonIntegralB(splitHalfCount m: Int, a: CGFloat, maxB: CGFloat,
+                                 s: CGFloat, bisectionCount: Int = 3,
+                                 f: (CGFloat) -> (CGFloat)) -> CGFloat {
+        let n = 2 * m
+        let h = (maxB - a) / CGFloat(n)
+        func x(at i: Int) -> CGFloat {
+            return a + CGFloat(i) * h
+        }
+        let h3 = h / 3
+        var a = a
+        var fa = f(a), allS = 0.0.cf
+        for i in (0..<m) {
+            let ab = x(at: i * 2 + 1), b = x(at: i * 2 + 2)
+            let fab = f(ab), fb = f(b)
+            let abS = fa + 4 * fab + fb
+            let nAllS = allS + abS
+            if h3 * nAllS >= s {
+                let hAllS = h3 * allS
+                var bA = a, bB = b
+                var fbA = fa
+                for _ in (0..<bisectionCount) {
+                    let bAB = (bA + bB) / 2
+                    let bS = fbA + 4 * f((bA + bAB) / 2) + f(bAB)
+                    let hBS = hAllS + ((bB - bA) / 6) * bS
+                    if hBS >= s {
+                        bA = bAB
+                        fbA = f(bA)
+                    } else {
+                        bB = bAB
+                    }
+                }
+                return bA
+            }
+            allS = nAllS
+            a = b
+            fa = fb
+        }
+        return maxB
+    }
+}
+extension CGFloat: Interpolatable {
+    static func linear(_ f0: CGFloat, _ f1: CGFloat, t: CGFloat) -> CGFloat {
+        return f0 * (1 - t) + f1 * t
+    }
+    static func firstMonospline(_ f1: CGFloat, _ f2: CGFloat, _ f3: CGFloat,
+                                with ms: Monospline) -> CGFloat {
+        return ms.firstInterpolatedValue(f1, f2, f3)
+    }
+    static func monospline(_ f0: CGFloat, _ f1: CGFloat, _ f2: CGFloat, _ f3: CGFloat,
+                           with ms: Monospline) -> CGFloat {
+        return ms.interpolatedValue(f0, f1, f2, f3)
+    }
+    static func lastMonospline(_ f0: CGFloat, _ f1: CGFloat, _ f2: CGFloat,
+                              with ms: Monospline) -> CGFloat {
+        return ms.lastInterpolatedValue(f0, f1, f2)
+    }
+    
+    static func integralLinear(_ f0: CGFloat, _ f1: CGFloat, a: CGFloat, b: CGFloat) -> CGFloat {
+        let f01 = f1 - f0
+        let fa = a * (f01 * a / 2 + f0)
+        let fb = b * (f01 * b / 2 + f0)
+        return fb - fa
+    }
+}
+
 extension CGAffineTransform {
     static func centering(from fromFrame: CGRect,
                           to toFrame: CGRect) -> (scale: CGFloat, affine: CGAffineTransform) {
-        
         guard !fromFrame.isEmpty && !toFrame.isEmpty else {
             return (1, CGAffineTransform.identity)
         }

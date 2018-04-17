@@ -20,10 +20,9 @@
 import Foundation
 
 /**
- # Issue
- - Z移動を廃止してセルツリー表示を作成、セルクリップや全てのロック解除などを廃止
- - スクロール後の元の位置までの距離を表示
- - sceneを取り除く
+ Issue: Z移動を廃止してセルツリー表示を作成、セルクリップや全てのロック解除などを廃止
+ Issue: スクロール後の元の位置までの距離を表示
+ Issue: sceneを取り除く
  */
 final class Canvas: DrawView {
     let player = Player()
@@ -61,7 +60,7 @@ final class Canvas: DrawView {
         cellView.copiedObjectsClosure = { [unowned self] _, _ in self.copiedCells() }
     }
     
-    var cursor = Cursor.stroke
+    var cursor = Cursor.arrow
     
     override var bounds: CGRect {
         didSet {
@@ -95,12 +94,12 @@ final class Canvas: DrawView {
     
     override var viewQuasimode: ViewQuasimode {
         didSet {
-            switch viewQuasimode {
-            case .move, .stroke, .lassoErase, .select, .deselect:
-                cursor = .stroke
-            default:
-                cursor = .arrow
-            }
+//            switch viewQuasimode {
+//            case .move, .stroke, .lassoErase, .select, .deselect:
+//                cursor = .stroke
+//            default:
+//                cursor = .arrow
+//            }
             updateViewType()
             updateEditView(with: convertToCurrentLocal(cursorPoint))
         }
@@ -886,7 +885,7 @@ final class Canvas: DrawView {
                                     in: drawingItem.drawing, inNode, time: time)
         }
         set(unselectedLines, old: drawingItem.drawing.lines,
-                 in: drawingItem.drawing, inNode, time: time)
+            in: drawingItem.drawing, inNode, time: time)
         let lki = track.animation.loopedKeyframeIndex(withTime: cut.currentTime)
         let keyGeometries = track.emptyKeyGeometries.withReplaced(geometry, at: lki.keyframeIndex)
         
@@ -1283,7 +1282,7 @@ final class Canvas: DrawView {
     private let bindingLineHeight = 5.0.cf
     let editCellBindingLineLayer: PathLayer = {
         let layer = PathLayer()
-        layer.fillColor = .border
+        layer.fillColor = .bindingBorder
         return layer
     } ()
     
@@ -1321,7 +1320,7 @@ final class Canvas: DrawView {
                                            y: midY - bindingLineHeight / 2,
                                            width: width,
                                            height: bindingLineHeight), transform: nil)
-            editCellBindingLineLayer.fillColor = .border
+            editCellBindingLineLayer.fillColor = .bindingBorder
             editCellBindingLineLayer.path = path
             
             let fp = CGPoint(x: bounds.maxX, y: bounds.midY)
@@ -1716,7 +1715,7 @@ final class Canvas: DrawView {
         if let drawing = nearest.drawing {
             replaceLine(nearest.line.splited(at: nearest.pointIndex), oldLine: nearest.line,
                         at: nearest.lineIndex, in: drawing, in: inNode, time: time)
-            cut.updateWithTime()
+            cut.updateWithCurrentTime()
             updateEditView(with: p)
         } else if let cellItem = nearest.cellItem {
             let newGeometries = Geometry.geometriesWithSplitedControl(with: cellItem.keyGeometries,
@@ -1724,7 +1723,7 @@ final class Canvas: DrawView {
                                                                       pointIndex: nearest.pointIndex)
             setGeometries(newGeometries, oldKeyGeometries: cellItem.keyGeometries,
                           in: cellItem, inNode.editTrack, inNode, time: time)
-            cut.updateWithTime()
+            cut.updateWithCurrentTime()
             updateEditView(with: p)
         }
         return true
@@ -1742,7 +1741,7 @@ final class Canvas: DrawView {
             } else {
                 removeLine(at: nearest.lineIndex, in: drawing, inNode, time: time)
             }
-            cut.updateWithTime()
+            cut.updateWithCurrentTime()
             updateEditView(with: p)
         } else if let cellItem = nearest.cellItem {
             setGeometries(Geometry.geometriesWithRemovedControl(with: cellItem.keyGeometries,
@@ -1753,7 +1752,7 @@ final class Canvas: DrawView {
             if cellItem.isEmptyKeyGeometries {
                 removeCellItems([cellItem])
             }
-            cut.updateWithTime()
+            cut.updateWithCurrentTime()
             updateEditView(with: p)
         }
         return true
@@ -2502,7 +2501,7 @@ final class Canvas: DrawView {
                     mcp.cellItem.replace(mcp.geometry.applying(affine),
                                          at: mcp.track.animation.editKeyframeIndex)
                 }
-                cut.updateWithTime()
+                cut.updateWithCurrentTime()
             }
         case .end:
             if type == .warp {
@@ -2527,7 +2526,7 @@ final class Canvas: DrawView {
                         at: mcp.track.animation.editKeyframeIndex,
                         in:mcp.cellItem, mcp.track, node, time: time)
                 }
-                cut.updateWithTime()
+                cut.updateWithCurrentTime()
                 moveSelected = Node.Selection()
             }
             self.editTransform = nil
@@ -2630,8 +2629,7 @@ final class Canvas: DrawView {
         guard isUseScrollView else {
             return false
         }
-        let translation = viewTransform.translation + event.scrollDeltaPoint
-        self.viewTransform = viewTransform.with(translation: translation)
+        viewTransform.translation += event.scrollDeltaPoint
         updateEditView(with: convertToCurrentLocal(point(from: event)))
         return true
     }
@@ -2653,13 +2651,13 @@ final class Canvas: DrawView {
                     if blockScale.isOver(old: scale, new: newScale) {
                         isBlockScale = true
                     }
-                    self.viewTransform = viewTransform.with(scale: newScale)
+                    viewTransform.scale = CGPoint(x: newScale, y: newScale)
                 }
             }
         case .end:
             if isBlockScale {
                 zoom(at: point(from: event)) {
-                    self.viewTransform = viewTransform.with(scale: blockScale)
+                    viewTransform.scale = CGPoint(x: blockScale, y: blockScale)
                 }
             }
         }
@@ -2685,13 +2683,13 @@ final class Canvas: DrawView {
                             break
                         }
                     }
-                    self.viewTransform = viewTransform.with(rotation: newRotation.clipRotation)
+                    viewTransform.rotation = newRotation.clipRotation
                 }
             }
         case .end:
             if isBlockRotation {
                 zoom(at: point(from: event)) {
-                    self.viewTransform = viewTransform.with(rotation: blockRotation)
+                    viewTransform.rotation = blockRotation
                 }
             }
         }
@@ -2709,8 +2707,7 @@ final class Canvas: DrawView {
         let point = convertToCurrentLocal(p)
         closure()
         let newPoint = convertFromCurrentLocal(point)
-        let translation = viewTransform.translation - (newPoint - p)
-        self.viewTransform = viewTransform.with(translation: translation)
+        viewTransform.translation -= (newPoint - p)
     }
     
     func reference(with event: TapEvent) -> Reference? {

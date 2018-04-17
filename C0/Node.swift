@@ -83,8 +83,7 @@ final class CellDifferential: NSObject, NSCoding {
 }
 
 /**
- # Issue
- - 変更通知またはイミュータブル化またはstruct化
+ Issue: 変更通知またはイミュータブル化またはstruct化
  */
 final class Node: NSObject, NSCoding {
     var name: String
@@ -234,7 +233,7 @@ final class Node: NSObject, NSCoding {
         transform = Node.transformWith(time: time, tracks: tracks)
     }
     func updateWiggle() {
-        (wiggle, wigglePhase) = Node.wiggleAndPhaseWith(time: time, tracks: tracks)
+        (xWiggle, wigglePhase) = Node.wiggleAndPhaseWith(time: time, tracks: tracks)
     }
     
     var isEdited = false
@@ -318,7 +317,7 @@ final class Node: NSObject, NSCoding {
         }
     }
     
-    var effect: Effect, transform: Transform, wiggle: Wiggle, wigglePhase: CGFloat = 0
+    var effect: Effect, transform: Transform, xWiggle: Wiggle, wigglePhase: CGFloat = 0
     
     static func effectWith(time: Beat, _ tracks: [NodeTrack]) -> Effect {
         var effect = Effect()
@@ -348,19 +347,18 @@ final class Node: NSObject, NSCoding {
     }
     static func wiggleAndPhaseWith(time: Beat,
                                    tracks: [NodeTrack]) -> (wiggle: Wiggle, wigglePhase: CGFloat) {
-        var wiggleSize = CGPoint(), hz = 0.0.cf, phase = 0.0.cf, count = 0
+        var amplitude = 0.0.cf, frequency = 0.0.cf, phase = 0.0.cf, count = 0
         tracks.forEach {
             if let wiggle = $0.wiggleItem?.drawWiggle {
-                wiggleSize.x += wiggle.amplitude.x
-                wiggleSize.y += wiggle.amplitude.y
-                hz += wiggle.frequency
+                amplitude += wiggle.amplitude
+                frequency += wiggle.frequency
                 phase += $0.wigglePhase(withBeatTime: time)
                 count += 1
             }
         }
         if count > 0 {
             let reciprocalCount = 1 / count.cf
-            let wiggle = Wiggle(amplitude: wiggleSize, frequency: hz * reciprocalCount)
+            let wiggle = Wiggle(amplitude: amplitude, frequency: frequency * reciprocalCount)
             return (wiggle, phase * reciprocalCount)
         } else {
             return (Wiggle(), 0)
@@ -388,7 +386,7 @@ final class Node: NSObject, NSCoding {
         self.rootCell = rootCell
         self.effect = effect
         self.transform = transform
-        self.wiggle = wiggle
+        self.xWiggle = wiggle
         self.wigglePhase = wigglePhase
         self.tracks = tracks
         self.editTrackIndex = editTrackIndex
@@ -414,7 +412,7 @@ final class Node: NSObject, NSCoding {
         effect = coder.decodeDecodable(Effect.self, forKey: CodingKeys.effect.rawValue) ?? Effect()
         transform = coder.decodeDecodable(
             Transform.self, forKey: CodingKeys.transform.rawValue) ?? Transform()
-        wiggle = coder.decodeDecodable(
+        xWiggle = coder.decodeDecodable(
             Wiggle.self, forKey: CodingKeys.wiggle.rawValue) ?? Wiggle()
         wigglePhase = coder.decodeDouble(forKey: CodingKeys.wigglePhase.rawValue).cf
         tracks = coder.decodeObject(forKey: CodingKeys.tracks.rawValue) as? [NodeTrack] ?? []
@@ -433,7 +431,7 @@ final class Node: NSObject, NSCoding {
         coder.encode(rootCell, forKey: CodingKeys.rootCell.rawValue)
         coder.encodeEncodable(effect, forKey: CodingKeys.effect.rawValue)
         coder.encodeEncodable(transform, forKey: CodingKeys.transform.rawValue)
-        coder.encodeEncodable(wiggle, forKey: CodingKeys.wiggle.rawValue)
+        coder.encodeEncodable(xWiggle, forKey: CodingKeys.wiggle.rawValue)
         coder.encode(wigglePhase.d, forKey: CodingKeys.wigglePhase.rawValue)
         coder.encode(tracks, forKey: CodingKeys.tracks.rawValue)
         coder.encode(editTrackIndex, forKey: CodingKeys.editTrackIndex.rawValue)
@@ -593,6 +591,12 @@ final class Node: NSObject, NSCoding {
         } else {
             return nil
         }
+    }
+    
+    var allCells: [Cell] {
+        var allCells = [Cell]()
+        allChildrenAndSelf { allCells += $0.rootCell.allCells }
+        return allCells
     }
     
     var indexPath: IndexPath {
@@ -846,9 +850,9 @@ final class Node: NSObject, NSCoding {
                        in ctx: CGContext) {
         let isEdit = !isEdited ? false :
             (viewType != .preview && viewType != .editMaterial && viewType != .changingMaterial)
-        moveWithWiggle: if viewType == .preview && !wiggle.isEmpty {
-            let p = wiggle.phasePosition(with: CGPoint(), phase: wigglePhase)
-            ctx.translateBy(x: p.x, y: p.y)
+        moveWithWiggle: if viewType == .preview && !xWiggle.isEmpty {
+            let phase = xWiggle.phase(with: 0.0, phase: wigglePhase)
+            ctx.translateBy(x: phase, y: 0)
         }
         guard !isHidden else {
             return
@@ -1053,9 +1057,9 @@ final class Node: NSObject, NSCoding {
             ctx.stroke(bounds.insetBy(dx: -1.5, dy: -1.5))
         }
         ctx.setLineWidth(1)
-        if !wiggle.isEmpty {
-            let amplitude = wiggle.amplitude
-            drawCameraBorder(bounds: cameraFrame.insetBy(dx: -amplitude.x, dy: -amplitude.y),
+        if !xWiggle.isEmpty {
+            let amplitude = xWiggle.amplitude
+            drawCameraBorder(bounds: cameraFrame.insetBy(dx: -amplitude, dy: 0),
                              inColor: Color.cameraBorder, outColor: Color.cutSubBorder)
         }
         let track = editTrack
@@ -1264,13 +1268,13 @@ final class Node: NSObject, NSCoding {
         ctx.saveGState()
         ctx.setLineWidth(1)
         let editCellY = editZFirstY(with: editZ.cells)
-        drawZ(withFillColor: .knob, lineColor: .border,
+        drawZ(withFillColor: .knob, lineColor: .getSetBorder,
               position: CGPoint(x: point.x,
                                 y: point.y - editZ.firstY + editCellY), in: ctx)
         var p = CGPoint(x: point.x - editZHeight, y: point.y - editZ.firstY)
         rootCell.allCells { (cell, stop) in
             drawZ(withFillColor: cell.colorAndLineColor(withIsEdit: true, isInterpolated: false).color,
-                  lineColor: .border, position: p, in: ctx)
+                  lineColor: .getSetBorder, position: p, in: ctx)
             p.y += editZHeight
         }
         ctx.restoreGState()
@@ -1439,7 +1443,7 @@ extension Node: ClassCopiable {
                         rootCell: copier.copied(rootCell),
                         effect: effect,
                         transform: transform,
-                        wiggle: wiggle, wigglePhase: wigglePhase,
+                        wiggle: xWiggle, wigglePhase: wigglePhase,
                         tracks: tracks.map { copier.copied($0) },
                         editTrackIndex: editTrackIndex,
                         time: time)
@@ -1533,8 +1537,7 @@ final class NodeView: View {
 }
 
 /**
- # Issue
- - 木構造の修正
+ Issue: 木構造の修正
  */
 final class NodeTreeManager {
     init() {
@@ -1630,90 +1633,6 @@ final class NodeTreeManager {
             }
             if event.sendType == .end {
                 self.beginTreeNode = nil
-            }
-        }
-        return true
-    }
-}
-
-final class TracksManager {
-    let tracksView = ListArrayView()
-    
-    init() {
-        tracksView.nameClosure = { [unowned self] in
-            let tracks = self.node.tracks
-            guard $0 < tracks.count else {
-                return Localization()
-            }
-            return Localization(tracks[$0].name)
-        }
-        tracksView.copiedObjectsClosure = { [unowned self] _, _ in
-            return [self.node.editTrack.copied]
-        }
-        tracksView.moveClosure = { [unowned self] in return self.moveTrack(with: $1) }
-    }
-    
-    var node = Node() {
-        didSet {
-            if node != oldValue {
-                updateWithTracks(isAlwaysUpdate: true)
-            }
-        }
-    }
-    
-    func updateWithTracks(isAlwaysUpdate: Bool = false) {
-        tracksView.set(selectedIndex: node.editTrackIndex, count: node.tracks.count)
-        if isAlwaysUpdate {
-            tracksView.updateLayout()
-        }
-    }
-    
-    var disabledRegisterUndo = true
-    
-    struct NodeTracksBinding {
-        let tracksManager: TracksManager
-        let track: NodeTrack, index: Int, oldIndex: Int, beginIndex: Int
-        let inNode: Node, type: Action.SendType
-    }
-    var setTracksClosure: ((NodeTracksBinding) -> ())?
-    
-    var moveHeight = 8.0.cf
-    private var oldIndex = 0, beginIndex = 0, oldP = CGPoint()
-    private weak var editTrack: NodeTrack?
-    private var oldInNode = Node(), oldTracks = [NodeTrack]()
-    func moveTrack(with event: DragEvent) -> Bool {
-        let p = tracksView.point(from: event)
-        switch event.sendType {
-        case .begin:
-            oldInNode = node
-            oldTracks = oldInNode.tracks
-            oldIndex = oldInNode.editTrackIndex
-            beginIndex = oldIndex
-            editTrack = oldInNode.editTrack
-            oldP = p
-            setTracksClosure?(NodeTracksBinding(tracksManager: self,
-                                                track: oldInNode.editTrack,
-                                                index: oldIndex,
-                                                oldIndex: oldIndex,
-                                                beginIndex: beginIndex,
-                                                inNode: oldInNode, type: .begin))
-        case .sending, .end:
-            guard let editTrack = editTrack else {
-                return true
-            }
-            let d = p.y - oldP.y
-            let i = (beginIndex + Int(d / moveHeight)).clip(min: 0, max: oldTracks.count - 1)
-            if i != oldIndex || (event.sendType == .end && i != beginIndex) {
-                setTracksClosure?(NodeTracksBinding(tracksManager: self,
-                                                    track: editTrack,
-                                                    index: i,
-                                                    oldIndex: oldIndex,
-                                                    beginIndex: beginIndex,
-                                                    inNode: oldInNode, type: event.sendType))
-                oldIndex = i
-            }
-            if event.sendType == .end {
-                oldTracks = []
             }
         }
         return true

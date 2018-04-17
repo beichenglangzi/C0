@@ -22,13 +22,6 @@ import Foundation
 struct Easing: Codable, Equatable, Hashable, Copiable {
     var cp0 = CGPoint(), cp1 = CGPoint(x: 1, y: 1)
     
-    func with(cp0: CGPoint) -> Easing {
-        return Easing(cp0: cp0, cp1: cp1)
-    }
-    func with(cp1: CGPoint) -> Easing {
-        return Easing(cp0: cp0, cp1: cp1)
-    }
-    
     func split(with t: CGFloat) -> (b0: Easing, b1: Easing) {
         guard !isDefault else {
             return (Easing(), Easing())
@@ -85,6 +78,9 @@ extension Easing: ObjectViewExpression {
     }
 }
 
+/**
+ Issue: 前後キーフレームからの傾斜スナップ
+ */
 final class EasingView: View {
     var easing = Easing() {
         didSet {
@@ -193,7 +189,11 @@ final class EasingView: View {
             oldEasing = easing
             binding?(Binding(view: self, easing: oldEasing, oldEasing: oldEasing, type: .begin))
         } else {
-            easing = obj.view == cp0View ? easing.with(cp0: obj.point) : easing.with(cp1: obj.point)
+            if obj.view == cp0View {
+                easing.cp0 = obj.point
+            } else {
+                easing.cp1 = obj.point
+            }
             binding?(Binding(view: self, easing: easing, oldEasing: oldEasing, type: obj.type))
         }
     }
@@ -232,7 +232,6 @@ final class EasingView: View {
         var reference = easing.reference
         reference.viewDescription = Localization(english: "Horizontal axis t: Time\nVertical axis t': Correction time",
                                                  japanese: "横軸t: 時間\n縦軸t': 補正後の時間")
-        reference.comment = Localization("Issue: 前後キーフレームからの傾斜スナップ")
         return reference
     }
 }

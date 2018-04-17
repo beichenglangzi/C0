@@ -60,8 +60,11 @@ extension Undoable {
     }
 }
 
+//protocol Copiable {
+//
+//}
 protocol Editable {
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]?
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]?//copiedViewable
     var topCopiedObjects: [ViewExpression] { get }
     func sendToTop(copiedObjects: [ViewExpression])
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool
@@ -201,17 +204,24 @@ extension PointEditable {
     }
 }
 
+//AllEditable
+
 enum ViewQuasimode {
     case select, deselect, move, moveZ, transform, warp, movePoint, moveVertex, stroke, lassoErase
 }
 
+enum ViewType {
+    case form, get, getSet
+}
+
 /**
- # Issue
- - コピー・ペーストなどのアクション対応を拡大
- - Eventを使用しないアクション設計
+ Issue: コピー・ペーストなどのアクション対応を拡大
+ Issue: Eventを使用しないアクション設計
  */
 protocol Respondable: class, Undoable, Editable, Selectable,
 PointEditable, Transformable, ViewEditable, Strokable, Localizable {
+    var isLiteral: Bool { get }
+    var isForm: Bool { get }
     var cursor: Cursor { get }
     var cursorPoint: CGPoint { get }
     var isIndicated: Bool { get set }
@@ -220,6 +230,9 @@ PointEditable, Transformable, ViewEditable, Strokable, Localizable {
     var viewQuasimode: ViewQuasimode { get set }
 }
 extension Respondable {
+    var isLiteral: Bool {
+        return false
+    }
     var cursor: Cursor {
         return .arrow
     }
@@ -265,6 +278,35 @@ extension ObjectViewExpressionWithDisplayText {
     }
 }
 
+final class GetterView<T: ViewExpression & Referenceable>: View {
+    var sizeType: SizeType
+    let classNameView: TextView
+    
+    init(copiedObjectsClosure: @escaping () -> (T), sizeType: SizeType = .regular) {
+        classNameView = TextView(text: T.name, font: Font.bold(with: sizeType))
+        self.copiedObjectsClosure = copiedObjectsClosure
+        self.sizeType = sizeType
+        
+        super.init()
+    }
+    
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    func updateLayout() {
+        let padding = Layout.padding(with: sizeType)
+        classNameView.frame.origin = CGPoint(x: padding,
+                                             y: bounds.height - classNameView.frame.height - padding)
+    }
+    
+    var copiedObjectsClosure: () -> (T)
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [copiedObjectsClosure()]
+    }
+}
+
 final class ObjectView<T: Copiable & ViewExpression & Referenceable>: View {
     let object: T
     
@@ -273,7 +315,7 @@ final class ObjectView<T: Copiable & ViewExpression & Referenceable>: View {
     init(object: T, thumbnailView: Layer?, minFrame: CGRect, thumbnailWidth: CGFloat = 40.0,
          sizeType: SizeType = .regular) {
         self.object = object
-        classNameView = TextView(text: type(of: object).name, font: Font.bold(with: sizeType))
+        classNameView = TextView(text: T.name, font: Font.bold(with: sizeType))
         self.thumbnailView = thumbnailView ?? Layer()
         self.sizeType = sizeType
         
@@ -315,27 +357,10 @@ final class ObjectView<T: Copiable & ViewExpression & Referenceable>: View {
     }
 }
 
-final class Drager {
-    private var downPosition = CGPoint(), oldFrame = CGRect()
-    func drag(with event: DragEvent, _ layer: Layer, in parent: Layer) {
-        let p = parent.point(from: event)
-        switch event.sendType {
-        case .begin:
-            downPosition = p
-            oldFrame = layer.frame
-        case .sending:
-            let dp =  p - downPosition
-            layer.frame.origin = CGPoint(x: oldFrame.origin.x + dp.x,
-                                         y: oldFrame.origin.y + dp.y)
-        case .end:
-            let dp =  p - downPosition
-            layer.frame.origin = CGPoint(x: round(oldFrame.origin.x + dp.x),
-                                         y: round(oldFrame.origin.y + dp.y))
-        }
-    }
-}
-final class Scroller {
-    func scroll(with event: ScrollEvent, layer: Layer) {
-        layer.frame.origin += event.scrollDeltaPoint
+final class KeyPathView<T, U>: View {
+    var keyPath: KeyPath<T, U>
+    init(keyPath: KeyPath<T, U>) {
+        self.keyPath = keyPath
+        
     }
 }

@@ -22,13 +22,6 @@ import Foundation
 struct Size: Equatable {
     var width = 0.0, height = 0.0
     
-    func with(width: Double) -> Size {
-        return Size(width: width, height: height)
-    }
-    func with(h: Double) -> Size {
-        return Size(width: width, height: height)
-    }
-    
     var isEmpty: Bool {
         return width == 0 && height == 0
     }
@@ -60,22 +53,17 @@ extension Size: Referenceable {
 }
 
 extension CGSize {
-    static func *(lhs: CGSize, rhs: CGFloat) -> CGSize {
-        return CGSize(width: lhs.width * rhs, height: lhs.height * rhs)
-    }
-    func with(width: CGFloat) -> CGSize {
-        return CGSize(width: width, height: height)
-    }
-    func with(height: CGFloat) -> CGSize {
-        return CGSize(width: width, height: height)
-    }
     init(square: CGFloat) {
         self.init(width: square, height: square)
     }
-    
     init(_ string: String) {
         self = NSSizeToCGSize(NSSizeFromString(string))
     }
+    
+    static func *(lhs: CGSize, rhs: CGFloat) -> CGSize {
+        return CGSize(width: lhs.width * rhs, height: lhs.height * rhs)
+    }
+    
     var string: String {
         return String(NSStringFromSize(NSSizeFromCGSize(self)))
     }
@@ -97,8 +85,8 @@ final class DiscreteSizeView: View {
     var size = CGSize() {
         didSet {
             if size != oldValue {
-                widthView.number = size.width
-                heightView.number = size.height
+                widthView.model = size.width
+                heightView.model = size.height
             }
         }
     }
@@ -106,18 +94,43 @@ final class DiscreteSizeView: View {
     
     var sizeType: SizeType
     let classWidthNameView: TextView
-    let widthView: DiscreteNumberView
+    let widthView: DiscreteRealNumberView
     let classHeightNameView: TextView
-    let heightView: DiscreteNumberView
-    init(sizeType: SizeType) {
+    let heightView: DiscreteRealNumberView
+    init(size: CGSize = CGSize(), defaultSize: CGSize = CGSize(),
+         minSize: CGSize = CGSize(width: 0, height: 0),
+         maxSize: CGSize = CGSize(width: 10000, height: 10000),
+         widthEXP: RealNumber = 1, heightEXP: RealNumber = 1,
+         widthInterval: RealNumber = 1, widthNumberOfDigits: Int = 0, widthUnit: String = "",
+         heightInterval: RealNumber = 1, heightNumberOfDigits: Int = 0, heightUnit: String = "",
+         frame: CGRect = CGRect(),
+         sizeType: SizeType) {
+        
         self.sizeType = sizeType
         
         classWidthNameView = TextView(text: Localization("w:"), font: Font.default(with: sizeType))
-        widthView = DiscreteNumberView(frame: Layout.valueFrame, min: 1, max: 10000,
-                                       numberInterval: 1, sizeType: sizeType)
         classHeightNameView = TextView(text: Localization("h:"), font: Font.default(with: sizeType))
-        heightView = DiscreteNumberView(frame: Layout.valueFrame,
-                                        min: 1, max: 10000, numberInterval: 1, sizeType: sizeType)
+        
+        widthView = DiscreteRealNumberView(model: size.width,
+                                       option: RealNumberOption(defaultModel: defaultSize.width,
+                                                                minModel: minSize.width,
+                                                                maxModel: maxSize.width,
+                                                                modelInterval: widthInterval,
+                                                                exp: widthEXP,
+                                                                numberOfDigits: widthNumberOfDigits,
+                                                                unit: widthUnit),
+                                       frame: Layout.valueFrame(with: sizeType),
+                                       sizeType: sizeType)
+        heightView = DiscreteRealNumberView(model: size.height,
+                                       option: RealNumberOption(defaultModel: defaultSize.height,
+                                                                minModel: minSize.height,
+                                                                maxModel: maxSize.height,
+                                                                modelInterval: heightInterval,
+                                                                exp: heightEXP,
+                                                                numberOfDigits: heightNumberOfDigits,
+                                                                unit: heightUnit),
+                                       frame: Layout.valueFrame(with: sizeType),
+                                       sizeType: sizeType)
         
         super.init()
         replace(children: [classWidthNameView, widthView, classHeightNameView, heightView])
@@ -140,11 +153,11 @@ final class DiscreteSizeView: View {
     func updateLayout() {
         let padding = Layout.padding(with: sizeType)
         var x = padding
-        classWidthNameView.frame.origin = CGPoint(x: x, y: padding)
+        classWidthNameView.frame.origin = CGPoint(x: x, y: padding * 2)
         x += classWidthNameView.frame.width
         widthView.frame.origin = CGPoint(x: x, y: padding)
         x += widthView.frame.width + padding
-        classHeightNameView.frame.origin = CGPoint(x: x, y: padding)
+        classHeightNameView.frame.origin = CGPoint(x: x, y: padding * 2)
         x += classHeightNameView.frame.width
         heightView.frame.origin = CGPoint(x: x, y: padding)
         x += heightView.frame.width + padding
@@ -159,13 +172,16 @@ final class DiscreteSizeView: View {
     var disabledRegisterUndo = false
     
     private var oldSize = CGSize()
-    private func setSize(with obj: DiscreteNumberView.Binding) {
+    private func setSize(with obj: DiscreteRealNumberView.Binding<RealNumber>) {
         if obj.type == .begin {
             oldSize = size
             binding?(Binding(view: self, size: oldSize, oldSize: oldSize, type: .begin))
         } else {
-            size = obj.view == widthView ?
-                size.with(width: obj.number) : size.with(height: obj.number)
+            if obj.view == widthView {
+                size.width = obj.model
+            } else {
+                size.height = obj.model
+            }
             binding?(Binding(view: self, size: size, oldSize: oldSize, type: obj.type))
         }
     }

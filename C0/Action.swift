@@ -128,6 +128,9 @@ extension Quasimode: Referenceable {
 extension Quasimode: ObjectViewExpressionWithDisplayText {
 }
 
+/**
+ Issue: トラックパッドの環境設定を無効化または表示反映
+ */
 struct Action {
     enum SendType {
         case begin, sending, end
@@ -136,28 +139,28 @@ struct Action {
     var name: Localization, instanceDescription: Localization
     var quasimode: Quasimode
     var viewQuasimode: ViewQuasimode
-    var moveCursor: ((_ receiver: Respondable, MoveCursorEvent) -> Bool)?
-    var keyInput: ((_ receiver: Respondable, KeyInputEvent) -> Bool)?
-    var click: ((_ receiver: Respondable, ClickEvent) -> Bool)?
-    var drag: ((_ receiver: Respondable, DragEvent) -> Bool)?
-    var scroll: ((_ receiver: Respondable, ScrollEvent) -> Bool)?
-    var pinch: ((_ receiver: Respondable, PinchEvent) -> Bool)?
-    var rotate: ((_ receiver: Respondable, RotateEvent) -> Bool)?
-    var tap: ((_ receiver: Respondable, TapEvent) -> Bool)?
-    var doubleTap: ((_ receiver: Respondable, DoubleTapEvent) -> Bool)?
+    var moveCursor: ((_ receivers: [Respondable], MoveCursorEvent) -> Bool)?
+    var keyInput: ((_ receivers: [Respondable], KeyInputEvent) -> Bool)?
+    var click: ((_ receivers: [Respondable], ClickEvent) -> Bool)?
+    var drag: ((_ receivers: [Respondable], DragEvent) -> Bool)?
+    var scroll: ((_ receivers: [Respondable], ScrollEvent) -> Bool)?
+    var pinch: ((_ receivers: [Respondable], PinchEvent) -> Bool)?
+    var rotate: ((_ receivers: [Respondable], RotateEvent) -> Bool)?
+    var tap: ((_ receivers: [Respondable], TapEvent) -> Bool)?
+    var doubleTap: ((_ receivers: [Respondable], DoubleTapEvent) -> Bool)?
     
     init(name: Localization = Localization(), description: Localization = Localization(),
          quasimode: Quasimode = Quasimode(),
          viewQuasimode: ViewQuasimode = .move,
-         moveCursor: ((_ receiver: Respondable, MoveCursorEvent) -> Bool)? = nil,
-         keyInput: ((_ receiver: Respondable, KeyInputEvent) -> Bool)? = nil,
-         click: ((_ receiver: Respondable, ClickEvent) -> Bool)? = nil,
-         drag: ((_ receiver: Respondable, DragEvent) -> Bool)? = nil,
-         scroll: ((_ receiver: Respondable, ScrollEvent) -> Bool)? = nil,
-         pinch: ((_ receiver: Respondable, PinchEvent) -> Bool)? = nil,
-         rotate: ((_ receiver: Respondable, RotateEvent) -> Bool)? = nil,
-         tap: ((_ receiver: Respondable, TapEvent) -> Bool)? = nil,
-         doubleTap: ((_ receiver: Respondable, DoubleTapEvent) -> Bool)? = nil) {
+         moveCursor: ((_ receivers: [Respondable], MoveCursorEvent) -> Bool)? = nil,
+         keyInput: ((_ receivers: [Respondable], KeyInputEvent) -> Bool)? = nil,
+         click: ((_ receivers: [Respondable], ClickEvent) -> Bool)? = nil,
+         drag: ((_ receivers: [Respondable], DragEvent) -> Bool)? = nil,
+         scroll: ((_ receivers: [Respondable], ScrollEvent) -> Bool)? = nil,
+         pinch: ((_ receivers: [Respondable], PinchEvent) -> Bool)? = nil,
+         rotate: ((_ receivers: [Respondable], RotateEvent) -> Bool)? = nil,
+         tap: ((_ receivers: [Respondable], TapEvent) -> Bool)? = nil,
+         doubleTap: ((_ receivers: [Respondable], DoubleTapEvent) -> Bool)? = nil) {
         
         self.name = name
         self.instanceDescription = description
@@ -180,7 +183,6 @@ extension Action: Equatable {
 }
 extension Action: Referenceable {
     static let name = Localization(english: "Action", japanese: "アクション")
-    static let comment = Localization("Issue: トラックパッドの環境設定を無効化または表示反映")
 }
 extension Action: ObjectViewExpression {
     func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
@@ -190,28 +192,38 @@ extension Action: ObjectViewExpression {
 
 struct ActionManager {
     var actions: [Action] = {
-        let cutClosure: (Respondable, KeyInputEvent) -> (Bool) = {
-            if let copiedObjects = $0.copiedObjects(with: $1), $0.delete(with: $1) {
-                $0.sendToTop(copiedObjects: copiedObjects)
+        let cutClosure: ([Respondable], KeyInputEvent) -> (Bool) = { receivers, event in
+            let copiedObjects = receivers.reduce(into: [ViewExpression]()) {
+                if let copiedObjects = $1.copiedObjects(with: event), $1.delete(with: event) {
+                    $0 += copiedObjects
+                }
+            }
+            if !copiedObjects.isEmpty {
+                receivers[0].sendToTop(copiedObjects: copiedObjects)
                 return true
             } else {
                 return false
             }
         }
-        let copyClosure: (Respondable, KeyInputEvent) -> (Bool) = {
-            if let copiedObjects = $0.copiedObjects(with: $1) {
-                $0.sendToTop(copiedObjects: copiedObjects)
+        let copyClosure: ([Respondable], KeyInputEvent) -> (Bool) = { receivers, event in
+            let copiedObjects = receivers.reduce(into: [ViewExpression]()) {
+                if let copiedObjects = $1.copiedObjects(with: event) {
+                    $0 += copiedObjects
+                }
+            }
+            if !copiedObjects.isEmpty {
+                receivers[0].sendToTop(copiedObjects: copiedObjects)
                 return true
             } else {
                 return false
             }
         }
-        let pasteClosure: (Respondable, KeyInputEvent) -> (Bool) = {
-            return $0.paste($0.topCopiedObjects, with: $1)
+        let pasteClosure: ([Respondable], KeyInputEvent) -> (Bool) = {
+            return $0[0].paste($0[0].topCopiedObjects, with: $1)
         }
-        let referenceClosure: (Respondable, TapEvent) -> (Bool) = {
-            if let reference = $0.reference(with: $1) {
-                $0.sendToTop(reference)
+        let referenceClosure: ([Respondable], TapEvent) -> (Bool) = {
+            if let reference = $0[0].reference(with: $1) {
+                $0[0].sendToTop(reference)
                 return true
             } else {
                 return false
@@ -222,50 +234,50 @@ struct ActionManager {
         
         return [Action(name: Localization(english: "Indicate", japanese: "指し示す"),
                        quasimode: Quasimode(gesture: .moveCursor),
-                       moveCursor: { $0.moveCursor(with: $1) }),
+                       moveCursor: { $0[0].moveCursor(with: $1) }),
                 Action(name: Localization(english: "Select", japanese: "選択"),
                        quasimode: Quasimode([.command], gesture: .drag),
                        viewQuasimode: .select,
-                       drag: { $0.select(with: $1) }),
+                       drag: { $0[0].select(with: $1) }),
                 Action(name: Localization(english: "Select All", japanese: "すべて選択"),
                        quasimode: Quasimode([.command], .a, gesture: .keyInput),
-                       keyInput: { $0.selectAll(with: $1) }),
+                       keyInput: { $0[0].selectAll(with: $1) }),
                 Action(name: Localization(english: "Deselect", japanese: "選択解除"),
                        quasimode: Quasimode([.command, .shift], gesture: .drag),
                        viewQuasimode: .deselect,
-                       drag: { $0.deselect(with: $1) }),
+                       drag: { $0[0].deselect(with: $1) }),
                 Action(name: Localization(english: "Deselect All", japanese: "すべて選択解除"),
                        quasimode: Quasimode([.command, .shift], .a, gesture: .keyInput),
-                       keyInput: { $0.deselectAll(with: $1) }),
+                       keyInput: { $0[0].deselectAll(with: $1) }),
                 Action(name: Localization(english: "Bind", japanese: "バインド"),
                        quasimode: Quasimode(gesture: .subClick),
-                       click: { $0.bind(with: $1) }),
+                       click: { $0[0].bind(with: $1) }),
                 Action(name: Localization(english: "Scroll", japanese: "スクロール"),
                        description: osPreferenceDescription,
                        quasimode: Quasimode(gesture: .scroll),
-                       scroll: { $0.scroll(with: $1) }),
+                       scroll: { $0[0].scroll(with: $1) }),
                 Action(name: Localization(english: "Zoom", japanese: "ズーム"),
                        description: osPreferenceDescription,
                        quasimode: Quasimode(gesture: .pinch),
-                       pinch: { $0.zoom(with: $1) }),
+                       pinch: { $0[0].zoom(with: $1) }),
                 Action(name: Localization(english: "Rotate", japanese: "回転"),
                        description: osPreferenceDescription,
                        quasimode: Quasimode(gesture: .rotate),
-                       rotate: { $0.rotate(with: $1) }),
+                       rotate: { $0[0].rotate(with: $1) }),
                 Action(name: Localization(english: "Reset View", japanese: "表示を初期化"),
                        description: osPreferenceDescription,
                        quasimode: Quasimode(gesture: .doubleTap),
-                       doubleTap: { $0.resetView(with: $1) }),
+                       doubleTap: { $0[0].resetView(with: $1) }),
                 Action(name: Localization(english: "Look Up", japanese: "調べる"),
                        description: osPreferenceDescription,
                        quasimode: Quasimode(gesture: .tap),
                        tap: referenceClosure),
                 Action(name: Localization(english: "Undo", japanese: "取り消す"),
                        quasimode: Quasimode([.command], .z, gesture: .keyInput),
-                       keyInput: { (receiver, _) in receiver.undo() }),
+                       keyInput: { (receivers, _) in receivers[0].undo() }),
                 Action(name: Localization(english: "Redo", japanese: "やり直す"),
                        quasimode: Quasimode([.command, .shift], .z, gesture: .keyInput),
-                       keyInput: { (receiver, _) in receiver.redo() }),
+                       keyInput: { (receivers, _) in receivers[0].redo() }),
                 Action(name: Localization(english: "Cut", japanese: "カット"),
                        quasimode: Quasimode([.command], .x, gesture: .keyInput),
                        keyInput: cutClosure),
@@ -277,49 +289,49 @@ struct ActionManager {
                        keyInput: pasteClosure),
                 Action(name: Localization(english: "New", japanese: "新規"),
                        quasimode: Quasimode([.command], .d, gesture: .keyInput),
-                       keyInput: { $0.new(with: $1) }),
+                       keyInput: { $0[0].new(with: $1) }),
                 Action(name: Localization(english: "Run", japanese: "実行"),
                        quasimode: Quasimode(gesture: .click),
-                       click: { $0.run(with: $1) }),
+                       click: { $0[0].run(with: $1) }),
                 Action(name: Localization(english: "Move", japanese: "移動"),
                        quasimode: Quasimode(gesture: .drag),
-                       drag: { $0.move(with: $1) }),
+                       drag: { $0[0].move(with: $1) }),
                 Action(name: Localization(english: "Transform", japanese: "変形"),
                        quasimode: Quasimode([.option], gesture: .drag),
                        viewQuasimode: .transform,
-                       drag: { $0.transform(with: $1) }),
+                       drag: { $0[0].transform(with: $1) }),
                 Action(name: Localization(english: "Warp", japanese: "歪曲"),
                        quasimode: Quasimode([.option, .shift], gesture: .drag),
                        viewQuasimode: .warp,
-                       drag: { $0.warp(with: $1) }),
+                       drag: { $0[0].warp(with: $1) }),
                 Action(name: Localization(english: "Move Z", japanese: "Z移動"),
                        quasimode: Quasimode([.option, .control], gesture: .drag),
                        viewQuasimode: .moveZ,
-                       drag: { $0.moveZ(with: $1) }),
+                       drag: { $0[0].moveZ(with: $1) }),
                 Action(name: Localization(english: "Stroke", japanese: "ストローク"),
                        quasimode: Quasimode(gesture: .subDrag),
                        viewQuasimode: .stroke,
-                       drag: { $0.stroke(with: $1) }),
+                       drag: { $0[0].stroke(with: $1) }),
                 Action(name: Localization(english: "Lasso Erase", japanese: "囲み消し"),
                        quasimode: Quasimode([.shift], gesture: .drag),
                        viewQuasimode: .lassoErase,
-                       drag: { $0.lassoErase(with: $1) }),
+                       drag: { $0[0].lassoErase(with: $1) }),
                 Action(name: Localization(english: "Remove Edit Point", japanese: "編集点を削除"),
                        quasimode: Quasimode([.control], .x, gesture: .keyInput),
                        viewQuasimode: .movePoint,
-                       keyInput: { $0.removePoint(with: $1) }),
+                       keyInput: { $0[0].removePoint(with: $1) }),
                 Action(name: Localization(english: "Insert Edit Point", japanese: "編集点を追加"),
                        quasimode: Quasimode([.control], .d, gesture: .keyInput),
                        viewQuasimode: .movePoint,
-                       keyInput: { $0.insertPoint(with: $1) }),
+                       keyInput: { $0[0].insertPoint(with: $1) }),
                 Action(name: Localization(english: "Move Edit Point", japanese: "編集点を移動"),
                        quasimode: Quasimode([.control], gesture: .drag),
                        viewQuasimode: .movePoint,
-                       drag: { $0.movePoint(with: $1) }),
+                       drag: { $0[0].movePoint(with: $1) }),
                 Action(name: Localization(english: "Move Vertex", japanese: "頂点を移動"),
                        quasimode: Quasimode([.control, .shift], gesture: .drag),
                        viewQuasimode: .moveVertex,
-                       drag: { $0.moveVertex(with: $1) })]
+                       drag: { $0[0].moveVertex(with: $1) })]
     } ()
     
     func actionWith(_ gesture: Quasimode.Gesture, _ event: Event) -> Action? {
@@ -358,10 +370,6 @@ typealias DoubleTapEvent = BasicEvent
 struct KeyInputEvent: Event {
     var sendType: Action.SendType, location: CGPoint, time: Second
     var modifierKeys: Quasimode.ModifierKeys, key: Quasimode.Key?
-    func with(sendType: Action.SendType) -> KeyInputEvent {
-        return KeyInputEvent(sendType: sendType, location: location,
-                             time: time, modifierKeys: modifierKeys, key: key)
-    }
 }
 struct DragEvent: Event {
     var sendType: Action.SendType, location: CGPoint, time: Second
@@ -391,7 +399,7 @@ struct RotateEvent: Event {
 final class QuasimodeView: View {
     var quasimode: Quasimode {
         didSet {
-            formTextView.localization = quasimode.displayText
+            formTextView.text = quasimode.displayText
             if isSizeToFit {
                 bounds = defaultBounds
             }
@@ -405,7 +413,7 @@ final class QuasimodeView: View {
     init(quasimode: Quasimode, isSizeToFit: Bool = true) {
         self.quasimode = quasimode
         self.isSizeToFit = isSizeToFit
-        formTextView = TextView(text: quasimode.displayText, font: .small, frameAlignment: .right)
+        formTextView = TextView(text: quasimode.displayText, frameAlignment: .right)
         
         super.init()
         if isSizeToFit {
@@ -417,15 +425,15 @@ final class QuasimodeView: View {
     
     override var locale: Locale {
         didSet {
+            if isSizeToFit {
+                bounds = defaultBounds
+            }
             updateLayout()
         }
     }
     
     override var defaultBounds: CGRect {
-        let padding = Layout.smallPadding
-        let width = formTextView.bounds.width + padding * 2
-        let height = formTextView.bounds.height + padding * 2
-        return CGRect(x: 0, y: 0, width: width, height: height)
+        return CGRect(x: 0, y: 0, width: formTextView.bounds.width, height: formTextView.bounds.height)
     }
     override var bounds: CGRect {
         didSet {
@@ -433,9 +441,7 @@ final class QuasimodeView: View {
         }
     }
     func updateLayout() {
-        let padding = Layout.smallPadding
-        formTextView.frame.origin = CGPoint(x: padding,
-                                     y: bounds.height - formTextView.frame.height - padding)
+        formTextView.frame.origin = CGPoint(x: 0, y: bounds.height - formTextView.frame.height)
     }
     
     func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
@@ -450,7 +456,7 @@ final class QuasimodeView: View {
 final class ActionView: View {
     var action: Action {
         didSet {
-            nameView.localization = action.name
+            nameView.text = action.name
             quasimodeView.quasimode = action.quasimode
         }
     }
@@ -487,7 +493,7 @@ final class ActionView: View {
         nameView.frame.origin = CGPoint(x: padding,
                                          y: bounds.height - nameView.frame.height - padding)
         quasimodeView.frame.origin = CGPoint(x: bounds.width - quasimodeView.frame.width - padding,
-                                             y: Layout.smallPadding)
+                                             y: padding)
     }
     
     func reference(with event: TapEvent) -> Reference? {
@@ -496,8 +502,7 @@ final class ActionView: View {
 }
 
 /**
- # Issue
- - アクションの表示をキーボードに常に表示（ハードウェアの変更が必要）
+ Issue: アクションの表示をキーボードに常に表示（ハードウェアの変更が必要）
  */
 final class ActionManagerView: View {
     var actionManager = ActionManager() {
@@ -506,7 +511,7 @@ final class ActionManagerView: View {
         }
     }
     
-    static let defaultWidth = 200 + Layout.basicPadding * 2
+    static let defaultWidth = 220 + Layout.basicPadding * 2
     let classNameView = TextView(text: ActionManager.name, font: .bold)
     let actionsView = ArrayView<Action>()
     
@@ -531,29 +536,28 @@ final class ActionManagerView: View {
         }
     }
     func updateLayout() {
-        let padding = Layout.basicPadding, sPadding = Layout.smallPadding
+        let padding = Layout.basicPadding
         classNameView.frame.origin = CGPoint(x: padding,
-                                              y: bounds.height - classNameView.frame.height - padding)
+                                             y: bounds.height - classNameView.frame.height - padding)
         let aw = bounds.width - padding * 2
-        let asw = aw - sPadding * 2
+        let asw = aw - padding * 2
         let ah = max(bounds.height - classNameView.frame.height - padding * 3, 0)
         actionsView.frame = CGRect(x: padding, y: padding, width: aw, height: ah)
         actionsView.children.forEach { $0.frame.size.width = asw }
-        _ = actionsView.children.reduce(actionsView.bounds.height - sPadding) {
+        _ = actionsView.children.reduce(actionsView.bounds.height - padding) {
             let y = $0 - $1.frame.height
             $1.frame.origin.y = y
             return y
         }
     }
     func updateWithIsHiddenActions() {
-        let padding = Layout.basicPadding, sPadding = Layout.smallPadding
-        let aw = bounds.width - sPadding * 2 - padding * 2
+        let padding = Layout.basicPadding
+        let aw = bounds.width - padding * 4
         let aaf = ActionManagerView.actionViewsAndSizeWith(actionManager: actionManager,
-                                                           origin: CGPoint(x: sPadding,
-                                                                           y: sPadding),
+                                                           origin: CGPoint(x: padding, y: padding),
                                                            actionWidth: aw)
         actionsView.replace(children: aaf.views)
-        actionsView.frame.size.height = aaf.size.height + sPadding * 2
+        actionsView.frame.size.height = aaf.size.height + padding * 2
         replace(children: [classNameView, actionsView])
     }
     

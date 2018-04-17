@@ -20,14 +20,13 @@
 import Foundation
 
 /**
- # Issue
- - 複数セルの重なり判定（複数のセルの上からセルを追加するときにもcontains判定が有効なように修正）
- - セルに文字を実装
- - 文字から口パク生成アクション
- - セルの結合
- - 自動回転補間
- - アクションの保存（変形情報などをセルに埋め込む、セルへの操作の履歴を別のセルに適用するコマンド）
- - 変更通知またはイミュータブル化またはstruct化
+ Issue: 複数セルの重なり判定（複数のセルの上からセルを追加するときにもcontains判定が有効なように修正）
+ Issue: セルに文字を実装
+ Issue: 文字から口パク生成アクション
+ Issue: セルの結合
+ Issue: 自動回転補間
+ Issue: アクションの保存（変形情報などをセルに埋め込む、セルへの操作の履歴を別のセルに適用するコマンド）
+ Issue: 変更通知またはイミュータブル化またはstruct化
  */
 final class Cell: NSObject, NSCoding {
     var children: [Cell], geometry: Geometry, material: Material
@@ -597,7 +596,7 @@ final class Cell: NSObject, NSCoding {
             ctx.restoreGState()
         }
         if isEditUnlocked {
-            ctx.setFillColor(Color.border.cgColor)
+            ctx.setFillColor(Color.getSetBorder.cgColor)
             if material.type != .normal {
                 geometry.draw(withLineWidth: 0.5 * reciprocalScale, in: ctx)
             }

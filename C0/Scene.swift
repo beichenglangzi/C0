@@ -20,19 +20,17 @@
 import Foundation
 
 typealias BPM = CGFloat
-typealias FPS = Int
-typealias CPB = Int
+typealias FPS = CGFloat
 typealias FrameTime = Int
 typealias BaseTime = Q
 typealias Beat = Q
-typealias DoubleBaseTime = Double
 typealias DoubleBeat = Double
+typealias DoubleBaseTime = Double
 typealias Second = Double
 
 /**
- # Issue
- - 複数のサウンド
- - 変更通知
+ Issue: 複数のサウンド
+ Issue: 変更通知
  */
 final class Scene: NSObject, NSCoding {
     var version = Version()
@@ -42,6 +40,7 @@ final class Scene: NSObject, NSCoding {
     var isHiddenPrevious: Bool, isHiddenNext: Bool
     var isHiddenSubtitles: Bool
     var sound: Sound
+    var renderingVerticalResolution: Int
     
     var viewTransform: Transform {
         didSet {
@@ -58,7 +57,7 @@ final class Scene: NSObject, NSCoding {
     var baseTimeInterval: Beat
     var tempoTrack: TempoTrack
     var cutTrack: CutTrack
-//    var sunAnimation
+//    var sumAnimation
     var editCut: Cut {
         return cutTrack.cutItem.cut
     }
@@ -105,14 +104,20 @@ final class Scene: NSObject, NSCoding {
         return data
     }
     
+    static let timeIntervalOption = RationalNumberOption(defaultModel: Q(1, 16),
+                                                         minModel: Q(1, 100000), maxModel: 100000,
+                                                         modelInterval: 1,
+                                                         isInfinitesimal: true, unit: " b")
+    
     init(name: String = Localization(english: "Untitled", japanese: "名称未設定").currentString,
          frame: CGRect = CGRect(x: -288, y: -162, width: 576, height: 324),
          frameRate: FPS = 24,
          baseTimeInterval: Beat = Beat(1, 24),
          editMaterial: Material = Material(),
-         isHiddenPrevious: Bool = false, isHiddenNext: Bool = false,
+         isHiddenPrevious: Bool = true, isHiddenNext: Bool = true,
          isHiddenSubtitles: Bool = false,
          sound: Sound = Sound(),
+         renderingVerticalResolution: Int = 1080,
          tempoTrack: TempoTrack = TempoTrack(),
          cutTrack: CutTrack = CutTrack(),
          time: Beat = 0,
@@ -127,6 +132,7 @@ final class Scene: NSObject, NSCoding {
         self.isHiddenNext = isHiddenNext
         self.isHiddenSubtitles = isHiddenSubtitles
         self.sound = sound
+        self.renderingVerticalResolution = renderingVerticalResolution
         self.tempoTrack = tempoTrack
         self.cutTrack = cutTrack
         self.time = time
@@ -138,13 +144,15 @@ final class Scene: NSObject, NSCoding {
     private enum CodingKeys: String, CodingKey {
         case
         name, frame, frameRate, baseTimeInterval,
-        editMaterial, isHiddenPrevious, isHiddenNext, isHiddenSubtitles, sound, viewTransform,
+        editMaterial, isHiddenPrevious, isHiddenNext, isHiddenSubtitles, sound,
+        renderingVerticalResolution,
+        viewTransform,
         tempoTrack, cutTrack, time
     }
     init?(coder: NSCoder) {
         name = coder.decodeObject(forKey: CodingKeys.name.rawValue) as? String ?? ""
         frame = coder.decodeRect(forKey: CodingKeys.frame.rawValue)
-        frameRate = coder.decodeInteger(forKey: CodingKeys.frameRate.rawValue)
+        frameRate = coder.decodeDouble(forKey: CodingKeys.frameRate.rawValue).cf
         baseTimeInterval = coder.decodeDecodable(
             Beat.self, forKey: CodingKeys.baseTimeInterval.rawValue) ?? Beat(1, 16)
         editMaterial = coder.decodeObject(
@@ -155,6 +163,8 @@ final class Scene: NSObject, NSCoding {
         viewTransform = coder.decodeDecodable(
             Transform.self, forKey: CodingKeys.viewTransform.rawValue) ?? Transform()
         sound = coder.decodeDecodable(Sound.self, forKey: CodingKeys.sound.rawValue) ?? Sound()
+        renderingVerticalResolution = coder.decodeInteger(forKey:
+            CodingKeys.renderingVerticalResolution.rawValue)
         tempoTrack = coder.decodeObject(
             forKey: CodingKeys.tempoTrack.rawValue) as? TempoTrack ?? TempoTrack()
         cutTrack = coder.decodeObject(forKey: CodingKeys.cutTrack.rawValue) as? CutTrack ?? CutTrack()
@@ -166,7 +176,7 @@ final class Scene: NSObject, NSCoding {
     func encode(with coder: NSCoder) {
         coder.encode(name, forKey: CodingKeys.name.rawValue)
         coder.encode(frame, forKey: CodingKeys.frame.rawValue)
-        coder.encode(frameRate, forKey: CodingKeys.frameRate.rawValue)
+        coder.encode(frameRate.d, forKey: CodingKeys.frameRate.rawValue)
         coder.encodeEncodable(baseTimeInterval, forKey: CodingKeys.baseTimeInterval.rawValue)
         coder.encode(editMaterial, forKey: CodingKeys.editMaterial.rawValue)
         coder.encode(isHiddenPrevious, forKey: CodingKeys.isHiddenPrevious.rawValue)
@@ -174,6 +184,8 @@ final class Scene: NSObject, NSCoding {
         coder.encode(isHiddenSubtitles, forKey: CodingKeys.isHiddenSubtitles.rawValue)
         coder.encodeEncodable(viewTransform, forKey: CodingKeys.viewTransform.rawValue)
         coder.encodeEncodable(sound, forKey: CodingKeys.sound.rawValue)
+        coder.encode(renderingVerticalResolution, forKey:
+            CodingKeys.renderingVerticalResolution.rawValue)
         coder.encode(tempoTrack, forKey: CodingKeys.tempoTrack.rawValue)
         coder.encode(cutTrack, forKey: CodingKeys.cutTrack.rawValue)
         coder.encodeEncodable(time, forKey: CodingKeys.time.rawValue)
@@ -217,6 +229,20 @@ final class Scene: NSObject, NSCoding {
         return DoubleBaseTime(beatTime / baseTimeInterval)
     }
     
+    var curretEditKeyframeTime: Beat {
+        let cut = editCut
+        let animation = cut.editNode.editTrack.animation
+        let t = cut.currentTime >= animation.duration ?
+            animation.duration : animation.editKeyframe.time
+        let cutAnimation = cutTrack.animation
+        return cutAnimation.keyframes[cutAnimation.editLoopframeIndex].time + t
+    }
+    var curretEditKeyframeTimeExpression: Expression {
+        let time = curretEditKeyframeTime
+        let iap = time.integerAndProperFraction
+        return Expression(iap.integer) + Expression(iap.properFraction)
+    }
+    
     func cutTime(withFrameTime frameTime: Int) -> (cutItemIndex: Int, cut: Cut, time: Beat) {
         let t = cutTrack.cutIndex(withTime: beatTime(withFrameTime: frameTime))
         return (t.index, cuts[t.index], t.interTime)
@@ -224,10 +250,10 @@ final class Scene: NSObject, NSCoding {
     var secondTime: (second: Int, frame: Int) {
         let second = secondTime(withBeatTime: time)
         let frameTime = FrameTime(second * Second(frameRate))
-        return (Int(second), frameTime - Int(second) * frameRate)
+        return (Int(second), frameTime - Int(second.cf * frameRate))
     }
     func secondTime(with frameTime: FrameTime) -> (second: Int, frame: Int) {
-        let second = frameTime / frameRate
+        let second = Int(frameTime.cf / frameRate)
         return (second, frameTime - second)
     }
     
@@ -252,6 +278,7 @@ extension Scene: ClassCopiable {
                      editMaterial: editMaterial,
                      isHiddenPrevious: isHiddenPrevious, isHiddenNext: isHiddenNext,
                      sound: sound,
+                     renderingVerticalResolution: renderingVerticalResolution,
                      tempoTrack: tempoTrack.copied,
                      cutTrack: cutTrack.copied,
                      time: time,
@@ -263,9 +290,8 @@ extension Scene: Referenceable {
 }
 
 /**
- # Issue
- - セルをキャンバス外にペースト
- - Display P3サポート
+ Issue: セルをキャンバス外にペースト
+ Issue: Display P3サポート
  */
 final class SceneView: View {
     var scene = Scene() {
@@ -273,6 +299,7 @@ final class SceneView: View {
             updateWithScene()
         }
     }
+    
     let dataModelKey = "scene"
     var dataModel: DataModel {
         didSet {
@@ -288,7 +315,7 @@ final class SceneView: View {
                 dataModel.insert(scene.cutTrack.differentialDataModel)
             }
             
-            timeline.sceneDataModel = differentialSceneDataModel
+            timelineView.differentialSceneDataModel = differentialSceneDataModel
             canvas.sceneDataModel = differentialSceneDataModel
             updateWithScene()
         }
@@ -303,21 +330,24 @@ final class SceneView: View {
         }
     }
     
-    static let versionWidth = 120.0.cf, colorSpaceWidth = 82.0.cf
-    static let propertyWidth = 200.0.cf, buttonsWidth = 120.0.cf
+    static let versionWidth = 120.0.cf, propertyWidth = 200.0.cf
     static let canvasSize = CGSize(width: 730, height: 480), timelineHeight = 190.0.cf
     
     let classNameView = TextView(text: Scene.name, font: .bold)
     let versionView = VersionView()
     
-    let timeline = Timeline()
+    let timelineView = TimelineView()
     let canvas = Canvas()
     let seekBar = SeekBar()
     
     let rendererManager = RendererManager()
     let sizeView = DiscreteSizeView(sizeType: .small)
-    let frameRateView = DiscreteNumberView(frame: Layout.valueFrame,
-                                           min: 1, max: 1000, numberInterval: 1, unit: " fps",
+    let frameRateView = DiscreteRealNumberView(model: 24,
+                                           option: RealNumberOption(defaultModel: 24,
+                                                                minModel: 1, maxModel: 1000,
+                                                                modelInterval: 1, exp: 1,
+                                                                numberOfDigits: 0, unit: " fps"),
+                                           frame: Layout.valueFrame(with: .small),
                                            sizeType: .small)
     
     let isHiddenPreviousView = BoolView(defaultBool: true, cationBool: false,
@@ -331,14 +361,28 @@ final class SceneView: View {
                                          boolInfo: BoolInfo.hidden,
                                          sizeType: .small)
     
+    let renderingVerticalResolutionView = DiscreteIntView(model: 1,
+                                                          option: IntOption(defaultModel: 1080,
+                                                                            minModel: 1,
+                                                                            maxModel: 10000,
+                                                                            modelInterval: 1, exp: 1,
+                                                                            unit: " p"),
+                                                          frame: Layout.valueFrame(with: .small),
+                                                          sizeType: .small)
+    
     let exportSubtitlesView = ClosureView(closure: {}, name: Localization(english: "Export Subtitles",
                                                                           japanese: "字幕を書き出す"))
+    let exportImageView = ClosureView(closure: {}, name: Localization(english: "Export Image",
+                                                                      japanese: "画像を書き出す"))
+    let exportMovieView = ClosureView(closure: {}, name: Localization(english: "Export Movie",
+                                                                      japanese: "動画を書き出す"))
     
-    let soundView = SoundView()
+    let soundView = SoundView(sizeType: .small)
     let drawingView = DrawingView()
     let materialManager = SceneMaterialManager()
     let transformView = TransformView()
-    let wiggleView = WiggleView()
+    let wiggleXView = WiggleView()
+    let wiggleYView = WiggleView()
     let subtitleView = SubtitleView(sizeType: .small)
     let effectView = EffectView(sizeType: .small)
     
@@ -358,7 +402,7 @@ final class SceneView: View {
         dataModel = DataModel(key: dataModelKey,
                               directoryWith: [differentialSceneDataModel,
                                               scene.cutTrack.differentialDataModel])
-        timeline.sceneDataModel = differentialSceneDataModel
+        timelineView.differentialSceneDataModel = differentialSceneDataModel
         canvas.sceneDataModel = differentialSceneDataModel
         
         versionView.version = scene.version
@@ -369,16 +413,19 @@ final class SceneView: View {
         
         replace(children: [classNameView,
                            versionView,
-                           sizeView, frameRateView,
-                           exportSubtitlesView,
-                           isHiddenPreviousView, isHiddenNextView, soundView,
-                           timeline.keyframeView,
-                           drawingView, canvas.materialView, transformView, wiggleView,
-                           timeline.tempoView, timeline.tempoKeyframeView,
-                           isHiddenSubtitlesView, subtitleView,
-                           timeline.nodeView, effectView,
+                           sizeView, frameRateView, renderingVerticalResolutionView,
+                           exportSubtitlesView, exportImageView, exportMovieView,
+                           isHiddenPreviousView, isHiddenNextView, timelineView.baseTimeIntervalView,
+                           soundView,
+                           timelineView.keyframeView,
+                           drawingView, canvas.materialView, transformView, wiggleXView, wiggleYView,
+                           timelineView.tempoView, timelineView.tempoKeyframeView,
+                           timelineView.baseTimeIntervalView,
+                           isHiddenSubtitlesView,
+//                           subtitleView,
+                           timelineView.nodeView, effectView,
                            canvas.cellView,
-                           timeline, canvas, seekBar])
+                           timelineView, canvas, seekBar])
         
         differentialSceneDataModel.dataClosure = { [unowned self] in self.scene.differentialData }
         
@@ -387,31 +434,53 @@ final class SceneView: View {
             self.scene.frame = CGRect(origin: CGPoint(x: -$0.size.width / 2,
                                                       y: -$0.size.height / 2), size: $0.size)
             self.canvas.setNeedsDisplay()
-            let sp = CGPoint(x: self.scene.frame.width, y: self.scene.frame.height)
+            let sp = CGPoint(x: $0.size.width, y: $0.size.height)
             self.transformView.standardTranslation = sp
-            self.wiggleView.standardAmplitude = sp
+            self.wiggleXView.standardAmplitude = $0.size.width
+            self.wiggleYView.standardAmplitude = $0.size.height
             if $0.type == .end && $0.size != $0.oldSize {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
         frameRateView.binding = { [unowned self] in
-            self.scene.frameRate = Int($0.number)
-            if $0.type == .end && $0.number != $0.oldNumber {
+            self.scene.frameRate = $0.model
+            if $0.type == .end && $0.model != $0.oldModel {
+                self.differentialSceneDataModel.isWrite = true
+            }
+        }
+        renderingVerticalResolutionView.binding = { [unowned self] in
+            self.scene.renderingVerticalResolution = $0.model
+            if $0.type == .end && $0.model != $0.oldModel {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
         
-        timeline.baseTimeIntervalView.binding = { [unowned self] in
-            if $0.type == .begin {
-                self.baseTimeIntervalOldTime = self.scene.secondTime(withBeatTime: self.scene.time)
-            }
-            self.scene.baseTimeInterval.q = Int($0.number)
-            self.timeline.time = self.scene.basedBeatTime(withSecondTime: self.baseTimeIntervalOldTime)
-            self.timeline.baseTimeInterval = self.scene.baseTimeInterval
-            if $0.type == .end && $0.number != $0.oldNumber {
-                self.differentialSceneDataModel.isWrite = true
-            }
-        }
+//        timelineView.baseTimeIntervalView.binding = { [unowned self] in
+//            if $0.type == .begin {
+//                self.baseTimeIntervalOldTime = self.scene.secondTime(withBeatTime: self.scene.time)
+//            }
+//            self.scene.baseTimeInterval = $0.model
+//            self.timelineView.time = self.scene.basedBeatTime(withSecondTime:
+//                self.baseTimeIntervalOldTime)
+//            self.timelineView.baseTimeInterval = self.scene.baseTimeInterval
+//            if $0.type == .end && $0.model != $0.oldModel {
+//                self.differentialSceneDataModel.isWrite = true
+//            }
+//            
+//            switch event.sendType {
+//            case .begin:
+//                self.baseTimeIntervalOldTime = self.scene.secondTime(withBeatTime: self.scene.time)
+//                beginBaseTimeInterval = baseTimeInterval
+//            case .sending, .end:
+//                self.scene.baseTimeInterval = $0.model
+//                self.timelineView.updateWith(time: time, scrollPoint: CGPoint(x: self.timelineView.x(withTime: time), y: 0),
+//                           isIntervalScroll: false)
+//                self.timelineView.updateWithTime()
+//                if $0.type == .end && $0.model != $0.oldModel {
+//                    self.differentialSceneDataModel.isWrite = true
+//                }
+//            }
+//        }
         
         isHiddenPreviousView.binding = { [unowned self] in
             self.canvas.isHiddenPrevious = $0.bool
@@ -434,7 +503,7 @@ final class SceneView: View {
         
         soundView.setSoundClosure = { [unowned self] in
             self.scene.sound = $0.sound
-            self.timeline.soundWaveformView.sound = $0.sound
+            self.timelineView.soundWaveformView.sound = $0.sound
             if $0.type == .end && $0.sound != $0.oldSound {
                 self.differentialSceneDataModel.isWrite = true
             }
@@ -452,13 +521,13 @@ final class SceneView: View {
         transformView.binding = { [unowned self] in
             self.set($0.transform, old: $0.oldTransform, type: $0.type)
         }
-        wiggleView.binding = { [unowned self] in
+        wiggleXView.binding = { [unowned self] in
             self.set($0.wiggle, old: $0.oldWiggle, type: $0.type)
         }
         
-        subtitleView.binding = { [unowned self] in
-            self.set($0.subtitle, old: $0.oldSubtitle, type: $0.type)
-        }
+//        subtitleView.binding = { [unowned self] in
+//            self.set($0.subtitle, old: $0.oldSubtitle, type: $0.type)
+//        }
         
 //        showAllBox.runClosure = { [unowned self] _ in
 //            self.canvas.unlockAllCells()
@@ -477,31 +546,31 @@ final class SceneView: View {
 //            return true
 //        }
         
-        timeline.tempoView.binding = { [unowned self] in
-            self.set(BPM($0.number), old: BPM($0.oldNumber), type: $0.type)
+        timelineView.tempoView.binding = { [unowned self] in
+            self.set($0.model, old: $0.oldModel, type: $0.type)
         }
-        timeline.scrollClosure = { [unowned self] (timeline, scrollPoint, event) in
+        timelineView.scrollClosure = { [unowned self] (timelineView, scrollPoint, event) in
             if event.sendType == .begin && self.canvas.player.isPlaying {
                 self.canvas.player.opacity = 0.2
             } else if event.sendType == .end && self.canvas.player.opacity != 1 {
                 self.canvas.player.opacity = 1
             }
         }
-        timeline.setSceneDurationClosure = { [unowned self] in
+        timelineView.setSceneDurationClosure = { [unowned self] in
             self.seekBar.maxTime = self.scene.secondTime(withBeatTime: $1)
         }
-        timeline.setEditCutItemIndexClosure = { [unowned self] _, _ in
+        timelineView.setEditCutItemIndexClosure = { [unowned self] _, _ in
             self.canvas.cut = self.scene.editCut
             self.drawingView.drawing = self.scene.editNode.editTrack.drawingItem.drawing
             self.transformView.transform =
                 self.scene.editNode.editTrack.transformItem?.transform ?? Transform()
-            self.wiggleView.wiggle =
+            self.wiggleXView.wiggle =
                 self.scene.editNode.editTrack.wiggleItem?.wiggle ?? Wiggle()
             self.effectView.effect =
                 self.scene.editNode.editTrack.effectItem?.effect ?? Effect()
             self.subtitleView.subtitle = self.scene.editCut.subtitleTrack.subtitleItem.subtitle
         }
-        timeline.updateViewClosure = { [unowned self] in
+        timelineView.updateViewClosure = { [unowned self] in
             if $0.isCut {
                 let p = self.canvas.cursorPoint
                 if self.canvas.contains(p) {
@@ -513,14 +582,14 @@ final class SceneView: View {
                 self.drawingView.drawing = self.scene.editNode.editTrack.drawingItem.drawing
                 self.transformView.transform =
                     self.scene.editNode.editTrack.transformItem?.transform ?? Transform()
-                self.wiggleView.wiggle =
+                self.wiggleXView.wiggle =
                     self.scene.editNode.editTrack.wiggleItem?.wiggle ?? Wiggle()
                 self.effectView.effect =
                     self.scene.editNode.editTrack.effectItem?.effect ?? Effect()
                 self.subtitleView.subtitle = self.scene.editCut.subtitleTrack.subtitleItem.subtitle
             }
         }
-        timeline.setNodeAndTrackBinding = { [unowned self] timeline, cutView, nodeAndTrack in
+        timelineView.setNodeAndTrackBinding = { [unowned self] timeline, cutView, nodeAndTrack in
             if cutView == timeline.editCutView {
                 let p = self.canvas.cursorPoint
                 if self.canvas.contains(p) {
@@ -531,11 +600,11 @@ final class SceneView: View {
                 }
             }
         }
-        timeline.nodeView.setIsHiddenClosure = { [unowned self] in
+        timelineView.nodeView.setIsHiddenClosure = { [unowned self] in
             self.setIsHiddenInNode(with: $0)
         }
-        timeline.keyframeView.binding = { [unowned self] in
-            switch self.timeline.bindingKeyframeType {
+        timelineView.keyframeView.binding = { [unowned self] in
+            switch self.timelineView.bindingKeyframeType {
             case .cut:
                 self.setKeyframeInNode(with: $0)
             case .tempo:
@@ -544,14 +613,30 @@ final class SceneView: View {
         }
         
         exportSubtitlesView.closure = { [unowned self] in _ = self.rendererManager.exportSubtitles() }
+        exportImageView.closure = { [unowned self] in
+            let size = self.scene.frame.size, p = self.scene.renderingVerticalResolution
+            let newSize = CGSize(width: floor((size.width * p.cf) / size.height), height: p.cf)
+            let sizeString = "w: \(Int(newSize.width)) px, h: \(Int(newSize.height)) px"
+            let message = Localization(english: "Export Image(\(sizeString))",
+                                       japanese: "画像として書き出す(\(sizeString))").currentString
+            _ = self.rendererManager.exportImage(message: message, size: newSize)
+        }
+        exportMovieView.closure = { [unowned self] in
+            let size = self.scene.frame.size, p = self.scene.renderingVerticalResolution
+            let newSize = CGSize(width: floor((size.width * p.cf) / size.height), height: p.cf)
+            let sizeString = "w: \(Int(newSize.width)) px, h: \(Int(newSize.height)) px"
+            let message = Localization(english: "Export Movie(\(sizeString))",
+                japanese: "動画として書き出す(\(sizeString))").currentString
+            _ = self.rendererManager.exportMovie(message: message, size: newSize)
+        }
         
         canvas.bindClosure = { [unowned self] _, m, _ in self.materialManager.material = m }
-        canvas.setTimeClosure = { [unowned self] _, time in self.timeline.time = time }
+        canvas.setTimeClosure = { [unowned self] _, time in self.timelineView.time = time }
         canvas.updateSceneClosure = { [unowned self] _ in
             self.differentialSceneDataModel.isWrite = true
         }
         canvas.setDraftLinesClosure = { [unowned self] _, _ in
-            self.timeline.editCutView.updateChildren()
+            self.timelineView.editCutView.updateChildren()
         }
         canvas.setContentsScaleClosure = { [unowned self] _, contentsScale in
             self.rendererManager.rendingContentScale = contentsScale
@@ -636,7 +721,6 @@ final class SceneView: View {
         let pw = SceneView.propertyWidth
         let y = bounds.height - buttonH - padding
         
-        let soundWidth = 120.0.cf
         let kh = 120.0.cf
         
         classNameView.frame.origin = CGPoint(x: padding,
@@ -647,21 +731,26 @@ final class SceneView: View {
         let esw = exportSubtitlesView.defaultBounds.width
         topX -= esw
         exportSubtitlesView.frame = CGRect(x: topX, y: y, width: esw, height: buttonH)
-        topX -= padding
-        topX -= soundWidth
-        soundView.frame = CGRect(x: topX, y: y, width: soundWidth, height: buttonH)
+        topX -= esw
+        exportImageView.frame = CGRect(x: topX, y: y, width: esw, height: buttonH)
+        topX -= esw
+        exportMovieView.frame = CGRect(x: topX, y: y, width: esw, height: buttonH)
         let ihnw = isHiddenNextView.defaultBounds.width
         topX -= ihnw + padding
         isHiddenNextView.frame = CGRect(x: topX, y: topY, width: ihnw, height: buttonH)
         let ihpw = isHiddenPreviousView.defaultBounds.width
         topX -= ihpw
-        isHiddenPreviousView.frame = CGRect(x: topX, y: topY, width: ihnw, height: buttonH)
+        isHiddenPreviousView.frame = CGRect(x: topX, y: topY, width: ihpw, height: buttonH)
+        let tiw = Layout.valueWidth(with: .regular)
+        topX -= tiw
+        timelineView.baseTimeIntervalView.frame = CGRect(x: topX, y: topY,
+                                                         width: tiw, height: buttonH)
         topX = classNameView.frame.maxX + padding
         versionView.frame = CGRect(x: topX, y: y, width: SceneView.versionWidth, height: buttonH)
         
         var ty = y
         ty -= th
-        timeline.frame = CGRect(x: padding, y: ty, width: cs.width, height: th)
+        timelineView.frame = CGRect(x: padding, y: ty, width: cs.width, height: th)
         ty -= cs.height
         canvas.frame = CGRect(x: padding, y: ty, width: cs.width, height: cs.height)
         ty -= h
@@ -674,18 +763,24 @@ final class SceneView: View {
         py -= sph
         sizeView.frame = CGRect(x: px, y: py, width: sizeView.defaultBounds.width, height: sph)
         frameRateView.frame = CGRect(x: sizeView.frame.maxX, y: py,
-                                     width: bounds.width - sizeView.frame.maxX - padding, height: sph)
+                                     width: Layout.valueWidth(with: .small), height: sph)
+        renderingVerticalResolutionView.frame = CGRect(x: frameRateView.frame.maxX,
+                                                       y: py,
+                                                       width: bounds.width - frameRateView.frame.maxX - padding,
+                                                       height: sph)
         py -= sh
-        isHiddenSubtitlesView.frame = CGRect(x: px, y: py, width: pw, height: sh)
+        isHiddenSubtitlesView.frame = CGRect(x: px, y: py, width: pw / 2, height: sh)
+        soundView.frame = CGRect(x: px + pw / 2, y: py, width: pw / 2, height: sh)
+        
         py -= sPadding
         py -= sph
-        timeline.tempoView.frame = CGRect(x: px, y: py, width: pw, height: sph)
-        let tkh = ceil(kh * 0.6)
-        py -= tkh
-        timeline.tempoKeyframeView.frame = CGRect(x: px, y: py, width: pw, height: tkh)
+        timelineView.tempoView.frame = CGRect(x: px, y: py, width: pw, height: sph)
+//        let tkh = ceil(kh * 0.6)
+//        py -= tkh
+//        timelineView.tempoKeyframeView.frame = CGRect(x: px, y: py, width: pw, height: tkh)
         py -= padding
         py -= kh
-        timeline.keyframeView.frame = CGRect(x: px, y: py, width: pw, height: kh)
+        timelineView.keyframeView.frame = CGRect(x: px, y: py, width: pw, height: kh)
         py -= sPadding
         let eh = effectView.defaultBounds.height
         py -= eh
@@ -701,14 +796,14 @@ final class SceneView: View {
         py -= padding
         let trb = transformView.defaultBounds
         py -= trb.height
-        transformView.frame = CGRect(x: px, y: py, width: trb.width, height: trb.height)
+        transformView.frame = CGRect(x: px, y: py, width: pw, height: trb.height)
         py -= padding
-        let wb = wiggleView.defaultBounds
+        let wb = wiggleXView.defaultBounds
         py -= wb.height
-        wiggleView.frame = CGRect(x: px, y: py, width: wb.width, height: wb.height)
+        wiggleXView.frame = CGRect(x: px, y: py, width: pw / 2, height: wb.height)
         
-        subtitleView.frame = CGRect(x: px, y: padding + sph, width: pw, height: sph)
-        timeline.nodeView.frame = CGRect(x: px + 100, y: padding, width: pw, height: sph)
+//        subtitleView.frame = CGRect(x: px, y: padding + sph, width: pw, height: sph)
+        timelineView.nodeView.frame = CGRect(x: px + 100, y: padding, width: pw, height: sph)
         let ch = canvas.cellView.defaultBounds.height
         py -= ch
         canvas.cellView.frame = CGRect(x: px, y: padding, width: pw, height: ch)
@@ -717,19 +812,23 @@ final class SceneView: View {
         scene.timeBinding = { [unowned self] (_, time) in self.update(withTime: time) }
         update(withTime: scene.time)
         
+        versionView.version = scene.version
+        
         materialManager.scene = scene
         rendererManager.scene = scene
-        timeline.scene = scene
+        timelineView.scene = scene
         canvas.scene = scene
         sizeView.size = scene.frame.size
-        frameRateView.number = scene.frameRate.cf
+        frameRateView.model = scene.frameRate
         isHiddenPreviousView.bool = scene.isHiddenPrevious
         isHiddenNextView.bool = scene.isHiddenNext
         isHiddenSubtitlesView.bool = scene.isHiddenSubtitles
         soundView.sound = scene.sound
+        renderingVerticalResolutionView.model = scene.renderingVerticalResolution
         let sp = CGPoint(x: scene.frame.width, y: scene.frame.height)
         transformView.standardTranslation = sp
-        wiggleView.standardAmplitude = sp
+        wiggleXView.standardAmplitude = scene.frame.width
+        wiggleYView.standardAmplitude = scene.frame.height
         if let effect = scene.editNode.editTrack.effectItem?.effect {
             effectView.effect = effect
         }
@@ -738,7 +837,7 @@ final class SceneView: View {
             transformView.transform = transform
         }
         if let wiggle = scene.editNode.editTrack.wiggleItem?.wiggle {
-            wiggleView.wiggle = wiggle
+            wiggleXView.wiggle = wiggle
         }
         subtitleView.subtitle = scene.editCut.subtitleTrack.subtitleItem.subtitle
         seekBar.time = scene.secondTime(withBeatTime: scene.time)
@@ -751,11 +850,11 @@ final class SceneView: View {
     
     var time: Beat {
         get {
-            return timeline.time
+            return timelineView.time
         }
         set {
             if newValue != time {
-                timeline.time = newValue
+                timelineView.time = newValue
                 differentialSceneDataModel.isWrite = true
                 seekBar.time = scene.secondTime(withBeatTime: newValue)
                 canvas.updateEditCellBindingLine()
@@ -779,7 +878,7 @@ final class SceneView: View {
     private func setKeyframeInNode(with obj: KeyframeView.Binding) {
         switch obj.type {
         case .begin:
-            let cutView = timeline.editCutView
+            let cutView = timelineView.editCutView
             let track = cutView.cut.editNode.editTrack
             self.cutView = cutView
             self.animationView = cutView.editAnimationView
@@ -834,17 +933,17 @@ final class SceneView: View {
             guard let track = oldTempoTrack else {
                 return
             }
-            set(obj.keyframe, at: keyframeIndex, in: track, in: timeline.tempoAnimationView)
+            set(obj.keyframe, at: keyframeIndex, in: track, in: timelineView.tempoAnimationView)
         case .end:
             guard let track = oldTempoTrack else {
                 return
             }
             if obj.keyframe != obj.oldKeyframe {
                 set(obj.keyframe, old: obj.oldKeyframe, at: keyframeIndex, in: track,
-                    in: timeline.tempoAnimationView, time: scene.time)
+                    in: timelineView.tempoAnimationView, time: scene.time)
             } else {
                 set(obj.oldKeyframe, at: keyframeIndex, in: track,
-                    in: timeline.tempoAnimationView)
+                    in: timelineView.tempoAnimationView)
             }
         }
     }
@@ -853,7 +952,7 @@ final class SceneView: View {
                      in animationView: AnimationView) {
         track.replace(keyframe, at: index)
         animationView.animation = track.animation
-        timeline.updateTimeRuler()
+        timelineView.updateTimeRuler()
     }
     private func set(_ keyframe: Keyframe, old oldKeyframe: Keyframe,
                      at index: Int, in track: TempoTrack,
@@ -863,8 +962,8 @@ final class SceneView: View {
                    in: animationView, time: $1)
         }
         set(keyframe, at: index, in: track, in: animationView)
-        timeline.updateTimeRuler()
-        timeline.soundWaveformView.updateWaveform()
+        timelineView.updateTimeRuler()
+        timelineView.soundWaveformView.updateWaveform()
         differentialSceneDataModel.isWrite = true
     }
     
@@ -873,7 +972,7 @@ final class SceneView: View {
     func set(_ effect: Effect, old oldEffect: Effect, type: Action.SendType) {
         switch type {
         case .begin:
-            let cutView = timeline.editCutView
+            let cutView = timelineView.editCutView
             let track = cutView.cut.editNode.editTrack
             oldEffectItem = track.effectItem
             if track.effectItem != nil {
@@ -954,7 +1053,7 @@ final class SceneView: View {
     func set(_ transform: Transform, old oldTransform: Transform, type: Action.SendType) {
         switch type {
         case .begin:
-            let cutView = timeline.editCutView
+            let cutView = timelineView.editCutView
             let track = cutView.cut.editNode.editTrack
             oldTransformItem = track.transformItem
             if track.transformItem != nil {
@@ -1035,7 +1134,7 @@ final class SceneView: View {
     func set(_ wiggle: Wiggle, old oldWiggle: Wiggle, type: Action.SendType) {
         switch type {
         case .begin:
-            let cutView = timeline.editCutView
+            let cutView = timelineView.editCutView
             let track = cutView.cut.editNode.editTrack
             oldWiggleItem = track.wiggleItem
             if track.wiggleItem != nil {
@@ -1113,7 +1212,7 @@ final class SceneView: View {
     private func setIsHiddenInNode(with obj: NodeView.Binding) {
         switch obj.type {
         case .begin:
-            self.cutView = timeline.editCutView
+            self.cutView = timelineView.editCutView
         case .sending:
             canvas.setNeedsDisplay()
             cutView?.updateChildren()
@@ -1146,7 +1245,7 @@ final class SceneView: View {
     private func setIsLockedInCell(with obj: CellView.Binding) {
         switch obj.type {
         case .begin:
-            self.cutView = timeline.editCutView
+            self.cutView = timelineView.editCutView
         case .sending:
             canvas.setNeedsDisplay()
         case .end:
@@ -1174,7 +1273,7 @@ final class SceneView: View {
     }
     
     func scroll(with event: ScrollEvent) -> Bool {
-        return timeline.scroll(with: event)
+        return timelineView.scroll(with: event)
     }
     
     private weak var oldTempoTrack: TempoTrack?
@@ -1204,8 +1303,8 @@ final class SceneView: View {
     }
     private func set(_ tempo: BPM, at index: Int, in track: TempoTrack) {
         track.replace(tempo: tempo, at: index)
-        timeline.updateTimeRuler()
-        timeline.soundWaveformView.updateWaveform()
+        timelineView.updateTimeRuler()
+        timelineView.soundWaveformView.updateWaveform()
     }
     private func set(_ tempo: BPM, old oldTempo: BPM,
                      at index: Int, in track: TempoTrack, time: Beat) {
@@ -1295,9 +1394,8 @@ final class SceneView: View {
 }
 
 /**
- # Issue
- - Undo時の時間の登録
- - マテリアルアニメーション
+ Issue: Undo時の時間の登録
+ Issue: マテリアルアニメーション
  */
 final class SceneMaterialManager {
     lazy var scene = Scene()
@@ -1378,7 +1476,7 @@ final class SceneMaterialManager {
         if let color = color {
             return colorTuplesWith(color: color, isSelected: useSelected, in: cuts)
         } else {
-            return colorTuplesWith(cells: cut.cells, isSelected: useSelected, in: cut)
+            return colorTuplesWith(cells: cut.allCells, isSelected: useSelected, in: cut)
         }
     }
     private func colorTuplesWith(cells: [Cell], isSelected: Bool, in cut: Cut) -> [ColorTuple] {
@@ -1401,7 +1499,7 @@ final class SceneMaterialManager {
     }
     private func colorTuplesWith(color: Color, isSelected: Bool, in cuts: [Cut]) -> [ColorTuple] {
         let cutTuples: [CutTuple] = cuts.compactMap { cut in
-            let cells = cut.cells.filter { $0.material.color == color }
+            let cells = cut.allCells.filter { $0.material.color == color }
             
             var materialItemTuples = [MaterialItemTuple]()
             for track in cut.editNode.tracks {
@@ -1503,7 +1601,7 @@ final class SceneMaterialManager {
         }
         if let material = material {
             let cutTuples: [CutTuple] = cuts.compactMap { cut in
-                let cells = cut.cells.filter { $0.material.id == material.id }
+                let cells = cut.allCells.filter { $0.material.id == material.id }
                 
                 var materialItemTuples = [MaterialItemTuple]()
                 for track in cut.editNode.tracks {
@@ -1526,7 +1624,7 @@ final class SceneMaterialManager {
             return cutTuples.isEmpty ? [:] : [material.id: MaterialTuple(material: material,
                                                                          cutTuples: cutTuples)]
         } else {
-            return materialTuplesWith(cells: editCut.cells, isSelected: useSelected, in: editCut)
+            return materialTuplesWith(cells: editCut.allCells, isSelected: useSelected, in: editCut)
         }
     }
     
@@ -1885,7 +1983,7 @@ final class SceneMaterialManager {
         let cut =  scene.editCut
         let track = cut.editNode.editTrack
         let keyMaterials = track.emptyKeyMaterials(with: material)
-        let cells = cut.cells.filter { $0.material == material }
+        let cells = cut.allCells.filter { $0.material == material }
         append(MaterialItem(material: material, cells: cells, keyMaterials: keyMaterials),
                in: track, cut)
         return true

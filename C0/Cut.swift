@@ -208,8 +208,7 @@ extension CutItem: ClassCopiable {
 }
 
 /**
- # Issue
- - 変更通知
+ Issue: 変更通知
  */
 final class Cut: NSObject, NSCoding {
     enum ViewType: Int8 {
@@ -234,10 +233,10 @@ final class Cut: NSObject, NSCoding {
     
     var currentTime: Beat {
         didSet {
-            updateWithTime()
+            updateWithCurrentTime()
         }
     }
-    func updateWithTime() {
+    func updateWithCurrentTime() {
         rootNode.time = currentTime
         subtitleTrack.time = currentTime
     }
@@ -303,12 +302,18 @@ final class Cut: NSObject, NSCoding {
         coder.encodeEncodable(duration, forKey: CodingKeys.duration.rawValue)
     }
     
+    func read() {
+        rootNode.allChildren { $0.read() }
+    }
+    
     var imageBounds: CGRect {
         return rootNode.imageBounds
     }
-    
-    func read() {
-        rootNode.allChildren { $0.read() }
+    var allCells: [Cell] {
+        return rootNode.allCells
+    }
+    var maxDuration: Beat {
+        return rootNode.maxDuration
     }
     
     func draw(scene: Scene, viewType: Cut.ViewType, in ctx: CGContext) {
@@ -356,25 +361,6 @@ final class Cut: NSObject, NSCoding {
                                      width: sb.width, height: sb.height), baseFont: .bold,
                           in: ctx)
         }
-    }
-    
-    var cells: [Cell] {
-        var cells = [Cell]()
-        rootNode.allChildrenAndSelf { cells += $0.rootCell.allCells }
-        return cells
-    }
-    
-    var maxDuration: Beat {
-        var maxDuration = editNode.editTrack.animation.duration
-        rootNode.children.forEach { node in
-            node.tracks.forEach {
-                let duration = $0.animation.duration
-                if duration > maxDuration {
-                    maxDuration = duration
-                }
-            }
-        }
-        return maxDuration
     }
     
     struct NodeAndTrack: Equatable {
@@ -519,7 +505,6 @@ final class CutView: View {
     static let name = Cut.name
     
     let classNameView = TextView(text: Cut.name, font: .smallBold)
-    let indexNameView = TextView(font: .small)
     let clipView = Layer()
     
     private(set) var editAnimationView: AnimationView {
@@ -617,7 +602,6 @@ final class CutView: View {
          knobHalfHeight: CGFloat, subKnobHalfHeight: CGFloat, maxLineWidth: CGFloat, height: CGFloat) {
         
         classNameView.fillColor = nil
-        indexNameView.fillColor = nil
         clipView.isClipped = true
         
         self.cut = cut
@@ -650,7 +634,7 @@ final class CutView: View {
         
         super.init()
         clipView.replace(children: animationViews)
-        replace(children: [clipView, classNameView, indexNameView])
+        replace(children: [clipView, classNameView])
         frame.size.height = height
         updateLayout()
         updateWithDuration()
@@ -660,7 +644,7 @@ final class CutView: View {
             let textView = TextView()
             textView.isLocked = false
             textView.string = subtitle.string
-            textView.noIndicatedLineColor = .border
+            textView.noIndicatedLineColor = .getSetBorder
             textView.indicatedLineColor = .indicated
             textView.fillColor = nil
             textView.binding = {
@@ -678,7 +662,7 @@ final class CutView: View {
                 let subtitle = Subtitle()
                 let textView = TextView()
                 textView.isLocked = false
-                textView.noIndicatedLineColor = .border
+                textView.noIndicatedLineColor = .getSetBorder
                 textView.indicatedLineColor = .indicated
                 textView.fillColor = nil
                 textView.string = subtitle.string
@@ -811,12 +795,7 @@ final class CutView: View {
     func updateWithNamePosition() {
         let padding = Layout.smallPadding
         classNameView.frame.origin = CGPoint(x: nameX,
-                                              y: bounds.height - classNameView.frame.height - padding)
-        indexNameView.frame.origin = CGPoint(x: classNameView.frame.maxX + padding,
-                                          y: bounds.height - classNameView.frame.height - padding)
-    }
-    func updateIndex(_ i: Int) {
-        indexNameView.localization = Localization("\(i)")
+                                             y: bounds.height - classNameView.frame.height - padding)
     }
     func updateChildren() {
         guard let index = animationViews.index(of: editAnimationView) else {

@@ -93,6 +93,18 @@ struct RationalNumber: AdditiveGroup, SignedNumeric {
     var isInteger: Bool {
         return q == 1
     }
+    var integerAndProperFraction: (integer: Int, properFraction: RationalNumber) {
+        let i = integralPart
+        return isInteger ? (i, RationalNumber(0, 1)) : (i, self - RationalNumber(i))
+    }
+    func interval(scale: RationalNumber) -> RationalNumber {
+        if scale == 0 {
+            return self
+        } else {
+            let t = floor(self / scale) * scale
+            return self - t > scale / 2 ? t + scale : t
+        }
+    }
     
     var magnitude: RationalNumber {
         return RationalNumber(abs(p), q)
@@ -153,7 +165,7 @@ extension RationalNumber: Codable {
     }
 }
 extension RationalNumber: Referenceable {
-    static let name = Localization(english: "Rational Number", japanese: "有理数")
+    static let name = Localization(english: "Rational RealNumber", japanese: "有理数")
 }
 extension RationalNumber: ObjectViewExpression {
     func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
@@ -186,3 +198,154 @@ func floor(_ x: RationalNumber) -> RationalNumber {
 func ceil(_ x: RationalNumber) -> RationalNumber {
     return RationalNumber(x.decimalPart.p == 0 ? x.integralPart : x.integralPart + 1)
 }
+extension RationalNumber: ViewExpression {
+    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
+        return RationalNumberView(rationalNumber: self, frame: bounds, sizeType: sizeType)
+    }
+}
+
+final class RationalNumberView: View {
+    var rationalNumber: RationalNumber {
+        didSet {
+            updateWithRationalNumber()
+        }
+    }
+    
+    var isIntegerAndProperFraction: Bool {
+        didSet {
+            if isIntegerAndProperFraction != oldValue {
+                updateChildren()
+            }
+        }
+    }
+    var unit: String {
+        didSet {
+            updateWithRationalNumber()
+        }
+    }
+    
+    var sizeType: SizeType
+    let integerView: RealNumberView
+    let formPlusView: TextView
+    let pView: RealNumberView, qView: RealNumberView
+    let unitView: TextView
+    let formLinePathView = PathLayer()
+    
+    init(rationalNumber: RationalNumber = 0,
+         isIntegerAndProperFraction: Bool = true, unit: String = "",
+         frame: CGRect = CGRect(), sizeType: SizeType = .regular) {
+        
+        self.rationalNumber = rationalNumber
+        self.isIntegerAndProperFraction = isIntegerAndProperFraction
+        self.unit = unit
+        self.sizeType = sizeType
+        integerView = RealNumberView(sizeType: sizeType)
+        formPlusView = TextView(text: Text("+"), font: Font.default(with: sizeType))
+        pView = RealNumberView(sizeType: sizeType)
+        qView = RealNumberView(sizeType: sizeType)
+        unitView = TextView(text: Text(unit), font: Font.default(with: sizeType))
+        
+        super.init()
+        isClipped = true
+        updateChildren()
+        self.frame = frame
+    }
+    
+    override var bounds: CGRect {
+        didSet {
+            updateLayout()
+        }
+    }
+    private func updateChildren() {
+        if isIntegerAndProperFraction {
+            replace(children: [integerView, formPlusView, pView, formLinePathView, qView])
+        } else {
+            replace(children: [pView, formLinePathView, qView])
+        }
+    }
+    private func updateLayout() {
+        updateWithRationalNumber()
+    }
+    private func updateWithRationalNumber() {
+        if isIntegerAndProperFraction {
+            let (integer, properFraction) = rationalNumber.integerAndProperFraction
+            integerView.number = integer.cf
+            pView.number = properFraction.p.cf
+            qView.number = properFraction.q.cf
+        } else {
+            pView.number = rationalNumber.p.cf
+            qView.number = rationalNumber.q.cf
+        }
+        
+        let padding = Layout.padding(with: sizeType)
+        if isIntegerAndProperFraction {
+            
+        } else {
+            pView.frame.origin = CGPoint(x: padding, y: padding)
+        }
+    }
+    
+    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+        return [rationalNumber, rationalNumber.description]
+    }
+    
+    func reference(with event: TapEvent) -> Reference? {
+        return rationalNumber.reference
+    }
+}
+
+struct RationalNumberOption: OneDimensionalOption {
+    typealias Model = RationalNumber
+    
+    var defaultModel: Model
+    var minModel: Model
+    var maxModel: Model
+    var modelInterval: Model
+    
+    var isInfinitesimal: Bool
+    var unit: String
+    
+    func model(with string: String) -> Model? {
+        return nil
+    }
+    func string(with model: Model) -> String {
+        return "\(model)"
+    }
+    func text(with model: Model) -> Localization {
+        return Localization("\(model)\(unit)")
+    }
+    func ratio(with model: Model) -> CGFloat {
+        return Double((model - minModel) / (maxModel - minModel)).cf
+    }
+    func ratioFromDefaultModel(with model: Model) -> CGFloat {
+        if model < defaultModel {
+            return Double((model - minModel) / (defaultModel - minModel)).cf * 0.5
+        } else {
+            return Double((model - defaultModel) / (maxModel - defaultModel)).cf * 0.5 + 0.5
+        }
+    }
+    
+    private func model(withDelta delta: CGFloat) -> Model {
+        let d = Model(delta.d) * modelInterval
+        return d.interval(scale: modelInterval)
+    }
+    func model(withDelta delta: CGFloat, oldModel: Model) -> Model {
+        let newModel: Model
+        if isInfinitesimal {
+            if oldModel.q == 1 {
+                let p = oldModel.p - Int(delta)
+                newModel = p < 1 ? Beat(1, 2 - p) : Beat(p)
+            } else {
+                let q = oldModel.q + Int(delta)
+                newModel = q < 1 ? Beat(2 - q) : Beat(1, q)
+            }
+        } else {
+            newModel = oldModel.interval(scale: modelInterval) + model(withDelta: delta)
+        }
+        return newModel.clip(min: minModel, max: maxModel)
+    }
+    func model(withRatio ratio: CGFloat) -> Model {
+        return (maxModel - minModel) * RationalNumber(ratio.d) + minModel
+    }
+}
+typealias DiscreteRationalNumberView = DiscreteOneDimensionalView<RationalNumber, RationalNumberOption>

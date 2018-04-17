@@ -19,6 +19,8 @@
 
 import Foundation
 
+typealias Text = Localization
+
 extension String {
     var calculate: String {
         return (NSExpression(format: self)
@@ -43,20 +45,21 @@ extension String: Referenceable {
 extension String: ViewExpression {
     func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
         return TextView(text: Localization(self), font: Font.default(with: sizeType),
-                        frame: bounds, isSizeToFit: false)
+                        frame: bounds, isSizeToFit: false, isForm: false)
     }
 }
 
 /**
- # Issue
- - モードレス文字入力
+ Issue: モードレス文字入力
  */
 final class TextView: DrawView {
-    var localization: Localization {
+    var text: Text {
         didSet {
-            string = localization.currentString
+            string = text.currentString
         }
     }
+    
+    let isLiteral = true
     
     var isSizeToFit = false
     
@@ -89,8 +92,8 @@ final class TextView: DrawView {
                 baselineDelta = -lastLine.origin.y - baseFont.descent
                 height = firstLine.origin.y + baseFont.ascent
             } else {
-                baselineDelta = 0
-                height = 0
+                baselineDelta = -baseFont.descent
+                height = baseFont.ascent
             }
             if isSizeToFit {
                 sizeToFit()
@@ -105,9 +108,10 @@ final class TextView: DrawView {
     init(text localization: Localization = Localization(),
          font: Font = .default, color: Color = .locked,
          frameAlignment: CTTextAlignment = .left, alignment: CTTextAlignment = .natural,
-         frame: CGRect = CGRect(), padding: CGFloat = 1, isSizeToFit: Bool = true) {
+         frame: CGRect = CGRect(), padding: CGFloat = 1,
+         isSizeToFit: Bool = true, isForm: Bool = true) {
         
-        self.localization = localization
+        self.text = localization
         self.padding = padding
         self.baseFont = font
         self.defaultAttributes = NSAttributedString.attributesWith(font: font, color: color,
@@ -124,13 +128,14 @@ final class TextView: DrawView {
             baselineDelta = -lastLine.origin.y - baseFont.descent
             height = firstLine.origin.y + baseFont.ascent
         } else {
-            baselineDelta = 0
-            height = 0
+            baselineDelta = -baseFont.descent
+            height = baseFont.ascent
         }
         self.frameAlignment = frameAlignment
         self.isSizeToFit = isSizeToFit
         
         super.init()
+        self.isForm = isForm
         drawBlock = { [unowned self] ctx in
             self.draw(in: ctx)
         }
@@ -142,8 +147,8 @@ final class TextView: DrawView {
         } else {
             self.frame = frame
         }
-        noIndicatedLineColor = Color(white: 0.85)
-        indicatedLineColor = .noBorderIndicated
+        noIndicatedLineColor = isForm ? nil : (isLocked ? .getBorder : .getSetBorder)
+        indicatedLineColor = isForm ? .noBorderIndicated : (isLocked ? .indicated : .indicated)
     }
     
     func word(for p: CGPoint) -> String {
@@ -195,7 +200,7 @@ final class TextView: DrawView {
     
     override var locale: Locale {
         didSet {
-            string = localization.string(with: locale)
+            string = text.string(with: locale)
             if isSizeToFit {
                 sizeToFit()
             }
@@ -225,7 +230,7 @@ final class TextView: DrawView {
     }
     var fitSize: CGSize {
         let w = textFrame.frameWidth?.cf ?? ceil(textFrame.pathBounds.width)
-        return CGSize(width: w + padding * 2,
+        return CGSize(width: max(w + padding * 2, 5),
                       height: ceil(height + baselineDelta) + padding * 2)
     }
     
@@ -488,10 +493,7 @@ final class TextView: DrawView {
     }
     
     func reference(with event: TapEvent) -> Reference? {
-        let p = convert(event.location, from: nil)
-        let textDefinition = Localization(self.textDefinition(for: p) ?? "")
         return Reference(name: Localization(english: "Text", japanese: "テキスト"),
-                         instanceDescription: textDefinition,
                          viewDescription: Localization(english: "Run (Verb sentence only): Click",
                                                        japanese: "実行 (動詞文のみ): クリック"))
     }

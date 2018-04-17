@@ -26,10 +26,9 @@ extension Version: Referenceable {
 }
 
 /**
- # Issue
- - Versionクラス
- - バージョン管理UndoManager
- - ブランチ機能
+ Issue: Versionクラス
+ Issue: バージョン管理UndoManager
+ Issue: ブランチ機能
  */
 final class VersionView: View {
     var version = Version() {
@@ -68,22 +67,29 @@ final class VersionView: View {
         }
     }
     var undoCount = 0, allCount = 0
+    var differentialCount: Int {
+        return undoCount - allCount
+    }
     private var undoGroupToken: NSObjectProtocol?
     private var undoToken: NSObjectProtocol?, redoToken: NSObjectProtocol?
     override var undoManager: UndoManager? {
         return version
     }
     
-    let classNameView = TextView(text: Version.name, font: .bold)
-    let allCountView = TextView(text: Localization("0"))
-    let currentCountView = TextView(color: .warning)
+    let allCountView = RealNumberView()
+    let differentialCountView = RealNumberView()
     
-    override init() {
-        _ = Layout.leftAlignment([classNameView, Padding(), allCountView],
+    var sizeType: SizeType
+    let formClassNameView = TextView(text: Version.name, font: .bold)
+    
+    init(sizeType: SizeType = .regular) {
+        self.sizeType = sizeType
+        _ = Layout.leftAlignment([formClassNameView, Padding(), allCountView],
                                  height: Layout.basicHeight)
+        
         super.init()
         isClipped = true
-        replace(children: [classNameView, allCountView])
+        replace(children: [formClassNameView, allCountView])
     }
     
     deinit {
@@ -107,6 +113,9 @@ final class VersionView: View {
         }
     }
     
+    override var defaultBounds: CGRect {
+        return CGRect(x: 0, y: 0, width: 120, height: Layout.height(with: sizeType))
+    }
     override var bounds: CGRect {
         didSet {
             updateLayout()
@@ -114,28 +123,36 @@ final class VersionView: View {
     }
     func updateLayout() {
         let padding = Layout.basicPadding
-        classNameView.frame.origin = CGPoint(x: padding,
-                                              y: bounds.height - classNameView.frame.height - padding)
+        formClassNameView.frame.origin = CGPoint(x: padding,
+                                             y: bounds.height - formClassNameView.frame.height - padding)
         if undoCount < allCount {
-            _ = Layout.leftAlignment([allCountView, Padding(), currentCountView],
-                                     minX: classNameView.frame.maxX + padding, height: frame.height)
+            _ = Layout.leftAlignment([allCountView, Padding(), differentialCountView],
+                                     minX: formClassNameView.frame.maxX + padding, height: frame.height)
         } else {
             _ = Layout.leftAlignment([allCountView],
-                                     minX: classNameView.frame.maxX + padding, height: frame.height)
+                                     minX: formClassNameView.frame.maxX + padding, height: frame.height)
         }
     }
     func updateWithVersion() {
         if undoCount < allCount {
-            allCountView.localization = Localization("\(allCount)")
-            currentCountView.localization = Localization("\(undoCount - allCount)")
-            if currentCountView.parent == nil {
-                replace(children: [classNameView, allCountView, currentCountView])
+            allCountView.number = allCount.cf
+            differentialCountView.number = differentialCount.cf
+            allCountView.bounds = CGRect(origin: CGPoint(), size: allCountView.formStringView.fitSize)
+            differentialCountView.bounds = CGRect(origin: CGPoint(),
+                                                  size: differentialCountView.formStringView.fitSize)
+            differentialCountView.formStringView.textFrame.color = .warning
+            if differentialCountView.parent == nil {
+                replace(children: [formClassNameView, allCountView, differentialCountView])
                 updateLayout()
             }
         } else {
-            allCountView.localization = Localization("\(allCount)")
-            if currentCountView.parent != nil {
-                replace(children: [classNameView, allCountView])
+            allCountView.number = allCount.cf
+            allCountView.bounds = CGRect(origin: CGPoint(), size: allCountView.formStringView.fitSize)
+            differentialCountView.bounds = CGRect(origin: CGPoint(),
+                                                  size: differentialCountView.formStringView.fitSize)
+            differentialCountView.formStringView.textFrame.color = .warning
+            if differentialCountView.parent != nil {
+                replace(children: [formClassNameView, allCountView])
                 updateLayout()
             }
         }

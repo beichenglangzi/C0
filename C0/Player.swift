@@ -65,7 +65,7 @@ final class Player: View {
     private var playDrawCount = 0, playFrameRate = FPS(0), delayTolerance = 0.5
     var didSetTimeClosure: ((Beat) -> (Void))? = nil
     var didSetCutIndexClosure: ((Int) -> (Void))? = nil
-    var didSetPlayFrameRateClosure: ((Int) -> (Void))? = nil
+    var didSetPlayFrameRateClosure: ((FPS) -> (Void))? = nil
     
     private var timer = LockTimer(), oldPlayCut: Cut?
     private var oldPlayTime = Beat(0), oldTimestamp = 0.0
@@ -154,7 +154,7 @@ final class Player: View {
             let deltaTime = newTimestamp - oldTimestamp
             if deltaTime >= 1 {
                 let newPlayFrameRate = min(scene.frameRate,
-                                           Int(round(Double(playDrawCount) / deltaTime)))
+                                           FPS(round(Double(playDrawCount) / deltaTime)))
                 if newPlayFrameRate != playFrameRate {
                     playFrameRate = newPlayFrameRate
                     didSetPlayFrameRateClosure?(playFrameRate)
@@ -238,7 +238,7 @@ final class Player: View {
 
 final class SeekBar: View {
     let timeTextView = TextView(text: Localization("00:00"), color: .locked)
-    let frameRateView = TextView(text: Localization("00 fps"), color: .locked)
+    let frameRateView = RealNumberView(unit: " fps")
     let timeView = SlidableNumberView(min: 0, max: 1)
     
     override init() {
@@ -272,8 +272,9 @@ final class SeekBar: View {
         let labelY = round((frame.height - labelHeight) / 2)
         
         timeTextView.frame.origin = CGPoint(x: padding, y: labelY)
-        frameRateView.frame.origin = CGPoint(x: bounds.width - frameRateView.frame.width - padding,
-                                              y: labelY)
+        let frw = Layout.valueWidth(with: .regular)
+        frameRateView.frame = CGRect(x: bounds.width - frw - padding,
+                                     y: padding, width: frw, height: height)
         let sliderWidth = frameRateView.frame.minX - timeTextView.frame.maxX - padding * 2
         timeView.frame = CGRect(x: timeTextView.frame.maxX + padding,
                               y: sliderY, width: sliderWidth, height: height)
@@ -315,7 +316,7 @@ final class SeekBar: View {
                 return
             }
             let oldBounds = timeTextView.bounds
-            timeTextView.string = minuteSecondString(withSecond: second, frameRate: Int(frameRate))
+            timeTextView.string = minuteSecondString(withSecond: second, frameRate: frameRate)
             if oldBounds.size != timeTextView.bounds.size {
                 updateLayout()
             }
@@ -330,12 +331,12 @@ final class SeekBar: View {
             return String(format: "00:%02d", s)
         }
     }
-    var playFrameRate = 0 {
+    var playFrameRate = FPS(0) {
         didSet {
             updateWithFrameRate()
         }
     }
-    var frameRate = 1 {
+    var frameRate = FPS(1) {
         didSet {
             playFrameRate = frameRate
             updateWithFrameRate()
@@ -343,8 +344,8 @@ final class SeekBar: View {
     }
     private func updateWithFrameRate() {
         let oldBounds = frameRateView.bounds
-        frameRateView.string = String(format: "%02d fps", playFrameRate)
-        frameRateView.textFrame.color = playFrameRate < frameRate ? .warning : .locked
+        frameRateView.number = playFrameRate
+        frameRateView.formStringView.textFrame.color = playFrameRate < frameRate ? .warning : .locked
         if oldBounds.size != frameRateView.bounds.size {
             updateLayout()
         }

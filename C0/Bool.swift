@@ -47,12 +47,14 @@ final class BoolView: View {
     var defaultBool: Bool
     var cationBool: Bool?
     
+    let isLiteral = true
+    
     var sizeType: SizeType
     let parentClassTextView: TextView
     var boolInfo: BoolInfo {
         didSet {
-            parentClassTrueNameView.localization = boolInfo.trueName
-            parentClassFalseNameView.localization = boolInfo.falseName
+            parentClassTrueNameView.text = boolInfo.trueName
+            parentClassFalseNameView.text = boolInfo.falseName
         }
     }
     let parentClassTrueNameView: TextView
@@ -66,7 +68,7 @@ final class BoolView: View {
         self.bool = bool
         self.defaultBool = bool
         self.cationBool = cationBool
-        parentClassTextView = TextView(text: name + Localization(":"),
+        parentClassTextView = TextView(text: name.isEmpty ? Localization() : name + Localization(":"),
                                        font: Font.default(with: sizeType))
         self.boolInfo = boolInfo
         parentClassTrueNameView = TextView(text: boolInfo.trueName,
@@ -87,7 +89,7 @@ final class BoolView: View {
     override var defaultBounds: CGRect {
         let padding = Layout.padding(with: sizeType)
         return CGRect(x: 0, y: 0,
-                      width: parentClassTextView.frame.width + parentClassFalseNameView.frame.width + parentClassTrueNameView.frame.width + padding * 3 + 1 * 4,
+                      width: parentClassTextView.frame.width + parentClassFalseNameView.frame.width + parentClassTrueNameView.frame.width + padding * 4,
                       height: parentClassTextView.frame.height + padding * 2)
     }
     override var bounds: CGRect {
@@ -98,13 +100,9 @@ final class BoolView: View {
     func updateLayout() {
         let padding = Layout.padding(with: sizeType)
         parentClassTextView.frame.origin = CGPoint(x: padding, y: padding)
-        parentClassFalseNameView.frame.origin = CGPoint(x: parentClassTextView.frame.maxX + padding + 1, y: padding)
-        parentClassTrueNameView.frame.origin = CGPoint(x: parentClassFalseNameView.frame.maxX + 2,
+        parentClassFalseNameView.frame.origin = CGPoint(x: parentClassTextView.frame.maxX + padding, y: padding)
+        parentClassTrueNameView.frame.origin = CGPoint(x: parentClassFalseNameView.frame.maxX + padding,
                                                        y: padding)
-        let path = CGMutablePath()
-        path.addRect(parentClassFalseNameView.frame.inset(by: -0.5))
-        path.addRect(parentClassTrueNameView.frame.inset(by: -0.5))
-        lineLayer.path = path
         updateWithBool()
     }
     func updateWithBool() {
@@ -112,14 +110,17 @@ final class BoolView: View {
             parentClassFalseNameView.frame.inset(by: -1) :
             parentClassTrueNameView.frame.inset(by: -1)
         if let cationBool = cationBool {
-            parentClassTextView.textFrame.color = cationBool == bool ? .warning : .locked
+            knob.lineColor = cationBool == bool ? .warning : .getSetBorder
         }
         parentClassFalseNameView.fillColor = !bool ? .knob : .background
         parentClassTrueNameView.fillColor = bool ? .knob : .background
+        parentClassFalseNameView.textFrame.color = !bool ? .locked : .subLocked
+        parentClassTrueNameView.textFrame.color = bool ? .locked : .subLocked
     }
     
     func bool(at p: CGPoint) -> Bool {
-        return !parentClassFalseNameView.frame.contains(p)
+        return parentClassFalseNameView.frame.distance²(p) >
+            parentClassTrueNameView.frame.distance²(p)
     }
     
     var disabledRegisterUndo = false

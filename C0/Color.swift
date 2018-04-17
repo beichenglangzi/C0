@@ -20,8 +20,7 @@
 import Foundation
 
 /**
- # Issue
- - Lab色空間ベースのカラーピッカー及びカラー補間
+ Issue: Lab色空間ベースのカラーピッカー及びカラー補間
  */
 struct Color: Codable {
     static let white = Color(hue: 0, saturation: 0, lightness: 1)
@@ -39,17 +38,20 @@ struct Color: Codable {
     static let rgbBlue = Color(red: 0, green: 0, blue: 1)
     static let rgbMagenta = Color(red: 1, green: 0, blue: 1)
     
-    static let background = Color(white: 0.96)
-    static let border = Color(white: 0.7)
+    static let background = Color(white: 0.94)
+    static let getSetBorder = Color(white: 0.7)
+    static let getBorder = Color(red: 1.0, green: 0.5, blue: 0.5)
+    static let bindingBorder = Color(red: 1.0, green: 0.0, blue: 1.0)
     static let content = Color(white: 0.35)
-    static let subContent = Color(white: 0.91)
+    static let subContent = Color(white: 0.9)
     static let font = Color(white: 0.05)
     static let knob = white
     static let locked = Color(white: 0.5)
+    static let subLocked = Color(white: 0.65)
     static let editing = Color(white: 0.88)
     static let translucentEdit = Color(white: 0, alpha: 0.1)
     static let indicated = Color(red: 0.1, green: 0.6, blue: 0.9)
-    static let noBorderIndicated = Color(red: 0.67, green: 0.84, blue: 1)
+    static let noBorderIndicated = Color(red: 0.85, green: 0.9, blue: 0.94)
     static let subIndicated = Color(red: 0.6, green: 0.95, blue: 1)
     static let select = Color(red: 0, green: 0.7, blue: 1, alpha: 0.3)
     static let selectBorder = Color(red: 0, green: 0.5, blue: 1, alpha: 0.5)
@@ -86,7 +88,7 @@ struct Color: Codable {
     static let controlPointOtherJointIn = Color(red: 1, green: 0.5, blue: 1)
     static let controlPointUnionIn = Color(red: 0, green: 1, blue: 0.2)
     static let controlPointPathIn = Color(red: 0, green: 1, blue: 1)
-    static let controlPointOut = border
+    static let controlPointOut = getSetBorder
     static let editControlPointIn = Color(red: 1, green: 0, blue: 0, alpha: 0.8)
     static let editControlPointOut = Color(red: 1, green: 0.5, blue: 0.5, alpha: 0.3)
     static let contolLineIn = Color(red: 1, green: 0.5, blue: 0.5, alpha: 0.3)
@@ -632,32 +634,32 @@ final class ColorView: View {
     }
     
     let hueView: CircularNumberView
-    let hueFormLayer = DrawLayer()
-    var hueFormLineWidth: CGFloat {
-        didSet {
-            hueFormCircle.lineWidth = hueFormLineWidth
-        }
-    }
-    var hueFormCircle = HueCircle() {
-        didSet {
-            hueFormLayer.draw()
-        }
-    }
-    
     let slView = PointView()
-    var slFormRatio = 0.82.cf {
+    
+    let formHueDrawView = DrawLayer()
+    var formHueLineWidth: CGFloat {
+        didSet {
+            formHueCircle.lineWidth = formHueLineWidth
+        }
+    }
+    var formHueCircle = HueCircle() {
+        didSet {
+            formHueDrawView.draw()
+        }
+    }
+    var formSLRatio = 0.82.cf {
         didSet {
             updateLayout()
         }
     }
-    let slFormColorLayer: GradientLayer = {
+    let formSLColorGradientView: GradientLayer = {
         let layer = GradientLayer()
         layer.gradient = Gradient(colors: [], locations: [],
                                   startPoint: CGPoint(x: 0, y: 0),
                                   endPoint: CGPoint(x: 1, y: 0))
         return layer
     } ()
-    let slFormBlackWhiteLayer: GradientLayer = {
+    let formSLBlackWhiteGradientView: GradientLayer = {
         let layer = GradientLayer()
         layer.gradient = Gradient(colors: [Color(white: 0, alpha: 1),
                                            Color(white: 0, alpha: 0),
@@ -682,17 +684,17 @@ final class ColorView: View {
             slView.formKnob.radius = 4
             hueView.knob.radius = 4
         }
-        self.hueFormLineWidth = hLineWidth
+        self.formHueLineWidth = hLineWidth
         hueView.width = hWidth
         
         super.init()
-        hueFormLayer.fillColor = nil
-        hueFormLayer.lineColor = nil
-        hueFormLayer.drawBlock = { [unowned self] ctx in
-            self.hueFormCircle.draw(in: ctx)
+        formHueDrawView.fillColor = nil
+        formHueDrawView.lineColor = nil
+        formHueDrawView.drawBlock = { [unowned self] ctx in
+            self.formHueCircle.draw(in: ctx)
         }
-        hueView.backgroundLayers = [hueFormLayer]
-        slView.formBackgroundLayers = [slFormColorLayer, slFormBlackWhiteLayer]
+        hueView.backgroundLayers = [formHueDrawView]
+        slView.formBackgroundLayers = [formSLColorGradientView, formSLBlackWhiteGradientView]
         replace(children: [hueView, slView])
         self.frame = frame
         
@@ -713,28 +715,28 @@ final class ColorView: View {
         let r = floor(min(bounds.size.width, bounds.size.height) / 2) - padding
         hueView.frame = CGRect(x: padding, y: padding, width: r * 2, height: r * 2)
         let sr = r - hueView.width
-        let b2 = floor(sr * slFormRatio)
+        let b2 = floor(sr * formSLRatio)
         let a2 = floor(sqrt(sr * sr - b2 * b2))
         slView.frame = CGRect(x: bounds.size.width / 2 - a2,
                               y: bounds.size.height / 2 - b2,
                               width: a2 * 2,
                               height: b2 * 2)
         let slInFrame = slView.bounds.inset(by: slView.padding)
-        slFormColorLayer.frame = slInFrame
-        slFormBlackWhiteLayer.frame = slInFrame
+        formSLColorGradientView.frame = slInFrame
+        formSLBlackWhiteGradientView.frame = slInFrame
         
-        hueFormLayer.frame = hueView.bounds.inset(by: ceil((hueView.width - hueFormLineWidth) / 2))
-        hueFormCircle = HueCircle(lineWidth: hueFormLineWidth,
-                                  bounds: hueFormLayer.bounds,
+        formHueDrawView.frame = hueView.bounds.inset(by: ceil((hueView.width - formHueLineWidth) / 2))
+        formHueCircle = HueCircle(lineWidth: formHueLineWidth,
+                                  bounds: formHueDrawView.bounds,
                                   colorSpace: color.colorSpace)
         updateWithColor()
     }
     private func updateWithColor() {
         let y = Color.y(withHue: color.hue)
-        slFormColorLayer.gradient?.colors = [Color(hue: color.hue, saturation: 0, brightness: y),
+        formSLColorGradientView.gradient?.colors = [Color(hue: color.hue, saturation: 0, brightness: y),
                                              Color(hue: color.hue, saturation: 1, brightness: 1)]
-        slFormBlackWhiteLayer.gradient?.locations = [0, y, y, 1]
-        hueView.number = hueFormCircle.angle(withHue: color.hue).cf
+        formSLBlackWhiteGradientView.gradient?.locations = [0, y, y, 1]
+        hueView.number = formHueCircle.angle(withHue: color.hue).cf
         slView.point = CGPoint(x: color.saturation, y: color.lightness)
     }
     private func updateWithColorSpace() {
@@ -742,9 +744,9 @@ final class ColorView: View {
                       Color(white: 0, alpha: 0, colorSpace: color.colorSpace),
                       Color(white: 1, alpha: 0, colorSpace: color.colorSpace),
                       Color(white: 1, alpha: 1, colorSpace: color.colorSpace)]
-        slFormBlackWhiteLayer.gradient?.colors = colors
-        hueFormCircle = HueCircle(lineWidth: hueFormLineWidth,
-                                  bounds: hueFormLayer.bounds,
+        formSLBlackWhiteGradientView.gradient?.colors = colors
+        formHueCircle = HueCircle(lineWidth: formHueLineWidth,
+                                  bounds: formHueDrawView.bounds,
                                   colorSpace: color.colorSpace)
     }
     
@@ -801,7 +803,7 @@ final class ColorView: View {
             setColorClosure?(Binding(colorView: self,
                                      color: oldColor, oldColor: oldColor, type: .begin))
         } else {
-            color.hue = hueFormCircle.hue(withAngle: obj.number.d)
+            color.hue = formHueCircle.hue(withAngle: obj.number.d)
             setColorClosure?(Binding(colorView: self,
                                      color: color, oldColor: oldColor, type: obj.type))
         }

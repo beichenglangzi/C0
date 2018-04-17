@@ -53,8 +53,7 @@ extension Desktop: Referenceable {
 }
 
 /**
- # Issue
- - sceneViewを取り除く
+ Issue: sceneViewを取り除く
  */
 final class DesktopView: RootView {
     var desktop = Desktop() {

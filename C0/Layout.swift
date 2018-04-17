@@ -24,13 +24,22 @@ struct Layout {
     static let smallRatio = Font.small.size / Font.default.size
     static let basicHeight = Font.default.ceilHeight(withPadding: 1) + basicPadding * 2
     static let smallHeight = Font.small.ceilHeight(withPadding: 1) + smallPadding * 2
-    static let valueWidth = 56.cf
-    static let valueFrame = CGRect(x: 0, y: basicPadding, width: valueWidth, height: basicHeight)
+    static let basicValueWidth = 56.cf, smallValueWidth = 40.0.cf
+    static let basicValueFrame = CGRect(x: 0, y: basicPadding,
+                                        width: basicValueWidth, height: basicHeight)
+    static let smallValueFrame = CGRect(x: 0, y: smallPadding,
+                                        width: smallValueWidth, height: smallHeight)
     static func padding(with sizeType: SizeType) -> CGFloat {
         return sizeType == .small ? smallPadding : basicPadding
     }
     static func height(with sizeType: SizeType) -> CGFloat {
         return sizeType == .small ? smallHeight : basicHeight
+    }
+    static func valueWidth(with sizeType: SizeType) -> CGFloat {
+        return sizeType == .small ? smallValueWidth : basicValueWidth
+    }
+    static func valueFrame(with sizeType: SizeType) -> CGRect {
+        return sizeType == .small ? smallValueFrame : basicValueFrame
     }
     
     static func centered(_ layers: [Layer],

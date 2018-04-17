@@ -299,25 +299,29 @@ final class SoundWaveformView: Layer {
 }
 
 /**
- # Issue
- - 効果音編集
- - シーケンサー
+ Issue: 効果音編集
+ Issue: シーケンサー
  */
 final class SoundView: View {
     var sound = Sound() {
         didSet {
-            nameView.localization = sound.url != nil ?
-                Localization(sound.name) : Localization(english: "Empty", japanese: "空")
+            nameView.text = sound.url != nil ? Localization(sound.name) : Localization("")
         }
     }
     
-    let classNameView = TextView(text: Sound.name, font: .bold)
-    let nameView = TextView(text: Localization(english: "Empty", japanese: "空"))
+    var sizeType: SizeType
+    let formClassNameView: TextView
+    let nameView: TextView
     
-    override init() {
+    init(sizeType: SizeType = .regular) {
+        self.sizeType = sizeType
+        formClassNameView = TextView(text: Sound.name, font: Font.bold(with: sizeType))
+        nameView = TextView(text: Localization(""), font: Font.default(with: sizeType),
+                            isSizeToFit: false, isForm: false)
+        
         super.init()
         isClipped = true
-        replace(children: [classNameView, nameView])
+        replace(children: [formClassNameView, nameView])
         updateLayout()
     }
     
@@ -333,7 +337,12 @@ final class SoundView: View {
         }
     }
     private func updateLayout() {
-        _ = Layout.leftAlignment([classNameView, Padding(), nameView], height: frame.height)
+        let padding = Layout.padding(with: sizeType)
+        let y = bounds.height - padding - formClassNameView.frame.height
+        formClassNameView.frame.origin = CGPoint(x: padding, y: y)
+        nameView.frame = CGRect(x: formClassNameView.frame.maxX + padding, y: padding,
+                                width: bounds.width - formClassNameView.frame.maxX - padding * 2,
+                                height: bounds.height - padding * 2)
     }
     
     var disabledRegisterUndo = false

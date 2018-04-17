@@ -26,9 +26,6 @@ extension Data {
 }
 extension Data: Referenceable {
     static let name = Localization(english: "Data", japanese: "データ")
-    var instanceDescription: Localization {
-        return Localization(bytesString)
-    }
 }
 
 final class LockTimer {

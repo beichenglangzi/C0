@@ -19,23 +19,143 @@
 
 import Foundation
 
-/**
- # Issue
- - 数を包括するNumberオブジェクトを設計
- */
-typealias Number = CGFloat
+typealias Z = Int
 
-extension Number: Referenceable {
-    static let name = Localization(english: "Number", japanese: "数値")
+extension Int {
+    func interval(scale: Int) -> Int {
+        if scale == 0 {
+            return self
+        } else {
+            let t = (self / scale) * scale
+            return self - t > scale / 2 ? t + scale : t
+        }
+    }
 }
-extension Number: ObjectViewExpression {
+
+struct IntOption: OneDimensionalOption {
+    typealias Model = Int
+    
+    var defaultModel: Model
+    var minModel: Model
+    var maxModel: Model
+    var modelInterval: Model
+    
+    var exp = 1.0.cf
+    var unit: String
+    
+    func model(with string: String) -> Model? {
+        return Int(string)
+    }
+    func string(with model: Model) -> String {
+        return "\(model)"
+    }
+    func text(with model: Model) -> Text {
+        return Text("\(model)\(unit)")
+    }
+    func ratio(with model: Model) -> CGFloat {
+        return (model - minModel).cf / (maxModel - minModel).cf
+    }
+    func ratioFromDefaultModel(with model: Model) -> CGFloat {
+        if model < defaultModel {
+            return ((model - minModel).cf / (defaultModel - minModel).cf) * 0.5
+        } else {
+            return ((model - defaultModel).cf / (maxModel - defaultModel).cf) * 0.5 + 0.5
+        }
+    }
+    
+    private func model(withDelta delta: CGFloat) -> Model {
+        let d = delta * modelInterval.cf
+        if exp == 1 {
+            return Int(d).interval(scale: modelInterval)
+        } else {
+            return Int(d >= 0 ? pow(d, exp) : -pow(abs(d), exp)).interval(scale: modelInterval)
+        }
+    }
+    func model(withDelta delta: CGFloat, oldModel: Model) -> Model {
+        let v = oldModel.interval(scale: modelInterval) + model(withDelta: delta)
+        return v.clip(min: minModel, max: maxModel)
+    }
+    func model(withRatio ratio: CGFloat) -> Model {
+        return Int(round((maxModel - minModel).cf * pow(ratio, exp))) + minModel
+    }
+}
+typealias DiscreteIntView = DiscreteOneDimensionalView<Int, IntOption>
+
+/**
+ Issue: 数を包括するNumberオブジェクトを設計
+ */
+typealias RealNumber = CGFloat
+typealias R = CGFloat
+
+extension RealNumber: Referenceable {
+    static let name = Localization(english: "Real Number", japanese: "実数")
+}
+extension RealNumber: ObjectViewExpression {
     func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
         return String(self.d).view(withBounds: bounds, sizeType: sizeType)
     }
 }
 
-final class NumberView: View {
-    var number: Number {
+struct RealNumberOption: OneDimensionalOption {
+    typealias Model = RealNumber
+    
+    var defaultModel: Model
+    var minModel: Model
+    var maxModel: Model
+    var modelInterval: Model
+    
+    var exp = 1.0.cf
+    var numberOfDigits: Int
+    var unit: String
+    
+    func model(with string: String) -> Model? {
+        return Double(string)?.cf
+    }
+    func string(with model: Model) -> String {
+        return "\(model)"
+    }
+    func text(with model: Model) -> Localization {
+        if numberOfDigits == 0 {
+            let string = model - floor(model) > 0 ?
+                String(format: "%g", model) + "\(unit)" :
+                "\(Int(model))" + "\(unit)"
+            return Localization(string)
+        } else {
+            let string = String(format: "%.\(numberOfDigits)f", model) + "\(unit)"
+            return Localization(string)
+        }
+    }
+    func ratio(with model: Model) -> CGFloat {
+        return (model - minModel) / (maxModel - minModel)
+    }
+    func ratioFromDefaultModel(with model: Model) -> CGFloat {
+        if model < defaultModel {
+            return ((model - minModel) / (defaultModel - minModel)) * 0.5
+        } else {
+            return ((model - defaultModel) / (maxModel - defaultModel)) * 0.5 + 0.5
+        }
+    }
+    
+    private func model(withDelta delta: CGFloat) -> Model {
+        let d = delta * modelInterval
+        if exp == 1 {
+            return d.interval(scale: modelInterval)
+        } else {
+            return (d >= 0 ? pow(d, exp) : -pow(abs(d), exp)).interval(scale: modelInterval)
+        }
+    }
+    func model(withDelta delta: CGFloat, oldModel: Model) -> Model {
+        let v = oldModel.interval(scale: modelInterval) + model(withDelta: delta)
+        return v.clip(min: minModel, max: maxModel)
+    }
+    func model(withRatio ratio: CGFloat) -> Model {
+        return (maxModel - minModel) * pow(ratio, exp) + minModel
+    }
+}
+typealias DiscreteRealNumberView = DiscreteOneDimensionalView<RealNumber, RealNumberOption>
+
+final class RealNumberView: View {
+    var number: RealNumber {
         didSet {
             updateWithNumber()
         }
@@ -52,34 +172,39 @@ final class NumberView: View {
         }
     }
     
-    let stringView: TextView
     var sizeType: SizeType
+    var formPropertyNameView: TextView?
+    let formStringView: TextView
     
-    init(number: Number = 0,
+    init(number: RealNumber = 0,
          numberOfDigits: Int = 0, unit: String = "", font: Font = .default,
-         frame: CGRect = CGRect(), sizeType: SizeType) {
+         frame: CGRect = CGRect(), sizeType: SizeType = .regular) {
         
         self.number = number
         self.numberOfDigits = numberOfDigits
         self.unit = unit
         self.sizeType = sizeType
-        stringView = TextView(font: font, frameAlignment: .right, alignment: .right)
+        formStringView = TextView(font: font, frameAlignment: .right, alignment: .right, isForm: true)
         
         super.init()
+        noIndicatedLineColor = .getBorder
+        indicatedLineColor = .indicated
         isClipped = true
-        replace(children: [stringView])
+        replace(children: [formStringView])
         self.frame = frame
     }
     
+    override var defaultBounds: CGRect {
+        return formStringView.defaultBounds
+    }
     override var bounds: CGRect {
         didSet {
             updateLayout()
         }
     }
     private func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
-        stringView.frame.origin = CGPoint(x: bounds.width - stringView.frame.width - padding,
-                                          y: bounds.height - stringView.frame.height - padding)
+        formStringView.frame.origin = CGPoint(x: bounds.width - formStringView.frame.width,
+                                          y: bounds.height - formStringView.frame.height)
         updateWithNumber()
     }
     private func updateWithNumber() {
@@ -87,15 +212,18 @@ final class NumberView: View {
             let string = number - floor(number) > 0 ?
                 String(format: "%g", number) + "\(unit)" :
                 "\(Int(number))" + "\(unit)"
-            stringView.localization = Localization(string)
+            formStringView.text = Localization(string)
+        } else if numberOfDigits < 0 {
+            let string = String(format: "%0\(-numberOfDigits)d", Int(number)) + "\(unit)"
+            formStringView.text = Localization(string)
         } else {
             let string = String(format: "%.\(numberOfDigits)f", number) + "\(unit)"
-            stringView.localization = Localization(string)
+            formStringView.text = Localization(string)
         }
     }
     
     func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        return [number, String(number.d)]
+        return [number]
     }
     
     func reference(with event: TapEvent) -> Reference? {
@@ -104,32 +232,32 @@ final class NumberView: View {
 }
 
 protocol Slidable {
-    var number: Number { get set }
-    var defaultNumber: Number { get }
-    var minNumber: Number { get }
-    var maxNumber: Number { get }
-    var exp: Number { get }
+    var number: RealNumber { get set }
+    var defaultNumber: RealNumber { get }
+    var minNumber: RealNumber { get }
+    var maxNumber: RealNumber { get }
+    var exp: RealNumber { get }
 }
 
 final class SlidableNumberView: View, Slidable {
-    var number: Number {
+    var number: RealNumber {
         didSet {
             updateWithNumber()
         }
     }
-    var defaultNumber: Number
+    var defaultNumber: RealNumber
     
-    var minNumber: Number {
+    var minNumber: RealNumber {
         didSet {
             updateWithNumber()
         }
     }
-    var maxNumber: Number {
+    var maxNumber: RealNumber {
         didSet {
             updateWithNumber()
         }
     }
-    var exp: Number {
+    var exp: RealNumber {
         didSet {
             updateWithNumber()
         }
@@ -153,6 +281,7 @@ final class SlidableNumberView: View, Slidable {
         }
     }
     
+    var sizeType: SizeType
     let knob: Knob
     var backgroundLayers = [Layer]() {
         didSet {
@@ -161,8 +290,8 @@ final class SlidableNumberView: View, Slidable {
     }
     
     init(frame: CGRect = CGRect(),
-         number: Number = 0, defaultNumber: Number = 0,
-         min: Number = 0, max: Number = 1, exp: Number = 1,
+         number: RealNumber = 0, defaultNumber: RealNumber = 0,
+         min: RealNumber = 0, max: RealNumber = 1, exp: RealNumber = 1,
          numberInterval: CGFloat = 0, isInverted: Bool = false, isVertical: Bool = false,
          sizeType: SizeType = .regular) {
         
@@ -174,6 +303,7 @@ final class SlidableNumberView: View, Slidable {
         self.numberInterval = numberInterval
         self.isInverted = isInverted
         self.isVertical = isVertical
+        self.sizeType = sizeType
         padding = sizeType == .small ? 6.0.cf : 8.0.cf
         knob = sizeType == .small ? Knob(radius: 4) : Knob()
         
@@ -203,7 +333,7 @@ final class SlidableNumberView: View, Slidable {
         }
     }
     
-    private func intervalNumber(withNumber n: Number) -> Number {
+    private func intervalNumber(withNumber n: RealNumber) -> RealNumber {
         if numberInterval == 0 {
             return n
         } else {
@@ -215,8 +345,8 @@ final class SlidableNumberView: View, Slidable {
             }
         }
     }
-    func number(at point: CGPoint) -> Number {
-        let n: Number
+    func number(at point: CGPoint) -> RealNumber {
+        let n: RealNumber
         if isVertical {
             let h = bounds.height - padding * 2
             if h > 0 {
@@ -240,7 +370,7 @@ final class SlidableNumberView: View, Slidable {
     var disabledRegisterUndo = false
     
     struct Binding {
-        let view: SlidableNumberView, number: Number, oldNumber: Number, type: Action.SendType
+        let view: SlidableNumberView, number: RealNumber, oldNumber: RealNumber, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
     
@@ -256,7 +386,7 @@ final class SlidableNumberView: View, Slidable {
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
-            if let number = (object as? Number)?.clip(min: minNumber, max: maxNumber) {
+            if let number = (object as? RealNumber)?.clip(min: minNumber, max: maxNumber) {
                 if number != self.number {
                     set(number, old: self.number)
                     return true
@@ -309,7 +439,7 @@ final class SlidableNumberView: View, Slidable {
         return true
     }
     
-    private func set(_ number: Number, old oldNumber: Number) {
+    private func set(_ number: RealNumber, old oldNumber: RealNumber) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, old: number) }
         binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, type: .begin))
         self.number = number
@@ -323,235 +453,241 @@ final class SlidableNumberView: View, Slidable {
     }
 }
 
-/**
- # Issue
- - スクロールによる値の変更
- */
-final class DiscreteNumberView: View, Slidable {
-    var number: Number {
-        didSet {
-            updateWithNumber()
-        }
-    }
-    
-    var unit: String {
-        didSet {
-            updateWithNumber()
-        }
-    }
-    var numberOfDigits: Int {
-        didSet {
-            updateWithNumber()
-        }
-    }
-    
-    var defaultNumber: Number
-    var minNumber: Number {
-        didSet {
-            updateWithNumber()
-        }
-    }
-    var maxNumber: Number {
-        didSet {
-            updateWithNumber()
-        }
-    }
-    var exp: Number
-    
-    var numberInterval: CGFloat, isInverted: Bool, isVertical: Bool
-    
-    var sizeType: SizeType
-    private var knobLineFrame = CGRect()
-    private let labelPaddingX = Layout.basicPadding, knobPadding = 3.0.cf
-    private var numberX = 1.5.cf
-    
-    private let knob = DiscreteKnob(CGSize(width: 6, height: 4), lineWidth: 1)
-    private let lineLayer: Layer = {
-        let lineLayer = Layer()
-        lineLayer.lineColor = .content
-        return lineLayer
-    } ()
-    
-    let stringView: TextView
-    
-    init(frame: CGRect = CGRect(),
-         number: Number = 0, defaultNumber: Number = 0,
-         min: Number = 0, max: Number = 1, exp: Number = 1,
-         numberInterval: Number = 1, isInverted: Bool = false, isVertical: Bool = false,
-         numberOfDigits: Int = 0, unit: String = "", sizeType: SizeType = .regular) {
-        
-        self.number = number.clip(min: min, max: max)
-        self.defaultNumber = defaultNumber
-        self.minNumber = min
-        self.maxNumber = max
-        self.exp = exp
-        self.numberInterval = numberInterval
-        self.isInverted = isInverted
-        self.isVertical = isVertical
-        self.numberOfDigits = numberOfDigits
-        self.unit = unit
-        stringView = TextView(font: Font.default(with: sizeType),
-                              frameAlignment: .right, alignment: .right)
-        self.sizeType = sizeType
-        
-        super.init()
-        isClipped = true
-        replace(children: [stringView, lineLayer, knob])
-        self.frame = frame
-    }
-    
-    override var bounds: CGRect {
-        didSet {
-            updateLayout()
-        }
-    }
-    private func updateLayout() {
-        knobLineFrame = CGRect(x: 5, y: 2, width: bounds.width - 10, height: 1)
-        lineLayer.frame = knobLineFrame
-        stringView.frame.origin = CGPoint(x: bounds.width - stringView.frame.width - labelPaddingX,
-                                     y: round((bounds.height - stringView.frame.height) / 2))
-        updateWithNumber()
-    }
-    private func updateWithNumber() {
-        if numberOfDigits == 0 {
-            let string = number - floor(number) > 0 ?
-                String(format: "%g", number) + "\(unit)" :
-                "\(Int(number))" + "\(unit)"
-            stringView.localization = Localization(string)
-        } else {
-            let string = String(format: "%.\(numberOfDigits)f", number) + "\(unit)"
-            stringView.localization = Localization(string)
-        }
-        if number < defaultNumber {
-            let x = (knobLineFrame.width / 2) * (number - minNumber) / (defaultNumber - minNumber)
-                + knobLineFrame.minX
-            knob.position = CGPoint(x: round(x), y: knobPadding)
-        } else {
-            let x = (knobLineFrame.width / 2) * (number - defaultNumber) / (maxNumber - defaultNumber)
-                + knobLineFrame.midX
-            knob.position = CGPoint(x: round(x), y: knobPadding)
-        }
-    }
-    
-    private func number(withDelta delta: Number) -> Number {
-        let d = (delta / numberX) * numberInterval
-        if exp == 1 {
-            return d.interval(scale: numberInterval)
-        } else {
-            return (d >= 0 ? pow(d, exp) : -pow(abs(d), exp)).interval(scale: numberInterval)
-        }
-    }
-    private func number(at p: CGPoint, old oldNumber: Number) -> Number {
-        let d = isVertical ? p.y - oldPoint.y : p.x - oldPoint.x
-        let v = oldNumber.interval(scale: numberInterval) + number(withDelta: isInverted ? -d : d)
-        return v.clip(min: minNumber, max: maxNumber)
-    }
-    
-    var disabledRegisterUndo = false
-    
-    struct Binding {
-        let view: DiscreteNumberView, number: Number, oldNumber: Number, type: Action.SendType
-    }
-    var binding: ((Binding) -> ())?
-    
-    func delete(with event: KeyInputEvent) -> Bool {
-        let number = defaultNumber.clip(min: minNumber, max: maxNumber)
-        if number != self.number {
-            set(number, old: self.number)
-        }
-        return true
-    }
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        return [number, String(number.d)]
-    }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        for object in objects {
-            if let number = (object as? Number)?.clip(min: minNumber, max: maxNumber) {
-                if number != self.number {
-                    set(number, old: self.number)
-                    return true
-                }
-            } else if let string = object as? String {
-                if let number = Double(string)?.cf.clip(min: minNumber, max: maxNumber) {
-                    if number != self.number {
-                        set(number, old: self.number)
-                        return true
-                    }
-                }
-            }
-        }
-        return false
-    }
-    
-    func run(with event: ClickEvent) -> Bool {
-        let p = point(from: event)
-        let number = self.number(at: p, old: self.number)
-        if number != self.number {
-            set(number, old: self.number)
-        }
-        return true
-    }
-    
-    private var oldNumber = 0.0.cf, oldPoint = CGPoint()
-    func move(with event: DragEvent) -> Bool {
-        let p = point(from: event)
-        switch event.sendType {
-        case .begin:
-            knob.fillColor = .editing
-            oldNumber = number
-            oldPoint = p
-            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .begin))
-            number = self.number(at: p, old: oldNumber)
-            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .sending))
-        case .sending:
-            number = self.number(at: p, old: oldNumber)
-            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .sending))
-        case .end:
-            number = self.number(at: p, old: oldNumber)
-            if number != oldNumber {
-                registeringUndoManager?.registerUndo(withTarget: self) { [number, oldNumber] in
-                    $0.set(oldNumber, old: number)
-                }
-            }
-            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
-            knob.fillColor = .knob
-        }
-        return true
-    }
-    
-    private func set(_ number: Number, old oldNumber: Number) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, old: number) }
-        binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, type: .begin))
-        self.number = number
-        binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
-    }
-    
-    func reference(with event: TapEvent) -> Reference? {
-        var reference = number.reference
-        reference.viewDescription = Localization(english: "Discrete Slider", japanese: "離散スライダー")
-        return reference
-    }
-}
+///**
+// Issue: スクロールによる値の変更
+// */
+//final class DiscreteRealNumberView: View, Slidable {
+//    var number: RealNumber {
+//        didSet {
+//            updateWithNumber()
+//        }
+//    }
+//
+//    var unit: String {
+//        didSet {
+//            updateWithNumber()
+//        }
+//    }
+//    var numberOfDigits: Int {
+//        didSet {
+//            updateWithNumber()
+//        }
+//    }
+//
+//    var defaultNumber: RealNumber
+//    var minNumber: RealNumber {
+//        didSet {
+//            updateWithNumber()
+//        }
+//    }
+//    var maxNumber: RealNumber {
+//        didSet {
+//            updateWithNumber()
+//        }
+//    }
+//    var exp: RealNumber
+//
+//    var numberInterval: CGFloat, isInverted: Bool, isVertical: Bool
+//
+//    var sizeType: SizeType
+//    private var knobLineFrame = CGRect()
+//    private let labelPaddingX: CGFloat, knobPadding: CGFloat
+//    private var numberX = 1.5.cf
+//
+//    private let knob = DiscreteKnob(CGSize(width: 6, height: 4), lineWidth: 1)
+//    private let lineLayer: Layer = {
+//        let lineLayer = Layer()
+//        lineLayer.lineColor = .content
+//        return lineLayer
+//    } ()
+//
+//    let stringView: TextView
+//
+//    init(number: RealNumber = 0, defaultNumber: RealNumber = 0,
+//         min: RealNumber = 0, max: RealNumber = 1, exp: RealNumber = 1,
+//         numberInterval: RealNumber = 1, isInverted: Bool = false, isVertical: Bool = false,
+//         numberOfDigits: Int = 0, unit: String = "",
+//         frame: CGRect = CGRect(),
+//         sizeType: SizeType = .regular) {
+//
+//        self.number = number.clip(min: min, max: max)
+//        self.defaultNumber = defaultNumber
+//        self.minNumber = min
+//        self.maxNumber = max
+//        self.exp = exp
+//        self.numberInterval = numberInterval
+//        self.isInverted = isInverted
+//        self.isVertical = isVertical
+//        self.numberOfDigits = numberOfDigits
+//        self.unit = unit
+//        self.knobPadding = sizeType == .small ? 2.0.cf : 3.0.cf
+//        labelPaddingX = Layout.padding(with: sizeType)
+//        stringView = TextView(font: Font.default(with: sizeType),
+//                              frameAlignment: .right, alignment: .right)
+//        self.sizeType = sizeType
+//
+//        super.init()
+//        updateWithNumber()
+//        isClipped = true
+//        replace(children: [stringView, lineLayer, knob])
+//        self.frame = frame
+//    }
+//
+//    override var bounds: CGRect {
+//        didSet {
+//            updateLayout()
+//        }
+//    }
+//    private func updateLayout() {
+//        let paddingX = sizeType == .small ? 3.0.cf : 5.0.cf
+//        knobLineFrame = CGRect(x: paddingX, y: sizeType == .small ? 1 : 2,
+//                               width: bounds.width - paddingX * 2, height: 1)
+//        // triangle
+//        lineLayer.frame = knobLineFrame
+//        stringView.frame.origin = CGPoint(x: bounds.width - stringView.frame.width - labelPaddingX,
+//                                          y: round((bounds.height - stringView.frame.height) / 2))
+//
+//    }
+//    private func updateWithNumber() {
+//        if numberOfDigits == 0 {
+//            let string = number - floor(number) > 0 ?
+//                String(format: "%g", number) + "\(unit)" :
+//                "\(Int(number))" + "\(unit)"
+//            stringView.text = Localization(string)
+//        } else {
+//            let string = String(format: "%.\(numberOfDigits)f", number) + "\(unit)"
+//            stringView.text = Localization(string)
+//        }
+//        if number < defaultNumber {
+//            let x = (knobLineFrame.width / 2) * (number - minNumber) / (defaultNumber - minNumber)
+//                + knobLineFrame.minX
+//            knob.position = CGPoint(x: round(x), y: knobPadding)
+//        } else {
+//            let x = (knobLineFrame.width / 2) * (number - defaultNumber) / (maxNumber - defaultNumber)
+//                + knobLineFrame.midX
+//            knob.position = CGPoint(x: round(x), y: knobPadding)
+//        }
+//    }
+//
+//    private func number(withDelta delta: CGFloat) -> RealNumber {
+//        let d = (delta / numberX) * numberInterval
+//        if exp == 1 {
+//            return d.interval(scale: numberInterval)
+//        } else {
+//            return (d >= 0 ? pow(d, exp) : -pow(abs(d), exp)).interval(scale: numberInterval)
+//        }
+//    }
+//    private func number(at p: CGPoint, old oldNumber: RealNumber) -> RealNumber {
+//        let d = isVertical ? p.y - oldPoint.y : p.x - oldPoint.x
+//        let v = oldNumber.interval(scale: numberInterval) + number(withDelta: isInverted ? -d : d)
+//        return v.clip(min: minNumber, max: maxNumber)
+//    }
+//
+//    var disabledRegisterUndo = false
+//
+//    struct Binding {
+//        let view: DiscreteRealNumberView, number: RealNumber, oldNumber: RealNumber, type: Action.SendType
+//    }
+//    var binding: ((Binding) -> ())?
+//
+//    func delete(with event: KeyInputEvent) -> Bool {
+//        let number = defaultNumber.clip(min: minNumber, max: maxNumber)
+//        if number != self.number {
+//            set(number, old: self.number)
+//        }
+//        return true
+//    }
+//    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+//        return [number, String(number.d)]
+//    }
+//    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+//        for object in objects {
+//            if let number = (object as? RealNumber)?.clip(min: minNumber, max: maxNumber) {
+//                if number != self.number {
+//                    set(number, old: self.number)
+//                    return true
+//                }
+//            } else if let string = object as? String {
+//                if let number = Double(string)?.cf.clip(min: minNumber, max: maxNumber) {
+//                    if number != self.number {
+//                        set(number, old: self.number)
+//                        return true
+//                    }
+//                }
+//            }
+//        }
+//        return false
+//    }
+//
+//    func run(with event: ClickEvent) -> Bool {
+//        let p = point(from: event)
+//        let number = self.number(at: p, old: self.number)
+//        if number != self.number {
+//            set(number, old: self.number)
+//        }
+//        return true
+//    }
+//
+//    private var oldNumber = 0.0.cf, oldPoint = CGPoint()
+//    func move(with event: DragEvent) -> Bool {
+//        let p = point(from: event)
+//        switch event.sendType {
+//        case .begin:
+//            knob.fillColor = .editing
+//            oldNumber = number
+//            oldPoint = p
+//            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .begin))
+//            number = self.number(at: p, old: oldNumber)
+//            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .sending))
+//        case .sending:
+//            number = self.number(at: p, old: oldNumber)
+//            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .sending))
+//        case .end:
+//            number = self.number(at: p, old: oldNumber)
+//            if number != oldNumber {
+//                registeringUndoManager?.registerUndo(withTarget: self) { [number, oldNumber] in
+//                    $0.set(oldNumber, old: number)
+//                }
+//            }
+//            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
+//            knob.fillColor = .knob
+//        }
+//        return true
+//    }
+//
+//    private func set(_ number: RealNumber, old oldNumber: RealNumber) {
+//        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, old: number) }
+//        binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, type: .begin))
+//        self.number = number
+//        binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
+//    }
+//
+//    func reference(with event: TapEvent) -> Reference? {
+//        var reference = number.reference
+//        reference.viewDescription = Localization(english: "Discrete Slider", japanese: "離散スライダー")
+//        return reference
+//    }
+//}
 
 final class CircularNumberView: PathView, Slidable {
-    var number: Number {
+    var number: RealNumber {
         didSet {
             updateWithNumber()
         }
     }
-    var defaultNumber: Number
+    var defaultNumber: RealNumber
     
-    var minNumber: Number {
+    var minNumber: RealNumber {
         didSet {
             updateWithNumber()
         }
     }
-    var maxNumber: Number {
+    var maxNumber: RealNumber {
         didSet {
             updateWithNumber()
         }
     }
-    var exp: Number {
+    var exp: RealNumber {
         didSet {
             updateWithNumber()
         }
@@ -569,8 +705,8 @@ final class CircularNumberView: PathView, Slidable {
     }
     
     init(frame: CGRect = CGRect(),
-         number: Number = 0, defaultNumber: Number = 0,
-         min: Number = -.pi, max: Number = .pi, exp: Number = 1,
+         number: RealNumber = 0, defaultNumber: RealNumber = 0,
+         min: RealNumber = -.pi, max: RealNumber = .pi, exp: RealNumber = 1,
          isClockwise: Bool = false, beginAngle: CGFloat = -.pi,
          numberInterval: CGFloat = 0, width: CGFloat = 16,
          sizeType: SizeType = .regular) {
@@ -623,7 +759,7 @@ final class CircularNumberView: PathView, Slidable {
         knob.position = cp + r * CGPoint(x: cos(theta), y: sin(theta))
     }
     
-    private func intervalNumber(withNumber n: Number) -> Number {
+    private func intervalNumber(withNumber n: RealNumber) -> RealNumber {
         if numberInterval == 0 {
             return n
         } else {
@@ -635,7 +771,7 @@ final class CircularNumberView: PathView, Slidable {
             }
         }
     }
-    func number(at p: CGPoint) -> Number {
+    func number(at p: CGPoint) -> RealNumber {
         guard !bounds.isEmpty else {
             return intervalNumber(withNumber: number).clip(min: minNumber, max: maxNumber)
         }
@@ -650,7 +786,7 @@ final class CircularNumberView: PathView, Slidable {
     var disabledRegisterUndo = false
     
     struct Binding {
-        let view: CircularNumberView, number: Number, oldNumber: Number, type: Action.SendType
+        let view: CircularNumberView, number: RealNumber, oldNumber: RealNumber, type: Action.SendType
     }
     var binding: ((Binding) -> ())?
     
@@ -666,7 +802,7 @@ final class CircularNumberView: PathView, Slidable {
     }
     func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
         for object in objects {
-            if let number = (object as? Number)?.clip(min: minNumber, max: maxNumber) {
+            if let number = (object as? RealNumber)?.clip(min: minNumber, max: maxNumber) {
                 if number != self.number {
                     set(number, old: self.number)
                     return true
@@ -719,7 +855,7 @@ final class CircularNumberView: PathView, Slidable {
         return true
     }
     
-    private func set(_ number: Number, old oldNumber: Number) {
+    private func set(_ number: RealNumber, old oldNumber: RealNumber) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, old: number) }
         binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, type: .begin))
         self.number = number

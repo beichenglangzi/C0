@@ -49,7 +49,7 @@ struct Transform: Codable {
                                                         scale: scale, rotation: rotation)
         }
     }
-    var _scale: CGPoint, _z: CGFloat
+    private var _scale: CGPoint, _z: CGFloat
     var rotation: CGFloat {
         didSet {
             affineTransform = Transform.affineTransform(translation: translation,
@@ -57,6 +57,10 @@ struct Transform: Codable {
         }
     }
     private(set) var affineTransform: CGAffineTransform
+    
+    static let zOption = RealNumberOption(defaultModel: 0, minModel: -20, maxModel: 20,
+                                          modelInterval: 0.01, exp: 1,
+                                          numberOfDigits: 2, unit: "")
     
     init(translation: CGPoint = CGPoint(), z: CGFloat = 0, rotation: CGFloat = 0) {
         let pow2 = pow(2, z)
@@ -94,23 +98,6 @@ struct Transform: Codable {
             affine = affine.scaledBy(x: scale.x, y: scale.y)
         }
         return affine
-    }
-    
-    func with(translation: CGPoint) -> Transform {
-        return Transform(translation: translation, z: z, scale: scale, rotation: rotation)
-    }
-    func with(z: CGFloat) -> Transform {
-        return Transform(translation: translation, z: z, rotation: rotation)
-    }
-    func with(scale: CGFloat) -> Transform {
-        return Transform(translation: translation,
-                         scale: CGPoint(x: scale, y: scale), rotation: rotation)
-    }
-    func with(scale: CGPoint) -> Transform {
-        return Transform(translation: translation, scale: scale, rotation: rotation)
-    }
-    func with(rotation: CGFloat) -> Transform {
-        return Transform(translation: translation, z: z, scale: scale, rotation: rotation)
     }
     
     var isIdentity: Bool {
@@ -159,7 +146,7 @@ extension Transform: Interpolatable {
                               with ms: Monospline) -> Transform {
         
         let translation = CGPoint.lastMonospline(f0.translation, f1.translation,
-                                                f2.translation, with: ms)
+                                                 f2.translation, with: ms)
         let scaleX = CGFloat.lastMonospline(f0.scale.x, f1.scale.x, f2.scale.x, with: ms)
         let scaleY = CGFloat.lastMonospline(f0.scale.y, f1.scale.y, f2.scale.y, with: ms)
         let rotation = CGFloat.lastMonospline(f0.rotation, f1.rotation, f2.rotation, with: ms)
@@ -186,32 +173,31 @@ final class TransformView: View {
         }
     }
     
-    let xView = DiscreteNumberView(frame: Layout.valueFrame,
-                                   min: -10000, max: 10000, numberInterval: 0.01, numberOfDigits: 2)
-    let yView = DiscreteNumberView(frame: Layout.valueFrame,
-                                   min: -10000, max: 10000, numberInterval: 0.01, numberOfDigits: 2)
-    let zView = DiscreteNumberView(frame: Layout.valueFrame,
-                                   min: -20, max: 20, numberInterval: 0.01, numberOfDigits: 2)
-    let thetaView = DiscreteNumberView(frame: Layout.valueFrame,
-                                       min: -10000, max: 10000, numberInterval: 0.5,
-                                       numberOfDigits: 1, unit: "°")
+    let translationView = DiscretePointView(xInterval: 0.01, xNumberOfDigits: 2,
+                                            yInterval: 0.01, yNumberOfDigits: 2,
+                                            sizeType: .regular)
+    let zView = DiscreteRealNumberView(model: 0.0.cf, option: Transform.zOption,
+                                       frame: Layout.valueFrame(with: .regular))
+    let thetaView = DiscreteRealNumberView(model: 0.0.cf,
+                                       option: RealNumberOption(defaultModel: 0,
+                                                            minModel: -10000, maxModel: 10000,
+                                                            modelInterval: 0.5, exp: 1,
+                                                            numberOfDigits: 1, unit: "°"),
+                                       frame: Layout.valueFrame(with: .regular))
     
-    var isHorizontal = false
     private let classNameView = TextView(text: Transform.name, font: .bold)
-    private let classXNameView = TextView(text: Localization("x:"))
-    private let classYNameView = TextView(text: Localization("y:"))
     private let classZNameView = TextView(text: Localization("z:"))
-    private let classThetaNameView = TextView(text: Localization("θ:"))
+    private let classRotationNameView = TextView(text: Localization("θ:"))
     
     override init() {
         super.init()
-        replace(children: [classNameView,
-                           classXNameView, xView, classYNameView, yView,
-                           classZNameView, zView,
-                           classThetaNameView, thetaView])
         
-        xView.binding = { [unowned self] in self.setTransform(with: $0) }
-        yView.binding = { [unowned self] in self.setTransform(with: $0) }
+        replace(children: [classNameView,
+                           translationView,
+                           classZNameView, zView,
+                           classRotationNameView, thetaView])
+        
+        translationView.binding = { [unowned self] in self.setTransform(with: $0) }
         zView.binding = { [unowned self] in self.setTransform(with: $0) }
         thetaView.binding = { [unowned self] in self.setTransform(with: $0) }
     }
@@ -223,19 +209,10 @@ final class TransformView: View {
     }
     
     override var defaultBounds: CGRect {
-        if isHorizontal {
-            let children = [classNameView, Padding(),
-                            classXNameView, xView, Padding(), classYNameView, yView, Padding(),
-                            classZNameView, zView, Padding(), classThetaNameView, thetaView]
-            return CGRect(x: 0,
-                          y: 0,
-                          width: Layout.leftAlignmentWidth(children) + Layout.basicPadding,
-                          height: Layout.basicHeight)
-        } else {
-            let w = MaterialView.defaultWidth + Layout.basicPadding * 2
-            let h = Layout.basicHeight * 2 + classNameView.frame.height + Layout.basicPadding * 3
-            return CGRect(x: 0, y: 0, width: w, height: h)
-        }
+        let padding = Layout.basicPadding
+        let w = MaterialView.defaultWidth + padding * 2
+        let h = Layout.basicHeight * 2 + classNameView.frame.height + padding * 3
+        return CGRect(x: 0, y: 0, width: w, height: h)
     }
     override var bounds: CGRect {
         didSet {
@@ -243,35 +220,27 @@ final class TransformView: View {
         }
     }
     func updateLayout() {
-        if isHorizontal {
-            let children = [classNameView, Padding(),
-                            classXNameView, xView, Padding(), classYNameView, yView, Padding(),
-                            classZNameView, zView, Padding(), classThetaNameView, thetaView]
-            _ = Layout.leftAlignment(children, height: frame.height)
-        } else {
-            var y = bounds.height - Layout.basicPadding - classNameView.frame.height
-            classNameView.frame.origin = CGPoint(x: Layout.basicPadding, y: y)
-            y -= Layout.basicHeight + Layout.basicPadding
-            _ = Layout.leftAlignment([classXNameView, xView, Padding(), classYNameView, yView],
-                                     y: y, height: Layout.basicHeight)
-            y -= Layout.basicHeight
-            _ = Layout.leftAlignment([classZNameView, zView, Padding(), classThetaNameView, thetaView],
-                                     y: y, height: Layout.basicHeight)
-            if yView.frame.maxX < thetaView.frame.maxX {
-                yView.frame.origin.x = thetaView.frame.minX
-                classYNameView.frame.origin.x = yView.frame.minX - classYNameView.frame.width
-            } else {
-                thetaView.frame.origin.x = yView.frame.minX
-                classThetaNameView.frame.origin.x
-                    = thetaView.frame.minX - classThetaNameView.frame.width
-            }
-        }
+        var y = bounds.height - Layout.basicPadding - classNameView.frame.height
+        classNameView.frame.origin = CGPoint(x: Layout.basicPadding, y: y)
+//        y -= Layout.basicHeight + Layout.basicPadding
+//        _ = Layout.leftAlignment([classXNameView, xView, Padding(), classYNameView, yView],
+//                                 y: y, height: Layout.basicHeight)
+//        y -= Layout.basicHeight
+//        _ = Layout.leftAlignment([classZNameView, zView, Padding(), classRotationNameView, thetaView],
+//                                 y: y, height: Layout.basicHeight)
+//        if yView.frame.maxX < thetaView.frame.maxX {
+//            yView.frame.origin.x = thetaView.frame.minX
+//            classYNameView.frame.origin.x = yView.frame.minX - classYNameView.frame.width
+//        } else {
+//            thetaView.frame.origin.x = yView.frame.minX
+//            classRotationNameView.frame.origin.x
+//                = thetaView.frame.minX - classRotationNameView.frame.width
+//        }
     }
     private func updateWithTransform() {
-        xView.number = transform.translation.x / standardTranslation.x
-        yView.number = transform.translation.y / standardTranslation.y
-        zView.number = transform.z
-        thetaView.number = transform.rotation * 180 / (.pi)
+        translationView.point = transform.translation
+        zView.model = transform.z
+        thetaView.model = transform.rotation * 180 / (.pi)
     }
     
     var standardTranslation = CGPoint(x: 1, y: 1)
@@ -285,23 +254,28 @@ final class TransformView: View {
     var binding: ((Binding) -> ())?
     
     private var oldTransform = Transform()
-    private func setTransform(with obj: DiscreteNumberView.Binding) {
+    private func setTransform(with obj: DiscretePointView.Binding) {
+        if obj.type == .begin {
+            oldTransform = transform
+            binding?(Binding(transformView: self,
+                             transform: oldTransform, oldTransform: oldTransform, type: .begin))
+        } else {
+            transform.translation = obj.point
+            binding?(Binding(transformView: self,
+                             transform: transform, oldTransform: oldTransform, type: obj.type))
+        }
+    }
+    private func setTransform(with obj: DiscreteRealNumberView.Binding<RealNumber>) {
         if obj.type == .begin {
             oldTransform = transform
             binding?(Binding(transformView: self,
                              transform: oldTransform, oldTransform: oldTransform, type: .begin))
         } else {
             switch obj.view {
-            case xView:
-                transform = transform.with(translation: CGPoint(x: obj.number * standardTranslation.x,
-                                                                y: transform.translation.y))
-            case yView:
-                transform = transform.with(translation: CGPoint(x: transform.translation.x,
-                                                                y: obj.number * standardTranslation.y))
             case zView:
-                transform = transform.with(z: obj.number)
+                transform.z = obj.model
             case thetaView:
-                transform = transform.with(rotation: obj.number * (.pi / 180))
+                transform.rotation = obj.model * (.pi / 180)
             default:
                 fatalError("No case")
             }

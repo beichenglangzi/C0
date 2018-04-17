@@ -313,7 +313,7 @@ final class Geometry: NSObject, NSCoding {
     }
     func drawPathLine(withReciprocalScale reciprocalScale: CGFloat, in ctx: CGContext) {
         ctx.setLineWidth(0.5 * reciprocalScale)
-        ctx.setStrokeColor(Color.border.cgColor)
+        ctx.setStrokeColor(Color.getSetBorder.cgColor)
         for (i, line) in lines.enumerated() {
             let nextLine = lines[i + 1 < lines.count ? i + 1 : 0]
             if line.lastPoint != nextLine.firstPoint {
@@ -323,7 +323,7 @@ final class Geometry: NSObject, NSCoding {
         }
         ctx.strokePath()
     }
-    func drawSkin(lineColor: Color, subColor: Color, backColor: Color = .border,
+    func drawSkin(lineColor: Color, subColor: Color, backColor: Color = .getSetBorder,
                   skinLineWidth: CGFloat = 1,
                   reciprocalScale: CGFloat, reciprocalAllScale: CGFloat, in ctx: CGContext) {
         fillPath(with: subColor, path, in: ctx)

@@ -56,16 +56,8 @@ extension BlendType: ObjectViewExpressionWithDisplayText {
 
 struct Effect: Codable, Equatable, Hashable {
     var blendType = BlendType.normal, blurRadius = 0.0.cf, opacity = 1.0.cf
-    
-    func with(_ blendType: BlendType) -> Effect {
-        return Effect(blendType: blendType, blurRadius: blurRadius, opacity: opacity)
-    }
-    func with(blur: CGFloat) -> Effect {
-        return Effect(blendType: blendType, blurRadius: blur, opacity: opacity)
-    }
-    func with(opacity: CGFloat) -> Effect {
-        return Effect(blendType: blendType, blurRadius: blurRadius, opacity: opacity)
-    }
+    static let minBlurRadius = 0.0.cf
+    static let minOpacity = 0.0.cf, maxOpacity = 1.0.cf
     
     var isEmpty: Bool {
         return self == Effect()
