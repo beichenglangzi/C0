@@ -78,17 +78,29 @@ struct Localization: Codable, Equatable {
                             values: values)
     }
     static func +=(lhs: inout Localization, rhs: Localization) {
-        for v in rhs.values {
-            lhs.values[v.key] = (lhs.values[v.key] ?? lhs.base) + v.value
+        var values = lhs.values
+        if rhs.values.isEmpty {
+            lhs.values.forEach { values[$0.key] = (values[$0.key] ?? "") + rhs.base }
+        } else {
+            for v in rhs.values {
+                values[v.key] = (lhs.values[v.key] ?? lhs.base) + v.value
+            }
         }
-        lhs.base += rhs.base
+        lhs.base = lhs.base + rhs.base
+        lhs.values = values
+    }
+}
+extension Localization: ExpressibleByStringLiteral {
+    typealias StringLiteralType = String
+    init(stringLiteral value: String) {
+        self.init(value)
     }
 }
 extension Localization: Referenceable {
     static let name = Localization(english: "Text", japanese: "テキスト")
 }
 extension Localization: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
         return TextView(text: self, font: Font.default(with: sizeType),
                         frame: bounds, isSizeToFit: false)
     }

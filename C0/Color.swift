@@ -43,7 +43,7 @@ struct Color: Codable {
     static let getBorder = Color(red: 1.0, green: 0.5, blue: 0.5)
     static let bindingBorder = Color(red: 1.0, green: 0.0, blue: 1.0)
     static let content = Color(white: 0.35)
-    static let subContent = Color(white: 0.9)
+    static let subContent = Color(white: 0.88)
     static let font = Color(white: 0.05)
     static let knob = white
     static let locked = Color(white: 0.5)
@@ -427,8 +427,8 @@ enum ColorSpace: Int8, Codable {
             return "Display P3"
         }
     }
-    var displayText: Localization {
-        return Localization(description)
+    var displayText: Text {
+        return Text(description)
     }
     static var displayTexts: [Localization] {
         return [sRGB.displayText, displayP3.displayText]
@@ -481,14 +481,14 @@ extension Color {
         return CGColor.with(rgb: rgb, alpha: alpha, colorSpace: CGColorSpace.with(colorSpace))
     }
 }
-extension Color: Copiable {
+extension Color: DeepCopiable {
 }
 extension Color: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        let layer = Layer()
-        layer.bounds = bounds
-        layer.fillColor = self
-        return layer
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        let view = View(isForm: true)
+        view.bounds = bounds
+        view.fillColor = self
+        return view
     }
 }
 
@@ -623,7 +623,7 @@ struct HueCircle {
     }
 }
 
-final class ColorView: View {    
+final class ColorView: View, Assignable {    
     var color = Color() {
         didSet {
             updateWithColor()
@@ -636,7 +636,7 @@ final class ColorView: View {
     let hueView: CircularNumberView
     let slView = PointView()
     
-    let formHueDrawView = DrawLayer()
+    let formHueDrawView = View(drawClosure: { _, _ in })
     var formHueLineWidth: CGFloat {
         didSet {
             formHueCircle.lineWidth = formHueLineWidth
@@ -652,24 +652,16 @@ final class ColorView: View {
             updateLayout()
         }
     }
-    let formSLColorGradientView: GradientLayer = {
-        let layer = GradientLayer()
-        layer.gradient = Gradient(colors: [], locations: [],
-                                  startPoint: CGPoint(x: 0, y: 0),
-                                  endPoint: CGPoint(x: 1, y: 0))
-        return layer
-    } ()
-    let formSLBlackWhiteGradientView: GradientLayer = {
-        let layer = GradientLayer()
-        layer.gradient = Gradient(colors: [Color(white: 0, alpha: 1),
-                                           Color(white: 0, alpha: 0),
-                                           Color(white: 1, alpha: 0),
-                                           Color(white: 1, alpha: 1)],
-                                  locations: [],
-                                  startPoint: CGPoint(x: 0, y: 0),
-                                  endPoint: CGPoint(x: 0, y: 1))
-        return layer
-    } ()
+    let formSLColorGradientView = View(gradient: Gradient(colors: [], locations: [],
+                                                          startPoint: CGPoint(x: 0, y: 0),
+                                                          endPoint: CGPoint(x: 1, y: 0)))
+    let formSLBlackWhiteGradientView = View(gradient: Gradient(colors: [Color(white: 0, alpha: 1),
+                                                                        Color(white: 0, alpha: 0),
+                                                                        Color(white: 1, alpha: 0),
+                                                                        Color(white: 1, alpha: 1)],
+                                                               locations: [],
+                                                               startPoint: CGPoint(x: 0, y: 0),
+                                                               endPoint: CGPoint(x: 0, y: 1)))
     
     init(frame: CGRect = CGRect(),
          hLineWidth: CGFloat = 2.5, hWidth: CGFloat = 16.0.cf, slPadding: CGFloat? = nil,
@@ -681,8 +673,8 @@ final class ColorView: View {
             slView.padding = slPadding
         }
         if sizeType == .small {
-            slView.formKnob.radius = 4
-            hueView.knob.radius = 4
+            slView.formKnobView.radius = 4
+            hueView.knobView.radius = 4
         }
         self.formHueLineWidth = hLineWidth
         hueView.width = hWidth
@@ -690,12 +682,12 @@ final class ColorView: View {
         super.init()
         formHueDrawView.fillColor = nil
         formHueDrawView.lineColor = nil
-        formHueDrawView.drawBlock = { [unowned self] ctx in
+        formHueDrawView.drawClosure = { [unowned self] ctx, _ in
             self.formHueCircle.draw(in: ctx)
         }
-        hueView.backgroundLayers = [formHueDrawView]
-        slView.formBackgroundLayers = [formSLColorGradientView, formSLBlackWhiteGradientView]
-        replace(children: [hueView, slView])
+        hueView.backgroundViews = [formHueDrawView]
+        slView.formBackgroundViews = [formSLColorGradientView, formSLBlackWhiteGradientView]
+        children = [hueView, slView]
         self.frame = frame
         
         hueView.binding = { [unowned self] in self.setColor(with: $0) }
@@ -751,75 +743,73 @@ final class ColorView: View {
     }
     
     struct Binding {
-        let colorView: ColorView, color: Color, oldColor: Color, type: Action.SendType
+        let colorView: ColorView, color: Color, oldColor: Color, phase: Phase
     }
     var setColorClosure: ((Binding) -> ())?
     
     var disabledRegisterUndo = false
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func delete(for p: CGPoint) {
+        let color = Color(), oldColor = self.color
+        guard color != oldColor else {
+            return
+        }
+        setColorClosure?(Binding(colorView: self,
+                                 color: oldColor, oldColor: oldColor, phase: .began))
+        set(color, old: oldColor)
+        setColorClosure?(Binding(colorView: self,
+                                 color: color, oldColor: oldColor, phase: .ended))
+    }
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [color]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let color = object as? Color {
                 if color != self.color {
                     set(color, old: self.color)
-                    return true
+                    return
                 }
             }
         }
-        return false
-    }
-    func delete(with event: KeyInputEvent) -> Bool {
-        let color = Color(), oldColor = self.color
-        guard color != oldColor else {
-            return false
-        }
-        setColorClosure?(Binding(colorView: self,
-                                 color: oldColor, oldColor: oldColor, type: .begin))
-        set(color, old: oldColor)
-        setColorClosure?(Binding(colorView: self,
-                                 color: color, oldColor: oldColor, type: .end))
-        return true
     }
     
     private var oldColor = Color()
     private func setColor(with obj: PointView.Binding) {
-        if obj.type == .begin {
+        if obj.phase == .began {
             oldColor = color
             setColorClosure?(Binding(colorView: self,
-                                     color: oldColor, oldColor: oldColor, type: .begin))
+                                     color: oldColor, oldColor: oldColor, phase: .began))
         } else {
             color.sl = obj.point
             setColorClosure?(Binding(colorView: self,
-                                     color: color, oldColor: oldColor, type: obj.type))
+                                     color: color, oldColor: oldColor, phase: obj.phase))
         }
     }
     
     private func setColor(with obj: CircularNumberView.Binding) {
-        if obj.type == .begin {
+        if obj.phase == .began {
             oldColor = color
             setColorClosure?(Binding(colorView: self,
-                                     color: oldColor, oldColor: oldColor, type: .begin))
+                                     color: oldColor, oldColor: oldColor, phase: .began))
         } else {
             color.hue = formHueCircle.hue(withAngle: obj.number.d)
             setColorClosure?(Binding(colorView: self,
-                                     color: color, oldColor: oldColor, type: obj.type))
+                                     color: color, oldColor: oldColor, phase: obj.phase))
         }
     }
     
     private func set(_ color: Color, old oldColor: Color) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldColor, old: color) }
         setColorClosure?(Binding(colorView: self,
-                                 color: oldColor, oldColor: oldColor, type: .begin))
+                                 color: oldColor, oldColor: oldColor, phase: .began))
         self.color = color
         setColorClosure?(Binding(colorView: self,
-                                 color: color, oldColor: oldColor, type: .end))
+                                 color: color, oldColor: oldColor, phase: .ended))
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        var reference = color.reference
+    func reference(at p: CGPoint) -> Reference {
+        var reference = Color.reference
         reference.viewDescription = Localization(english: "Ring: Hue, Width: Saturation, Height: Luminance",
                                                  japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
         return reference

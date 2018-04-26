@@ -152,9 +152,9 @@ final class CutTrack: NSObject, Track, NSCoding {
 extension CutTrack: Referenceable {
     static let name = Localization(english: "Cut Track", japanese: "カットトラック")
 }
-extension CutTrack: ClassCopiable {
-    func copied(from copier: Copier) -> CutTrack {
-        return CutTrack(animation: animation, time: time, cutItem: copier.copied(cutItem))
+extension CutTrack: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> CutTrack {
+        return CutTrack(animation: animation, time: time, cutItem: deepCopier.copied(cutItem))
     }
 }
 
@@ -201,9 +201,9 @@ final class CutItem: NSObject, TrackItem, NSCoding {
         coder.encode(cut, forKey: CodingKeys.cut.rawValue)
     }
 }
-extension CutItem: ClassCopiable {
-    func copied(from copier: Copier) -> CutItem {
-        return CutItem(keyCuts: keyCuts.map { copier.copied($0) }, cut: copier.copied(cut))
+extension CutItem: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> CutItem {
+        return CutItem(keyCuts: keyCuts.map { deepCopier.copied($0) }, cut: deepCopier.copied(cut))
     }
 }
 
@@ -488,24 +488,24 @@ final class Cut: NSObject, NSCoding {
 extension Cut: Referenceable {
     static let name = Localization(english: "Cut", japanese: "カット")
 }
-extension Cut: ClassCopiable {
-    func copied(from copier: Copier) -> Cut {
-        return Cut(rootNode: copier.copied(rootNode), editNode: copier.copied(editNode),
-                   subtitleTrack: copier.copied(subtitleTrack),
+extension Cut: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> Cut {
+        return Cut(rootNode: deepCopier.copied(rootNode), editNode: deepCopier.copied(editNode),
+                   subtitleTrack: deepCopier.copied(subtitleTrack),
                    currentTime: currentTime, duration: duration)
     }
 }
 extension Cut: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return duration.thumbnail(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return duration.thumbnail(withBounds: bounds, sizeType)
     }
 }
 
-final class CutView: View {
-    static let name = Cut.name
+final class CutView: View, Assignable, Scrollable {
+    let cut: Cut
     
     let classNameView = TextView(text: Cut.name, font: .smallBold)
-    let clipView = Layer()
+    let clipView = View(isForm: true)
     
     private(set) var editAnimationView: AnimationView {
         didSet {
@@ -556,7 +556,7 @@ final class CutView: View {
     }
     static func tracks(from node: Node, with cut: Cut, closure: (Node, NodeTrack, Int) -> ()) {
         tracks(with: cut) { (aNode, track, i) in
-            aNode.allParentsAndSelf { (n) -> (Bool) in
+            aNode.selfAndAllParents { (n) -> (Bool) in
                 if node == n {
                     closure(aNode, track, i)
                     return true
@@ -595,7 +595,6 @@ final class CutView: View {
         return animationViews
     }
     
-    let cut: Cut
     init(_ cut: Cut,
          beginBaseTime: Beat = 0,
          baseWidth: CGFloat, baseTimeInterval: Beat,
@@ -633,16 +632,16 @@ final class CutView: View {
                                                     sizeType: .small)
         
         super.init()
-        clipView.replace(children: animationViews)
-        replace(children: [clipView, classNameView])
+        clipView.children = animationViews
+        children = [clipView, classNameView]
         frame.size.height = height
         updateLayout()
         updateWithDuration()
         
         let subtitleItem = cut.subtitleTrack.subtitleItem
         subtitleTextViews = subtitleItem.keySubtitles.enumerated().map { (i, subtitle) in
-            let textView = TextView()
-            textView.isLocked = false
+            let textView = TextView(isForm: false)
+            textView.isReadOnly = false
             textView.string = subtitle.string
             textView.noIndicatedLineColor = .getSetBorder
             textView.indicatedLineColor = .indicated
@@ -654,14 +653,14 @@ final class CutView: View {
             return textView
         }
         subtitleAnimationView.setKeyframeClosure = { [unowned self] ab in
-            guard ab.type == .end else {
+            guard ab.phase == .ended else {
                 return
             }
             switch ab.setType {
             case .insert:
                 let subtitle = Subtitle()
-                let textView = TextView()
-                textView.isLocked = false
+                let textView = TextView(isForm: false)
+                textView.isReadOnly = false
                 textView.noIndicatedLineColor = .getSetBorder
                 textView.indicatedLineColor = .indicated
                 textView.fillColor = nil
@@ -682,7 +681,7 @@ final class CutView: View {
                                                                       setType: ab.setType,
                                                                       animation: ab.animation,
                                                                       oldAnimation: ab.oldAnimation,
-                                                                      type: ab.type))
+                                                                      phase: ab.phase))
             case .remove:
                 let subtitle = cut.subtitleTrack.subtitleItem.keySubtitles[ab.index]
                 cut.subtitleTrack.removeKeyframe(at: ab.index)
@@ -694,7 +693,7 @@ final class CutView: View {
                                                                       setType: ab.setType,
                                                                       animation: ab.animation,
                                                                       oldAnimation: ab.oldAnimation,
-                                                                      type: ab.type))
+                                                                      phase: ab.phase))
             case .replace:
                 break
             }
@@ -711,13 +710,13 @@ final class CutView: View {
     
     struct SubtitleBinding {
         let cutView: CutView
-        let subtitle: Subtitle, oldSubtitle: Subtitle, type: Action.SendType
+        let subtitle: Subtitle, oldSubtitle: Subtitle, phase: Phase
     }
     var subtitleBinding: ((SubtitleBinding) -> ())?
     struct SubtitleKeyframeBinding {
         let cutView: CutView
         let keyframe: Keyframe, subtitle: Subtitle, index: Int, setType: AnimationView.SetKeyframeType
-        let animation: Animation, oldAnimation: Animation, type: Action.SendType
+        let animation: Animation, oldAnimation: Animation, phase: Phase
     }
     var subtitleKeyframeBinding: ((SubtitleKeyframeBinding) -> ())?
     
@@ -845,8 +844,8 @@ final class CutView: View {
                                                                              trackIndex: 0))
         self.animationViews.insert(contentsOf: animationViews, at: nodeAndTrackIndex)
         var children = self.clipView.children
-        children.insert(contentsOf: animationViews as [Layer], at: nodeAndTrackIndex)
-        replace(children: children)
+        children.insert(contentsOf: animationViews, at: nodeAndTrackIndex)
+        self.children = children
         updateChildren()
     }
     func remove(at index: Int, _ animationViews: [AnimationView], parent: Node) {
@@ -857,7 +856,7 @@ final class CutView: View {
         self.animationViews.removeSubrange(animationIndex..<maxAnimationIndex)
         var children = self.clipView.children
         children.removeSubrange(animationIndex..<maxAnimationIndex)
-        replace(children: children)
+        self.children = children
         updateChildren()
     }
     func insert(_ track: NodeTrack, _ animationView: AnimationView,
@@ -931,36 +930,35 @@ final class CutView: View {
         }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    var deleteClosure: ((CutView) -> ())?
+    func delete(for p: CGPoint) {
+        deleteClosure?(self)
+    }
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [cut.copied]
     }
-    
-    var pasteClosure: ((CutView, [Any]) -> (Bool))?
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        return pasteClosure?(self, objects) ?? false
-    }
-    
-    var deleteClosure: ((CutView) -> (Bool))?
-    func delete(with event: KeyInputEvent) -> Bool {
-        return deleteClosure?(self) ?? false
+    var pasteClosure: ((CutView, [Any]) -> ())?
+    func paste(_ objects: [Any], for p: CGPoint) {
+        pasteClosure?(self, objects)
     }
     
     private var isScrollTrack = false
-    func scroll(with event: ScrollEvent) -> Bool {
-        if event.sendType  == .begin {
-            isScrollTrack = abs(event.scrollDeltaPoint.x) < abs(event.scrollDeltaPoint.y)
+    func scroll(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+                phase: Phase, momentumPhase: Phase?) {
+        if phase  == .began {
+            isScrollTrack = abs(scrollDeltaPoint.x) < abs(scrollDeltaPoint.y)
         }
         guard isScrollTrack else {
-            return false
+            return
         }
-        scrollTrack(with: event)
-        return true
+        scrollTrack(for: p, time: time, scrollDeltaPoint: scrollDeltaPoint,
+                    phase: phase, momentumPhase: momentumPhase)
     }
     
     struct ScrollBinding {
         let cutView: CutView
         let nodeAndTrack: Cut.NodeAndTrack, oldNodeAndTrack: Cut.NodeAndTrack
-        let type: Action.SendType
+        let phase: Phase
     }
     var scrollClosure: ((ScrollBinding) -> ())?
     
@@ -970,13 +968,13 @@ final class CutView: View {
         var oldNodeAndTrack: Cut.NodeAndTrack?
     }
     private var scrollObject = ScrollObject()
-    func scrollTrack(with event: ScrollEvent) {
-        guard event.scrollMomentumType == nil else {
+    func scrollTrack(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+                     phase: Phase, momentumPhase: Phase?) {
+        guard momentumPhase == nil else {
             return
         }
-        let p = point(from: event)
-        switch event.sendType {
-        case .begin:
+        switch phase {
+        case .began:
             scrollObject = ScrollObject()
             scrollObject.oldP = p
             scrollObject.deltaScrollY = 0
@@ -986,12 +984,12 @@ final class CutView: View {
             scrollClosure?(ScrollBinding(cutView: self,
                                          nodeAndTrack: editNodeAndTrack,
                                          oldNodeAndTrack: editNodeAndTrack,
-                                         type: .begin))
-        case .sending:
+                                         phase: .began))
+        case .changed:
             guard let oldEditNodeAndTrack = scrollObject.oldNodeAndTrack else {
                 return
             }
-            scrollObject.deltaScrollY += event.scrollDeltaPoint.y
+            scrollObject.deltaScrollY += scrollDeltaPoint.y
             let maxIndex = cut.maxNodeAndTrackIndex
             let i = (scrollObject.oldNodeAndTrackIndex - Int(scrollObject.deltaScrollY / 10))
                 .clip(min: 0, max: maxIndex)
@@ -1002,14 +1000,14 @@ final class CutView: View {
                 scrollClosure?(ScrollBinding(cutView: self,
                                              nodeAndTrack: editNodeAndTrack,
                                              oldNodeAndTrack: oldEditNodeAndTrack,
-                                             type: .sending))
+                                             phase: .changed))
                 isUseUpdateChildren = true
             }
-        case .end:
+        case .ended:
             guard let oldEditNodeAndTrack = scrollObject.oldNodeAndTrack else {
                 return
             }
-            scrollObject.deltaScrollY += event.scrollDeltaPoint.y
+            scrollObject.deltaScrollY += scrollDeltaPoint.y
             let maxIndex = cut.maxNodeAndTrackIndex
             let i = (scrollObject.oldNodeAndTrackIndex - Int(scrollObject.deltaScrollY / 10))
                 .clip(min: 0, max: maxIndex)
@@ -1018,7 +1016,7 @@ final class CutView: View {
             scrollClosure?(ScrollBinding(cutView: self,
                                          nodeAndTrack: editNodeAndTrack,
                                          oldNodeAndTrack: oldEditNodeAndTrack,
-                                         type: .end))
+                                         phase: .ended))
             isUseUpdateChildren = true
             if i != scrollObject.oldNodeAndTrackIndex {
                 registeringUndoManager?.registerUndo(withTarget: self) { [old = editNodeAndTrack] in
@@ -1035,13 +1033,17 @@ final class CutView: View {
         scrollClosure?(ScrollBinding(cutView: self,
                                      nodeAndTrack: oldEditNodeAndTrack,
                                      oldNodeAndTrack: oldEditNodeAndTrack,
-                                     type: .begin))
+                                     phase: .began))
         isUseUpdateChildren = false
         self.editNodeAndTrack = editNodeAndTrack
         scrollClosure?(ScrollBinding(cutView: self,
                                      nodeAndTrack: oldEditNodeAndTrack,
                                      oldNodeAndTrack: editNodeAndTrack,
-                                     type: .end))
+                                     phase: .ended))
         isUseUpdateChildren = true
+    }
+    
+    func reference(at p: CGPoint) -> Reference {
+        return Cut.reference
     }
 }

@@ -100,8 +100,8 @@ extension Keyframe: Referenceable {
     static let name = Localization(english: "Keyframe", japanese: "キーフレーム")
 }
 extension Keyframe: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return interpolation.displayText.thumbnail(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return interpolation.displayText.thumbnail(withBounds: bounds, sizeType)
     }
 }
 extension Keyframe.Interpolation: Referenceable {
@@ -127,7 +127,7 @@ extension Keyframe.Label: Referenceable {
 extension Keyframe.Label: ObjectViewExpressionWithDisplayText {
 }
 
-final class KeyframeView: View {
+final class KeyframeView: View, Assignable {
     var keyframe = Keyframe() {
         didSet {
             if !keyframe.equalOption(other: oldValue) {
@@ -163,7 +163,7 @@ final class KeyframeView: View {
                              sizeType: sizeType)
         self.sizeType = sizeType
         super.init()
-        replace(children: [classNameView, easingView, interpolationView, loopView, labelView])
+        children = [classNameView, easingView, interpolationView, loopView, labelView]
         interpolationView.binding = { [unowned self] in self.setKeyframe(with: $0) }
         loopView.binding = { [unowned self] in self.setKeyframe(with: $0) }
         labelView.binding = { [unowned self] in self.setKeyframe(with: $0) }
@@ -199,17 +199,17 @@ final class KeyframeView: View {
     
     struct Binding {
         let view: KeyframeView
-        let keyframe: Keyframe, oldKeyframe: Keyframe, type: Action.SendType
+        let keyframe: Keyframe, oldKeyframe: Keyframe, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
     private var oldKeyframe = Keyframe()
     
     private func setKeyframe<T: EnumType>(with binding: EnumView<T>.Binding) {
-        if binding.type == .begin {
+        if binding.phase == .began {
             oldKeyframe = keyframe
             self.binding?(Binding(view: self,
-                                  keyframe: oldKeyframe, oldKeyframe: oldKeyframe, type: .begin))
+                                  keyframe: oldKeyframe, oldKeyframe: oldKeyframe, phase: .began))
         } else {
             if let interpolation = binding.enumeratedType as? Keyframe.Interpolation {
                 keyframe.interpolation = interpolation
@@ -219,58 +219,56 @@ final class KeyframeView: View {
                 keyframe.label = label
             }
             self.binding?(Binding(view: self,
-                                  keyframe: keyframe, oldKeyframe: oldKeyframe, type: binding.type))
+                                  keyframe: keyframe, oldKeyframe: oldKeyframe, phase: binding.phase))
         }
     }
     private func setKeyframe(with binding: EasingView.Binding) {
-        if binding.type == .begin {
+        if binding.phase == .began {
             oldKeyframe = keyframe
             self.binding?(Binding(view: self,
-                                  keyframe: oldKeyframe, oldKeyframe: oldKeyframe, type: .begin))
+                                  keyframe: oldKeyframe, oldKeyframe: oldKeyframe, phase: .began))
         } else {
             keyframe.easing = binding.easing
             self.binding?(Binding(view: self,
-                                  keyframe: keyframe, oldKeyframe: oldKeyframe, type: binding.type))
+                                  keyframe: keyframe, oldKeyframe: oldKeyframe, phase: binding.phase))
         }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        return [keyframe]
-    }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        for object in objects {
-            if let keyframe = object as? Keyframe {
-                if keyframe.equalOption(other: self.keyframe) {
-                    set(keyframe, old: self.keyframe)
-                    return true
-                }
-            }
-        }
-        return false
-    }
-    func delete(with event: KeyInputEvent) -> Bool {
+    func delete(for p: CGPoint) {
         let keyframe: Keyframe = {
             var keyframe = Keyframe()
             keyframe.time = self.keyframe.time
             return keyframe
         } ()
         guard keyframe.equalOption(other: self.keyframe) else {
-            return false
+            return
         }
         set(keyframe, old: self.keyframe)
-        return true
+    }
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
+        return [keyframe]
+    }
+    func paste(_ objects: [Any], for p: CGPoint) {
+        for object in objects {
+            if let keyframe = object as? Keyframe {
+                if keyframe.equalOption(other: self.keyframe) {
+                    set(keyframe, old: self.keyframe)
+                    return
+                }
+            }
+        }
     }
     
     private func set(_ keyframe: Keyframe, old oldKeyframe: Keyframe) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldKeyframe, old: keyframe) }
         binding?(Binding(view: self,
-                         keyframe: oldKeyframe, oldKeyframe: oldKeyframe, type: .begin))
+                         keyframe: oldKeyframe, oldKeyframe: oldKeyframe, phase: .began))
         self.keyframe = keyframe
         binding?(Binding(view: self,
-                         keyframe: keyframe, oldKeyframe: oldKeyframe, type: .end))
+                         keyframe: keyframe, oldKeyframe: oldKeyframe, phase: .ended))
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return keyframe.reference
+    func reference(at p: CGPoint) -> Reference {
+        return Keyframe.reference
     }
 }

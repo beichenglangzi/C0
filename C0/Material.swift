@@ -187,14 +187,14 @@ extension Material: Interpolatable {
                         lineWidth: lineWidth, opacity: opacity)
     }
 }
-extension Material: ClassCopiable {
+extension Material: ClassDeepCopiable {
 }
 extension Material: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        let layer = Layer()
-        layer.bounds = bounds
-        layer.fillColor = color
-        return layer
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        let view = View(isForm: true)
+        view.bounds = bounds
+        view.fillColor = color
+        return view
     }
 }
 extension Material.MaterialType: Referenceable {
@@ -217,61 +217,58 @@ extension Material.MaterialType: ObjectViewExpressionWithDisplayText {
 }
 
 extension SlidableNumberView {
-    static func opacityView(sizeType: SizeType = .regular) -> SlidableNumberView {
+    static func opacityView(_ sizeType: SizeType = .regular) -> SlidableNumberView {
         return SlidableNumberView(number: 1, defaultNumber: 1, min: 0, max: 1, sizeType: sizeType)
     }
-    private static func opacityViewLayers(with bounds: CGRect,
-                                            checkerWidth: CGFloat, padding: CGFloat) -> [Layer] {
+    private static func opacityViewViews(with bounds: CGRect,
+                                         checkerWidth: CGFloat, padding: CGFloat) -> [View] {
         let frame = CGRect(x: padding, y: bounds.height / 2 - checkerWidth,
                            width: bounds.width - padding * 2, height: checkerWidth * 2)
         
-        let backgroundLayer = GradientLayer()
-        backgroundLayer.gradient = Gradient(colors: [.subContent, .content],
-                                            locations: [0, 1],
-                                            startPoint: CGPoint(x: 0, y: 0),
-                                            endPoint: CGPoint(x: 1, y: 0))
-        backgroundLayer.frame = frame
+        let backgroundView = View(gradient: Gradient(colors: [.subContent, .content],
+                                                     locations: [0, 1],
+                                                     startPoint: CGPoint(x: 0, y: 0),
+                                                     endPoint: CGPoint(x: 1, y: 0)))
+        backgroundView.frame = frame
         
-        let checkerboardLayer = PathLayer()
-        checkerboardLayer.fillColor = .content
-        checkerboardLayer.path = CGPath.checkerboard(with: CGSize(square: checkerWidth), in: frame)
+        let checkerboardView = View(path: CGPath.checkerboard(with: CGSize(square: checkerWidth),
+                                                              in: frame))
+        checkerboardView.fillColor = .content
         
-        return [backgroundLayer, checkerboardLayer]
+        return [backgroundView, checkerboardView]
     }
-    func updateOpacityLayers(withFrame frame: CGRect) {
+    func updateOpacityViews(withFrame frame: CGRect) {
         if self.frame != frame {
             self.frame = frame
-            backgroundLayers = SlidableNumberView.opacityViewLayers(with: frame,
-                                                            checkerWidth: knob.radius,
-                                                            padding: padding)
+            backgroundViews = SlidableNumberView.opacityViewViews(with: frame,
+                                                                  checkerWidth: knobView.radius,
+                                                                  padding: padding)
         }
     }
 }
 extension SlidableNumberView {
     static func widthViewWith(min: CGFloat, max: CGFloat, exp: CGFloat,
-                              sizeType: SizeType = .regular) -> SlidableNumberView {
+                              _ sizeType: SizeType = .regular) -> SlidableNumberView {
         return SlidableNumberView(min: min, max: max, exp: exp, sizeType: sizeType)
     }
-    private static func widthLayer(with bounds: CGRect,
-                                   halfWidth: CGFloat, padding: CGFloat) -> Layer {
-        let shapeLayer = PathLayer()
-        shapeLayer.fillColor = .content
-        shapeLayer.path = {
-            let path = CGMutablePath()
-            path.addLines(between: [CGPoint(x: padding,y: bounds.height / 2),
-                                    CGPoint(x: bounds.width - padding,
-                                            y: bounds.height / 2 - halfWidth),
-                                    CGPoint(x: bounds.width - padding,
-                                            y: bounds.height / 2 + halfWidth)])
-            return path
-        } ()
-        return shapeLayer
+    private static func widthView(with bounds: CGRect,
+                                   halfWidth: CGFloat, padding: CGFloat) -> View {
+        let path = CGMutablePath()
+        path.addLines(between: [CGPoint(x: padding,y: bounds.height / 2),
+                                CGPoint(x: bounds.width - padding,
+                                        y: bounds.height / 2 - halfWidth),
+                                CGPoint(x: bounds.width - padding,
+                                        y: bounds.height / 2 + halfWidth)])
+        let shapeView = View(path: path)
+        shapeView.fillColor = .content
+        return shapeView
     }
-    func updateLineWidthLayers(withFrame frame: CGRect) {
+    func updateLineWidthViews(withFrame frame: CGRect) {
         if self.frame != frame {
             self.frame = frame
-            backgroundLayers = [SlidableNumberView.widthLayer(with: frame,
-                                                      halfWidth: knob.radius, padding: padding)]
+            backgroundViews = [SlidableNumberView.widthView(with: frame,
+                                                            halfWidth: knobView.radius,
+                                                            padding: padding)]
         }
     }
 }
@@ -279,7 +276,7 @@ extension SlidableNumberView {
 /**
  Issue: 「線の強さ」を追加
  */
-final class MaterialView: View {
+final class MaterialView: View, Assignable {
     var material: Material {
         didSet {
             guard material.id != oldValue.id else {
@@ -314,10 +311,10 @@ final class MaterialView: View {
     override init() {
         material = defaultMaterial
         super.init()
-        replace(children: [classNameView,
-                           typeView,
-                           colorView, classLineColorNameView, lineColorView,
-                           lineWidthView, opacityView])
+        children = [classNameView,
+                    typeView,
+                    colorView, classLineColorNameView, lineColorView,
+                    lineWidthView, opacityView]
         
         typeView.binding = { [unowned self] in self.setMaterial(with: $0) }
         
@@ -368,10 +365,10 @@ final class MaterialView: View {
                                      width: rw, height: rw)
         let lineWidthFrame = CGRect(x: padding + cw, y: lineColorView.frame.minY - h,
                                     width: rw, height: h)
-        lineWidthView.updateLineWidthLayers(withFrame: lineWidthFrame)
+        lineWidthView.updateLineWidthViews(withFrame: lineWidthFrame)
         let opacityFrame = CGRect(x: padding + cw, y: lineColorView.frame.minY - h * 2,
                                   width: rw, height: h)
-        opacityView.updateOpacityLayers(withFrame: opacityFrame)
+        opacityView.updateOpacityViews(withFrame: opacityFrame)
     }
     
     var isEditingBinding: ((MaterialView, Bool) -> ())?
@@ -392,62 +389,62 @@ final class MaterialView: View {
     
     struct Binding {
         let view: MaterialView
-        let material: Material, oldMaterial: Material, type: Action.SendType
+        let material: Material, oldMaterial: Material, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
     struct TypeBinding {
         let view: MaterialView
         let type: Material.MaterialType, oldType: Material.MaterialType
-        let material: Material, oldMaterial: Material, sendType: Action.SendType
+        let material: Material, oldMaterial: Material, phase: Phase
     }
     var typeBinding: ((TypeBinding) -> ())?
     
     struct ColorBinding {
         let view: MaterialView
         let color: Color, oldColor: Color
-        let material: Material, oldMaterial: Material, type: Action.SendType
+        let material: Material, oldMaterial: Material, phase: Phase
     }
     var colorBinding: ((ColorBinding) -> ())?
     
     struct LineColorBinding {
         let view: MaterialView
         let lineColor: Color, oldLineColor: Color
-        let material: Material, oldMaterial: Material, type: Action.SendType
+        let material: Material, oldMaterial: Material, phase: Phase
     }
     var lineColorBinding: ((LineColorBinding) -> ())?
     
     struct LineWidthBinding {
         let view: MaterialView
         let lineWidth: CGFloat, oldLineWidth: CGFloat
-        let material: Material, oldMaterial: Material, type: Action.SendType
+        let material: Material, oldMaterial: Material, phase: Phase
     }
     var lineWidthBinding: ((LineWidthBinding) -> ())?
     
     struct OpacityBinding {
         let view: MaterialView
         let opacity: CGFloat, oldOpacity: CGFloat
-        let material: Material, oldMaterial: Material, type: Action.SendType
+        let material: Material, oldMaterial: Material, phase: Phase
     }
     var opacityBinding: ((OpacityBinding) -> ())?
     
     private var oldMaterial = Material()
     
     private func setMaterial(with binding: EnumView<Material.MaterialType>.Binding) {
-        if binding.type == .begin {
+        if binding.phase == .began {
             isEditing = true
             oldMaterial = material
             typeBinding?(TypeBinding(view: self,
                                      type: oldMaterial.type, oldType: oldMaterial.type,
                                      material: oldMaterial, oldMaterial: oldMaterial,
-                                     sendType: .begin))
+                                     phase: .began))
         } else {
             material = material.with(binding.enumeratedType)
             typeBinding?(TypeBinding(view: self,
                                      type: binding.enumeratedType, oldType: oldMaterial.type,
                                      material: material, oldMaterial: oldMaterial,
-                                     sendType: binding.type))
-            if binding.type == .end {
+                                     phase: binding.phase))
+            if binding.phase == .ended {
                 isEditing = false
             }
         }
@@ -456,38 +453,38 @@ final class MaterialView: View {
     private func setMaterial(with obj: ColorView.Binding) {
         switch obj.colorView {
         case colorView:
-            if obj.type == .begin {
+            if obj.phase == .began {
                 isEditing = true
                 oldMaterial = material
                 colorBinding?(ColorBinding(view: self,
                                            color: obj.color, oldColor: obj.oldColor,
                                            material: oldMaterial, oldMaterial: oldMaterial,
-                                           type: .begin))
+                                           phase: .began))
             } else {
                 material = material.with(obj.color)
                 colorBinding?(ColorBinding(view: self,
                                            color: obj.color, oldColor: obj.oldColor,
                                            material: material, oldMaterial: oldMaterial,
-                                           type: obj.type))
-                if obj.type == .end {
+                                           phase: obj.phase))
+                if obj.phase == .ended {
                     isEditing = false
                 }
             }
         case lineColorView:
-            if obj.type == .begin {
+            if obj.phase == .began {
                 isEditing = true
                 oldMaterial = material
                 lineColorBinding?(LineColorBinding(view: self,
                                                    lineColor: obj.color, oldLineColor: obj.oldColor,
                                                    material: oldMaterial, oldMaterial: oldMaterial,
-                                                   type: .begin))
+                                                   phase: .began))
             } else {
                 material = material.with(lineColor: obj.color)
                 lineColorBinding?(LineColorBinding(view: self,
                                                    lineColor: obj.color, oldLineColor: obj.oldColor,
                                                    material: material, oldMaterial: oldMaterial,
-                                                   type: obj.type))
-                if obj.type == .end {
+                                                   phase: obj.phase))
+                if obj.phase == .ended {
                     isEditing = false
                 }
             }
@@ -499,38 +496,38 @@ final class MaterialView: View {
     private func setMaterial(with obj: SlidableNumberView.Binding) {
         switch obj.view {
         case lineWidthView:
-            if obj.type == .begin {
+            if obj.phase == .began {
                 isEditing = true
                 oldMaterial = material
                 lineWidthBinding?(LineWidthBinding(view: self,
                                                    lineWidth: obj.number, oldLineWidth: obj.oldNumber,
                                                    material: oldMaterial, oldMaterial: oldMaterial,
-                                                   type: .begin))
+                                                   phase: .began))
             } else {
                 material = material.with(lineWidth: obj.number)
                 lineWidthBinding?(LineWidthBinding(view: self,
                                                    lineWidth: obj.number, oldLineWidth: obj.oldNumber,
                                                    material: material, oldMaterial: oldMaterial,
-                                                   type: obj.type))
-                if obj.type == .end {
+                                                   phase: obj.phase))
+                if obj.phase == .ended {
                     isEditing = false
                 }
             }
         case opacityView:
-            if obj.type == .begin {
+            if obj.phase == .began {
                 isEditing = true
                 oldMaterial = material
                 opacityBinding?(OpacityBinding(view: self,
                                                opacity: obj.number, oldOpacity: obj.oldNumber,
                                                material: oldMaterial, oldMaterial: oldMaterial,
-                                               type: .begin))
+                                               phase: .began))
             } else {
                 material = material.with(opacity: obj.number)
                 opacityBinding?(OpacityBinding(view: self,
                                                opacity: obj.number, oldOpacity: obj.oldNumber,
                                                material: material, oldMaterial: oldMaterial,
-                                               type: obj.type))
-                if obj.type == .end {
+                                               phase: obj.phase))
+                if obj.phase == .ended {
                     isEditing = false
                 }
             }
@@ -539,34 +536,34 @@ final class MaterialView: View {
         }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func delete(for p: CGPoint) {
+        let material = Material()
+        set(material, old: self.material)
+    }
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [material]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let material = object as? Material {
                 if material.id != self.material.id {
                     set(material, old: self.material)
-                    return true
+                    return
                 }
             }
         }
-        return false
-    }
-    func delete(with event: KeyInputEvent) -> Bool {
-        let material = Material()
-        set(material, old: self.material)
-        return true
     }
     
     private func set(_ material: Material, old oldMaterial: Material) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldMaterial, old: material) }
-        binding?(Binding(view: self, material: oldMaterial, oldMaterial: oldMaterial, type: .begin))
+        binding?(Binding(view: self,
+                         material: oldMaterial, oldMaterial: oldMaterial, phase: .began))
         self.material = material
-        binding?(Binding(view: self, material: material, oldMaterial: oldMaterial, type: .end))
+        binding?(Binding(view: self,
+                         material: material, oldMaterial: oldMaterial, phase: .ended))
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return material.reference
+    func reference(at p: CGPoint) -> Reference {
+        return Material.reference
     }
 }

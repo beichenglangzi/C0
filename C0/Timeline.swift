@@ -25,7 +25,7 @@ import Foundation
  Issue: sceneを取り除く
  Issue: スクロールの可視性の改善
  */
-final class TimelineView: View {
+final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
     var scene = Scene() {
         didSet {
             _scrollPoint.x = x(withTime: scene.time)
@@ -92,34 +92,34 @@ final class TimelineView: View {
                                                           option: Scene.timeIntervalOption,
                                                           frame: Layout.valueFrame(with: .regular))
     
-    let formTimeRulerView = RulerLayer()
+    let formTimeRulerView = RulerView()
     let tempoView = DiscreteRealNumberView(model: 120,
-                                       option: RealNumberOption(defaultModel: 120,
-                                                            minModel: 1, maxModel: 10000,
-                                                            modelInterval: 1, exp: 1,
-                                                            numberOfDigits: 0, unit: " bpm"),
-                                       frame: CGRect(x: 0, y: 0,
-                                                     width: leftWidth, height: Layout.basicHeight))
-    let tempoAnimationLayer = Layer()
+                                           option: RealNumberOption(defaultModel: 120,
+                                                                    minModel: 1, maxModel: 10000,
+                                                                    modelInterval: 1, exp: 1,
+                                                                    numberOfDigits: 0, unit: " bpm"),
+                                           frame: CGRect(x: 0, y: 0,
+                                                         width: leftWidth, height: Layout.basicHeight))
+    let tempoAnimationClipView = View(isForm: true)
     let tempoAnimationView = AnimationView(height: defaultSumKeyTimesHeight)
     let soundWaveformView = SoundWaveformView()
-    let cutViewsLayer = Layer()
+    let cutViewsView = View(isForm: true)
     let classSumAnimationNameView = TextView(text: Localization(english: "Sum:", japanese: "合計:"),
                                              font: .small)
-    let sumKeyTimesLayer = Layer()
+    let sumKeyTimesClipView = View(isForm: true)
     let sumKeyTimesView = AnimationView(height: defaultSumKeyTimesHeight)
     
     let nodeTreeView = NodeTreeManager()
     let tracksManager = TracksManager()
     
-    let timeLayer: Layer = {
-        let layer = Layer()
-        layer.fillColor = .editing
-        layer.lineColor = nil
-        return layer
+    let timeView: View = {
+        let view = View(isForm: true)
+        view.fillColor = .editing
+        view.lineColor = nil
+        return view
     } ()
-    let nodeBindingLineLayer: PathLayer = {
-        let layer = PathLayer()
+    let nodeBindingLinePathView: View = {
+        let layer = View(path: CGMutablePath())
         layer.lineWidth = 5
         layer.lineColor = .bindingBorder
         return layer
@@ -129,40 +129,40 @@ final class TimelineView: View {
     }
     var bindingKeyframeType = BindingKeyframeType.cut
     
-    let beatsLayer = PathLayer()
+    let beatsView = View(path: CGMutablePath())
     
     let tempoKeyframeView = KeyframeView(sizeType: .small)
     let keyframeView = KeyframeView(), nodeView = NodeView(sizeType: .small)
     
     init(frame: CGRect = CGRect()) {
-        tempoAnimationLayer.replace(children: [tempoAnimationView])
-        tempoAnimationLayer.isClipped = true
+        tempoAnimationClipView.children = [tempoAnimationView]
+        tempoAnimationClipView.isClipped = true
         tempoAnimationView.isEdit = true
         tempoAnimationView.sizeType = .regular
         tempoAnimationView.smallHeight = tempoHeight
-        cutViewsLayer.isClipped = true
-        sumKeyTimesLayer.isClipped = true
+        cutViewsView.isClipped = true
+        sumKeyTimesClipView.isClipped = true
         sumKeyTimesView.isEdit = true
         sumKeyTimesView.smallHeight = sumKeyTimesHeight
-        sumKeyTimesLayer.append(child: sumKeyTimesView)
+        sumKeyTimesClipView.append(child: sumKeyTimesView)
         formTimeRulerView.isClipped = true
-        beatsLayer.isClipped = true
-        beatsLayer.fillColor = .subContent
-        beatsLayer.lineColor = nil
+        beatsView.isClipped = true
+        beatsView.fillColor = .subContent
+        beatsView.lineColor = nil
         
         super.init()
-        replace(children: [timeLayer, //curretEditKeyframeTimeExpressionView,
-                           beatsLayer, classSumAnimationNameView, sumKeyTimesLayer,
-                           formTimeRulerView,
-                           tempoAnimationLayer, //baseTimeIntervalView,
-                           nodeTreeView.nodesView, tracksManager.tracksView,
-                           cutViewsLayer])
+        children = [timeView, //curretEditKeyframeTimeExpressionView,
+                    beatsView, classSumAnimationNameView, sumKeyTimesClipView,
+                    formTimeRulerView,
+                    tempoAnimationClipView, //baseTimeIntervalView,
+                    nodeTreeView.nodesView, tracksManager.tracksView,
+                    cutViewsView]
         if !frame.isEmpty {
             self.frame = frame
         }
         
         tempoAnimationView.setKeyframeClosure = { [unowned self] in
-            guard $0.type == .end else {
+            guard $0.phase == .ended else {
                 return
             }
             let tempoTrack = self.scene.tempoTrack
@@ -186,10 +186,10 @@ final class TimelineView: View {
         }
         
         baseTimeIntervalView.binding = { [unowned self] in
-            switch $0.type {
-            case .begin:
+            switch $0.phase {
+            case .began:
                 self.baseTimeIntervalOldTime = self.scene.secondTime(withBeatTime: self.scene.time)
-            case .sending, .end:
+            case .changed, .ended:
                 self.baseTimeInterval = $0.model
                 self.updateWith(time: self.time,
                                 scrollPoint: CGPoint(x: self.x(withTime: self.time), y: 0),
@@ -199,7 +199,7 @@ final class TimelineView: View {
         }
         
         sumKeyTimesView.setKeyframeClosure = { [unowned self] binding in
-            guard binding.type == .end else {
+            guard binding.phase == .ended else {
                 return
             }
             self.isUpdateSumKeyTimes = false
@@ -223,39 +223,25 @@ final class TimelineView: View {
             }
             self.isUpdateSumKeyTimes = true
         }
-        sumKeyTimesView.slideClosure = { [unowned self] in
-            self.setAnimations(with: $0)
-        }
+        sumKeyTimesView.slideClosure = { [unowned self] in self.setAnimations(with: $0) }
         
-        nodeTreeView.nodesView.newClosure = { [unowned self] _, _ in
-            _ = self.newNode()
-            return true
-        }
-        nodeTreeView.setNodesClosure = { [unowned self] in
-            self.setNodes(with: $0)
-        }
+        nodeTreeView.nodesView.newClosure = { [unowned self] _, _ in self.newNode() }
+        nodeTreeView.setNodesClosure = { [unowned self] in self.setNodes(with: $0) }
         nodeTreeView.nodesView.deleteClosure = { [unowned self] _, _ in
             self.remove(self.editCutView.cut.editNode, in: self.editCutView)
-            return true
         }
         nodeTreeView.nodesView.pasteClosure = { [unowned self] in
-            return self.pasteFromNodesView($1, with: $2)
+            self.pasteFromNodesView($1, for: $2)
         }
         
-        tracksManager.tracksView.newClosure = { [unowned self] _, _ in
-            self.newNodeTrack()
-            return true
-        }
-        tracksManager.setTracksClosure = { [unowned self] in
-            self.setNodeTracks(with: $0)
-        }
+        tracksManager.tracksView.newClosure = { [unowned self] _, _ in self.newNodeTrack() }
+        tracksManager.setTracksClosure = { [unowned self] in self.setNodeTracks(with: $0) }
         tracksManager.tracksView.deleteClosure = { [unowned self] _, _ in
             let node = self.editCutView.cut.editNode
             self.remove(trackIndex: node.editTrackIndex, in: node, in: self.editCutView)
-            return true
         }
         tracksManager.tracksView.pasteClosure = { [unowned self] in
-            return self.pasteFromTracksView($1, with: $2)
+            self.pasteFromTracksView($1, for: $2)
         }
     }
     
@@ -281,7 +267,7 @@ final class TimelineView: View {
 //        curretEditKeyframeTimeView.frame.origin = CGPoint(x: rightX - curretEditKeyframeTimeView.frame.width - Layout.smallPadding,
 //                                         y: bounds.height - timeRulerHeight
 //                                            - Layout.basicPadding + Layout.smallPadding)
-        tempoAnimationLayer.frame = CGRect(x: rightX,
+        tempoAnimationClipView.frame = CGRect(x: rightX,
                                          y: bounds.height - timeRulerHeight - tempoHeight - sp,
                                          width: bounds.width - rightX - sp, height: tempoHeight)
         let tracksHeight = 30.0.cf
@@ -291,16 +277,16 @@ final class TimelineView: View {
         nodeTreeView.nodesView.frame = CGRect(x: sp, y: sumKeyTimesHeight + sp + tracksHeight,
                                               width: leftWidth - sp,
                                               height: cutHeight - tracksHeight)
-        cutViewsLayer.frame = CGRect(x: rightX, y: sumKeyTimesHeight + sp,
+        cutViewsView.frame = CGRect(x: rightX, y: sumKeyTimesHeight + sp,
                                    width: bounds.width - rightX - sp,
                                    height: mainHeight - tempoHeight)
         classSumAnimationNameView.frame.origin = CGPoint(x: rightX - classSumAnimationNameView.frame.width,
                                         y: sp + (sumKeyTimesHeight - classSumAnimationNameView.frame.height) / 2)
-        sumKeyTimesLayer.frame = CGRect(x: rightX, y: sp,
+        sumKeyTimesClipView.frame = CGRect(x: rightX, y: sp,
                                       width: bounds.width - rightX - sp, height: sumKeyTimesHeight)
-        timeLayer.frame = CGRect(x: midX - baseWidth / 2, y: sp,
+        timeView.frame = CGRect(x: midX - baseWidth / 2, y: sp,
                                  width: baseWidth, height: bounds.height - sp * 2)
-        beatsLayer.frame = CGRect(x: rightX, y: 0,
+        beatsView.frame = CGRect(x: rightX, y: 0,
                                   width: bounds.width - rightX, height: bounds.height)
         let bx = sp + (sumKeyTimesHeight - baseTimeIntervalView.frame.height) / 2
         baseTimeIntervalView.frame.origin = CGPoint(x: sp, y: bx)
@@ -391,11 +377,11 @@ final class TimelineView: View {
     }
     var cutViews = [CutView]() {
         didSet {
-            var subtitleTextViews = [Layer]()
-            cutViews.forEach { subtitleTextViews += $0.subtitleTextViews as [Layer] }
+            var subtitleTextViews = [View]()
+            cutViews.forEach { subtitleTextViews += $0.subtitleTextViews as [View] }
             
-            cutViewsLayer.replace(children: cutViews.reversed() as [Layer]
-                + cutViews.map { $0.subtitleAnimationView } as [Layer] + subtitleTextViews as [Layer] + [soundWaveformView] as [Layer])
+            cutViewsView.children = cutViews.reversed() as [View]
+                + cutViews.map { $0.subtitleAnimationView } as [View] + subtitleTextViews as [View] + [soundWaveformView] as [View]
             updateCutViewPositions()
         }
     }
@@ -427,7 +413,7 @@ final class TimelineView: View {
             
             return x + cutView.frame.width
         }
-        soundWaveformView.frame.origin = CGPoint(x: minX, y: cutViewsLayer.frame.height - soundWaveformView.frame.height)
+        soundWaveformView.frame.origin = CGPoint(x: minX, y: cutViewsView.frame.height - soundWaveformView.frame.height)
         tempoAnimationView.frame.origin = CGPoint(x: minX, y: 0)
         sumKeyTimesView.frame.origin.x = minX
         updateBeats()
@@ -476,20 +462,18 @@ final class TimelineView: View {
                 for object in $1 {
                     if let cut = object as? Cut {
                         self.paste(cut.copied, at: index + 1)
-                        return true
+                        return
                     }
                 }
             }
-            return false
         }
         cutView.deleteClosure = { [unowned self] in
             if let index = self.cutViews.index(of: $0) {
                 self.removeCut(at: index)
             }
-            return true
         }
         cutView.scrollClosure = { [unowned self, unowned cutView] obj in
-            if obj.type == .end {
+            if obj.phase == .ended {
                 if obj.nodeAndTrack != obj.oldNodeAndTrack {
                     self.registerUndo(time: self.time) {
                         self.set(obj.oldNodeAndTrack, old: obj.nodeAndTrack, in: cutView, time: $1)
@@ -505,10 +489,10 @@ final class TimelineView: View {
             }
         }
         cutView.subtitleKeyframeBinding = { [unowned self] _ in
-            var subtitleTextViews = [Layer]()
-            self.cutViews.forEach { subtitleTextViews += $0.subtitleTextViews as [Layer] }
-            self.cutViewsLayer.replace(children: self.cutViews.reversed() as [Layer]
-                + self.cutViews.map { $0.subtitleAnimationView } as [Layer] + subtitleTextViews as [Layer] + [self.soundWaveformView] as [Layer])
+            var subtitleTextViews = [View]()
+            self.cutViews.forEach { subtitleTextViews += $0.subtitleTextViews as [View] }
+            self.cutViewsView.children = self.cutViews.reversed() as [View]
+                + self.cutViews.map { $0.subtitleAnimationView } as [View] + subtitleTextViews as [View] + [self.soundWaveformView] as [View]
             self.updateWithScrollPosition()
         }
         cutView.subtitleBinding = { [unowned self] _ in
@@ -521,7 +505,7 @@ final class TimelineView: View {
     func bind(in animationView: AnimationView, in cutView: CutView,
               from nodeAndTrack: Cut.NodeAndTrack) {
         animationView.setKeyframeClosure = { [unowned self, unowned cutView] in
-            guard $0.type == .end else {
+            guard $0.phase == .ended else {
                 return
             }
             switch $0.setType {
@@ -574,7 +558,7 @@ final class TimelineView: View {
         let string = second < 0 ?
             String(format: "-%d:%02d", minute, -second) :
             String(format: "%d:%02d", minute, second)
-        return TextView(text: Localization(string), font: .small)
+        return TextView(text: Text(string), font: .small)
     }
     
     func updateSumKeyTimesView() {
@@ -625,7 +609,7 @@ final class TimelineView: View {
     let beatsLineWidth = 1.0.cf, barLineWidth = 3.0.cf, beatsPerBar = 0
     func updateBeats() {
         guard baseTimeInterval < 1 else {
-            beatsLayer.path = nil
+            beatsView.path = nil
             return
         }
         let minX = localDeltaX
@@ -633,7 +617,7 @@ final class TimelineView: View {
         let maxTime = time(withLocalX: convertToLocalX(bounds.maxX))
         let intMinTime = floor(minTime).integralPart, intMaxTime = ceil(maxTime).integralPart
         guard intMinTime < intMaxTime else {
-            beatsLayer.path = nil
+            beatsView.path = nil
             return
         }
         let padding = Layout.basicPadding
@@ -644,7 +628,7 @@ final class TimelineView: View {
             return CGRect(x: i0x - w / 2, y: padding, width: w, height: bounds.height - padding * 2)
         }
         path.addRects(rects)
-        beatsLayer.path = path
+        beatsView.path = path
     }
     
     var contentFrame: CGRect {
@@ -833,37 +817,36 @@ final class TimelineView: View {
         updateView(isCut: true, isTransform: false, isKeyframe: false)
     }
     
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func delete(for p: CGPoint) {
+        let localX = convertToLocalX(p.x)
+        let cutIndex = self.cutIndex(withLocalX: localX)
+        removeCut(at: cutIndex)
+    }
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
+        return []
+    }
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let cut = object as? Cut {
-                let localX = convertToLocalX(point(from: event).x)
+                let localX = convertToLocalX(p.x)
                 let index = cutIndex(withLocalX: localX)
                 paste(cut.copied, at: index + 1)
-                return true
+                return
             }
         }
-        return false
     }
     func paste(_ cut: Cut, at index: Int) {
         insert(bindedCutView(with: cut, height: cutHeight), at: index, time: time)
         set(time: scene.cutTrack.time(at: index), oldTime: time)
     }
     
-    func delete(with event: KeyInputEvent) -> Bool {
-        let localX = convertToLocalX(point(from: event).x)
-        let cutIndex = self.cutIndex(withLocalX: localX)
-        removeCut(at: cutIndex)
-        return true
-    }
-    
-    func new(with event: KeyInputEvent) -> Bool {
-        let localX = convertToLocalX(point(from: event).x)
+    func new(for p: CGPoint) {
+        let localX = convertToLocalX(p.x)
         let cutIndex = self.cutIndex(withLocalX: localX)
         let cut = Cut()
         let cutView = self.bindedCutView(with: cut, height: cutHeight)
         insert(cutView, at: cutIndex + 1, time: time)
         set(time: scene.cutTrack.time(at: cutIndex + 1), oldTime: time)
-        return true
     }
     
     func insert(_ cutView: CutView, at index: Int, time: Beat) {
@@ -933,28 +916,27 @@ final class TimelineView: View {
         let index = minIndex != nil ? minIndex! + 1 : 0
         return Localization(english: "Node \(index)", japanese: "ノード\(index)").currentString
     }
-    func newNode() -> Bool {
+    func newNode() {
         let node = Node(name: newNodeName)
         node.editTrack.name = Localization(english: "Track 0", japanese: "トラック0").currentString
-        return append(node, in: editCutView)
+        append(node, in: editCutView)
     }
-    func pasteFromNodesView(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func pasteFromNodesView(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let node = object as? Node {
-                return append(node.copied, in: editCutView)
+                append(node.copied, in: editCutView)
+                return
             }
         }
-        return false
     }
-    func append(_ node: Node, in cutView: CutView) -> Bool {
+    func append(_ node: Node, in cutView: CutView) {
         guard let parent = cutView.cut.editNode.parent,
             let index = parent.children.index(of: cutView.cut.editNode) else {
-                return false
+                return
         }
         let animationViews = cutView.newAnimationViews(with: node)
         insert(node, animationViews, at: index + 1, parent: parent, in: cutView, time: time)
         set(node, in: cutView)
-        return true
     }
     func remove(_ node: Node, in cutView: CutView) {
         guard let parent = node.parent else {
@@ -1035,15 +1017,15 @@ final class TimelineView: View {
         set(editTrackIndex: trackIndex, oldEditTrackIndex: node.editTrackIndex,
             in: node, in: cutView, time: time)
     }
-    func pasteFromTracksView(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func pasteFromTracksView(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let track = object as? NodeTrack {
-                return append(track.copied, in: editCutView)
+                append(track.copied, in: editCutView)
+                return
             }
         }
-        return false
     }
-    func append(_ track: NodeTrack, in cutView: CutView) -> Bool {
+    func append(_ track: NodeTrack, in cutView: CutView) {
         let node = cutView.cut.editNode
         let index = node.editTrackIndex
         let animationView = cutView.newAnimationView(with: track, node: node, sizeType: .regular)
@@ -1052,7 +1034,6 @@ final class TimelineView: View {
              from: Cut.NodeAndTrack(node: node, trackIndex: index))
         set(editTrackIndex: index + 1, oldEditTrackIndex: node.editTrackIndex,
             in: node, in: cutView, time: time)
-        return true
     }
     func remove(trackIndex: Int, in node: Node, in cutView: CutView) {
         let newIndex = trackIndex > 0 ? trackIndex - 1 : trackIndex
@@ -1137,8 +1118,8 @@ final class TimelineView: View {
     private var isUpdateSumKeyTimes = true
     private var moveAnimationViews = [(animationView: AnimationView, keyframeIndex: Int?)]()
     private func setAnimations(with obj: AnimationView.SlideBinding) {
-        switch obj.type {
-        case .begin:
+        switch obj.phase {
+        case .began:
             isUpdateSumKeyTimes = false
             let cutIndex = movingCutIndex(withTime: obj.oldTime)
             let cutView = self.cutViews[cutIndex]
@@ -1156,18 +1137,18 @@ final class TimelineView: View {
             }
             
             moveAnimationViews.forEach {
-                _ = $0.animationView.move(withDeltaTime: obj.deltaTime,
-                                          keyframeIndex: $0.keyframeIndex, sendType: obj.type)
+                $0.animationView.move(withDeltaTime: obj.deltaTime,
+                                      keyframeIndex: $0.keyframeIndex, obj.phase)
             }
-        case .sending:
+        case .changed:
             moveAnimationViews.forEach {
-                _ = $0.animationView.move(withDeltaTime: obj.deltaTime,
-                                            keyframeIndex: $0.keyframeIndex, sendType: obj.type)
+                $0.animationView.move(withDeltaTime: obj.deltaTime,
+                                      keyframeIndex: $0.keyframeIndex, obj.phase)
             }
-        case .end:
+        case .ended:
             moveAnimationViews.forEach {
-                _ = $0.animationView.move(withDeltaTime: obj.deltaTime,
-                                            keyframeIndex: $0.keyframeIndex, sendType: obj.type)
+                $0.animationView.move(withDeltaTime: obj.deltaTime,
+                                      keyframeIndex: $0.keyframeIndex, obj.phase)
             }
             moveAnimationViews = []
             isUpdateSumKeyTimes = true
@@ -1176,17 +1157,17 @@ final class TimelineView: View {
     
     private var oldTempoTrack: TempoTrack?
     private func setAnimationInTempoTrack(with obj: AnimationView.SlideBinding) {
-        switch obj.type {
-        case .begin:
+        switch obj.phase {
+        case .began:
             oldTempoTrack = scene.tempoTrack
-        case .sending:
+        case .changed:
             guard let oldTrack = oldTempoTrack else {
                 return
             }
             oldTrack.replace(obj.animation.keyframes)
             updateTimeRuler()
             soundWaveformView.updateWaveform()
-        case .end:
+        case .ended:
             guard let oldTrack = oldTempoTrack else {
                 return
             }
@@ -1205,12 +1186,12 @@ final class TimelineView: View {
         updateWithTime()
     }
     private func setAnimationInTempoTrack(with obj: AnimationView.SelectBinding) {
-        switch obj.type {
-        case .begin:
+        switch obj.phase {
+        case .began:
             oldTempoTrack = scene.tempoTrack
-        case .sending:
+        case .changed:
             break
-        case .end:
+        case .ended:
             guard let oldTrack = oldTempoTrack else {
                 return
             }
@@ -1290,13 +1271,13 @@ final class TimelineView: View {
     
     private func setAnimation(with obj: AnimationView.SlideBinding,
                               in track: NodeTrack, in node: Node, in cutView: CutView) {
-        switch obj.type {
-        case .begin:
+        switch obj.phase {
+        case .began:
             break
-        case .sending:
+        case .changed:
             track.replace(obj.animation.keyframes, duration: obj.animation.duration)
             updateCutDuration(with: cutView)
-        case .end:
+        case .ended:
             track.replace(obj.animation.keyframes, duration: obj.animation.duration)
             if obj.animation != obj.oldAnimation {
                 registerUndo(time: time) {
@@ -1313,12 +1294,12 @@ final class TimelineView: View {
     }
     private func setAnimation(with obj: AnimationView.SelectBinding,
                               in track: NodeTrack, in cutView: CutView) {
-        switch obj.type {
-        case .begin:
+        switch obj.phase {
+        case .began:
             break
-        case .sending:
+        case .changed:
             break
-        case .end:
+        case .ended:
             if obj.animation != obj.oldAnimation {
                 registerUndo(time: time) {
                     $0.set(obj.oldAnimation, old: obj.animation,
@@ -1417,10 +1398,10 @@ final class TimelineView: View {
     private var oldCutView: CutView?
     
     private func setNodes(with obj: NodeTreeManager.NodesBinding) {
-        switch obj.type {
-        case .begin:
+        switch obj.phase {
+        case .began:
             oldCutView = editCutView
-        case .sending, .end:
+        case .changed, .ended:
             guard let cutView = oldCutView else {
                 return
             }
@@ -1430,7 +1411,7 @@ final class TimelineView: View {
                 obj.nodeTreeView.updateWithNodes(isAlwaysUpdate: true)
                 tracksManager.updateWithTracks(isAlwaysUpdate: true)
             }
-            if obj.type == .end {
+            if obj.phase == .ended {
                 if obj.index != obj.beginIndex || obj.toNode != obj.beginNode {
                     registerUndo(time: time) {
                         $0.moveNode(from: obj.index, fromParent: obj.toNode,
@@ -1458,10 +1439,10 @@ final class TimelineView: View {
     }
     
     private func setNodeTracks(with obj: TracksManager.NodeTracksBinding) {
-        switch obj.type {
-        case .begin:
+        switch obj.phase {
+        case .began:
             oldCutView = editCutView
-        case .sending, .end:
+        case .changed, .ended:
             guard let cutView = oldCutView else {
                 return
             }
@@ -1470,7 +1451,7 @@ final class TimelineView: View {
             if cutView.cut.editNode == obj.tracksManager.node {
                 obj.tracksManager.updateWithTracks(isAlwaysUpdate: true)
             }
-            if obj.type == .end {
+            if obj.phase == .ended {
                 if obj.index != obj.beginIndex {
                     registerUndo(time: time) {
                         $0.moveTrack(from: obj.index, to: obj.beginIndex,
@@ -1534,36 +1515,38 @@ final class TimelineView: View {
         }
     }
     
-    var scrollClosure: ((TimelineView, CGPoint, ScrollEvent) -> ())?
     private var isScrollTrack = false
     private weak var scrollCutView: CutView?
-    func scroll(with event: ScrollEvent) -> Bool {
-        if event.sendType == .begin {
-            isScrollTrack = abs(event.scrollDeltaPoint.x) < abs(event.scrollDeltaPoint.y)
+    func scroll(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+                phase: Phase, momentumPhase: Phase?) {
+        if phase == .began {
+            isScrollTrack = abs(scrollDeltaPoint.x) < abs(scrollDeltaPoint.y)
         }
         if isScrollTrack {
-            if event.sendType == .begin {
+            if phase == .began {
                 scrollCutView = editCutView
             }
-            scrollCutView?.scrollTrack(with: event)
+            scrollCutView?.scrollTrack(for: p, time: time, scrollDeltaPoint: scrollDeltaPoint,
+                                       phase: phase, momentumPhase: momentumPhase)
         } else {
-            scrollTime(with: event)
+            scrollTime(for: p, time: time, scrollDeltaPoint: scrollDeltaPoint,
+                       phase: phase, momentumPhase: momentumPhase)
         }
-        return true
     }
     
     private var indexScrollDeltaPosition = CGPoint(), indexScrollBeginX = 0.0.cf
     private var indexScrollIndex = 0, indexScrollWidth = 14.0.cf
-    func indexScroll(with event: ScrollEvent) {
-        guard event.scrollMomentumType == nil else {
+    func indexScroll(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+                     phase: Phase, momentumPhase: Phase?) {
+        guard momentumPhase == nil else {
             return
         }
-        switch event.sendType {
-        case .begin:
+        switch phase {
+        case .began:
             indexScrollDeltaPosition = CGPoint()
             indexScrollIndex = currentAllKeyframeIndex
-        case .sending, .end:
-            indexScrollDeltaPosition += event.scrollDeltaPoint
+        case .changed, .ended:
+            indexScrollDeltaPosition += scrollDeltaPoint
             let di = Int(-indexScrollDeltaPosition.x / indexScrollWidth)
             currentAllKeyframeIndex = indexScrollIndex + di
         }
@@ -1603,32 +1586,24 @@ final class TimelineView: View {
         return scene.cuts.reduce(0) { $0 + $1.editNode.editTrack.animation.loopFrames.count }
     }
     
-    private var isIndexScroll = false
-    func scrollTime(with event: ScrollEvent) {
-        if event.sendType == .begin {
-            isIndexScroll = event.beginNormalizedPosition.y > 0.85
-        }
-        if isIndexScroll {
-            indexScroll(with: event)
-        } else {
-            let maxX = self.x(withTime: scene.duration)
-            let x = (scrollPoint.x - event.scrollDeltaPoint.x).clip(min: 0, max: maxX)
-            scrollPoint = CGPoint(x: event.sendType == .begin ?
-                self.x(withTime: time(withLocalX: x)) : x, y: 0)
-            scrollClosure?(self, scrollPoint, event)
-        }
+    func scrollTime(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+                    phase: Phase, momentumPhase: Phase?) {
+        let maxX = self.x(withTime: scene.duration)
+        let x = (scrollPoint.x - scrollDeltaPoint.x).clip(min: 0, max: maxX)
+        scrollPoint = CGPoint(x: phase == .began ?
+            self.x(withTime: self.time(withLocalX: x)) : x, y: 0)
     }
     
     private var baseTimeIntervalOldTime = Second(0)
     private var floatBaseTimeInterval = 0.0.cf, beginBaseTimeInterval = Beat(1)
-    func zoom(with event: PinchEvent) -> Bool {
-        switch event.sendType {
-        case .begin:
+    func zoom(for p: CGPoint, time: Second, magnification: CGFloat, _ phase: Phase) {
+        switch phase {
+        case .began:
             baseTimeIntervalOldTime = scene.secondTime(withBeatTime: scene.time)
             beginBaseTimeInterval = baseTimeInterval
             floatBaseTimeInterval = 0
-        case .sending, .end:
-            floatBaseTimeInterval += event.magnification * 40
+        case .changed, .ended:
+            floatBaseTimeInterval += magnification * 40
             if beginBaseTimeInterval.q == 1 {
                 let p = beginBaseTimeInterval.p - Int(floatBaseTimeInterval)
                 baseTimeInterval = p < 1 ? Beat(1, 2 - p) : Beat(p)
@@ -1636,7 +1611,7 @@ final class TimelineView: View {
                 let q = beginBaseTimeInterval.q + Int(floatBaseTimeInterval)
                 baseTimeInterval = q < 1 ? Beat(2 - q) : Beat(1, q)
             }
-            updateWith(time: time, scrollPoint: CGPoint(x: x(withTime: time), y: 0),
+            updateWith(time: self.time, scrollPoint: CGPoint(x: x(withTime: self.time), y: 0),
                        isIntervalScroll: false)
             updateWithTime()
         }
@@ -1644,17 +1619,15 @@ final class TimelineView: View {
 //            baseWidth = (baseWidth * (event.magnification * 2.5 + 1))
 //                .clip(min: 1, max: Timeline.defautBaseWidth)
 //        }
-        return true
     }
-//    func resetView(with event: DoubleTapEvent) -> Bool {
+    func resetView(for p: CGPoint) {
 //        guard baseWidth != Timeline.defautBaseWidth else {
-//            return false
+//            return
 //        }
 //        zoom(at: point(from: event)) {
 //            baseWidth = Timeline.defautBaseWidth
 //        }
-//        return true
-//    }
+    }
     func zoom(at p: CGPoint, closure: () -> ()) {
         closure()
         _scrollPoint.x = x(withTime: time)
@@ -1662,37 +1635,38 @@ final class TimelineView: View {
         updateView(isCut: false, isTransform: false, isKeyframe: false)
     }
     
-    static let name = Localization(english: "Timeline", japanese: "タイムライン")
-    static let feature = Localization(english: "Select time: Left and right scroll\nSelect track: Up and down scroll",
-                                      japanese: "時間選択: 左右スクロール\nトラック選択: 上下スクロール")
-    
+    func reference(at p: CGPoint) -> Reference {
+        return Reference(name: Localization(english: "Timeline", japanese: "タイムライン"),
+                         viewDescription: Localization(english: "Select time: Left and right scroll\nSelect track: Up and down scroll",
+                                                       japanese: "時間選択: 左右スクロール\nトラック選択: 上下スクロール"))
+    }
 }
 
-final class RulerLayer: Layer {
-    private let scroller: Layer = {
-        let layer = Layer()
-        layer.lineColor = nil
-        return layer
+final class RulerView: View {
+    private let scrollView: View = {
+        let view = View(isForm: true)
+        view.lineColor = nil
+        return view
     } ()
     
     override init() {
         super.init()
-        append(child: scroller)
+        append(child: scrollView)
     }
     
     var scrollPosition: CGPoint {
         get  {
-            return scroller.frame.origin
+            return scrollView.frame.origin
         }
         set {
-            scroller.frame.origin = newValue
+            scrollView.frame.origin = newValue
         }
     }
     var scrollFrame = CGRect()
     
     var scaleTextViews = [TextView]() {
         didSet {
-            scroller.replace(children: scaleTextViews)
+            scrollView.children = scaleTextViews
         }
     }
 }

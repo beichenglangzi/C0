@@ -22,7 +22,8 @@ import Foundation
 struct Layout {
     static let smallPadding = 2.0.cf, basicPadding = 3.0.cf, basicLargePadding = 14.0.cf
     static let smallRatio = Font.small.size / Font.default.size
-    static let basicHeight = Font.default.ceilHeight(withPadding: 1) + basicPadding * 2
+    static let basicTextHeight = Font.default.ceilHeight(withPadding: 1)
+    static let basicHeight = basicTextHeight + basicPadding * 2
     static let smallHeight = Font.small.ceilHeight(withPadding: 1) + smallPadding * 2
     static let basicValueWidth = 56.cf, smallValueWidth = 40.0.cf
     static let basicValueFrame = CGRect(x: 0, y: basicPadding,
@@ -42,53 +43,53 @@ struct Layout {
         return sizeType == .small ? smallValueFrame : basicValueFrame
     }
     
-    static func centered(_ layers: [Layer],
+    static func centered(_ views: [View],
                          in bounds: CGRect, paddingWidth: CGFloat = 0) {
-        let w = layers.reduce(-paddingWidth) { $0 +  $1.frame.width + paddingWidth }
-        _ = layers.reduce(floor((bounds.width - w) / 2)) { x, layer in
-            layer.frame.origin.x = x
-            return x + layer.frame.width + paddingWidth
+        let w = views.reduce(-paddingWidth) { $0 +  $1.frame.width + paddingWidth }
+        _ = views.reduce(floor((bounds.width - w) / 2)) { x, view in
+            view.frame.origin.x = x
+            return x + view.frame.width + paddingWidth
         }
     }
-    static func leftAlignmentWidth(_ layers: [Layer], minX: CGFloat = basicPadding,
+    static func leftAlignmentWidth(_ views: [View], minX: CGFloat = basicPadding,
                                    paddingWidth: CGFloat = 0) -> CGFloat {
-        return layers.reduce(minX) { $0 + $1.frame.width + paddingWidth } - paddingWidth
+        return views.reduce(minX) { $0 + $1.frame.width + paddingWidth } - paddingWidth
     }
-    static func leftAlignment(_ layers: [Layer], minX: CGFloat = basicPadding,
+    static func leftAlignment(_ views: [View], minX: CGFloat = basicPadding,
                               y: CGFloat = 0, paddingWidth: CGFloat = 0) {
-        _ = layers.reduce(minX) { x, layer in
-            layer.frame.origin = CGPoint(x: x, y: y)
-            return x + layer.frame.width + paddingWidth
+        _ = views.reduce(minX) { x, view in
+            view.frame.origin = CGPoint(x: x, y: y)
+            return x + view.frame.width + paddingWidth
         }
     }
-    static func leftAlignment(_ layers: [Layer], minX: CGFloat = basicPadding,
+    static func leftAlignment(_ views: [View], minX: CGFloat = basicPadding,
                               y: CGFloat = 0, height: CGFloat, paddingWidth: CGFloat = 0) -> CGSize {
-        let width = layers.reduce(minX) { x, layer in
-            layer.frame.origin = CGPoint(x: x, y: y + round((height - layer.frame.height) / 2))
-            return x + layer.frame.width + paddingWidth
+        let width = views.reduce(minX) { x, view in
+            view.frame.origin = CGPoint(x: x, y: y + round((height - view.frame.height) / 2))
+            return x + view.frame.width + paddingWidth
         }
         return CGSize(width: width, height: height)
     }
-    static func topAlignment(_ layers: [Layer],
+    static func topAlignment(_ views: [View],
                              minX: CGFloat = basicPadding, minY: CGFloat = basicPadding,
                              minSize: inout CGSize, padding: CGFloat = Layout.basicPadding) {
-        let width = layers.reduce(0.0.cf) { max($0, $1.defaultBounds.width) } + padding * 2
-        let height = layers.reversed().reduce(minY) { y, layer in
-            layer.frame = CGRect(x: minX, y: y,
-                                 width: width, height: layer.defaultBounds.height)
-            return y + layer.frame.height
+        let width = views.reduce(0.0.cf) { max($0, $1.defaultBounds.width) } + padding * 2
+        let height = views.reversed().reduce(minY) { y, view in
+            view.frame = CGRect(x: minX, y: y,
+                                 width: width, height: view.defaultBounds.height)
+            return y + view.frame.height
         }
         minSize = CGSize(width: width, height: height - minY)
     }
-    static func autoHorizontalAlignment(_ layers: [Layer],
+    static func autoHorizontalAlignment(_ views: [View],
                                         padding: CGFloat = 0, in bounds: CGRect) {
-        guard !layers.isEmpty else {
+        guard !views.isEmpty else {
             return
         }
-        let w = layers.reduce(0.0.cf) { $0 +  $1.defaultBounds.width + padding } - padding
-        let dx = (bounds.width - w) / layers.count.cf
-        _ = layers.enumerated().reduce(bounds.minX) { x, value in
-            if value.offset == layers.count - 1 {
+        let w = views.reduce(0.0.cf) { $0 +  $1.defaultBounds.width + padding } - padding
+        let dx = (bounds.width - w) / views.count.cf
+        _ = views.enumerated().reduce(bounds.minX) { x, value in
+            if value.offset == views.count - 1 {
                 value.element.frame = CGRect(x: x, y: bounds.minY,
                                              width: bounds.maxX - x, height: bounds.height)
                 return bounds.maxX
@@ -106,5 +107,9 @@ final class Padding: View {
     override init() {
         super.init()
         self.frame = CGRect(origin: CGPoint(), size: CGSize(square: Layout.basicPadding))
+    }
+    
+    func reference(at p: CGPoint) -> Reference {
+        return Reference(name: Localization(english: "Padding", japanese: "パディング"))
     }
 }

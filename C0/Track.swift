@@ -367,10 +367,10 @@ final class TempoTrack: NSObject, Track, NSCoding {
         coder.encode(keySeconds, forKey: CodingKeys.keySeconds.rawValue)
     }
 }
-extension TempoTrack: ClassCopiable {
-    func copied(from copier: Copier) -> TempoTrack {
+extension TempoTrack: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> TempoTrack {
         return TempoTrack(animation: animation, time: time,
-                          tempoItem: copier.copied(tempoItem))
+                          tempoItem: deepCopier.copied(tempoItem))
     }
 }
 extension TempoTrack: Referenceable {
@@ -1205,17 +1205,17 @@ final class NodeTrack: NSObject, Track, NSCoding {
                                         reciprocalAllScale: reciprocalAllScale, in: ctx)
     }
 }
-extension NodeTrack: ClassCopiable {
-    func copied(from copier: Copier) -> NodeTrack {
+extension NodeTrack: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> NodeTrack {
         return NodeTrack(animation: animation, name: name,
                          time: time, isHidden: isHidden,
-                         selectedCellItems: selectedCellItems.map { copier.copied($0) },
-                         drawingItem: copier.copied(drawingItem),
-                         cellItems: cellItems.map { copier.copied($0) },
-                         materialItems: materialItems.map { copier.copied($0) },
-                         effectItem: effectItem != nil ? copier.copied(effectItem!) : nil,
-                         transformItem: transformItem != nil ? copier.copied(transformItem!) : nil,
-                         wiggleItem: wiggleItem != nil ? copier.copied(wiggleItem!) : nil,
+                         selectedCellItems: selectedCellItems.map { deepCopier.copied($0) },
+                         drawingItem: deepCopier.copied(drawingItem),
+                         cellItems: cellItems.map { deepCopier.copied($0) },
+                         materialItems: materialItems.map { deepCopier.copied($0) },
+                         effectItem: effectItem != nil ? deepCopier.copied(effectItem!) : nil,
+                         transformItem: transformItem != nil ? deepCopier.copied(transformItem!) : nil,
+                         wiggleItem: wiggleItem != nil ? deepCopier.copied(wiggleItem!) : nil,
                          keyPhases: keyPhases)
     }
 }
@@ -1223,8 +1223,8 @@ extension NodeTrack: Referenceable {
     static let name = Localization(english: "Node Track", japanese: "ノードトラック")
 }
 extension NodeTrack: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return name.view(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return name.view(withBounds: bounds, sizeType)
     }
 }
 
@@ -1317,10 +1317,10 @@ final class DrawingItem: NSObject, TrackItem, NSCoding {
         }
     }
 }
-extension DrawingItem: ClassCopiable {
-    func copied(from copier: Copier) -> DrawingItem {
-        return DrawingItem(drawing: copier.copied(drawing),
-                           keyDrawings: keyDrawings.map { copier.copied($0) }, color: color)
+extension DrawingItem: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> DrawingItem {
+        return DrawingItem(drawing: deepCopier.copied(drawing),
+                           keyDrawings: keyDrawings.map { deepCopier.copied($0) }, color: color)
     }
 }
 extension DrawingItem: Referenceable {
@@ -1413,9 +1413,9 @@ final class CellItem: NSObject, TrackItem, NSCoding {
         }
     }
 }
-extension CellItem: ClassCopiable {
-    func copied(from copier: Copier) -> CellItem {
-        return CellItem(cell: copier.copied(cell), keyGeometries: keyGeometries)
+extension CellItem: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> CellItem {
+        return CellItem(cell: deepCopier.copied(cell), keyGeometries: keyGeometries)
     }
 }
 extension CellItem: Referenceable {
@@ -1480,10 +1480,10 @@ final class MaterialItem: NSObject, TrackItem, NSCoding {
         coder.encode(keyMaterials, forKey: CodingKeys.keyMaterials.rawValue)
     }
 }
-extension MaterialItem: ClassCopiable {
-    func copied(from copier: Copier) -> MaterialItem {
+extension MaterialItem: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> MaterialItem {
         return MaterialItem(material: material,
-                            cells: cells.map { copier.copied($0) }, keyMaterials: keyMaterials)
+                            cells: cells.map { deepCopier.copied($0) }, keyMaterials: keyMaterials)
     }
 }
 extension MaterialItem: Referenceable {
@@ -1547,8 +1547,8 @@ final class EffectItem: TrackItem, Codable {
         return true
     }
 }
-extension EffectItem: ClassCopiable {
-    func copied(from copier: Copier) -> EffectItem {
+extension EffectItem: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> EffectItem {
         return EffectItem(effect: effect, keyEffects: keyEffects)
     }
 }
@@ -1613,8 +1613,8 @@ final class TransformItem: TrackItem, Codable {
         return true
     }
 }
-extension TransformItem: ClassCopiable {
-    func copied(from copier: Copier) -> TransformItem {
+extension TransformItem: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> TransformItem {
         return TransformItem(transform: transform, keyTransforms: keyTransforms)
     }
 }
@@ -1679,8 +1679,8 @@ final class WiggleItem: TrackItem, Codable {
         return true
     }
 }
-extension WiggleItem: ClassCopiable {
-    func copied(from copier: Copier) -> WiggleItem {
+extension WiggleItem: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> WiggleItem {
         return WiggleItem(wiggle: wiggle, keyWiggles: keyWiggles)
     }
 }
@@ -1734,8 +1734,8 @@ final class TempoItem: TrackItem, Codable {
         return tempoItem
     }
 }
-extension TempoItem: ClassCopiable {
-    func copied(from copier: Copier) -> TempoItem {
+extension TempoItem: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> TempoItem {
         return TempoItem(tempo: tempo, keyTempos: keyTempos)
     }
 }
@@ -1754,10 +1754,10 @@ final class TracksManager {
             }
             return Localization(tracks[$0].name)
         }
-        tracksView.copiedObjectsClosure = { [unowned self] _, _ in
+        tracksView.copiedViewablesClosure = { [unowned self] _, _ in
             return [self.node.editTrack.copied]
         }
-        tracksView.moveClosure = { [unowned self] in return self.moveTrack(with: $1) }
+        tracksView.moveClosure = { [unowned self] in self.moveTrack(for: $1, $2) }
     }
     
     var node = Node() {
@@ -1780,7 +1780,7 @@ final class TracksManager {
     struct NodeTracksBinding {
         let tracksManager: TracksManager
         let track: NodeTrack, index: Int, oldIndex: Int, beginIndex: Int
-        let inNode: Node, type: Action.SendType
+        let inNode: Node, phase: Phase
     }
     var setTracksClosure: ((NodeTracksBinding) -> ())?
     
@@ -1788,10 +1788,9 @@ final class TracksManager {
     private var oldIndex = 0, beginIndex = 0, oldP = CGPoint()
     private weak var editTrack: NodeTrack?
     private var oldInNode = Node(), oldTracks = [NodeTrack]()
-    func moveTrack(with event: DragEvent) -> Bool {
-        let p = tracksView.point(from: event)
-        switch event.sendType {
-        case .begin:
+    func moveTrack(for p: CGPoint, _ phase: Phase) {
+        switch phase {
+        case .began:
             oldInNode = node
             oldTracks = oldInNode.tracks
             oldIndex = oldInNode.editTrackIndex
@@ -1803,26 +1802,25 @@ final class TracksManager {
                                                 index: oldIndex,
                                                 oldIndex: oldIndex,
                                                 beginIndex: beginIndex,
-                                                inNode: oldInNode, type: .begin))
-        case .sending, .end:
+                                                inNode: oldInNode, phase: .began))
+        case .changed, .ended:
             guard let editTrack = editTrack else {
-                return true
+                return
             }
             let d = p.y - oldP.y
             let i = (beginIndex + Int(d / moveHeight)).clip(min: 0, max: oldTracks.count - 1)
-            if i != oldIndex || (event.sendType == .end && i != beginIndex) {
+            if i != oldIndex || (phase == .ended && i != beginIndex) {
                 setTracksClosure?(NodeTracksBinding(tracksManager: self,
                                                     track: editTrack,
                                                     index: i,
                                                     oldIndex: oldIndex,
                                                     beginIndex: beginIndex,
-                                                    inNode: oldInNode, type: event.sendType))
+                                                    inNode: oldInNode, phase: phase))
                 oldIndex = i
             }
-            if event.sendType == .end {
+            if phase == .ended {
                 oldTracks = []
             }
         }
-        return true
     }
 }

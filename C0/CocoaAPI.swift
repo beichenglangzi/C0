@@ -20,16 +20,16 @@
 import Cocoa
 
 struct Font {
-    static let `default` = Font(monospacedSize: 11)
-    static let bold = Font(boldMonospacedSize: 11)
-    static let italic = Font(italicMonospacedSize: 11)
-    static let smallBold = Font(boldMonospacedSize: 8)
     static let small = Font(monospacedSize: 8)
+    static let `default` = Font(monospacedSize: 11)
+    static let smallBold = Font(boldMonospacedSize: 8)
+    static let bold = Font(boldMonospacedSize: 11)
     static let smallItalic = Font(italicMonospacedSize: 8)
+    static let italic = Font(italicMonospacedSize: 11)
+    
     static let action = Font(boldMonospacedSize: 9)
-    static let hedding0 = Font(boldMonospacedSize: 14)
-    static let hedding1 = Font(boldMonospacedSize: 10)
     static let subtitle = Font(boldMonospacedSize: 20)
+    
     static func `default`(with sizeType: SizeType) -> Font {
         return sizeType == .small ? small : self.default
     }
@@ -475,11 +475,11 @@ final class C0Document: NSDocument, NSWindowDelegate {
         preferenceDataModel.didChangeIsWriteClosure = isWriteClosure
         
         view.desktopView.undoManager?.disableUndoRegistration()
-        view.desktopView.push(copiedObjects: NSPasteboard.general.copiedObjects)
+        view.desktopView.push(copiedViewables: NSPasteboard.general.copiedViewables)
         view.desktopView.undoManager?.enableUndoRegistration()
         
-        view.desktopView.desktop.copiedObjectsBinding = { [unowned self] _ in
-            self.didSetCopiedObjects()
+        view.desktopView.desktop.copiedViewablesBinding = { [unowned self] _ in
+            self.didSetCopiedViewables()
         }
     }
     private func setupWindow(with preference: C0Preference) {
@@ -515,25 +515,25 @@ final class C0Document: NSDocument, NSWindowDelegate {
         preferenceDataModel.isWrite = true
     }
     
-    func didSetCopiedObjects() {
-        changeCountWithCopiedObjects += 1
+    func didSetCopiedViewables() {
+        changeCountWithCopiedViewables += 1
     }
-    var changeCountWithCopiedObjects = 0
-    var oldChangeCountWithCopiedObjects = 0
+    var changeCountWithCopiedViewables = 0
+    var oldChangeCountWithCopiedViewables = 0
     var oldChangeCountWithPsteboard = NSPasteboard.general.changeCount
     func windowDidBecomeMain(_ notification: Notification) {
         let pasteboard = NSPasteboard.general
         if pasteboard.changeCount != oldChangeCountWithPsteboard {
             oldChangeCountWithPsteboard = pasteboard.changeCount
-            view.desktopView.push(copiedObjects: pasteboard.copiedObjects)
-            oldChangeCountWithCopiedObjects = changeCountWithCopiedObjects
+            view.desktopView.push(copiedViewables: pasteboard.copiedViewables)
+            oldChangeCountWithCopiedViewables = changeCountWithCopiedViewables
         }
     }
     func windowDidResignMain(_ notification: Notification) {
-        if oldChangeCountWithCopiedObjects != changeCountWithCopiedObjects {
-            oldChangeCountWithCopiedObjects = changeCountWithCopiedObjects
+        if oldChangeCountWithCopiedViewables != changeCountWithCopiedViewables {
+            oldChangeCountWithCopiedViewables = changeCountWithCopiedViewables
             let pasteboard = NSPasteboard.general
-            pasteboard.set(copiedObjects: desktop.copiedObjects)
+            pasteboard.set(copiedViewables: desktop.copiedViewables)
             oldChangeCountWithPsteboard = pasteboard.changeCount
         }
     }
@@ -544,27 +544,27 @@ final class C0Document: NSDocument, NSWindowDelegate {
 }
 
 extension NSPasteboard {
-    var copiedObjects: [ViewExpression] {
-        var copiedObjects = [ViewExpression]()
+    var copiedViewables: [Viewable] {
+        var copiedViewables = [Viewable]()
         func append(with data: Data, type: NSPasteboard.PasteboardType) {
             let object = C0Coder.decode(from: data, forKey: type.rawValue)
             if let object = object as? [Line] {
-                copiedObjects.append(object)
-            } else if let object = object as? ViewExpression {
-                copiedObjects.append(object)
+                copiedViewables.append(object)
+            } else if let object = object as? Viewable {
+                copiedViewables.append(object)
             }
         }
         if let urls = readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
-            urls.forEach { copiedObjects.append($0) }
+            urls.forEach { copiedViewables.append($0) }
         }
         if let string = string(forType: .string) {
-            copiedObjects.append(string)
+            copiedViewables.append(string)
         } else if let types = types {
             for type in types {
                 if let data = data(forType: type) {
                     append(with: data, type: type)
                 } else if let string = string(forType: .string) {
-                    copiedObjects.append(string)
+                    copiedViewables.append(string)
                 }
             }
         } else if let items = pasteboardItems {
@@ -573,21 +573,21 @@ extension NSPasteboard {
                     if let data = item.data(forType: type) {
                         append(with: data, type: type)
                     } else if let string = item.string(forType: .string) {
-                        copiedObjects.append(string)
+                        copiedViewables.append(string)
                     }
                 }
             }
         }
-        return copiedObjects
+        return copiedViewables
     }
-    func set(copiedObjects: [ViewExpression]) {
-        guard !copiedObjects.isEmpty else {
+    func set(copiedViewables: [Viewable]) {
+        guard !copiedViewables.isEmpty else {
             clearContents()
             return
         }
         var strings = [String]()
         var typesAndDatas = [(type: NSPasteboard.PasteboardType, data: Data)]()
-        for object in copiedObjects {
+        for object in copiedViewables {
             if let string = object as? String {
                 strings.append(string)
             } else {
@@ -622,6 +622,9 @@ extension NSPasteboard {
     }
 }
 
+/**
+ Issue: トラックパッドの環境設定を無効化
+ */
 final class C0View: NSView, NSTextInputClient {
     let sender: Sender
     let desktopView = DesktopView()
@@ -630,14 +633,12 @@ final class C0View: NSView, NSTextInputClient {
     private let isSimpleReferenceKey = "isSimpleReferenceKey"
     
     override init(frame frameRect: NSRect) {
-        sender = Sender(rootView: desktopView,
-                        actionManager: desktopView.actionManagerView.actionManager)
+        sender = Sender(rootView: desktopView)
         super.init(frame: frameRect)
         setup()
     }
     required init?(coder: NSCoder) {
-        sender = Sender(rootView: desktopView,
-                        actionManager: desktopView.actionManagerView.actionManager)
+        sender = Sender(rootView: desktopView)
         super.init(coder: coder)
         setup()
     }
@@ -661,12 +662,14 @@ final class C0View: NSView, NSTextInputClient {
             UserDefaults.standard.bool(forKey: isSimpleReferenceKey))
         
         desktopView.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }
-        sender.setCursorClosure = {
-            if $0.cursor.nsCursor != NSCursor.current {
-                $0.cursor.nsCursor.set()
-            }
+        
+        sender.indicatableActionManager.indicatedViewBinding = { [unowned self] in
+            self.didSet($0.indicatedView, oldIndicatedView: $0.oldIndicatedView)
         }
-
+        desktopView.changedFrame = { [unowned self] in
+            self.sender.indicatableActionManager.updateIndicatedView(with: $0, in: self.desktopView)
+        }
+        
         let nc = NotificationCenter.default
         localToken = nc.addObserver(forName: NSLocale.currentLocaleDidChangeNotification,
                                     object: nil,
@@ -734,115 +737,179 @@ final class C0View: NSView, NSTextInputClient {
         }
         return convertFromLayer(window.convertToScreen(convert(r, to: nil)))
     }
-
-    func viewQuasimodeEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> MoveCursorEvent {
-        return MoveCursorEvent(sendType: sendType, location: cursorPoint,
-                               time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil)
+    
+    func draggerEventWith(pointing nsEvent: NSEvent, _ phase: Phase) -> Dragger.Event {
+        return Dragger.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp,
+                             pressure: 1, phase: phase)
     }
-    func moveEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> MoveCursorEvent {
-        return MoveCursorEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                               time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil)
+    func draggerEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Dragger.Event {
+        return Dragger.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp,
+                             pressure: nsEvent.pressure.cf, phase: phase)
     }
-    func dragEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> DragEvent {
-        return DragEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                         time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil,
-                         isPen: nsEvent.subtype == .tabletPoint,
-                         pressure: nsEvent.pressure.cf)
+    func scrollerEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Scroller.Event {
+        var scrollMomentumPhase: Phase? {
+            if nsEvent.momentumPhase.contains(.began) {
+                return .began
+            } else if nsEvent.momentumPhase.contains(.changed) {
+                return .changed
+            } else if nsEvent.momentumPhase.contains(.ended) {
+                return .ended
+            } else {
+                return nil
+            }
+        }
+        return Scroller.Event(rootLocation: screenPoint(with: nsEvent),
+                              time: nsEvent.timestamp,
+                              scrollDeltaPoint: CGPoint(x: nsEvent.scrollingDeltaX,
+                                                        y: -nsEvent.scrollingDeltaY),
+                              phase: phase,
+                              momentumPhase: scrollMomentumPhase)
     }
-    func scrollEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> ScrollEvent {
-        return ScrollEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                           time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil,
-                           scrollDeltaPoint: CGPoint(x: nsEvent.scrollingDeltaX,
-                                                     y: -nsEvent.scrollingDeltaY),
-                           scrollMomentumType: nsEvent.scrollMomentumType,
-                           beginNormalizedPosition: beginTouchesNormalizedPosition)
+    func pincherEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Pincher.Event {
+        return Pincher.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp,
+                             magnification: nsEvent.magnification, phase: phase)
     }
-    func pinchEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> PinchEvent {
-        return PinchEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                          time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil,
-                          magnification: nsEvent.magnification)
+    func rotaterEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Rotater.Event {
+        return Rotater.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp,
+                             rotationQuantity: nsEvent.rotation.cf, phase: phase)
     }
-    func rotateEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> RotateEvent {
-        return RotateEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                           time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil,
-                           rotation: nsEvent.rotation.cf)
+    func inputterEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Inputter.Event {
+        return Inputter.Event(rootLocation: cursorPoint, time: nsEvent.timestamp,
+                              pressure: 1, phase: phase)
     }
-    func tapEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> TapEvent {
-        return TapEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                        time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil)
+    
+    func didSet(_ indicatedView: View?, oldIndicatedView: View?) {
+        if let editTextView = oldIndicatedView as? TextView {
+            editTextView.unmarkText()
+        }
     }
-    func doubleTapEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> DoubleTapEvent {
-        return DoubleTapEvent(sendType: sendType, location: screenPoint(with: nsEvent),
-                              time: nsEvent.timestamp, modifierKeys: nsEvent.modifierKeys, key: nil)
+    
+    override func flagsChanged(with nsEvent: NSEvent) {
+        let newInputterTypes = nsEvent.modifierKeys, oldInputters = sender.eventMap.inputters
+        newInputterTypes.forEach { newInputterType in
+            if !oldInputters.contains(where: { newInputterType == $0.type }) {
+                sender.send(Inputter(type: newInputterType, event: inputterEventWith(nsEvent, .began)))
+            }
+        }
+        oldInputters.forEach { oldInptter in
+            if !newInputterTypes.contains(where: { oldInptter.type == $0 }) {
+                sender.send(Inputter(type: oldInptter.type, event: inputterEventWith(nsEvent, .ended)))
+            }
+        }
     }
-    func keyInputEventWith(_ sendType: Action.SendType, _ nsEvent: NSEvent) -> KeyInputEvent {
-        return KeyInputEvent(sendType: sendType, location: cursorPoint,
-                             time: nsEvent.timestamp,
-                             modifierKeys: nsEvent.modifierKeys, key: nsEvent.key)
+    
+    override func keyDown(with nsEvent: NSEvent) {
+        guard !nsEvent.isARepeat else {
+            return
+        }
+        if let key = nsEvent.key {
+            sender.send(Inputter(type: key, event: inputterEventWith(nsEvent, .began)))
+        }
     }
-
-    override func flagsChanged(with event: NSEvent) {
-        let viewQuasimode = viewQuasimodeEventWith(!event.modifierFlags.isEmpty ? .begin : .end, event)
-        sender.sendViewQuasimode(with: viewQuasimode)
-    }
-
-    override func keyDown(with event: NSEvent) {
-        keyInput(with: event, .begin)
-    }
-    override func keyUp(with event: NSEvent) {
-        keyInput(with: event, .end)
-    }
-    private func keyInput(with event: NSEvent, _ sendType: Action.SendType) {
-        if sender.sendKeyInputIsEditText(with: keyInputEventWith(sendType, event)) {
-            inputContext?.handleEvent(event)
+    override func keyUp(with nsEvent: NSEvent) {
+        if let key = nsEvent.key {
+            sender.send(Inputter(type: key, event: inputterEventWith(nsEvent, .ended)))
         }
     }
 
-    override func cursorUpdate(with event: NSEvent) {
-        sender.sendMoveCursor(with: moveEventWith(.sending, event))
-        if sender.indicatedResponders[0].cursor.nsCursor != NSCursor.current {
-            sender.indicatedResponders[0].cursor.nsCursor.set()
-        }
+    override func cursorUpdate(with nsEvent: NSEvent) {
+        mouseMoved(with: nsEvent)
     }
-    override func mouseMoved(with event: NSEvent) {
-        sender.sendMoveCursor(with: moveEventWith(.sending, event))
+    override func mouseMoved(with nsEvent: NSEvent) {
+        sender.send(Dragger(type: .pointing, event: draggerEventWith(pointing: nsEvent, .began)))
     }
 
     override func rightMouseDown(with nsEvent: NSEvent) {
-        sender.sendSubDrag(with: dragEventWith(.begin, nsEvent))
+        sender.send(Dragger(type: .subDrag, event: draggerEventWith(nsEvent, .began)))
     }
     override func rightMouseDragged(with nsEvent: NSEvent) {
-        sender.sendSubDrag(with: dragEventWith(.sending, nsEvent))
+        sender.send(Dragger(type: .subDrag, event: draggerEventWith(nsEvent, .changed)))
     }
     override func rightMouseUp(with nsEvent: NSEvent) {
-        sender.sendSubDrag(with: dragEventWith(.end, nsEvent))
+        sender.send(Dragger(type: .subDrag, event: draggerEventWith(nsEvent, .ended)))
+        sender.send(Dragger(type: .pointing, event: draggerEventWith(pointing: nsEvent, .began)))
     }
-
+    
+    private var workItem: DispatchWorkItem?
+    private var beginDragger: Dragger?
+    var clickTime = 0.2
     override func mouseDown(with nsEvent: NSEvent) {
-        sender.sendDrag(with: dragEventWith(.begin, nsEvent))
+        sender.send(Dragger(type: .pointing, event: draggerEventWith(pointing: nsEvent, .began)))
+        let beginDragger = Dragger(type: .drag, event: draggerEventWith(nsEvent, .began))
+        self.beginDragger = beginDragger
+        let workItem = DispatchWorkItem() { [unowned self] in
+            self.sender.send(beginDragger)
+            self.workItem?.cancel()
+            self.workItem = nil
+        }
+        self.workItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + clickTime, execute: workItem)
     }
     override func mouseDragged(with nsEvent: NSEvent) {
-        sender.sendDrag(with: dragEventWith(.sending, nsEvent))
+        sender.send(Dragger(type: .pointing, event: draggerEventWith(pointing: nsEvent, .began)))
+        if workItem != nil {
+            workItem?.perform()
+        }
+        sender.send(Dragger(type: .drag, event: draggerEventWith(nsEvent, .changed)))
     }
     override func mouseUp(with nsEvent: NSEvent) {
-        sender.sendDrag(with: dragEventWith(.end, nsEvent))
+        let endDragger = Dragger(type: .drag, event: draggerEventWith(nsEvent, .ended))
+        if workItem != nil {
+            workItem?.cancel()
+            self.workItem = nil
+            
+            guard let beginDragger = beginDragger else {
+                return
+            }
+            if beginDragger.event.rootLocation != endDragger.event.rootLocation {
+                sender.send(Dragger(type: .pointing,
+                                    event: draggerEventWith(pointing: nsEvent, .began)))
+                sender.send(beginDragger)
+                sender.send(endDragger)
+            } else {
+                func clickInputterWith(_ dragger: Dragger, _ phase: Phase) -> Inputter {
+                    return Inputter(type: .click,
+                                    event: Inputter.Event(rootLocation: dragger.event.rootLocation,
+                                                          time: dragger.event.time,
+                                                          pressure: dragger.event.pressure,
+                                                          phase: phase))
+                }
+                sender.send(clickInputterWith(beginDragger, .began))
+                sender.send(clickInputterWith(beginDragger, .ended))
+            }
+        } else {
+            sender.send(Dragger(type: .pointing, event: draggerEventWith(pointing: nsEvent, .began)))
+            sender.send(endDragger)
+        }
     }
-
+    
     private var beginTouchesNormalizedPosition = CGPoint()
-    override func touchesBegan(with event: NSEvent) {
-        let touches = event.touches(matching: .began, in: self)
+    override func touchesBegan(with nsEvent: NSEvent) {
+        let touches = nsEvent.touches(matching: .began, in: self)
         beginTouchesNormalizedPosition = touches.reduce(CGPoint()) {
             return CGPoint(x: max($0.x, $1.normalizedPosition.x),
                            y: max($0.y, $1.normalizedPosition.y))
         }
     }
+    override func touchesEnded(with event: NSEvent) {
+        beginTouchesNormalizedPosition = CGPoint()
+    }
 
-    override func scrollWheel(with event: NSEvent) {
-        if event.phase != .mayBegin && event.phase != .cancelled {
-            let momentum = event.momentumPhase == .changed || event.momentumPhase == .ended
-            let sendType: Action.SendType = event.phase == .began ?
-                .begin : (event.phase == .ended ? .end : .sending)
-            sender.sendScroll(with: scrollEventWith(sendType, event), momentum: momentum)
+    override func scrollWheel(with nsEvent: NSEvent) {
+        guard nsEvent.phase != .mayBegin && nsEvent.phase != .cancelled else {
+            return
+        }
+        let phase: Phase = nsEvent.phase == .began ?
+            .began : (nsEvent.phase == .ended ? .ended : .changed)
+        let type: Scroller.EventType = beginTouchesNormalizedPosition.y > 0.85 ?
+            .upperScroll : .scroll
+        switch phase {
+        case .began:
+            sender.send(Scroller(type: type, event: scrollerEventWith(nsEvent, .began)))
+        case .changed:
+            sender.send(Scroller(type: type, event: scrollerEventWith(nsEvent, .changed)))
+        case .ended:
+            sender.send(Scroller(type: type, event: scrollerEventWith(nsEvent, .ended)))
         }
     }
 
@@ -850,50 +917,53 @@ final class C0View: NSView, NSTextInputClient {
         case none, scroll, pinch, rotate
     }
     private var blockGesture = TouchGesture.none
-    override func magnify(with event: NSEvent) {
-        if event.phase == .began {
+    override func magnify(with nsEvent: NSEvent) {
+        if nsEvent.phase == .began {
             if blockGesture == .none {
                 blockGesture = .pinch
-                sender.sendPinch(with: pinchEventWith(.begin, event))
+                sender.send(Pincher(type: .pinch, event: pincherEventWith(nsEvent, .began)))
             }
-        } else if event.phase == .ended {
+        } else if nsEvent.phase == .ended {
             if blockGesture == .pinch {
                 blockGesture = .none
-                sender.sendPinch(with:pinchEventWith(.end, event))
+                sender.send(Pincher(type: .pinch, event: pincherEventWith(nsEvent, .ended)))
             }
         } else {
             if blockGesture == .pinch {
-                sender.sendPinch(with: pinchEventWith(.sending, event))
+                sender.send(Pincher(type: .pinch, event: pincherEventWith(nsEvent, .changed)))
             }
         }
     }
-    override func rotate(with event: NSEvent) {
-        if event.phase == .began {
+    override func rotate(with nsEvent: NSEvent) {
+        if nsEvent.phase == .began {
             if blockGesture == .none {
                 blockGesture = .rotate
-                sender.sendRotate(with: rotateEventWith(.begin, event))
+                sender.send(Rotater(type: .rotate, event: rotaterEventWith(nsEvent, .began)))
             }
-        } else if event.phase == .ended {
+        } else if nsEvent.phase == .ended {
             if blockGesture == .rotate {
                 blockGesture = .none
-                sender.sendRotate(with: rotateEventWith(.end, event))
+                sender.send(Rotater(type: .rotate, event: rotaterEventWith(nsEvent, .ended)))
             }
         } else {
             if blockGesture == .rotate {
-                sender.sendRotate(with: rotateEventWith(.sending, event))
+                sender.send(Rotater(type: .rotate, event: rotaterEventWith(nsEvent, .changed)))
             }
         }
     }
-
-    override func quickLook(with event: NSEvent) {
-        sender.sendTap(with: tapEventWith(.end, event))
-    }
-    override func smartMagnify(with event: NSEvent) {
-        sender.sendDoubleTap(with: doubleTapEventWith(.end, event))
+    
+    override func quickLook(with nsEvent: NSEvent) {
+        sender.send(Inputter(type: .tap, event: inputterEventWith(nsEvent, .began)))
+        sender.send(Inputter(type: .tap, event: inputterEventWith(nsEvent, .ended)))
     }
 
+    func sentKeyInput() {
+        if let nsEvent = NSApp.currentEvent {
+            inputContext?.handleEvent(nsEvent)
+        }
+    }
     var editTextView: TextView? {
-        return sender.editTextView
+        return sender.indicatableActionManager.indicatedView as? TextView
     }
     func hasMarkedText() -> Bool {
         return editTextView?.hasMarkedText ?? false
@@ -906,7 +976,7 @@ final class C0View: NSView, NSTextInputClient {
     }
     func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
         editTextView?.setMarkedText(string, selectedRange: selectedRange,
-                                      replacementRange: replacementRange)
+                                    replacementRange: replacementRange)
     }
     func unmarkText() {
         editTextView?.unmarkText()
@@ -923,7 +993,7 @@ final class C0View: NSView, NSTextInputClient {
     }
     func characterIndex(for point: NSPoint) -> Int {
         if let editText = editTextView {
-            let p = editText.convert(convertFromTopScreen(point), from: nil)
+            let p = editText.convertFromRoot(convertFromTopScreen(point))
             return editText.editCharacterIndex(for: p)
         } else {
             return 0
@@ -932,7 +1002,7 @@ final class C0View: NSView, NSTextInputClient {
     func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
         if let editText = editTextView {
             let rect = editText.firstRect(forCharacterRange: range, actualRange: actualRange)
-            return convertToTopScreen(editText.convert(rect, to: nil))
+            return convertToTopScreen(editText.convertToRoot(rect))
         } else {
             return NSRect()
         }
@@ -942,7 +1012,7 @@ final class C0View: NSView, NSTextInputClient {
     }
     func fractionOfDistanceThroughGlyph(for point: NSPoint) -> CGFloat {
         if let editText = editTextView {
-            let p = editText.convert(convertFromTopScreen(point), from: nil)
+            let p = editText.convertFromRoot(convertFromTopScreen(point))
             return editText.characterFraction(for: p)
         } else {
             return 0
@@ -979,36 +1049,24 @@ final class C0View: NSView, NSTextInputClient {
 }
 
 extension NSEvent {
-    var scrollMomentumType: Action.SendType? {
-        if momentumPhase.contains(.began) {
-            return .begin
-        } else if momentumPhase.contains(.changed) {
-            return .sending
-        } else if momentumPhase.contains(.ended) {
-            return .end
-        } else {
-            return nil
-        }
-    }
-    
-    var modifierKeys: Quasimode.ModifierKeys {
-        var modifierKeys: Quasimode.ModifierKeys = []
+    var modifierKeys: [Inputter.EventType] {
+        var modifierKeys = [Inputter.EventType]()
         if modifierFlags.contains(.shift) {
-            modifierKeys.insert(.shift)
+            modifierKeys.append(.shift)
         }
         if modifierFlags.contains(.command) {
-            modifierKeys.insert(.command)
+            modifierKeys.append(.command)
         }
         if modifierFlags.contains(.control) {
-            modifierKeys.insert(.control)
+            modifierKeys.append(.control)
         }
         if modifierFlags.contains(.option) {
-            modifierKeys.insert(.option)
+            modifierKeys.append(.option)
         }
         return modifierKeys
     }
     
-    var key: Quasimode.Key? {
+    var key: Inputter.EventType? {
         switch keyCode {
         case 0:
             return .a

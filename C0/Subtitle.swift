@@ -173,9 +173,9 @@ final class SubtitleTrack: NSObject, Track, NSCoding {
         return KeyframeValues(subtitle: subtitleItem.keySubtitles[index])
     }
 }
-extension SubtitleTrack: ClassCopiable {
-    func copied(from copier: Copier) -> SubtitleTrack {
-        return SubtitleTrack(animation: animation, time: time, subtitleItem: copier.copied(subtitleItem))
+extension SubtitleTrack: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> SubtitleTrack {
+        return SubtitleTrack(animation: animation, time: time, subtitleItem: deepCopier.copied(subtitleItem))
     }
 }
 extension SubtitleTrack: Referenceable {
@@ -244,8 +244,8 @@ final class SubtitleItem: NSObject, TrackItem, NSCoding {
         return true
     }
 }
-extension SubtitleItem: ClassCopiable {
-    func copied(from copier: Copier) -> SubtitleItem {
+extension SubtitleItem: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> SubtitleItem {
         return SubtitleItem(keySubtitles: keySubtitles, subtitle: subtitle)
     }
 }
@@ -330,12 +330,12 @@ extension Subtitle: Referenceable {
     static let name = Localization(english: "Subtitle", japanese: "字幕")
 }
 extension Subtitle: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return string.view(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return string.view(withBounds: bounds, sizeType)
     }
 }
 
-final class SubtitleView: View {
+final class SubtitleView: View, Copiable {
     var subtitle = Subtitle() {
         didSet {
             isConnectedWithPreviousView.bool = subtitle.isConnectedWithPrevious
@@ -353,7 +353,7 @@ final class SubtitleView: View {
                                                                   japanese: "前と結合なし"),
                                                sizeType: sizeType)
         super.init()
-        replace(children: [classNameView, isConnectedWithPreviousView])
+        children = [classNameView, isConnectedWithPreviousView]
         
         isConnectedWithPreviousView.binding = { [unowned self] in
             self.setIsConnectedWithPrevious(with: $0)
@@ -388,14 +388,14 @@ final class SubtitleView: View {
     
     struct Binding {
         let view: SubtitleView, isConnectedWithPrevious: Bool, oldIsConnectedWithPrevious: Bool
-        let subtitle: Subtitle, oldSubtitle: Subtitle, type: Action.SendType
+        let subtitle: Subtitle, oldSubtitle: Subtitle, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
     private var oldSubtitle = Subtitle()
     
     private func setIsConnectedWithPrevious(with binding: BoolView.Binding) {
-        if binding.type == .begin {
+        if binding.phase == .began {
             oldSubtitle = subtitle
         } else {
             subtitle.isConnectedWithPrevious = binding.bool
@@ -404,10 +404,14 @@ final class SubtitleView: View {
                               isConnectedWithPrevious: binding.bool,
                               oldIsConnectedWithPrevious: binding.oldBool,
                               subtitle: subtitle, oldSubtitle: oldSubtitle,
-                              type: binding.type))
+                              phase: binding.phase))
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [subtitle]
+    }
+    
+    func reference(at p: CGPoint) -> Reference {
+        return Subtitle.reference
     }
 }

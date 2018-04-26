@@ -158,13 +158,13 @@ extension Transform: Referenceable {
     static let name = Localization(english: "Transform", japanese: "トランスフォーム")
 }
 extension Transform: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return Layer()
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return View(isForm: true)
     }
 }
 
 
-final class TransformView: View {
+final class TransformView: View, Assignable {
     var transform = Transform() {
         didSet {
             if transform != oldValue {
@@ -192,10 +192,10 @@ final class TransformView: View {
     override init() {
         super.init()
         
-        replace(children: [classNameView,
-                           translationView,
-                           classZNameView, zView,
-                           classRotationNameView, thetaView])
+        children = [classNameView,
+                    translationView,
+                    classZNameView, zView,
+                    classRotationNameView, thetaView]
         
         translationView.binding = { [unowned self] in self.setTransform(with: $0) }
         zView.binding = { [unowned self] in self.setTransform(with: $0) }
@@ -249,27 +249,27 @@ final class TransformView: View {
     
     struct Binding {
         let transformView: TransformView
-        let transform: Transform, oldTransform: Transform, type: Action.SendType
+        let transform: Transform, oldTransform: Transform, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
     private var oldTransform = Transform()
     private func setTransform(with obj: DiscretePointView.Binding) {
-        if obj.type == .begin {
+        if obj.phase == .began {
             oldTransform = transform
             binding?(Binding(transformView: self,
-                             transform: oldTransform, oldTransform: oldTransform, type: .begin))
+                             transform: oldTransform, oldTransform: oldTransform, phase: .began))
         } else {
             transform.translation = obj.point
             binding?(Binding(transformView: self,
-                             transform: transform, oldTransform: oldTransform, type: obj.type))
+                             transform: transform, oldTransform: oldTransform, phase: obj.phase))
         }
     }
     private func setTransform(with obj: DiscreteRealNumberView.Binding<RealNumber>) {
-        if obj.type == .begin {
+        if obj.phase == .began {
             oldTransform = transform
             binding?(Binding(transformView: self,
-                             transform: oldTransform, oldTransform: oldTransform, type: .begin))
+                             transform: oldTransform, oldTransform: oldTransform, phase: .began))
         } else {
             switch obj.view {
             case zView:
@@ -280,31 +280,29 @@ final class TransformView: View {
                 fatalError("No case")
             }
             binding?(Binding(transformView: self,
-                             transform: transform, oldTransform: oldTransform, type: obj.type))
+                             transform: transform, oldTransform: oldTransform, phase: obj.phase))
         }
     }
     
-    func delete(with event: KeyInputEvent) -> Bool {
+    func delete(for p: CGPoint) {
         let transform = Transform()
         guard transform != self.transform else {
-            return false
+            return
         }
         set(transform, oldTransform: self.transform)
-        return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [transform]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let transform = object as? Transform {
                 if transform != self.transform {
                     set(transform, oldTransform: self.transform)
-                    return true
+                    return
                 }
             }
         }
-        return false
     }
     
     private func set(_ transform: Transform, oldTransform: Transform) {
@@ -312,9 +310,13 @@ final class TransformView: View {
             $0.set(oldTransform, oldTransform: transform)
         }
         binding?(Binding(transformView: self,
-                         transform: oldTransform, oldTransform: oldTransform, type: .begin))
+                         transform: oldTransform, oldTransform: oldTransform, phase: .began))
         self.transform = transform
         binding?(Binding(transformView: self,
-                         transform: transform, oldTransform: oldTransform, type: .end))
+                         transform: transform, oldTransform: oldTransform, phase: .ended))
+    }
+    
+    func reference(at p: CGPoint) -> Reference {
+        return Transform.reference
     }
 }

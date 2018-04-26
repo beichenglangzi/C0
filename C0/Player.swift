@@ -21,15 +21,13 @@ import Foundation
 import AVFoundation
 
 final class Player: View {
-    static let name = Localization(english: "Player", japanese: "プレイヤー")
-    
-    private let drawLayer = DrawLayer()
+    private let drawView = View(drawClosure: { _, _ in })
     override init() {
         super.init()
         fillColor = .playBorder
-        drawLayer.lineWidth = 0
-        drawLayer.drawBlock = { [unowned self] ctx in self.draw(in: ctx) }
-        append(child: drawLayer)
+        drawView.lineWidth = 0
+        drawView.drawClosure = { [unowned self] ctx, _ in self.draw(in: ctx) }
+        append(child: drawView)
     }
     
     var scene = Scene() {
@@ -48,11 +46,11 @@ final class Player: View {
     func updateChildren() {
         let paddingOrigin = CGPoint(x: (bounds.width - scene.frame.size.width) / 2,
                                     y: (bounds.height - scene.frame.size.height) / 2)
-        drawLayer.frame = CGRect(origin: paddingOrigin, size: scene.frame.size)
-        screenTransform = CGAffineTransform(translationX: drawLayer.bounds.midX,
-                                            y: drawLayer.bounds.midY)
+        drawView.frame = CGRect(origin: paddingOrigin, size: scene.frame.size)
+        screenTransform = CGAffineTransform(translationX: drawView.bounds.midX,
+                                            y: drawView.bounds.midY)
     }
-    func draw(in ctx: CGContext) {
+    override func draw(in ctx: CGContext) {
         ctx.concatenate(screenTransform)
         playCut.draw(scene: scene, viewType: .preview, in: ctx)
     }
@@ -98,12 +96,12 @@ final class Player: View {
                 timer.begin(interval: 1 / Second(scene.frameRate),
                             tolerance: 0.1 / Second(scene.frameRate),
                             closure: { [unowned self] in self.updatePlayTime() })
-                drawLayer.draw()
+                drawView.draw()
             } else {
                 timer.stop()
                 audioPlayer?.stop()
                 audioPlayer = nil
-                drawLayer.image = nil
+                drawView.image = nil
             }
         }
     }
@@ -181,7 +179,7 @@ final class Player: View {
             }
             playCut.currentTime = ci.interTime
         }
-        drawLayer.draw()
+        drawView.draw()
         updateBinding()
     }
     
@@ -215,9 +213,6 @@ final class Player: View {
         }
     }
     
-    func play(with event: KeyInputEvent) {
-        play()
-    }
     func play() {
         if isPlaying {
             isPlaying = false
@@ -234,25 +229,29 @@ final class Player: View {
         }
         endPlayClosure?(self)
     }
+    
+    func reference(at p: CGPoint) -> Reference {
+        return Reference(name: Localization(english: "Player", japanese: "プレイヤー"))
+    }
 }
 
 final class SeekBar: View {
-    let timeTextView = TextView(text: Localization("00:00"), color: .locked)
+    let timeTextView = TextView(text: Text("00:00"), color: .locked)
     let frameRateView = RealNumberView(unit: " fps")
     let timeView = SlidableNumberView(min: 0, max: 1)
     
     override init() {
         super.init()
-        replace(children: [timeTextView, frameRateView, timeView])
+        children = [timeTextView, frameRateView, timeView]
         
         timeView.disabledRegisterUndo = true
         timeView.binding = { [unowned self] in
             self.time = Second($0.number)
-            self.timeBinding?(self.time, $0.type)
+            self.timeBinding?(self.time, $0.phase)
         }
     }
     
-    var timeBinding: ((Second, Action.SendType) -> (Void))? = nil
+    var timeBinding: ((Second, Phase) -> (Void))? = nil
     
     override var locale: Locale {
         didSet {
@@ -274,20 +273,19 @@ final class SeekBar: View {
         timeTextView.frame.origin = CGPoint(x: padding, y: labelY)
         let frw = Layout.valueWidth(with: .regular)
         frameRateView.frame = CGRect(x: bounds.width - frw - padding,
-                                     y: padding, width: frw, height: height)
+                                     y: padding * 2, width: frw, height: height - padding * 2)
         let sliderWidth = frameRateView.frame.minX - timeTextView.frame.maxX - padding * 2
         timeView.frame = CGRect(x: timeTextView.frame.maxX + padding,
                               y: sliderY, width: sliderWidth, height: height)
-        timeView.backgroundLayers = [SeekBar.sliderLayer(with: timeView.bounds,
-                                                         padding: timeView.padding)]
+        timeView.backgroundViews = [SeekBar.sliderView(with: timeView.bounds,
+                                                       padding: timeView.padding)]
     }
-    static func sliderLayer(with bounds: CGRect, padding: CGFloat) -> Layer {
-        let layer = PathLayer()
+    static func sliderView(with bounds: CGRect, padding: CGFloat) -> View {
         let shapeRect = CGRect(x: padding, y: bounds.midY - 1,
                                width: bounds.width - padding * 2, height: 2)
-        layer.path = CGPath(rect: shapeRect, transform: nil)
-        layer.fillColor = .content
-        return layer
+        let view = View(path: CGPath(rect: shapeRect, transform: nil))
+        view.fillColor = .content
+        return view
     }
     
     override var isSubIndicated: Bool {
@@ -349,5 +347,9 @@ final class SeekBar: View {
         if oldBounds.size != frameRateView.bounds.size {
             updateLayout()
         }
+    }
+    
+    func reference(at p: CGPoint) -> Reference {
+        return Reference(name: Text(english: "Seek Bar", japanese: "シークバー"))
     }
 }

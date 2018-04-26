@@ -19,9 +19,9 @@
 
 import Foundation
 
-typealias EnumType = RawRepresentable & Referenceable & ViewExpression & Equatable
+typealias EnumType = RawRepresentable & Referenceable & Viewable & Equatable
 
-final class EnumView<T: EnumType>: View {
+final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
     var enumeratedType: T {
         didSet {
             index = indexClosure(enumeratedType.rawValue)
@@ -53,11 +53,11 @@ final class EnumView<T: EnumType>: View {
     var sizeType: SizeType
     
     let classNameView: TextView
-    let knob: DiscreteKnob
-    private let lineLayer: PathLayer = {
-        let lineLayer = PathLayer()
-        lineLayer.fillColor = .content
-        return lineLayer
+    let knobView: DiscreteKnobView
+    private let lineView: View = {
+        let lineView = View(path: CGMutablePath())
+        lineView.fillColor = .content
+        return lineView
     } ()
     var nameViews: [TextView]
     
@@ -80,14 +80,14 @@ final class EnumView<T: EnumType>: View {
         }
         
         nameViews = names.map { TextView(text: $0, font: Font.default(with: sizeType)) }
-        self.knob = sizeType == .small ?
-            DiscreteKnob(CGSize(square: 6), lineWidth: 1) :
-            DiscreteKnob(CGSize(square: 8), lineWidth: 1)
+        self.knobView = sizeType == .small ?
+            DiscreteKnobView(CGSize(square: 6), lineWidth: 1) :
+            DiscreteKnobView(CGSize(square: 8), lineWidth: 1)
         self.sizeType = sizeType
         
         super.init()
         self.frame = frame
-        replace(children: [classNameView, lineLayer, knob] + nameViews)
+        children = [classNameView, lineView, knobView] + nameViews
         updateLayout()
         updateWithEnumeratedType()
     }
@@ -127,14 +127,18 @@ final class EnumView<T: EnumType>: View {
             path.addRect($1.frame)
             return x + $1.frame.width + padding
         }
-        lineLayer.path = path
+        lineView.path = path
         
-        knob.frame = nameViews[index].frame.inset(by: -1)
+        knobView.frame = nameViews[index].frame.inset(by: -1)
     }
     private func updateWithEnumeratedType() {
-        knob.frame = nameViews[index].frame.inset(by: -1)
-        nameViews.forEach { $0.fillColor = .background }
+        knobView.frame = nameViews[index].frame.inset(by: -1)
+        nameViews.forEach {
+            $0.fillColor = .background
+            $0.lineColor = .subContent
+        }
         nameViews[index].fillColor = .knob
+        nameViews[index].lineColor = .knob
         nameViews.enumerated().forEach {
             $0.element.textFrame.color = $0.offset == index ? .locked : .subLocked
         }
@@ -160,83 +164,78 @@ final class EnumView<T: EnumType>: View {
     }
     
     struct Binding {
-        let view: EnumView, enumeratedType: T, oldEnumeratedType: T, type: Action.SendType
+        let view: EnumView, enumeratedType: T, oldEnumeratedType: T, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
     var disabledRegisterUndo = false
     
-    func delete(with event: KeyInputEvent) -> Bool {
+    func delete(for p: CGPoint) {
         let enumeratedType = defaultEnumeratedType
         if enumeratedType != self.enumeratedType {
             push(enumeratedType, old: self.enumeratedType)
         }
-        return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [enumeratedType]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let enumeratedType = object as? T {
                 if enumeratedType != self.enumeratedType {
                     push(enumeratedType, old: self.enumeratedType)
-                    return true
+                    return
                 }
             } else if let string = object as? String, let index = Int(string) {
                 let enumeratedType = self.enumeratedType(at: index)
                 if enumeratedType != self.enumeratedType {
                     push(enumeratedType, old: self.enumeratedType)
-                    return true
+                    return
                 }
             }
         }
-        return false
     }
     func push(_ enumeratedType: T, old oldEnumeratedType: T) {
         registeringUndoManager?.registerUndo(withTarget: self) {
             $0.push(oldEnumeratedType, old: enumeratedType)
         }
         binding?(Binding(view: self, enumeratedType: oldEnumeratedType,
-                         oldEnumeratedType: oldEnumeratedType, type: .begin))
+                         oldEnumeratedType: oldEnumeratedType, phase: .began))
         self.enumeratedType = enumeratedType
         binding?(Binding(view: self, enumeratedType: enumeratedType,
-                         oldEnumeratedType: oldEnumeratedType, type: .end))
+                         oldEnumeratedType: oldEnumeratedType, phase: .ended))
     }
     
-    func run(with event: ClickEvent) -> Bool {
-        let p = point(from: event)
+    func run(for p: CGPoint) {
         let enumeratedType = self.enumeratedType(at: p)
         if enumeratedType != self.enumeratedType {
             push(enumeratedType, old: self.enumeratedType)
         }
-        return true
     }
     
     private var oldEnumeratedType: T?, oldPoint = CGPoint()
-    func move(with event: DragEvent) -> Bool {
-        let p = point(from: event)
-        switch event.sendType {
-        case .begin:
-            knob.fillColor = .editing
+    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        switch phase {
+        case .began:
+            knobView.fillColor = .editing
             let oldEnumeratedType = enumeratedType
             self.oldEnumeratedType = oldEnumeratedType
             oldPoint = p
             binding?(Binding(view: self, enumeratedType: enumeratedType,
-                             oldEnumeratedType: oldEnumeratedType, type: .begin))
+                             oldEnumeratedType: oldEnumeratedType, phase: .began))
             enumeratedType = self.enumeratedType(at: p)
             binding?(Binding(view: self, enumeratedType: enumeratedType,
-                             oldEnumeratedType: oldEnumeratedType, type: .sending))
-        case .sending:
+                             oldEnumeratedType: oldEnumeratedType, phase: .changed))
+        case .changed:
             guard let oldEnumeratedType = oldEnumeratedType else {
-                return true
+                return
             }
             enumeratedType = self.enumeratedType(at: p)
             binding?(Binding(view: self, enumeratedType: enumeratedType,
-                             oldEnumeratedType: oldEnumeratedType, type: .sending))
-        case .end:
+                             oldEnumeratedType: oldEnumeratedType, phase: .changed))
+        case .ended:
             guard let oldEnumeratedType = oldEnumeratedType else {
-                return true
+                return
             }
             enumeratedType = self.enumeratedType(at: p)
             if enumeratedType != oldEnumeratedType {
@@ -247,13 +246,12 @@ final class EnumView<T: EnumType>: View {
                 }
             }
             binding?(Binding(view: self, enumeratedType: enumeratedType,
-                             oldEnumeratedType: oldEnumeratedType, type: .end))
-            knob.fillColor = .knob
+                             oldEnumeratedType: oldEnumeratedType, phase: .ended))
+            knobView.fillColor = .knob
         }
-        return true
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return enumeratedType.reference
+    func reference(at p: CGPoint) -> Reference {
+        return T.reference
     }
 }

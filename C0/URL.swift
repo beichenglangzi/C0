@@ -50,10 +50,10 @@ extension URL {
 extension URL: Referenceable {
     static let name = Localization("URL")
 }
-extension URL: Copiable {
+extension URL: DeepCopiable {
 }
 extension URL: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return lastPathComponent.view(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return lastPathComponent.view(withBounds: bounds, sizeType)
     }
 }

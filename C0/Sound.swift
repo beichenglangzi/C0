@@ -50,8 +50,8 @@ final class SoundItem: TrackItem, Codable {
         self.keySounds = keySounds
     }
 }
-extension SoundItem: ClassCopiable {
-    func copied(from copier: Copier) -> SoundItem {
+extension SoundItem: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> SoundItem {
         return SoundItem(sound: sound, keySounds: keySounds)
     }
 }
@@ -176,12 +176,12 @@ extension Sound: Referenceable {
     static let name = Localization(english: "Sound", japanese: "サウンド")
 }
 extension Sound: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return name.view(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return name.view(withBounds: bounds, sizeType)
     }
 }
 
-final class SoundWaveformView: Layer {
+final class SoundWaveformView: View {
     var sampleRate = Sound.basicSampleRate
     var sound = Sound() {
         didSet {
@@ -224,20 +224,20 @@ final class SoundWaveformView: Layer {
             frame.size.width = x(withDoubleBeatTime: duration)
         }
     }
-    let waveformLayer = PathLayer()
+    let waveformView = View(path: CGMutablePath())
     
     init(height: CGFloat = 12.0) {
         super.init()
         frame.size.height = height
         isClipped = true
-        replace(children: [waveformLayer])
+        children = [waveformView]
     }
     func updateWaveform(isRefreshCache: Bool = false) {
         switch waveformType {
         case .normal:
             let samples = sound.samples(withSampleRate: sampleRate)
             guard !samples.isEmpty else {
-                waveformLayer.path = nil
+                waveformView.path = nil
                 secondDuration = 0
                 duration = 0
                 return
@@ -259,15 +259,15 @@ final class SoundWaveformView: Layer {
                 let si = Int(CGFloat(samples.count - 1) * xt)
                 return CGPoint(x: frame.width * xt, y: y(withSample: samples[si]))
             })
-            waveformLayer.lineColor = .content
-            waveformLayer.lineWidth = 1
-            waveformLayer.path = path
+            waveformView.lineColor = .content
+            waveformView.lineWidth = 1
+            waveformView.path = path
         case .dBFS:
             let dBFSs: [Float]
             if cacheDBFSs.isEmpty || isRefreshCache {
                 let samples = sound.samples(withSampleRate: sampleRate)
                 guard !samples.isEmpty else {
-                    waveformLayer.path = nil
+                    waveformView.path = nil
                     secondDuration = 0
                     duration = 0
                     return
@@ -292,8 +292,8 @@ final class SoundWaveformView: Layer {
                 let yt = 1 + spl.cf.clip(min: -30, max: 0) / 30
                 path.addLine(to: CGPoint(x: frame.width * xt, y: frame.height * yt))
             }
-            waveformLayer.fillColor = .content
-            waveformLayer.path = path
+            waveformView.fillColor = .content
+            waveformView.path = path
         }
     }
 }
@@ -302,10 +302,10 @@ final class SoundWaveformView: Layer {
  Issue: 効果音編集
  Issue: シーケンサー
  */
-final class SoundView: View {
+final class SoundView: View, Assignable {
     var sound = Sound() {
         didSet {
-            nameView.text = sound.url != nil ? Localization(sound.name) : Localization("")
+            nameView.text = sound.url != nil ? Localization(sound.name) : ""
         }
     }
     
@@ -316,12 +316,12 @@ final class SoundView: View {
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
         formClassNameView = TextView(text: Sound.name, font: Font.bold(with: sizeType))
-        nameView = TextView(text: Localization(""), font: Font.default(with: sizeType),
+        nameView = TextView(text: "", font: Font.default(with: sizeType),
                             isSizeToFit: false, isForm: false)
         
         super.init()
         isClipped = true
-        replace(children: [formClassNameView, nameView])
+        children = [formClassNameView, nameView]
         updateLayout()
     }
     
@@ -348,47 +348,45 @@ final class SoundView: View {
     var disabledRegisterUndo = false
     
     struct Binding {
-        let soundView: SoundView, sound: Sound, oldSound: Sound, type: Action.SendType
+        let soundView: SoundView, sound: Sound, oldSound: Sound, phase: Phase
     }
     var setSoundClosure: ((Binding) -> ())?
     
-    func delete(with event: KeyInputEvent) -> Bool {
+    func delete(for p: CGPoint) {
         guard sound.url != nil else {
-            return false
+            return
         }
         set(Sound(), old: self.sound)
-        return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         guard let url = sound.url else {
             return [sound]
         }
         return [sound, url]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let sound = object as? Sound {
                 set(sound, old: self.sound)
-                return true
+                return
             } else if let url = object as? URL, url.isConforms(uti: kUTTypeAudio as String) {
                 var sound = Sound()
                 sound.url = url
                 set(sound, old: self.sound)
-                return true
+                return
             }
         }
-        return false
     }
     private func set(_ sound: Sound, old oldSound: Sound) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldSound, old: sound) }
         setSoundClosure?(Binding(soundView: self,
-                                 sound: oldSound, oldSound: oldSound, type: .begin))
+                                 sound: oldSound, oldSound: oldSound, phase: .began))
         self.sound = sound
         setSoundClosure?(Binding(soundView: self,
-                                 sound: sound, oldSound: oldSound, type: .end))
+                                 sound: sound, oldSound: oldSound, phase: .ended))
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return sound.reference
+    func reference(at p: CGPoint) -> Reference {
+        return Sound.reference
     }
 }

@@ -122,20 +122,16 @@ final class Drawing: NSObject, NSCoding {
 extension Drawing: Referenceable {
     static let name = Localization(english: "Drawing", japanese: "ドローイング")
 }
-extension Drawing: ClassCopiable {
-    func copied(from copier: Copier) -> Drawing {
+extension Drawing: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> Drawing {
         return Drawing(lines: lines, draftLines: draftLines, selectedLineIndexes: selectedLineIndexes)
     }
 }
-extension Drawing: ViewExpression {
-    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
-        let thumbnailView = DrawLayer()
-        thumbnailView.drawBlock = { [unowned self, unowned thumbnailView] ctx in
-            self.draw(with: thumbnailView.bounds, in: ctx)
-        }
+extension Drawing: Viewable {
+    func view(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
         thumbnailView.bounds = bounds
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
-                          sizeType: sizeType)
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds, sizeType)
     }
     func draw(with bounds: CGRect, in ctx: CGContext) {
         let imageBounds = self.imageBounds(withLineWidth: 1)
@@ -149,7 +145,7 @@ extension Drawing: ViewExpression {
 /**
  Issue: DraftArray、下書き化などのコマンドを排除
  */
-final class DrawingView: View {
+final class DrawingView: View, Assignable {
     var drawing = Drawing() {
         didSet {
             linesView.array = drawing.lines
@@ -175,10 +171,10 @@ final class DrawingView: View {
         super.init()
         changeToDraftView.closure = { [unowned self] in self.changeToDraft() }
         exchangeWithDraftView.closure = { [unowned self] in self.exchangeWithDraft() }
-        replace(children: [formClassNameView,
-                           linesView,
-                           formClassDraftLinesNameView, draftLinesView,
-                           changeToDraftView, exchangeWithDraftView])
+        children = [formClassNameView,
+                    linesView,
+                    formClassDraftLinesNameView, draftLinesView,
+                    changeToDraftView, exchangeWithDraftView]
     }
     
     override var defaultBounds: CGRect {
@@ -218,7 +214,7 @@ final class DrawingView: View {
     
     struct Binding {
         let view: DrawingView
-        let drawing: Drawing, oldDrawing: Drawing, type: Action.SendType
+        let drawing: Drawing, oldDrawing: Drawing, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
@@ -229,39 +225,37 @@ final class DrawingView: View {
         
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func delete(for p: CGPoint) {
+        let drawing = Drawing()
+        guard !self.drawing.isEmpty else {
+            return
+        }
+        set(drawing, old: self.drawing)
+    }
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [drawing.copied]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let drawing = object as? Drawing {
                 if drawing != self.drawing {
                     set(drawing.copied, old: self.drawing)
-                    return true
+                    return
                 }
             }
         }
-        return false
-    }
-    func delete(with event: KeyInputEvent) -> Bool {
-        let drawing = Drawing()
-        guard !self.drawing.isEmpty else {
-            return false
-        }
-        set(drawing, old: self.drawing)
-        return true
     }
     
     private func set(_ drawing: Drawing, old oldDrawing: Drawing) {
         registeringUndoManager?.registerUndo(withTarget: self) {
             $0.set(oldDrawing, old: drawing)
         }
-        binding?(Binding(view: self, drawing: oldDrawing, oldDrawing: oldDrawing, type: .begin))
+        binding?(Binding(view: self, drawing: oldDrawing, oldDrawing: oldDrawing, phase: .began))
         self.drawing = drawing
-        binding?(Binding(view: self, drawing: drawing, oldDrawing: oldDrawing, type: .end))
+        binding?(Binding(view: self, drawing: drawing, oldDrawing: oldDrawing, phase: .ended))
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return drawing.reference
+    func reference(at p: CGPoint) -> Reference {
+        return Drawing.reference
     }
 }

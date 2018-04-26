@@ -73,9 +73,9 @@ final class TreeNode<T: Equatable>: Equatable {
             }
         }
     }
-    func allParentsAndSelf(_ closure: ((TreeNode<T>) -> ())) {
+    func selfAndAllParents(_ closure: ((TreeNode<T>) -> ())) {
         closure(self)
-        parent?.allParentsAndSelf(closure)
+        parent?.selfAndAllParents(closure)
     }
     
     func at(_ object: T) -> TreeNode<T> {
@@ -177,7 +177,7 @@ final class TreeNode<T: Equatable>: Equatable {
         let aParent = node.parent!
         var ini = aParent.children.count == 1
             || aParent.children.index(of: node)! == aParent.children.count - 1 ? 0 : 1
-        node.allParentsAndSelf { (aNode) in
+        node.selfAndAllParents { (aNode) in
             if let parent = aNode.parent {
                 let i = parent.children.index(of: aNode)!
                 (0..<i).forEach { ini += parent.children[$0].movableCount + 1 }
@@ -219,56 +219,56 @@ extension Array {
         return array
     }
 }
-
-extension Array: ViewExpression & Copiable & Referenceable
-where Element: ViewExpression & Copiable & Referenceable {
-    static var name: Localization {
-        return Localization("[") + Element.name + Localization("]")
+extension Array: Referenceable where Element: Referenceable {
+    static var name: Text {
+        return "[" + Element.name + "]"
     }
-    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
-        return ObjectView(object: self, thumbnailView: nil, minFrame: bounds, sizeType: sizeType)
+}
+extension Array: Viewable & DeepCopiable where Element: Viewable & DeepCopiable {
+    func view(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return ObjectView(object: self, thumbnailView: nil, minFrame: bounds, sizeType)
     }
 }
 
-final class AnyArrayView: View {
-    var array = [ViewExpression]()
+final class AnyArrayView: View, Copiable {
+    var array = [Viewable]()
     
-    init(children: [Layer] = [], frame: CGRect = CGRect()) {
+    init(children: [View] = [], frame: CGRect = CGRect()) {
         super.init()
         isClipped = true
         self.frame = frame
-        replace(children: children)
+        self.children = children
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return array
     }
     
-    func reference(with event: TapEvent) -> Reference? {
+    func reference(at p: CGPoint) -> Reference {
         return Reference(name: Localization(english: "Array", japanese: "配列"))
     }
 }
 
-final class ArrayView<T: Referenceable & ViewExpression & Copiable>: View {
+final class ArrayView<T: Viewable & DeepCopiable>: View, Copiable {
     var array = [T]()
     
-    init(children: [Layer] = [], frame: CGRect = CGRect()) {
+    init(children: [View] = [], frame: CGRect = CGRect()) {
         super.init()
         isClipped = true
         self.frame = frame
-        replace(children: children)
+        self.children = children
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [array.copied]
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return array.reference
+    func reference(at p: CGPoint) -> Reference {
+        return T.reference
     }
 }
 
-final class ArrayCountView<T: Referenceable & ViewExpression & Copiable>: View {
+final class ArrayCountView<T: Viewable & DeepCopiable>: View {
     var array = [T]() {
         didSet {
             countView.number = RealNumber(array.count)
@@ -293,7 +293,7 @@ final class ArrayCountView<T: Referenceable & ViewExpression & Copiable>: View {
         super.init()
         isClipped = true
         self.frame = frame
-        replace(children: [classNameView, classCountNameView, countView])
+        children = [classNameView, classCountNameView, countView]
     }
     
     override var locale: Locale {
@@ -322,37 +322,37 @@ final class ArrayCountView<T: Referenceable & ViewExpression & Copiable>: View {
                                  width: width, height: h - padding * 2)
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [array.copied]
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return array.reference
+    func reference(at p: CGPoint) -> Reference {
+        return T.reference
     }
 }
 
 /**
  Issue: ツリー操作が複雑
  */
-final class ListArrayView: View {
-    private let nameLineLayer: PathLayer = {
-        let lineLayer = PathLayer()
-        lineLayer.fillColor = .subContent
-        return lineLayer
+final class ListArrayView: View, Assignable, Newable, Movable {
+    private let nameLineView: View = {
+        let lineView = View(path: CGMutablePath())
+        lineView.fillColor = .subContent
+        return lineView
     } ()
-    private let knobLineLayer: PathLayer = {
-        let lineLayer = PathLayer()
-        lineLayer.fillColor = .content
-        return lineLayer
+    private let knobLineView: View = {
+        let lineView = View(path: CGMutablePath())
+        lineView.fillColor = .content
+        return lineView
     } ()
-    private let knob = DiscreteKnob(CGSize(width: 8, height: 8), lineWidth: 1)
+    private let knobView = DiscreteKnobView(CGSize(width: 8, height: 8), lineWidth: 1)
     private var nameViews = [TextView](), treeLevelTextViews = [TextView]()
     func set(selectedIndex: Int, count: Int) {
         let isUpdate = self.selectedIndex != selectedIndex || self.count != count
         self.selectedIndex = selectedIndex
         self.count = count
         if isUpdate {
-            knob.isHidden = count <= 1
+            knobView.isHidden = count <= 1
             updateLayout()
         }
     }
@@ -449,34 +449,38 @@ final class ListArrayView: View {
             treeLevelTextViews = []
         }
         
-        nameLineLayer.path = nameLinePath
-        knobLineLayer.path = knobLinePath
+        nameLineView.path = nameLinePath
+        knobLineView.path = knobLinePath
         
-        knob.position = CGPoint(x: knobLineX, y: bounds.midY)
+        knobView.position = CGPoint(x: knobLineX, y: bounds.midY)
         
-        replace(children: [nameLineLayer, knobLineLayer, knob]
-            + treeLevelTextViews as [Layer] + nameViews as [Layer])
+        children = [nameLineView, knobLineView, knobView]
+            + treeLevelTextViews as [View] + nameViews as [View]
     }
     
-    var deleteClosure: ((ListArrayView, KeyInputEvent) -> (Bool))?
-    func delete(with event: KeyInputEvent) -> Bool {
-        return deleteClosure?(self, event) ?? false
+    var deleteClosure: ((ListArrayView, CGPoint) -> ())?
+    func delete(for p: CGPoint) {
+        deleteClosure?(self, p)
     }
-    var copiedObjectsClosure: ((ListArrayView, KeyInputEvent) -> ([ViewExpression]))?
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        return copiedObjectsClosure?(self, event)
+    var copiedViewablesClosure: ((ListArrayView, CGPoint) -> ([Viewable]))?
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
+        return copiedViewablesClosure?(self, p) ?? []
     }
-    var pasteClosure: ((ListArrayView, [Any], KeyInputEvent) -> (Bool))?
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        return pasteClosure?(self, objects, event) ?? false
+    var pasteClosure: ((ListArrayView, [Any], CGPoint) -> ())?
+    func paste(_ objects: [Any], for p: CGPoint) {
+        pasteClosure?(self, objects, p)
     }
-    var newClosure: ((ListArrayView, KeyInputEvent) -> (Bool))?
-    func new(with event: KeyInputEvent) -> Bool {
-        return newClosure?(self, event) ?? false
+    var newClosure: ((ListArrayView, CGPoint) -> ())?
+    func new(for p: CGPoint) {
+        newClosure?(self, p)
     }
     
-    var moveClosure: ((ListArrayView, DragEvent) -> (Bool))?
-    func move(with event: DragEvent) -> Bool {
-        return moveClosure?(self, event) ?? false
+    var moveClosure: ((ListArrayView, CGPoint, Phase) -> ())?
+    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        moveClosure?(self, p, phase)
+    }
+    
+    func reference(at p: CGPoint) -> Reference {
+        return Reference()
     }
 }

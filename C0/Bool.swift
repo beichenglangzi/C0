@@ -23,8 +23,8 @@ extension Bool: Referenceable {
     static let name = Localization(english: "Bool", japanese: "ブール値")
 }
 extension Bool: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return (self ? "true" : "false").view(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return (self ? "true" : "false").view(withBounds: bounds, sizeType)
     }
 }
 
@@ -38,7 +38,7 @@ struct BoolInfo {
                                  falseName: Localization(english: "Unlocked", japanese: "未ロック"))
 }
 
-final class BoolView: View {
+final class BoolView: View, Assignable, Runnable, Movable {
     var bool: Bool {
         didSet {
             updateWithBool()
@@ -46,8 +46,6 @@ final class BoolView: View {
     }
     var defaultBool: Bool
     var cationBool: Bool?
-    
-    let isLiteral = true
     
     var sizeType: SizeType
     let parentClassTextView: TextView
@@ -59,8 +57,8 @@ final class BoolView: View {
     }
     let parentClassTrueNameView: TextView
     let parentClassFalseNameView: TextView
-    let knob: DiscreteKnob
-    let lineLayer = PathLayer()
+    let knobView: DiscreteKnobView
+    let lineView = View(path: CGMutablePath())
     
     init(bool: Bool = false, defaultBool: Bool = false, cationBool: Bool? = nil,
          name: Localization = Localization(), boolInfo: BoolInfo = BoolInfo(),
@@ -75,14 +73,15 @@ final class BoolView: View {
                                            font: Font.default(with: sizeType))
         parentClassFalseNameView = TextView(text: boolInfo.falseName,
                                             font: Font.default(with: sizeType))
-        knob = DiscreteKnob()
+        knobView = DiscreteKnobView()
         self.sizeType = sizeType
-        lineLayer.lineColor = .content
-        lineLayer.lineWidth = 1
+        lineView.lineColor = .content
+        lineView.lineWidth = 1
         
         super.init()
-        replace(children: [parentClassTextView, lineLayer, knob,
-                           parentClassTrueNameView, parentClassFalseNameView])
+        isLiteral = true
+        children = [parentClassTextView, lineView, knobView,
+                    parentClassTrueNameView, parentClassFalseNameView]
         updateLayout()
     }
     
@@ -106,14 +105,16 @@ final class BoolView: View {
         updateWithBool()
     }
     func updateWithBool() {
-        knob.frame = !bool ?
+        knobView.frame = !bool ?
             parentClassFalseNameView.frame.inset(by: -1) :
             parentClassTrueNameView.frame.inset(by: -1)
         if let cationBool = cationBool {
-            knob.lineColor = cationBool == bool ? .warning : .getSetBorder
+            knobView.lineColor = cationBool == bool ? .warning : .getSetBorder
         }
         parentClassFalseNameView.fillColor = !bool ? .knob : .background
         parentClassTrueNameView.fillColor = bool ? .knob : .background
+        parentClassFalseNameView.lineColor = !bool ? .knob : .subContent
+        parentClassTrueNameView.lineColor = bool ? .knob : .subContent
         parentClassFalseNameView.textFrame.color = !bool ? .locked : .subLocked
         parentClassTrueNameView.textFrame.color = bool ? .locked : .subLocked
     }
@@ -127,78 +128,72 @@ final class BoolView: View {
     
     struct Binding {
         let view: BoolView
-        let bool: Bool, oldBool: Bool, type: Action.SendType
+        let bool: Bool, oldBool: Bool, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
-    func delete(with event: KeyInputEvent) -> Bool {
+    func delete(for p: CGPoint) {
         let bool = defaultBool
         if bool != self.bool {
             push(bool, old: self.bool)
         }
-        return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [bool]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let string = object as? String {
                 if let bool = Bool(string) {
                     if bool != self.bool {
                         push(bool, old: self.bool)
-                        return true
+                        return
                     }
                 }
             }
         }
-        return false
     }
     
-    func run(with event: ClickEvent) -> Bool {
-        let p = point(from: event)
+    func run(for p: CGPoint) {
         let bool = self.bool(at: p)
         if bool != self.bool {
             push(bool, old: self.bool)
         }
-        return true
     }
     
     private var oldBool = false, oldPoint = CGPoint()
-    func move(with event: DragEvent) -> Bool {
-        let p = point(from: event)
-        switch event.sendType {
-        case .begin:
-            knob.fillColor = .editing
+    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        switch phase {
+        case .began:
+            knobView.fillColor = .editing
             oldBool = bool
             oldPoint = p
-            binding?(Binding(view: self, bool: bool, oldBool: oldBool, type: .begin))
+            binding?(Binding(view: self, bool: bool, oldBool: oldBool, phase: .began))
             bool = self.bool(at: p)
-            binding?(Binding(view: self, bool: bool, oldBool: oldBool, type: .sending))
-        case .sending:
+            binding?(Binding(view: self, bool: bool, oldBool: oldBool, phase: .changed))
+        case .changed:
             bool = self.bool(at: p)
-            binding?(Binding(view: self, bool: bool, oldBool: oldBool, type: .sending))
-        case .end:
+            binding?(Binding(view: self, bool: bool, oldBool: oldBool, phase: .changed))
+        case .ended:
             bool = self.bool(at: p)
             if bool != oldBool {
                 registeringUndoManager?.registerUndo(withTarget: self) { [bool, oldBool] in
                     $0.push(oldBool, old: bool)
                 }
             }
-            binding?(Binding(view: self, bool: bool, oldBool: oldBool, type: .end))
-            knob.fillColor = .knob
+            binding?(Binding(view: self, bool: bool, oldBool: oldBool, phase: .ended))
+            knobView.fillColor = .knob
         }
-        return true
     }
     
     private func push(_ bool: Bool, old oldBool: Bool) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.push(oldBool, old: bool) }
-        binding?(Binding(view: self, bool: oldBool, oldBool: oldBool, type: .begin))
+        binding?(Binding(view: self, bool: oldBool, oldBool: oldBool, phase: .began))
         self.bool = bool
-        binding?(Binding(view: self, bool: bool, oldBool: oldBool, type: .end))
+        binding?(Binding(view: self, bool: bool, oldBool: oldBool, phase: .ended))
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return bool.reference
+    func reference(at p: CGPoint) -> Reference {
+        return Bool.reference
     }
 }

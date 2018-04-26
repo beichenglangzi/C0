@@ -91,8 +91,8 @@ extension RealNumber: Referenceable {
     static let name = Localization(english: "Real Number", japanese: "実数")
 }
 extension RealNumber: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return String(self.d).view(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return String(self.d).view(withBounds: bounds, sizeType)
     }
 }
 
@@ -154,7 +154,7 @@ struct RealNumberOption: OneDimensionalOption {
 }
 typealias DiscreteRealNumberView = DiscreteOneDimensionalView<RealNumber, RealNumberOption>
 
-final class RealNumberView: View {
+final class RealNumberView: View, Copiable {
     var number: RealNumber {
         didSet {
             updateWithNumber()
@@ -190,7 +190,7 @@ final class RealNumberView: View {
         noIndicatedLineColor = .getBorder
         indicatedLineColor = .indicated
         isClipped = true
-        replace(children: [formStringView])
+        children = [formStringView]
         self.frame = frame
     }
     
@@ -204,7 +204,7 @@ final class RealNumberView: View {
     }
     private func updateLayout() {
         formStringView.frame.origin = CGPoint(x: bounds.width - formStringView.frame.width,
-                                          y: bounds.height - formStringView.frame.height)
+                                              y: bounds.height - formStringView.frame.height)
         updateWithNumber()
     }
     private func updateWithNumber() {
@@ -222,12 +222,12 @@ final class RealNumberView: View {
         }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [number]
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return number.reference
+    func reference(at p: CGPoint) -> Reference {
+        return RealNumber.reference
     }
 }
 
@@ -239,7 +239,7 @@ protocol Slidable {
     var exp: RealNumber { get }
 }
 
-final class SlidableNumberView: View, Slidable {
+final class SlidableNumberView: View, Assignable, Runnable, Movable, Slidable {
     var number: RealNumber {
         didSet {
             updateWithNumber()
@@ -282,10 +282,10 @@ final class SlidableNumberView: View, Slidable {
     }
     
     var sizeType: SizeType
-    let knob: Knob
-    var backgroundLayers = [Layer]() {
+    let knobView: KnobView
+    var backgroundViews = [View]() {
         didSet {
-            replace(children: backgroundLayers + [knob])
+            children = backgroundViews + [knobView]
         }
     }
     
@@ -305,10 +305,10 @@ final class SlidableNumberView: View, Slidable {
         self.isVertical = isVertical
         self.sizeType = sizeType
         padding = sizeType == .small ? 6.0.cf : 8.0.cf
-        knob = sizeType == .small ? Knob(radius: 4) : Knob()
+        knobView = sizeType == .small ? KnobView(radius: 4) : KnobView()
         
         super.init()
-        append(child: knob)
+        append(child: knobView)
         self.frame = frame
     }
     
@@ -325,11 +325,11 @@ final class SlidableNumberView: View, Slidable {
         if isVertical {
             let y = padding + (bounds.height - padding * 2)
                 * pow(isInverted ? 1 - t : t, 1 / exp)
-            knob.position = CGPoint(x: bounds.midX, y: y)
+            knobView.position = CGPoint(x: bounds.midX, y: y)
         } else {
             let x = padding + (bounds.width - padding * 2)
                 * pow(isInverted ? 1 - t : t, 1 / exp)
-            knob.position = CGPoint(x: x, y: bounds.midY)
+            knobView.position = CGPoint(x: x, y: bounds.midY)
         }
     }
     
@@ -370,306 +370,84 @@ final class SlidableNumberView: View, Slidable {
     var disabledRegisterUndo = false
     
     struct Binding {
-        let view: SlidableNumberView, number: RealNumber, oldNumber: RealNumber, type: Action.SendType
+        let view: SlidableNumberView, number: RealNumber, oldNumber: RealNumber, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
-    func delete(with event: KeyInputEvent) -> Bool {
+    func delete(for p: CGPoint) {
         let number = defaultNumber.clip(min: minNumber, max: maxNumber)
         if number != self.number {
             set(number, old: self.number)
         }
-        return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        return [number, String(number.d)]
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
+        return [number]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let number = (object as? RealNumber)?.clip(min: minNumber, max: maxNumber) {
                 if number != self.number {
                     set(number, old: self.number)
-                    return true
+                    return
                 }
             } else if let string = object as? String {
                 if let number = Double(string)?.cf.clip(min: minNumber, max: maxNumber) {
                     if number != self.number {
                         set(number, old: self.number)
-                        return true
+                        return
                     }
                 }
             }
         }
-        return false
     }
     
-    func run(with event: ClickEvent) -> Bool {
-        let p = point(from: event)
+    func run(for p: CGPoint) {
         let number = self.number(at: p)
         if number != self.number {
             set(number, old: self.number)
         }
-        return true
     }
     
     private var oldNumber = 0.0.cf, oldPoint = CGPoint()
-    func move(with event: DragEvent) -> Bool {
-        let p = point(from: event)
-        switch event.sendType {
-        case .begin:
-            knob.fillColor = .editing
+    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        switch phase {
+        case .began:
+            knobView.fillColor = .editing
             oldNumber = number
             oldPoint = p
-            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .begin))
+            binding?(Binding(view: self, number: number, oldNumber: oldNumber, phase: .began))
             number = self.number(at: p)
-            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .sending))
-        case .sending:
+            binding?(Binding(view: self, number: number, oldNumber: oldNumber, phase: .changed))
+        case .changed:
             number = self.number(at: p)
-            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .sending))
-        case .end:
+            binding?(Binding(view: self, number: number, oldNumber: oldNumber, phase: .changed))
+        case .ended:
             number = self.number(at: p)
             if number != oldNumber {
                 registeringUndoManager?.registerUndo(withTarget: self) { [number, oldNumber] in
                     $0.set(oldNumber, old: number)
                 }
             }
-            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
-            knob.fillColor = .knob
+            binding?(Binding(view: self, number: number, oldNumber: oldNumber, phase: .ended))
+            knobView.fillColor = .knob
         }
-        return true
     }
     
     private func set(_ number: RealNumber, old oldNumber: RealNumber) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, old: number) }
-        binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, type: .begin))
+        binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, phase: .began))
         self.number = number
-        binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
+        binding?(Binding(view: self, number: number, oldNumber: oldNumber, phase: .ended))
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        var reference = number.reference
+    func reference(at p: CGPoint) -> Reference {
+        var reference = RealNumber.reference
         reference.viewDescription = Localization(english: "Slider", japanese: "スライダー")
         return reference
     }
 }
 
-///**
-// Issue: スクロールによる値の変更
-// */
-//final class DiscreteRealNumberView: View, Slidable {
-//    var number: RealNumber {
-//        didSet {
-//            updateWithNumber()
-//        }
-//    }
-//
-//    var unit: String {
-//        didSet {
-//            updateWithNumber()
-//        }
-//    }
-//    var numberOfDigits: Int {
-//        didSet {
-//            updateWithNumber()
-//        }
-//    }
-//
-//    var defaultNumber: RealNumber
-//    var minNumber: RealNumber {
-//        didSet {
-//            updateWithNumber()
-//        }
-//    }
-//    var maxNumber: RealNumber {
-//        didSet {
-//            updateWithNumber()
-//        }
-//    }
-//    var exp: RealNumber
-//
-//    var numberInterval: CGFloat, isInverted: Bool, isVertical: Bool
-//
-//    var sizeType: SizeType
-//    private var knobLineFrame = CGRect()
-//    private let labelPaddingX: CGFloat, knobPadding: CGFloat
-//    private var numberX = 1.5.cf
-//
-//    private let knob = DiscreteKnob(CGSize(width: 6, height: 4), lineWidth: 1)
-//    private let lineLayer: Layer = {
-//        let lineLayer = Layer()
-//        lineLayer.lineColor = .content
-//        return lineLayer
-//    } ()
-//
-//    let stringView: TextView
-//
-//    init(number: RealNumber = 0, defaultNumber: RealNumber = 0,
-//         min: RealNumber = 0, max: RealNumber = 1, exp: RealNumber = 1,
-//         numberInterval: RealNumber = 1, isInverted: Bool = false, isVertical: Bool = false,
-//         numberOfDigits: Int = 0, unit: String = "",
-//         frame: CGRect = CGRect(),
-//         sizeType: SizeType = .regular) {
-//
-//        self.number = number.clip(min: min, max: max)
-//        self.defaultNumber = defaultNumber
-//        self.minNumber = min
-//        self.maxNumber = max
-//        self.exp = exp
-//        self.numberInterval = numberInterval
-//        self.isInverted = isInverted
-//        self.isVertical = isVertical
-//        self.numberOfDigits = numberOfDigits
-//        self.unit = unit
-//        self.knobPadding = sizeType == .small ? 2.0.cf : 3.0.cf
-//        labelPaddingX = Layout.padding(with: sizeType)
-//        stringView = TextView(font: Font.default(with: sizeType),
-//                              frameAlignment: .right, alignment: .right)
-//        self.sizeType = sizeType
-//
-//        super.init()
-//        updateWithNumber()
-//        isClipped = true
-//        replace(children: [stringView, lineLayer, knob])
-//        self.frame = frame
-//    }
-//
-//    override var bounds: CGRect {
-//        didSet {
-//            updateLayout()
-//        }
-//    }
-//    private func updateLayout() {
-//        let paddingX = sizeType == .small ? 3.0.cf : 5.0.cf
-//        knobLineFrame = CGRect(x: paddingX, y: sizeType == .small ? 1 : 2,
-//                               width: bounds.width - paddingX * 2, height: 1)
-//        // triangle
-//        lineLayer.frame = knobLineFrame
-//        stringView.frame.origin = CGPoint(x: bounds.width - stringView.frame.width - labelPaddingX,
-//                                          y: round((bounds.height - stringView.frame.height) / 2))
-//
-//    }
-//    private func updateWithNumber() {
-//        if numberOfDigits == 0 {
-//            let string = number - floor(number) > 0 ?
-//                String(format: "%g", number) + "\(unit)" :
-//                "\(Int(number))" + "\(unit)"
-//            stringView.text = Localization(string)
-//        } else {
-//            let string = String(format: "%.\(numberOfDigits)f", number) + "\(unit)"
-//            stringView.text = Localization(string)
-//        }
-//        if number < defaultNumber {
-//            let x = (knobLineFrame.width / 2) * (number - minNumber) / (defaultNumber - minNumber)
-//                + knobLineFrame.minX
-//            knob.position = CGPoint(x: round(x), y: knobPadding)
-//        } else {
-//            let x = (knobLineFrame.width / 2) * (number - defaultNumber) / (maxNumber - defaultNumber)
-//                + knobLineFrame.midX
-//            knob.position = CGPoint(x: round(x), y: knobPadding)
-//        }
-//    }
-//
-//    private func number(withDelta delta: CGFloat) -> RealNumber {
-//        let d = (delta / numberX) * numberInterval
-//        if exp == 1 {
-//            return d.interval(scale: numberInterval)
-//        } else {
-//            return (d >= 0 ? pow(d, exp) : -pow(abs(d), exp)).interval(scale: numberInterval)
-//        }
-//    }
-//    private func number(at p: CGPoint, old oldNumber: RealNumber) -> RealNumber {
-//        let d = isVertical ? p.y - oldPoint.y : p.x - oldPoint.x
-//        let v = oldNumber.interval(scale: numberInterval) + number(withDelta: isInverted ? -d : d)
-//        return v.clip(min: minNumber, max: maxNumber)
-//    }
-//
-//    var disabledRegisterUndo = false
-//
-//    struct Binding {
-//        let view: DiscreteRealNumberView, number: RealNumber, oldNumber: RealNumber, type: Action.SendType
-//    }
-//    var binding: ((Binding) -> ())?
-//
-//    func delete(with event: KeyInputEvent) -> Bool {
-//        let number = defaultNumber.clip(min: minNumber, max: maxNumber)
-//        if number != self.number {
-//            set(number, old: self.number)
-//        }
-//        return true
-//    }
-//    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-//        return [number, String(number.d)]
-//    }
-//    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-//        for object in objects {
-//            if let number = (object as? RealNumber)?.clip(min: minNumber, max: maxNumber) {
-//                if number != self.number {
-//                    set(number, old: self.number)
-//                    return true
-//                }
-//            } else if let string = object as? String {
-//                if let number = Double(string)?.cf.clip(min: minNumber, max: maxNumber) {
-//                    if number != self.number {
-//                        set(number, old: self.number)
-//                        return true
-//                    }
-//                }
-//            }
-//        }
-//        return false
-//    }
-//
-//    func run(with event: ClickEvent) -> Bool {
-//        let p = point(from: event)
-//        let number = self.number(at: p, old: self.number)
-//        if number != self.number {
-//            set(number, old: self.number)
-//        }
-//        return true
-//    }
-//
-//    private var oldNumber = 0.0.cf, oldPoint = CGPoint()
-//    func move(with event: DragEvent) -> Bool {
-//        let p = point(from: event)
-//        switch event.sendType {
-//        case .begin:
-//            knob.fillColor = .editing
-//            oldNumber = number
-//            oldPoint = p
-//            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .begin))
-//            number = self.number(at: p, old: oldNumber)
-//            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .sending))
-//        case .sending:
-//            number = self.number(at: p, old: oldNumber)
-//            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .sending))
-//        case .end:
-//            number = self.number(at: p, old: oldNumber)
-//            if number != oldNumber {
-//                registeringUndoManager?.registerUndo(withTarget: self) { [number, oldNumber] in
-//                    $0.set(oldNumber, old: number)
-//                }
-//            }
-//            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
-//            knob.fillColor = .knob
-//        }
-//        return true
-//    }
-//
-//    private func set(_ number: RealNumber, old oldNumber: RealNumber) {
-//        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, old: number) }
-//        binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, type: .begin))
-//        self.number = number
-//        binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
-//    }
-//
-//    func reference(with event: TapEvent) -> Reference? {
-//        var reference = number.reference
-//        reference.viewDescription = Localization(english: "Discrete Slider", japanese: "離散スライダー")
-//        return reference
-//    }
-//}
-
-final class CircularNumberView: PathView, Slidable {
+final class CircularNumberView: View, Assignable, Runnable, Movable, Slidable {
     var number: RealNumber {
         didSet {
             updateWithNumber()
@@ -697,10 +475,10 @@ final class CircularNumberView: PathView, Slidable {
     var numberInterval: CGFloat
     var width: CGFloat
     
-    let knob: Knob
-    var backgroundLayers = [Layer]() {
+    let knobView: KnobView
+    var backgroundViews = [View]() {
         didSet {
-            replace(children: backgroundLayers + [knob])
+            children = backgroundViews + [knobView]
         }
     }
     
@@ -720,19 +498,13 @@ final class CircularNumberView: PathView, Slidable {
         self.beginAngle = beginAngle
         self.numberInterval = numberInterval
         self.width = width
-        knob = sizeType == .small ? Knob(radius: 4) : Knob()
+        knobView = sizeType == .small ? KnobView(radius: 4) : KnobView()
         
-        super.init()
+        super.init(path: CGMutablePath(), isForm: false)
         fillColor = nil
         lineWidth = 0.5
-        append(child: knob)
+        append(child: knobView)
         self.frame = frame
-    }
-    
-    override func contains(_ p: CGPoint) -> Bool {
-        let cp = CGPoint(x: bounds.midX, y: bounds.midY), r = bounds.width / 2
-        let d = cp.distance(p)
-        return d >= r - width && d <= r
     }
     
     override var bounds: CGRect {
@@ -756,7 +528,7 @@ final class CircularNumberView: PathView, Slidable {
         let t = pow((number - minNumber) / (maxNumber - minNumber), 1 / exp)
         let theta = isClockwise ? beginAngle - t * (2 * .pi) : beginAngle + t * (2 * .pi)
         let cp = CGPoint(x: bounds.midX, y: bounds.midY), r = bounds.width / 2 - width / 2
-        knob.position = cp + r * CGPoint(x: cos(theta), y: sin(theta))
+        knobView.position = cp + r * CGPoint(x: cos(theta), y: sin(theta))
     }
     
     private func intervalNumber(withNumber n: RealNumber) -> RealNumber {
@@ -786,93 +558,88 @@ final class CircularNumberView: PathView, Slidable {
     var disabledRegisterUndo = false
     
     struct Binding {
-        let view: CircularNumberView, number: RealNumber, oldNumber: RealNumber, type: Action.SendType
+        let view: CircularNumberView, number: RealNumber, oldNumber: RealNumber, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
-    func delete(with event: KeyInputEvent) -> Bool {
+    func delete(for p: CGPoint) {
         let number = defaultNumber.clip(min: minNumber, max: maxNumber)
         if number != self.number {
             set(number, old: self.number)
         }
-        return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        return [number, String(number.d)]
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
+        return [number]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let number = (object as? RealNumber)?.clip(min: minNumber, max: maxNumber) {
                 if number != self.number {
                     set(number, old: self.number)
-                    return true
+                    return
                 }
             } else if let string = object as? String {
                 if let number = Double(string)?.cf.clip(min: minNumber, max: maxNumber) {
                     if number != self.number {
                         set(number, old: self.number)
-                        return true
+                        return
                     }
                 }
             }
         }
-        return false
     }
     
-    func run(with event: ClickEvent) -> Bool {
-        let p = point(from: event)
+    func run(for p: CGPoint) {
         let number = self.number(at: p)
         if number != self.number {
             set(number, old: self.number)
         }
-        return true
     }
     
     private var oldNumber = 0.0.cf, oldPoint = CGPoint()
-    func move(with event: DragEvent) -> Bool {
-        let p = point(from: event)
-        switch event.sendType {
-        case .begin:
-            knob.fillColor = .editing
+    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        switch phase {
+        case .began:
+            knobView.fillColor = .editing
             oldNumber = number
             oldPoint = p
-            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .begin))
+            binding?(Binding(view: self, number: number, oldNumber: oldNumber, phase: .began))
             number = self.number(at: p)
-            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .sending))
-        case .sending:
+            binding?(Binding(view: self, number: number, oldNumber: oldNumber, phase: .changed))
+        case .changed:
             number = self.number(at: p)
-            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .sending))
-        case .end:
+            binding?(Binding(view: self, number: number, oldNumber: oldNumber, phase: .changed))
+        case .ended:
             number = self.number(at: p)
             if number != oldNumber {
                 registeringUndoManager?.registerUndo(withTarget: self) { [number, oldNumber] in
                     $0.set(oldNumber, old: number)
                 }
             }
-            binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
-            knob.fillColor = .knob
+            binding?(Binding(view: self, number: number, oldNumber: oldNumber, phase: .ended))
+            knobView.fillColor = .knob
         }
-        return true
     }
     
     private func set(_ number: RealNumber, old oldNumber: RealNumber) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, old: number) }
-        binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, type: .begin))
+        binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, phase: .began))
         self.number = number
-        binding?(Binding(view: self, number: number, oldNumber: oldNumber, type: .end))
+        binding?(Binding(view: self, number: number, oldNumber: oldNumber, phase: .ended))
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        var reference = number.reference
+    func reference(at p: CGPoint) -> Reference {
+        var reference = RealNumber.reference
         reference.viewDescription = Localization(english: "Circular Slider", japanese: "円状スライダー")
         return reference
     }
 }
 
 final class ProgressNumberView: View {
-    let barLayer = Layer()
-    let barBackgroundLayer = Layer()
+    let barView = View(isForm: true)
+    let barBackgroundView = View(isForm: true)
     let nameView: TextView
+    let stopView = ClosureView(closure: {}, name: Localization(english: "Stop", japanese: "中止"))
     
     init(frame: CGRect = CGRect(), backgroundColor: Color = .background,
          name: String = "", type: String = "", state: Localization? = nil) {
@@ -883,14 +650,15 @@ final class ProgressNumberView: View {
         nameView = TextView()
         nameView.frame.origin = CGPoint(x: Layout.basicPadding,
                                         y: round((frame.height - nameView.frame.height) / 2))
-        barLayer.frame = CGRect(x: 0, y: 0, width: 0, height: frame.height)
-        barBackgroundLayer.fillColor = .editing
-        barLayer.fillColor = .content
+        barView.frame = CGRect(x: 0, y: 0, width: 0, height: frame.height)
+        barBackgroundView.fillColor = .editing
+        barView.fillColor = .content
         
         super.init()
+        stopView.closure = { [unowned self] in self.stop() }
         self.frame = frame
         isClipped = true
-        replace(children: [nameView, barBackgroundLayer, barLayer])
+        children = [nameView, barBackgroundView, barView, stopView]
         updateLayout()
     }
     
@@ -939,10 +707,15 @@ final class ProgressNumberView: View {
     }
     func updateLayout() {
         let padding = Layout.basicPadding
-        barBackgroundLayer.frame = CGRect(x: padding, y: padding - 1,
-                                          width: (bounds.width - padding * 2), height: 1)
-        barLayer.frame = CGRect(x: padding, y: padding - 1,
-                                width: floor((bounds.width - padding * 2) * value), height: 1)
+        let db = stopView.defaultBounds
+        let w = bounds.width - db.width - padding
+        stopView.frame = CGRect(x: w, y: padding,
+                                width: db.width, height: bounds.height - padding * 2)
+        
+        barBackgroundView.frame = CGRect(x: padding, y: padding - 1,
+                                          width: (w - padding * 2), height: 1)
+        barView.frame = CGRect(x: padding, y: padding - 1,
+                                width: floor((w - padding * 2) * value), height: 1)
         updateString(with: locale)
     }
     func updateString(with locale: Locale) {
@@ -969,16 +742,16 @@ final class ProgressNumberView: View {
                                          y: round((frame.height - nameView.frame.height) / 2))
     }
     
-    var deleteClosure: ((ProgressNumberView) -> (Bool))?
+    var deleteClosure: ((ProgressNumberView) -> ())?
     weak var operation: Operation?
-    func delete(with event: KeyInputEvent) -> Bool {
+    func stop() {
         if let operation = operation {
             operation.cancel()
         }
-        return deleteClosure?(self) ?? false
+        deleteClosure?(self)
     }
     
-    func reference(with event: TapEvent) -> Reference? {
+    func reference(at p: CGPoint) -> Reference {
         return Reference(name: Localization(english: "Progress", japanese: "進捗"),
                          viewDescription: Localization(english: "Stop: Send \"Cut\" action",
                                                        japanese: "停止: \"カット\"アクションを送信"))

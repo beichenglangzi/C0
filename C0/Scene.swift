@@ -272,8 +272,8 @@ final class Scene: NSObject, NSCoding {
         return Subtitle.vtt(subtitleTuples, timeClosure: { secondTime(withBeatTime: $0) })
     }
 }
-extension Scene: ClassCopiable {
-    func copied(from copier: Copier) -> Scene {
+extension Scene: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> Scene {
         return Scene(frame: frame, frameRate: frameRate,
                      editMaterial: editMaterial,
                      isHiddenPrevious: isHiddenPrevious, isHiddenNext: isHiddenNext,
@@ -293,7 +293,7 @@ extension Scene: Referenceable {
  Issue: セルをキャンバス外にペースト
  Issue: Display P3サポート
  */
-final class SceneView: View {
+final class SceneView: View, Scrollable {
     var scene = Scene() {
         didSet {
             updateWithScene()
@@ -380,6 +380,7 @@ final class SceneView: View {
     let soundView = SoundView(sizeType: .small)
     let drawingView = DrawingView()
     let materialManager = SceneMaterialManager()
+    //bindingView   /cutTrack.cuts[].editNode.tracks[].transforms[]
     let transformView = TransformView()
     let wiggleXView = WiggleView()
     let wiggleYView = WiggleView()
@@ -411,25 +412,24 @@ final class SceneView: View {
         bounds = defaultBounds
         materialManager.sceneView = self
         
-        replace(children: [classNameView,
-                           versionView,
-                           sizeView, frameRateView, renderingVerticalResolutionView,
-                           exportSubtitlesView, exportImageView, exportMovieView,
-                           isHiddenPreviousView, isHiddenNextView, timelineView.baseTimeIntervalView,
-                           soundView,
-                           timelineView.keyframeView,
-                           drawingView, canvas.materialView, transformView, wiggleXView, wiggleYView,
-                           timelineView.tempoView, timelineView.tempoKeyframeView,
-                           timelineView.baseTimeIntervalView,
-                           isHiddenSubtitlesView,
-//                           subtitleView,
-                           timelineView.nodeView, effectView,
-                           canvas.cellView,
-                           timelineView, canvas, seekBar])
+        children = [classNameView,
+                    versionView,
+                    sizeView, frameRateView, renderingVerticalResolutionView,
+                    exportSubtitlesView, exportImageView, exportMovieView,
+                    isHiddenPreviousView, isHiddenNextView, timelineView.baseTimeIntervalView,
+                    soundView,
+                    timelineView.keyframeView,
+                    drawingView, canvas.materialView, transformView, wiggleXView, wiggleYView,
+                    timelineView.tempoView, timelineView.tempoKeyframeView,
+                    timelineView.baseTimeIntervalView,
+                    isHiddenSubtitlesView,
+                    timelineView.nodeView, effectView,
+                    canvas.cellView,
+                    timelineView, canvas, seekBar]
         
         differentialSceneDataModel.dataClosure = { [unowned self] in self.scene.differentialData }
         
-        rendererManager.progressesEdgeLayer = self
+        rendererManager.progressesEdgeView = self
         sizeView.binding = { [unowned self] in
             self.scene.frame = CGRect(origin: CGPoint(x: -$0.size.width / 2,
                                                       y: -$0.size.height / 2), size: $0.size)
@@ -438,65 +438,38 @@ final class SceneView: View {
             self.transformView.standardTranslation = sp
             self.wiggleXView.standardAmplitude = $0.size.width
             self.wiggleYView.standardAmplitude = $0.size.height
-            if $0.type == .end && $0.size != $0.oldSize {
+            if $0.phase == .ended && $0.size != $0.oldSize {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
         frameRateView.binding = { [unowned self] in
             self.scene.frameRate = $0.model
-            if $0.type == .end && $0.model != $0.oldModel {
+            if $0.phase == .ended && $0.model != $0.oldModel {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
         renderingVerticalResolutionView.binding = { [unowned self] in
             self.scene.renderingVerticalResolution = $0.model
-            if $0.type == .end && $0.model != $0.oldModel {
+            if $0.phase == .ended && $0.model != $0.oldModel {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
         
-//        timelineView.baseTimeIntervalView.binding = { [unowned self] in
-//            if $0.type == .begin {
-//                self.baseTimeIntervalOldTime = self.scene.secondTime(withBeatTime: self.scene.time)
-//            }
-//            self.scene.baseTimeInterval = $0.model
-//            self.timelineView.time = self.scene.basedBeatTime(withSecondTime:
-//                self.baseTimeIntervalOldTime)
-//            self.timelineView.baseTimeInterval = self.scene.baseTimeInterval
-//            if $0.type == .end && $0.model != $0.oldModel {
-//                self.differentialSceneDataModel.isWrite = true
-//            }
-//            
-//            switch event.sendType {
-//            case .begin:
-//                self.baseTimeIntervalOldTime = self.scene.secondTime(withBeatTime: self.scene.time)
-//                beginBaseTimeInterval = baseTimeInterval
-//            case .sending, .end:
-//                self.scene.baseTimeInterval = $0.model
-//                self.timelineView.updateWith(time: time, scrollPoint: CGPoint(x: self.timelineView.x(withTime: time), y: 0),
-//                           isIntervalScroll: false)
-//                self.timelineView.updateWithTime()
-//                if $0.type == .end && $0.model != $0.oldModel {
-//                    self.differentialSceneDataModel.isWrite = true
-//                }
-//            }
-//        }
-        
         isHiddenPreviousView.binding = { [unowned self] in
             self.canvas.isHiddenPrevious = $0.bool
-            if $0.type == .end && $0.bool != $0.oldBool {
+            if $0.phase == .ended && $0.bool != $0.oldBool {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
         isHiddenNextView.binding = { [unowned self] in
             self.canvas.isHiddenNext = $0.bool
-            if $0.type == .end && $0.bool != $0.oldBool {
+            if $0.phase == .ended && $0.bool != $0.oldBool {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
         isHiddenSubtitlesView.binding = { [unowned self] in
             self.scene.isHiddenSubtitles = $0.bool
-            if $0.type == .end && $0.bool != $0.oldBool {
+            if $0.phase == .ended && $0.bool != $0.oldBool {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
@@ -504,7 +477,7 @@ final class SceneView: View {
         soundView.setSoundClosure = { [unowned self] in
             self.scene.sound = $0.sound
             self.timelineView.soundWaveformView.sound = $0.sound
-            if $0.type == .end && $0.sound != $0.oldSound {
+            if $0.phase == .ended && $0.sound != $0.oldSound {
                 self.differentialSceneDataModel.isWrite = true
             }
             if self.scene.sound.url == nil && self.canvas.player.audioPlayer?.isPlaying ?? false {
@@ -513,16 +486,16 @@ final class SceneView: View {
         }
         
         effectView.binding = { [unowned self] in
-            self.set($0.effect, old: $0.oldEffect, type: $0.type)
+            self.set($0.effect, old: $0.oldEffect, $0.phase)
         }
         drawingView.binding = { [unowned self] in
-            self.set($0.drawing, old: $0.oldDrawing, type: $0.type)
+            self.set($0.drawing, old: $0.oldDrawing, $0.phase)
         }
         transformView.binding = { [unowned self] in
-            self.set($0.transform, old: $0.oldTransform, type: $0.type)
+            self.set($0.transform, old: $0.oldTransform, $0.phase)
         }
         wiggleXView.binding = { [unowned self] in
-            self.set($0.wiggle, old: $0.oldWiggle, type: $0.type)
+            self.set($0.wiggle, old: $0.oldWiggle, $0.phase)
         }
         
 //        subtitleView.binding = { [unowned self] in
@@ -547,14 +520,7 @@ final class SceneView: View {
 //        }
         
         timelineView.tempoView.binding = { [unowned self] in
-            self.set($0.model, old: $0.oldModel, type: $0.type)
-        }
-        timelineView.scrollClosure = { [unowned self] (timelineView, scrollPoint, event) in
-            if event.sendType == .begin && self.canvas.player.isPlaying {
-                self.canvas.player.opacity = 0.2
-            } else if event.sendType == .end && self.canvas.player.opacity != 1 {
-                self.canvas.player.opacity = 1
-            }
+            self.set($0.model, old: $0.oldModel, $0.phase)
         }
         timelineView.setSceneDurationClosure = { [unowned self] in
             self.seekBar.maxTime = self.scene.secondTime(withBeatTime: $1)
@@ -572,10 +538,10 @@ final class SceneView: View {
         }
         timelineView.updateViewClosure = { [unowned self] in
             if $0.isCut {
-                let p = self.canvas.cursorPoint
-                if self.canvas.contains(p) {
-                    self.canvas.updateEditView(with: self.canvas.convertToCurrentLocal(p))
-                }
+//                let p = self.canvas.cursorPoint
+//                if self.canvas.contains(p) {
+//                    self.canvas.updateEditView(with: self.canvas.convertToCurrentLocal(p))
+//                }
                 self.canvas.setNeedsDisplay()
             }
             if $0.isTransform {
@@ -591,13 +557,11 @@ final class SceneView: View {
         }
         timelineView.setNodeAndTrackBinding = { [unowned self] timeline, cutView, nodeAndTrack in
             if cutView == timeline.editCutView {
-                let p = self.canvas.cursorPoint
-                if self.canvas.contains(p) {
-                    self.canvas.updateEditView(with: self.canvas.convertToCurrentLocal(p))
-                    self.canvas.setNeedsDisplay()
-                } else {
-                    self.canvas.setNeedsDisplay()
-                }
+//                let p = self.canvas.cursorPoint
+//                if self.canvas.contains(p) {
+//                    self.canvas.updateEditView(with: self.canvas.convertToCurrentLocal(p))
+//                }
+                self.canvas.setNeedsDisplay()
             }
         }
         timelineView.nodeView.setIsHiddenClosure = { [unowned self] in
@@ -626,7 +590,7 @@ final class SceneView: View {
             let newSize = CGSize(width: floor((size.width * p.cf) / size.height), height: p.cf)
             let sizeString = "w: \(Int(newSize.width)) px, h: \(Int(newSize.height)) px"
             let message = Localization(english: "Export Movie(\(sizeString))",
-                japanese: "動画として書き出す(\(sizeString))").currentString
+                                       japanese: "動画として書き出す(\(sizeString))").currentString
             _ = self.rendererManager.exportMovie(message: message, size: newSize)
         }
         
@@ -668,11 +632,11 @@ final class SceneView: View {
         
         seekBar.timeBinding = { [unowned self] in
             switch $1 {
-            case .begin:
+            case .began:
                 self.canvas.player.isPause = true
-            case .sending:
+            case .changed:
                 break
-            case .end:
+            case .ended:
                 self.canvas.player.isPause = false
             }
             self.canvas.player.currentPlaySecond = $0
@@ -876,22 +840,22 @@ final class SceneView: View {
     private var baseTimeIntervalOldTime = Second(0)
     
     private func setKeyframeInNode(with obj: KeyframeView.Binding) {
-        switch obj.type {
-        case .begin:
+        switch obj.phase {
+        case .began:
             let cutView = timelineView.editCutView
             let track = cutView.cut.editNode.editTrack
             self.cutView = cutView
             self.animationView = cutView.editAnimationView
             self.track = track
             keyframeIndex = track.animation.editKeyframeIndex
-        case .sending:
+        case .changed:
             guard let track = track,
                 let animationView = animationView, let cutView = cutView else {
                     return
             }
             set(obj.keyframe, at: keyframeIndex, in: track,
                 in: animationView, in: cutView)
-        case .end:
+        case .ended:
             guard let track = track,
                 let animationView = animationView, let cutView = cutView else {
                     return
@@ -924,17 +888,17 @@ final class SceneView: View {
     }
     
     private func setKeyframeInTempo(with obj: KeyframeView.Binding) {
-        switch obj.type {
-        case .begin:
+        switch obj.phase {
+        case .began:
             let track = scene.tempoTrack
             self.oldTempoTrack = track
             keyframeIndex = track.animation.editKeyframeIndex
-        case .sending:
+        case .changed:
             guard let track = oldTempoTrack else {
                 return
             }
             set(obj.keyframe, at: keyframeIndex, in: track, in: timelineView.tempoAnimationView)
-        case .end:
+        case .ended:
             guard let track = oldTempoTrack else {
                 return
             }
@@ -969,9 +933,9 @@ final class SceneView: View {
     
     private var isMadeEffectItem = false
     private weak var oldEffectItem: EffectItem?
-    func set(_ effect: Effect, old oldEffect: Effect, type: Action.SendType) {
-        switch type {
-        case .begin:
+    func set(_ effect: Effect, old oldEffect: Effect, _ phase: Phase) {
+        switch phase {
+        case .began:
             let cutView = timelineView.editCutView
             let track = cutView.cut.editNode.editTrack
             oldEffectItem = track.effectItem
@@ -987,12 +951,12 @@ final class SceneView: View {
             keyframeIndex = track.animation.editKeyframeIndex
             
             set(effect, at: keyframeIndex, in: track, in: cutView)
-        case .sending:
+        case .changed:
             guard let track = track, let cutView = cutView else {
                 return
             }
             set(effect, at: keyframeIndex, in: track, in: cutView)
-        case .end:
+        case .ended:
             guard let track = track, let cutView = cutView,
                 let effectItem = track.effectItem else {
                     return
@@ -1050,9 +1014,9 @@ final class SceneView: View {
     private var keyframeIndex = 0, isMadeTransformItem = false
     private weak var oldTransformItem: TransformItem?, track: NodeTrack?
     private weak var animationView: AnimationView?, cutView: CutView?
-    func set(_ transform: Transform, old oldTransform: Transform, type: Action.SendType) {
-        switch type {
-        case .begin:
+    func set(_ transform: Transform, old oldTransform: Transform, _ phase: Phase) {
+        switch phase {
+        case .began:
             let cutView = timelineView.editCutView
             let track = cutView.cut.editNode.editTrack
             oldTransformItem = track.transformItem
@@ -1068,12 +1032,12 @@ final class SceneView: View {
             keyframeIndex = track.animation.editKeyframeIndex
             
             set(transform, at: keyframeIndex, in: track, in: cutView)
-        case .sending:
+        case .changed:
             guard let track = track, let cutView = cutView else {
                 return
             }
             set(transform, at: keyframeIndex, in: track, in: cutView)
-        case .end:
+        case .ended:
             guard let track = track, let cutView = cutView,
                 let transformItem = track.transformItem else {
                     return
@@ -1131,9 +1095,9 @@ final class SceneView: View {
     
     private var isMadeWiggleItem = false
     private weak var oldWiggleItem: WiggleItem?
-    func set(_ wiggle: Wiggle, old oldWiggle: Wiggle, type: Action.SendType) {
-        switch type {
-        case .begin:
+    func set(_ wiggle: Wiggle, old oldWiggle: Wiggle, _ phase: Phase) {
+        switch phase {
+        case .began:
             let cutView = timelineView.editCutView
             let track = cutView.cut.editNode.editTrack
             oldWiggleItem = track.wiggleItem
@@ -1149,12 +1113,12 @@ final class SceneView: View {
             keyframeIndex = track.animation.editKeyframeIndex
             
             set(wiggle, at: keyframeIndex, in: track, in: cutView)
-        case .sending:
+        case .changed:
             guard let track = track, let cutView = cutView else {
                 return
             }
             set(wiggle, at: keyframeIndex, in: track, in: cutView)
-        case .end:
+        case .ended:
             guard let track = track, let cutView = cutView,
                 let wiggleItem = track.wiggleItem else {
                     return
@@ -1210,13 +1174,13 @@ final class SceneView: View {
     }
     
     private func setIsHiddenInNode(with obj: NodeView.Binding) {
-        switch obj.type {
-        case .begin:
+        switch obj.phase {
+        case .began:
             self.cutView = timelineView.editCutView
-        case .sending:
+        case .changed:
             canvas.setNeedsDisplay()
             cutView?.updateChildren()
-        case .end:
+        case .ended:
             guard let cutView = cutView else {
                 return
             }
@@ -1243,12 +1207,12 @@ final class SceneView: View {
     }
     
     private func setIsLockedInCell(with obj: CellView.Binding) {
-        switch obj.type {
-        case .begin:
+        switch obj.phase {
+        case .began:
             self.cutView = timelineView.editCutView
-        case .sending:
+        case .changed:
             canvas.setNeedsDisplay()
-        case .end:
+        case .ended:
             guard let cutView = cutView else {
                 return
             }
@@ -1272,24 +1236,26 @@ final class SceneView: View {
         differentialSceneDataModel.isWrite = true
     }
     
-    func scroll(with event: ScrollEvent) -> Bool {
-        return timelineView.scroll(with: event)
+    func scroll(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+                phase: Phase, momentumPhase: Phase?) {
+        timelineView.scroll(for: p, time: time, scrollDeltaPoint: scrollDeltaPoint,
+                            phase: phase, momentumPhase: momentumPhase)
     }
     
     private weak var oldTempoTrack: TempoTrack?
-    func set(_ tempo: BPM, old oldTempo: BPM, type: Action.SendType) {
-        switch type {
-        case .begin:
+    func set(_ tempo: BPM, old oldTempo: BPM, _ phase: Phase) {
+        switch phase {
+        case .began:
             let track = scene.tempoTrack
             oldTempoTrack = track
             keyframeIndex = track.animation.editKeyframeIndex
             set(tempo, at: keyframeIndex, in: track)
-        case .sending:
+        case .changed:
             guard let track = oldTempoTrack else {
                 return
             }
             set(tempo, at: keyframeIndex, in: track)
-        case .end:
+        case .ended:
             guard let track = oldTempoTrack else {
                 return
             }
@@ -1316,20 +1282,20 @@ final class SceneView: View {
     }
     
     private var oldNode: Node?
-    func set(_ drawing: Drawing, old oldDrawing: Drawing, type: Action.SendType) {
-        switch type {
-        case .begin:
+    func set(_ drawing: Drawing, old oldDrawing: Drawing, _ phase: Phase) {
+        switch phase {
+        case .began:
             let track = scene.editCut.editNode.editTrack
             oldNode = scene.editNode
             self.track = track
             keyframeIndex = track.animation.editKeyframeIndex
             set(drawing, at: keyframeIndex, in: track)
-        case .sending:
+        case .changed:
             guard let track = track else {
                 return
             }
             set(drawing, at: keyframeIndex, in: track)
-        case .end:
+        case .ended:
             guard let track = track, let oldNode = oldNode else {
                 return
             }
@@ -1356,19 +1322,19 @@ final class SceneView: View {
     }
     
     private weak var oldSubtitleTrack: SubtitleTrack?
-    func set(_ subtitle: Subtitle, old oldSubtitle: Subtitle, type: Action.SendType) {
-        switch type {
-        case .begin:
+    func set(_ subtitle: Subtitle, old oldSubtitle: Subtitle, _ phase: Phase) {
+        switch phase {
+        case .began:
             let track = scene.editCut.subtitleTrack
             oldSubtitleTrack = track
             keyframeIndex = track.animation.editKeyframeIndex
             set(subtitle, at: keyframeIndex, in: track)
-        case .sending:
+        case .changed:
             guard let track = oldSubtitleTrack else {
                 return
             }
             set(subtitle, at: keyframeIndex, in: track)
-        case .end:
+        case .ended:
             guard let track = oldSubtitleTrack else {
                 return
             }
@@ -1390,6 +1356,10 @@ final class SceneView: View {
         }
         set(subtitle, at: index, in: track)
         differentialSceneDataModel.isWrite = true
+    }
+    
+    func reference(at p: CGPoint) -> Reference {
+        return Scene.reference
     }
 }
 
@@ -1641,20 +1611,20 @@ final class SceneMaterialManager {
     private func selectedMaterialTuple(with materialTuples: [UUID: MaterialTuple]) -> MaterialTuple? {
         return materialTuples[material.id]
     }
-    private func changeMaterialWith(isColorTuple: Bool, type: Action.SendType) {
-        switch type {
-        case .begin:
+    private func changeMaterialWith(isColorTuple: Bool, _ phase: Phase) {
+        switch phase {
+        case .began:
             oldMaterialTuple = isColorTuple ?
                 selectedMaterialTuple(with: colorTuples) :
                 selectedMaterialTuple(with: materialTuples)
             if let oldMaterialTuple = oldMaterialTuple {
                 material = oldMaterialTuple.cutTuples[0].cells[0].material
             }
-        case .sending:
+        case .changed:
             if let oldMaterialTuple = oldMaterialTuple {
                 material = oldMaterialTuple.cutTuples[0].cells[0].material
             }
-        case .end:
+        case .ended:
             if let oldMaterialTuple = oldMaterialTuple {
                 _set(oldMaterialTuple.cutTuples[0].cells[0].material,
                      old: oldMaterialTuple.material)
@@ -1704,7 +1674,7 @@ final class SceneMaterialManager {
         }
     }
     
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) -> Bool {
         for object in objects {
             if let material = object as? Material {
                 paste(material, withSelected: self.material, useSelected: false)
@@ -1836,17 +1806,17 @@ final class SceneMaterialManager {
     }
     
     func setType(with binding: MaterialView.TypeBinding) {
-        switch binding.sendType {
-        case .begin:
+        switch binding.phase {
+        case .began:
             materialTuples = materialTuplesWith(material: binding.oldMaterial,
                                                 in: scene.editCut, scene.cutTrack.cutItem.keyCuts)
-        case .sending:
+        case .changed:
             setMaterialType(binding.type, in: materialTuples)
-        case .end:
+        case .ended:
             _setMaterialType(binding.type, in: materialTuples)
             materialTuples = [:]
         }
-        changeMaterialWith(isColorTuple: false, type: binding.sendType)
+        changeMaterialWith(isColorTuple: false, binding.phase)
         sceneView.canvas.setNeedsDisplay()
     }
     private func setMaterialType(_ type: Material.MaterialType,
@@ -1863,17 +1833,17 @@ final class SceneMaterialManager {
     }
     
     private func setColor(with binding: MaterialView.ColorBinding) {
-        switch binding.type {
-        case .begin:
+        switch binding.phase {
+        case .began:
             colorTuples = colorTuplesWith(color: binding.oldColor,
                                           in: scene.editCut, scene.cutTrack.cutItem.keyCuts)
-        case .sending:
+        case .changed:
             setColor(binding.color, in: colorTuples)
-        case .end:
+        case .ended:
             _setColor(binding.color, in: colorTuples)
             colorTuples = []
         }
-        changeMaterialWith(isColorTuple: true, type: binding.type)
+        changeMaterialWith(isColorTuple: true, binding.phase)
         sceneView.canvas.setNeedsDisplay()
     }
     private func setColor(_ color: Color, in colorTuples: [ColorTuple]) {
@@ -1892,18 +1862,18 @@ final class SceneMaterialManager {
     }
     
     private func setLineColor(with binding: MaterialView.LineColorBinding) {
-        switch binding.type {
-        case .begin:
+        switch binding.phase {
+        case .began:
             materialTuples = materialTuplesWith(material: binding.oldMaterial,
                                                 in: scene.editCut, scene.cutTrack.cutItem.keyCuts)
             setLineColor(binding.lineColor, in: materialTuples)
-        case .sending:
+        case .changed:
             setLineColor(binding.lineColor, in: materialTuples)
-        case .end:
+        case .ended:
             _setLineColor(binding.lineColor, in: materialTuples)
             materialTuples = [:]
         }
-        changeMaterialWith(isColorTuple: false, type: binding.type)
+        changeMaterialWith(isColorTuple: false, binding.phase)
         sceneView.canvas.setNeedsDisplay()
     }
     private func setLineColor(_ lineColor: Color, in materialTuples: [UUID: MaterialTuple]) {
@@ -1918,17 +1888,17 @@ final class SceneMaterialManager {
     }
     
     func setLineWidth(with binding: MaterialView.LineWidthBinding) {
-        switch binding.type {
-        case .begin:
+        switch binding.phase {
+        case .began:
             materialTuples = materialTuplesWith(material: binding.oldMaterial,
                                                 in: scene.editCut, scene.cutTrack.cutItem.keyCuts)
-        case .sending:
+        case .changed:
             setLineWidth(binding.lineWidth, in: materialTuples)
-        case .end:
+        case .ended:
             _setLineWidth(binding.lineWidth, in: materialTuples)
             materialTuples = [:]
         }
-        changeMaterialWith(isColorTuple: false, type: binding.type)
+        changeMaterialWith(isColorTuple: false, binding.phase)
         sceneView.canvas.setNeedsDisplay()
     }
     private func setLineWidth(_ lineWidth: CGFloat, in materialTuples: [UUID: MaterialTuple]) {
@@ -1943,17 +1913,17 @@ final class SceneMaterialManager {
     }
     
     func setOpacity(with binding: MaterialView.OpacityBinding) {
-        switch binding.type {
-        case .begin:
+        switch binding.phase {
+        case .began:
             materialTuples = materialTuplesWith(material: binding.oldMaterial,
                                                 in: scene.editCut, scene.cutTrack.cutItem.keyCuts)
-        case .sending:
+        case .changed:
             setOpacity(binding.opacity, in: materialTuples)
-        case .end:
+        case .ended:
             _setOpacity(binding.opacity, in: materialTuples)
             materialTuples = [:]
         }
-        changeMaterialWith(isColorTuple: false, type: binding.type)
+        changeMaterialWith(isColorTuple: false, binding.phase)
         sceneView.canvas.setNeedsDisplay()
     }
     private func setOpacity(_ opacity: CGFloat, in materialTuples: [UUID: MaterialTuple]) {

@@ -21,7 +21,7 @@ import Foundation
 
 typealias Closure = (() -> ())
 
-final class ClosureView: View {
+final class ClosureView: View, Runnable {
     var closure: Closure
     
     let nameView: TextView
@@ -37,7 +37,7 @@ final class ClosureView: View {
         
         super.init()
         self.frame = frame
-        replace(children: [nameView])
+        children = [nameView]
     }
     
     override var defaultBounds: CGRect {
@@ -58,12 +58,11 @@ final class ClosureView: View {
                                         y: bounds.height - nameView.frame.height - padding)
     }
     
-    func run(with event: ClickEvent) -> Bool {
+    func run(for p: CGPoint) {
         closure()
-        return true
     }
     
-    func reference(with event: TapEvent) -> Reference? {
+    func reference(at p: CGPoint) -> Reference {
         return Reference(name: Localization(english: "Closure", japanese: "クロージャ"))
     }
 }

@@ -111,12 +111,12 @@ extension Effect: Interpolatable {
     }
 }
 extension Effect: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return blendType.displayText.thumbnail(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return blendType.displayText.thumbnail(withBounds: bounds, sizeType)
     }
 }
 
-final class EffectView: View {
+final class EffectView: View, Assignable {
     var effect: Effect {
         didSet {
             if effect != oldValue {
@@ -138,20 +138,20 @@ final class EffectView: View {
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
         classNameView = TextView(text: Effect.name, font: Font.bold(with: sizeType))
-        let blurPropertyText = Effect.displayText(with: \Effect.blurRadius) + Localization(":")
+        let blurPropertyText = Effect.displayText(with: \Effect.blurRadius) + Text(":")
         classBlurNameView = TextView(text: blurPropertyText, font: Font.default(with: sizeType))
-        blurView = SlidableNumberView.widthViewWith(min: 0, max: 500, exp: 3, sizeType: sizeType)
-        opacityView = SlidableNumberView.opacityView(sizeType: sizeType)
+        blurView = SlidableNumberView.widthViewWith(min: 0, max: 500, exp: 3, sizeType)
+        opacityView = SlidableNumberView.opacityView(sizeType)
         blendTypeView = EnumView(enumeratedType: .normal,
                                  indexClosure: { Int($0) },
                                  rawValueClosure: { BlendType.RawValue($0) },
                                  names: BlendType.displayTexts, sizeType: sizeType)
         effect = defaultEffect
         super.init()
-        replace(children: [classNameView,
-                           blendTypeView,
-                           classBlurNameView, blurView,
-                           opacityView])
+        children = [classNameView,
+                    blendTypeView,
+                    classBlurNameView, blurView,
+                    opacityView]
         
         blurView.binding = { [unowned self] in self.setEffect(with: $0) }
         opacityView.binding = { [unowned self] in self.setEffect(with: $0) }
@@ -185,9 +185,9 @@ final class EffectView: View {
         classBlurNameView.frame.origin = CGPoint(x: padding,
                                                  y: padding * 2)
         let blurW = ceil((cw - classBlurNameView.frame.width) / 2)
-        blurView.updateLineWidthLayers(withFrame: CGRect(x: classBlurNameView.frame.maxX, y: padding,
+        blurView.updateLineWidthViews(withFrame: CGRect(x: classBlurNameView.frame.maxX, y: padding,
                                                          width: blurW, height: h))
-        opacityView.updateOpacityLayers(withFrame: CGRect(x: blurView.frame.maxX,
+        opacityView.updateOpacityViews(withFrame: CGRect(x: blurView.frame.maxX,
                                                           y: padding,
                                                           width: bounds.width - blurView.frame.maxX - padding,
                                                           height: h))
@@ -202,24 +202,24 @@ final class EffectView: View {
     
     struct Binding {
         let view: EffectView
-        let effect: Effect, oldEffect: Effect, type: Action.SendType
+        let effect: Effect, oldEffect: Effect, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
     private var oldEffect = Effect()
     private func setEffect(with obj: EnumView<BlendType>.Binding) {
-        if obj.type == .begin {
+        if obj.phase == .began {
             oldEffect = effect
-            binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
+            binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, phase: .began))
         } else {
             effect.blendType = obj.enumeratedType
-            binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: obj.type))
+            binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, phase: obj.phase))
         }
     }
     private func setEffect(with obj: SlidableNumberView.Binding) {
-        if obj.type == .begin {
+        if obj.phase == .began {
             oldEffect = effect
-            binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
+            binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, phase: .began))
         } else {
             switch obj.view {
             case blurView:
@@ -229,43 +229,41 @@ final class EffectView: View {
             default:
                 fatalError("No case")
             }
-            binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: obj.type))
+            binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, phase: obj.phase))
         }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func delete(for p: CGPoint) {
+        let effect = defaultEffect
+        guard effect != self.effect else {
+            return
+        }
+        set(effect, old: self.effect)
+    }
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [effect]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let effect = object as? Effect {
                 if effect != self.effect {
                     set(effect, old: self.effect)
-                    return true
+                    return
                 }
             }
         }
-        return false
-    }
-    func delete(with event: KeyInputEvent) -> Bool {
-        let effect = defaultEffect
-        guard effect != self.effect else {
-            return false
-        }
-        set(effect, old: self.effect)
-        return true
     }
     
     private func set(_ effect: Effect, old oldEffect: Effect) {
         registeringUndoManager?.registerUndo(withTarget: self) {
             $0.set(oldEffect, old: effect)
         }
-        binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, type: .begin))
+        binding?(Binding(view: self, effect: oldEffect, oldEffect: oldEffect, phase: .began))
         self.effect = effect
-        binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, type: .end))
+        binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, phase: .ended))
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return effect.reference
+    func reference(at p: CGPoint) -> Reference {
+        return Effect.reference
     }
 }

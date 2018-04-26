@@ -134,7 +134,7 @@ struct RationalNumber: AdditiveGroup, SignedNumeric {
     }
 }
 extension RationalNumber {
-    static let basicEffectiveFieldOfView = Q(152, 100)
+    static let basicEffectiveFieldOfView: Q = Q(152, 100)
 }
 extension RationalNumber: Equatable {
     static func ==(lhs: RationalNumber, rhs: RationalNumber) -> Bool {
@@ -165,11 +165,11 @@ extension RationalNumber: Codable {
     }
 }
 extension RationalNumber: Referenceable {
-    static let name = Localization(english: "Rational RealNumber", japanese: "有理数")
+    static let name = Localization(english: "Rational Number", japanese: "有理数")
 }
 extension RationalNumber: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return description.view(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return description.view(withBounds: bounds, sizeType)
     }
 }
 extension RationalNumber: CustomStringConvertible {
@@ -198,13 +198,8 @@ func floor(_ x: RationalNumber) -> RationalNumber {
 func ceil(_ x: RationalNumber) -> RationalNumber {
     return RationalNumber(x.decimalPart.p == 0 ? x.integralPart : x.integralPart + 1)
 }
-extension RationalNumber: ViewExpression {
-    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
-        return RationalNumberView(rationalNumber: self, frame: bounds, sizeType: sizeType)
-    }
-}
 
-final class RationalNumberView: View {
+final class RationalNumberView: View, Copiable {
     var rationalNumber: RationalNumber {
         didSet {
             updateWithRationalNumber()
@@ -229,7 +224,7 @@ final class RationalNumberView: View {
     let formPlusView: TextView
     let pView: RealNumberView, qView: RealNumberView
     let unitView: TextView
-    let formLinePathView = PathLayer()
+    let formLinePathView = View(path: CGMutablePath())
     
     init(rationalNumber: RationalNumber = 0,
          isIntegerAndProperFraction: Bool = true, unit: String = "",
@@ -258,9 +253,9 @@ final class RationalNumberView: View {
     }
     private func updateChildren() {
         if isIntegerAndProperFraction {
-            replace(children: [integerView, formPlusView, pView, formLinePathView, qView])
+            children = [integerView, formPlusView, pView, formLinePathView, qView]
         } else {
-            replace(children: [pView, formLinePathView, qView])
+            children = [pView, formLinePathView, qView]
         }
     }
     private func updateLayout() {
@@ -285,12 +280,12 @@ final class RationalNumberView: View {
         }
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        return [rationalNumber, rationalNumber.description]
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
+        return [rationalNumber]
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return rationalNumber.reference
+    func reference(at p: CGPoint) -> Reference {
+        return RationalNumber.reference
     }
 }
 

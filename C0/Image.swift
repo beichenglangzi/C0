@@ -38,7 +38,7 @@ extension CGImage: Referenceable {
     static let name = Localization(english: "Image", japanese: "画像")
 }
 
-final class ImageView: View {
+final class ImageView: View, Movable {
     var url: URL? {
         didSet {
             if let url = url {
@@ -67,23 +67,18 @@ final class ImageView: View {
         }
     }
     
-    func delete(with event: KeyInputEvent) -> Bool {
-        removeFromParent()
-        return true
-    }
-    
     enum DragType {
         case move, resizeMinXMinY, resizeMaxXMinY, resizeMinXMaxY, resizeMaxXMaxY
     }
     var dragType = DragType.move, downPosition = CGPoint(), oldFrame = CGRect()
     var resizeWidth = 10.0.cf, ratio = 1.0.cf
-    func move(with event: DragEvent) -> Bool {
+    func move(for point: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
         guard let parent = parent else {
-            return false
+            return
         }
-        let p = parent.point(from: event), ip = point(from: event)
-        switch event.sendType {
-        case .begin:
+        let p = parent.convert(point, from: self), ip = point
+        switch phase {
+        case .began:
             if CGRect(x: 0, y: 0, width: resizeWidth, height: resizeWidth).contains(ip) {
                 dragType = .resizeMinXMinY
             } else if CGRect(x:  bounds.width - resizeWidth, y: 0,
@@ -101,7 +96,7 @@ final class ImageView: View {
             downPosition = p
             oldFrame = frame
             ratio = frame.height / frame.width
-        case .sending, .end:
+        case .changed, .ended:
             let dp =  p - downPosition
             var frame = self.frame
             switch dragType {
@@ -124,12 +119,11 @@ final class ImageView: View {
                 frame.size.width = oldFrame.width + dp.x
                 frame.size.height = frame.size.width * ratio
             }
-            self.frame = event.sendType == .end ? frame.integral : frame
+            self.frame = phase == .ended ? frame.integral : frame
         }
-        return true
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return image?.reference
+    func reference(at p: CGPoint) -> Reference {
+        return CGImage.reference
     }
 }

@@ -19,21 +19,24 @@
 
 import Foundation
 
-struct Rect: Equatable {
-    var origin = Point(), size = Size()
-    init(origin: Point = Point(), size: Size = Size()) {
+/**
+ Issue: Core Graphicsとの置き換え
+ */
+struct _Rect: Equatable {
+    var origin = _Point(), size = _Size()
+    init(origin: _Point = _Point(), size: _Size = _Size()) {
         self.origin = origin
         self.size = size
     }
     init(x: Double, y: Double, width: Double, height: Double) {
-        self.init(origin: Point(x: x, y: y), size: Size(width: width, height: height))
+        self.init(origin: _Point(x: x, y: y), size: _Size(width: width, height: height))
     }
     
-    func insetBy(dx: Double, dy: Double) -> Rect {
-        return Rect(x: minX + dx, y: minY + dy,
+    func insetBy(dx: Double, dy: Double) -> _Rect {
+        return _Rect(x: minX + dx, y: minY + dy,
                     width: width - dx * 2, height: height - dy * 2)
     }
-    func inset(by width: Double) -> Rect {
+    func inset(by width: Double) -> _Rect {
         return insetBy(dx: width, dy: width)
     }
     
@@ -64,31 +67,31 @@ struct Rect: Equatable {
     var isEmpty: Bool {
         return origin.isEmpty && size.isEmpty
     }
-    func union(_ other: Rect) -> Rect {
+    func union(_ other: _Rect) -> _Rect {
         let minX = min(self.minX, other.minX)
         let maxX = max(self.maxX, other.maxX)
         let minY = min(self.minY, other.minY)
         let maxY = max(self.maxY, other.maxY)
-        return Rect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        return _Rect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
-    func unionNoEmpty(_ other: Rect) -> Rect {
+    func unionNoEmpty(_ other: _Rect) -> _Rect {
         return other.isEmpty ? self : (isEmpty ? other : union(other))
     }
-    var circleBounds: Rect {
+    var circleBounds: _Rect {
         let r = hypot(width, height) / 2
-        return Rect(x: midX - r, y: midY - r, width: r * 2, height: r * 2)
+        return _Rect(x: midX - r, y: midY - r, width: r * 2, height: r * 2)
     }
 }
-extension Rect: Hashable {
+extension _Rect: Hashable {
     var hashValue: Int {
         return Hash.uniformityHashValue(with: [origin.hashValue, size.hashValue])
     }
 }
-extension Rect: Codable {
+extension _Rect: Codable {
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
-        let origin = try container.decode(Point.self)
-        let size = try container.decode(Size.self)
+        let origin = try container.decode(_Point.self)
+        let size = try container.decode(_Size.self)
         self.init(origin: origin, size: size)
     }
     func encode(to encoder: Encoder) throws {
@@ -97,10 +100,11 @@ extension Rect: Codable {
         try container.encode(size)
     }
 }
-extension Rect: Referenceable {
+extension _Rect: Referenceable {
     static let name = Localization(english: "Rect", japanese: "矩形")
 }
 
+typealias Rect = CGRect
 extension CGRect {
     func distance²(_ point: CGPoint) -> CGFloat {
         return AABB(self).nearestDistance²(point)

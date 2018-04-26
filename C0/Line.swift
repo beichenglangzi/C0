@@ -844,11 +844,8 @@ extension Line: Interpolatable {
     }
 }
 extension Line: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        let thumbnailView = DrawLayer()
-        thumbnailView.drawBlock = { [unowned thumbnailView] ctx in
-            self.draw(with: thumbnailView.bounds, in: ctx)
-        }
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
         thumbnailView.bounds = bounds
         return thumbnailView
     }
@@ -874,14 +871,27 @@ extension Array where Element == Line {
     static func square(centerPosition cp: CGPoint = CGPoint(),
                        polygonRadius r: CGFloat = 50.0.cf) -> [Line] {
         let p0 = CGPoint(x: cp.x - r, y: cp.y - r), p1 = CGPoint(x: cp.x + r, y: cp.y - r)
-        let p2 = CGPoint(x: cp.x - r, y: cp.y + r), p3 = CGPoint(x: cp.x + r, y: cp.y + r)
+        let p2 = CGPoint(x: cp.x + r, y: cp.y + r), p3 = CGPoint(x: cp.x - r, y: cp.y + r)
         let l0 = Line(controls: [Line.Control(point: p0, pressure: 1),
                                  Line.Control(point: p1, pressure: 1)])
         let l1 = Line(controls: [Line.Control(point: p1, pressure: 1),
-                                 Line.Control(point: p3, pressure: 1)])
-        let l2 = Line(controls: [Line.Control(point: p3, pressure: 1),
                                  Line.Control(point: p2, pressure: 1)])
-        let l3 = Line(controls: [Line.Control(point: p2, pressure: 1),
+        let l2 = Line(controls: [Line.Control(point: p2, pressure: 1),
+                                 Line.Control(point: p3, pressure: 1)])
+        let l3 = Line(controls: [Line.Control(point: p3, pressure: 1),
+                                 Line.Control(point: p0, pressure: 1)])
+        return [l0, l1, l2, l3]
+    }
+    static func rectangle(_ rect: CGRect) -> [Line] {
+        let p0 = CGPoint(x: rect.minX, y: rect.minY), p1 = CGPoint(x: rect.maxX, y: rect.minY)
+        let p2 = CGPoint(x: rect.maxX, y: rect.maxY), p3 = CGPoint(x: rect.minX, y: rect.maxY)
+        let l0 = Line(controls: [Line.Control(point: p0, pressure: 1),
+                                 Line.Control(point: p1, pressure: 1)])
+        let l1 = Line(controls: [Line.Control(point: p1, pressure: 1),
+                                 Line.Control(point: p2, pressure: 1)])
+        let l2 = Line(controls: [Line.Control(point: p2, pressure: 1),
+                                 Line.Control(point: p3, pressure: 1)])
+        let l3 = Line(controls: [Line.Control(point: p3, pressure: 1),
                                  Line.Control(point: p0, pressure: 1)])
         return [l0, l1, l2, l3]
     }

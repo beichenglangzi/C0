@@ -89,7 +89,7 @@ final class VersionView: View {
         
         super.init()
         isClipped = true
-        replace(children: [formClassNameView, allCountView])
+        children = [formClassNameView, allCountView]
     }
     
     deinit {
@@ -127,10 +127,12 @@ final class VersionView: View {
                                              y: bounds.height - formClassNameView.frame.height - padding)
         if undoCount < allCount {
             _ = Layout.leftAlignment([allCountView, Padding(), differentialCountView],
-                                     minX: formClassNameView.frame.maxX + padding, height: frame.height)
+                                     minX: formClassNameView.frame.maxX + padding,
+                                     height: frame.height)
         } else {
             _ = Layout.leftAlignment([allCountView],
-                                     minX: formClassNameView.frame.maxX + padding, height: frame.height)
+                                     minX: formClassNameView.frame.maxX + padding,
+                                     height: frame.height)
         }
     }
     func updateWithVersion() {
@@ -142,7 +144,7 @@ final class VersionView: View {
                                                   size: differentialCountView.formStringView.fitSize)
             differentialCountView.formStringView.textFrame.color = .warning
             if differentialCountView.parent == nil {
-                replace(children: [formClassNameView, allCountView, differentialCountView])
+                children = [formClassNameView, allCountView, differentialCountView]
                 updateLayout()
             }
         } else {
@@ -152,14 +154,14 @@ final class VersionView: View {
                                                   size: differentialCountView.formStringView.fitSize)
             differentialCountView.formStringView.textFrame.color = .warning
             if differentialCountView.parent != nil {
-                replace(children: [formClassNameView, allCountView])
+                children = [formClassNameView, allCountView]
                 updateLayout()
             }
         }
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        var reference = version.reference
+    func reference(at p: CGPoint) -> Reference {
+        var reference = Version.reference
         reference.classDescription  = Localization(english: "Show undoable count and undoed count in parent view",
                                                    japanese: "親表示での取り消し可能回数、取り消し済み回数を表示")
         return reference

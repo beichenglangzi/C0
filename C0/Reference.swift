@@ -23,7 +23,7 @@ protocol Referenceable {
     static var uninheritanceName: Localization { get }
     static var name: Localization { get }
     static var classDescription: Localization { get }
-    var reference: Reference { get }
+    static var reference: Reference { get }
 }
 extension Referenceable {
     static var uninheritanceName: Localization {
@@ -32,8 +32,8 @@ extension Referenceable {
     static var classDescription: Localization {
         return Localization()
     }
-    var reference: Reference {
-        return Reference(name: Self.name, classDescription: Self.classDescription)
+    static var reference: Reference {
+        return Reference(name: name, classDescription: classDescription)
     }
 }
 
@@ -54,8 +54,8 @@ extension Reference: Referenceable {
     static let name = Localization(english: "Reference", japanese: "情報")
 }
 extension Reference: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return name.view(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return name.view(withBounds: bounds, sizeType)
     }
 }
 
@@ -81,9 +81,9 @@ final class ReferenceView: View {
         self.reference = reference
         super.init()
         isClipped = true
-        replace(children: [classNameView, nameView,
-                           classClassDescriptionView, classDescriptionView,
-                           classViewDescriptionView, viewDescriptionView])
+        children = [classNameView, nameView,
+                    classClassDescriptionView, classDescriptionView,
+                    classViewDescriptionView, viewDescriptionView]
         updateWithReference()
     }
     
@@ -121,7 +121,7 @@ final class ReferenceView: View {
         updateLayout()
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return reference.reference
+    func reference(at p: CGPoint) -> Reference {
+        return Reference.reference
     }
 }

@@ -21,15 +21,15 @@ import Foundation
 
 final class Desktop {
     var version = Version()
-    var copiedObjects = [ViewExpression]() {
+    var copiedViewables = [Viewable]() {
         didSet {
-            copiedObjectsBinding?(copiedObjects)
+            copiedViewablesBinding?(copiedViewables)
         }
     }
-    var copiedObjectsBinding: (([ViewExpression]) -> ())?
+    var copiedViewablesBinding: (([Viewable]) -> ())?
     var isHiddenActionManager = false
     var isSimpleReference = false
-    var actionManager = ActionManager()
+    var sender = Sender()
     var objects = [Any]()
     private enum CodingKeys: String, CodingKey {
         case isSimpleReference, isHiddenActionManager
@@ -55,11 +55,11 @@ extension Desktop: Referenceable {
 /**
  Issue: sceneViewを取り除く
  */
-final class DesktopView: RootView {
+final class DesktopView: View {
     var desktop = Desktop() {
         didSet {
             versionView.version = desktop.version
-            actionManagerView.actionManager = desktop.actionManager
+            actionManagerView.sender = desktop.sender
             isSimpleReferenceView.bool = desktop.isSimpleReference
             isHiddenActionManagerView.bool = desktop.isHiddenActionManager
             updateLayout()
@@ -100,7 +100,7 @@ final class DesktopView: RootView {
     var objectsDataModel: DataModel
     
     var versionWidth = 120.0.cf
-    var actionWidth = ActionManagerView.defaultWidth {
+    var actionWidth = ActionManagableView.defaultWidth {
         didSet {
             updateLayout()
         }
@@ -111,20 +111,19 @@ final class DesktopView: RootView {
         }
     }
     let versionView = VersionView()
-    let classCopiedObjectsNameView = TextView(text: Localization(english: "Copied:",
+    let classCopiedViewablesNameView = TextView(text: Localization(english: "Copied:",
                                                                  japanese: "コピー済み:"))
-    let copiedObjectsView = AnyArrayView()
+    let copiedViewablesView = AnyArrayView()
     let isHiddenActionManagerView = BoolView(name: Localization(english: "Action Manager",
                                                                 japanese: "アクション管理"),
                                              boolInfo: BoolInfo.hidden)
-    let isSimpleReferenceView = BoolView(name: Localization(english: "Reference",
-                                                            japanese: "情報"),
+    let isSimpleReferenceView = BoolView(name: Localization(english: "Reference", japanese: "情報"),
                                          boolInfo: BoolInfo(trueName: Localization(english: "Outline",
                                                                                    japanese: "概略"),
                                                             falseName: Localization(english: "detail",
                                                                                     japanese: "詳細")))
     let referenceView = ReferenceView()
-    let actionManagerView = ActionManagerView()
+    let actionManagerView = SenderView()
     let objectsView = AnyArrayView()
     let sceneView = SceneView()
     
@@ -138,10 +137,10 @@ final class DesktopView: RootView {
         fillColor = .background
         versionView.version = desktop.version
         
-        objectsView.replace(children: [sceneView])
-        replace(children: [versionView, classCopiedObjectsNameView, copiedObjectsView,
-                           isHiddenActionManagerView, isSimpleReferenceView,
-                           actionManagerView, referenceView, objectsView])
+        objectsView.children = [sceneView]
+        children = [versionView, classCopiedViewablesNameView, copiedViewablesView,
+                    isHiddenActionManagerView, isSimpleReferenceView,
+                    actionManagerView, referenceView, objectsView]
         
         isHiddenActionManagerView.binding = { [unowned self] in
             self.update(withIsHiddenActionManager: $0.bool)
@@ -162,10 +161,10 @@ final class DesktopView: RootView {
         return desktop.version
     }
     
-    var rootCursorPoint = CGPoint()
-    override var cursorPoint: CGPoint {
-        return rootCursorPoint
-    }
+//    var rootCursorPoint = CGPoint()
+//    override var cursorPoint: CGPoint {
+//        return rootCursorPoint
+//    }
     
     override var contentsScale: CGFloat {
         didSet {
@@ -196,14 +195,14 @@ final class DesktopView: RootView {
         versionView.frame = CGRect(x: padding,
                                    y: headerY,
                                    width: versionWidth, height: topViewsHeight)
-        classCopiedObjectsNameView.frame.origin = CGPoint(x: versionView.frame.maxX + padding, y: headerY + padding)
-        let cw = max(bounds.width - actionWidth - versionWidth - isrw - ihamvw - classCopiedObjectsNameView.frame.width - padding * 3, 0)
-        copiedObjectsView.frame = CGRect(x: classCopiedObjectsNameView.frame.maxX,
+        classCopiedViewablesNameView.frame.origin = CGPoint(x: versionView.frame.maxX + padding, y: headerY + padding)
+        let cw = max(bounds.width - actionWidth - versionWidth - isrw - ihamvw - classCopiedViewablesNameView.frame.width - padding * 3, 0)
+        copiedViewablesView.frame = CGRect(x: classCopiedViewablesNameView.frame.maxX,
                                          y: headerY,
                                          width: cw,
                                          height: topViewsHeight)
         updateCopiedObjectViewPositions()
-        isSimpleReferenceView.frame = CGRect(x: copiedObjectsView.frame.maxX,
+        isSimpleReferenceView.frame = CGRect(x: copiedViewablesView.frame.maxX,
                                              y: headerY,
                                              width: isrw,
                                              height: topViewsHeight)
@@ -260,36 +259,36 @@ final class DesktopView: RootView {
     }
     var objectViewWidth = 80.0.cf
     private func updateCopiedObjectViews() {
-        copiedObjectsView.array = desktop.copiedObjects
+        copiedViewablesView.array = desktop.copiedViewables
         let padding = Layout.smallPadding
         let bounds = CGRect(x: 0,
                             y: 0,
                             width: objectViewWidth,
-                            height: copiedObjectsView.bounds.height - padding * 2)
-        copiedObjectsView.replace(children: desktop.copiedObjects.map {
-            $0.view(withBounds: bounds, sizeType: .small)
-        })
+                            height: copiedViewablesView.bounds.height - padding * 2)
+        copiedViewablesView.children = desktop.copiedViewables.map {
+            $0.view(withBounds: bounds, .small)
+        }
         updateCopiedObjectViewPositions()
     }
     func updateCopiedObjectViewPositions() {
         let padding = Layout.smallPadding
-        _ = Layout.leftAlignment(copiedObjectsView.children, minX: padding, y: padding)
+        _ = Layout.leftAlignment(copiedViewablesView.children, minX: padding, y: padding)
     }
 
-    override var topCopiedObjects: [ViewExpression] {
-        return desktop.copiedObjects
+    override var topCopiedViewables: [Viewable] {
+        return desktop.copiedViewables
     }
-    override func sendToTop(copiedObjects: [ViewExpression]) {
-        push(copiedObjects: copiedObjects)
+    override func sendToTop(copiedViewables: [Viewable]) {
+        push(copiedViewables: copiedViewables)
     }
-    func push(copiedObjects: [ViewExpression]) {
-        push(copiedObjects: copiedObjects, oldCopiedObjects: desktop.copiedObjects)
+    func push(copiedViewables: [Viewable]) {
+        push(copiedViewables: copiedViewables, oldCopiedViewables: desktop.copiedViewables)
     }
-    private func push(copiedObjects: [ViewExpression], oldCopiedObjects: [ViewExpression]) {
+    private func push(copiedViewables: [Viewable], oldCopiedViewables: [Viewable]) {
         undoManager?.registerUndo(withTarget: self) {
-            $0.push(copiedObjects: oldCopiedObjects, oldCopiedObjects: copiedObjects)
+            $0.push(copiedViewables: oldCopiedViewables, oldCopiedViewables: copiedViewables)
         }
-        desktop.copiedObjects = copiedObjects
+        desktop.copiedViewables = copiedViewables
         updateCopiedObjectViews()
     }
     
@@ -302,7 +301,7 @@ final class DesktopView: RootView {
         }
         referenceView.reference = reference
     }
-    func reference(with event: TapEvent) -> Reference? {
-        return desktop.reference
+    func reference(at p: CGPoint) -> Reference {
+        return Desktop.reference
     }
 }

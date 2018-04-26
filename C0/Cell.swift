@@ -243,14 +243,15 @@ final class Cell: NSObject, NSCoding {
             return cell
         }
     }
-    func at(_ point: CGPoint) -> Cell? {
-        if contains(point) || geometry.isEmpty {
+    func at(_ p: CGPoint) -> Cell? {
+        let contains = self.contains(p)
+        if contains || geometry.isEmpty {
             for child in children.reversed() {
-                if let cell = child.at(point) {
+                if let cell = child.at(p) {
                     return cell
                 }
             }
-            return !isLocked && !geometry.isEmpty && contains(point) ? self : nil
+            return !geometry.isEmpty && contains ? self : nil
         } else {
             return nil
         }
@@ -317,7 +318,7 @@ final class Cell: NSObject, NSCoding {
     }
     
     func contains(_ p: CGPoint) -> Bool {
-        return !isEditable && (imageBounds.contains(p) ? geometry.path.contains(p) : false)
+        return isEditable && (imageBounds.contains(p) ? geometry.path.contains(p) : false)
     }
     func contains(_ cell: Cell) -> Bool {
         if !geometry.isEmpty && !cell.geometry.isEmpty && isEditable
@@ -632,9 +633,9 @@ final class Cell: NSObject, NSCoding {
         textFrame.drawWithCenterOfImageBounds(in: imageBounds, in: ctx)
     }
 }
-extension Cell: ClassCopiable {
-    func copied(from copier: Copier) -> Cell {
-        return Cell(children: children.map { copier.copied($0) },
+extension Cell: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> Cell {
+        return Cell(children: children.map { deepCopier.copied($0) },
                     geometry: geometry, material: material,
                     isLocked: isLocked, isHidden: isHidden,
                     isMainEdit: isMainEdit, id: id)
@@ -643,15 +644,11 @@ extension Cell: ClassCopiable {
 extension Cell: Referenceable {
     static let name = Localization(english: "Cell", japanese: "セル")
 }
-extension Cell: ViewExpression {
-    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
-        let thumbnailView = DrawLayer()
-        thumbnailView.drawBlock = { [unowned self, unowned thumbnailView] ctx in
-            self.draw(with: thumbnailView.bounds, in: ctx)
-        }
+extension Cell: Viewable {
+    func view(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        let thumbnailView = View(drawClosure: { [unowned self] in self.draw(with: $1.bounds, in: $0) })
         thumbnailView.bounds = bounds
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds,
-                          sizeType: sizeType)
+        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds, sizeType)
     }
     func draw(with bounds: CGRect, in ctx: CGContext) {
         var imageBounds = CGRect()
@@ -696,20 +693,17 @@ final class JoiningCell: NSObject, NSCoding {
 extension JoiningCell: Referenceable {
     static let name = Localization(english: "Joining Cell", japanese: "接続セル")
 }
-extension JoiningCell: ClassCopiable {
+extension JoiningCell: ClassDeepCopiable {
 }
 extension JoiningCell: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        let thumbnailView = DrawLayer()
-        thumbnailView.drawBlock = { [unowned cell, unowned thumbnailView] ctx in
-            cell.draw(with: thumbnailView.bounds, in: ctx)
-        }
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        let thumbnailView = View(drawClosure: { [unowned cell] in cell.draw(with: $1.bounds, in: $0) })
         thumbnailView.bounds = bounds
         return thumbnailView
     }
 }
 
-final class CellView: View {
+final class CellView: View, Copiable {
     var cell = Cell() {
         didSet {
             isLockedView.bool = cell.isLocked
@@ -727,7 +721,7 @@ final class CellView: View {
                                 boolInfo: BoolInfo.locked,
                                 sizeType: sizeType)
         super.init()
-        replace(children: [classNameView, isLockedView])
+        children = [classNameView, isLockedView]
         
         isLockedView.binding = { [unowned self] in self.setIsLocked(with: $0) }
     }
@@ -765,14 +759,14 @@ final class CellView: View {
     struct Binding {
         let cellView: CellView
         let isLocked: Bool, oldIsLocked: Bool
-        let inCell: Cell, type: Action.SendType
+        let inCell: Cell, phase: Phase
     }
     var setIsLockedClosure: ((Binding) -> ())?
     
     private var oldCell = Cell()
     
     private func setIsLocked(with binding: BoolView.Binding) {
-        if binding.type == .begin {
+        if binding.phase == .began {
             oldCell = cell
         } else {
             cell.isLocked = binding.bool
@@ -781,19 +775,19 @@ final class CellView: View {
                                     isLocked: binding.bool,
                                     oldIsLocked: binding.oldBool,
                                     inCell: oldCell,
-                                    type: binding.type))
+                                    phase: binding.phase))
     }
     
-    var copiedObjectsClosure: ((CellView, KeyInputEvent) -> [ViewExpression]?)?
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        if let copiedObjectsClosure = copiedObjectsClosure {
-            return copiedObjectsClosure(self, event)
+    var copiedViewablesClosure: ((CellView, CGPoint) -> [Viewable])?
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
+        if let copiedViewablesClosure = copiedViewablesClosure {
+            return copiedViewablesClosure(self, p)
         } else {
             return [cell.copied]
         }
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return cell.reference
+    func reference(at p: CGPoint) -> Reference {
+        return Cell.reference
     }
 }

@@ -26,16 +26,19 @@ struct Variable {
     }
     static let x = Variable("x"), y = Variable("y"), z = Variable("z")
 }
-extension Variable: ViewExpression {
-    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
-        return rawValue.view(withBounds: bounds, sizeType: sizeType)
+extension Variable: Referenceable {
+    static let name = Text(english: "Variable", japanese: "変数")
+}
+extension Variable: Viewable {
+    func view(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return rawValue.view(withBounds: bounds, sizeType)
     }
 }
 struct Expression {
     enum Operator: String {
         case addition = "+", subtraction = "-", multiplication = "⋅", division = ""
     }
-    var value: ViewExpression
+    var value: Viewable
     var nextOperator: Operator?
     var next: Expression? {
         get {
@@ -46,7 +49,7 @@ struct Expression {
         }
     }
     private var _expression: Any?
-    init(_ value: ViewExpression) {
+    init(_ value: Viewable) {
         self.value = value
     }
     static func +(_ lhs: Expression, _ rhs: Expression) -> Expression {
@@ -56,10 +59,13 @@ struct Expression {
         return lhs
     }
 }
-extension Expression: ViewExpression {
-    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
+extension Expression: Viewable {
+    func view(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
         return ExpressionView(expression: self, bounds: bounds, sizeType: sizeType)
     }
+}
+extension Expression: Referenceable {
+    static let name = Text(english: "Expression", japanese: "数式")
 }
 
 final class ExpressionView: View {
@@ -72,15 +78,19 @@ final class ExpressionView: View {
         super.init()
         var views = [View]()
         var ex = expression
-        views.append(ex.value.view(withBounds: CGRect(), sizeType: sizeType))
+        views.append(ex.value.view(withBounds: CGRect(), sizeType))
         while let next = ex.next, let nextOperator = ex.nextOperator {
             if !(nextOperator == .multiplication && next.value is Variable) {
-                views.append(nextOperator.rawValue.view(withBounds: CGRect(), sizeType: sizeType))
+                views.append(nextOperator.rawValue.view(withBounds: CGRect(), sizeType))
             }
-            views.append(next.value.view(withBounds: CGRect(), sizeType: sizeType))
+            views.append(next.value.view(withBounds: CGRect(), sizeType))
             ex = next
         }
-        replace(children: views)
+        children = views
+    }
+    
+    func reference(at p: CGPoint) -> Reference {
+        return Expression.reference
     }
 }
 
@@ -270,7 +280,7 @@ protocol OneDimensionalOption {
  Issue: スクロールによる値の変更
  */
 final class DiscreteOneDimensionalView
-    <T: Comparable & ViewExpression & Referenceable, U: OneDimensionalOption>: View where U.Model == T {
+    <T: Comparable & Viewable & Referenceable, U: OneDimensionalOption>: View, Assignable, Runnable, Movable where U.Model == T {
     var model: T {
         didSet {
             updateWithModel()
@@ -289,11 +299,11 @@ final class DiscreteOneDimensionalView
     var orientation: Orientation, layoutOrientation: LayoutOrientation
     private var knobLineFrame = CGRect()
     private let labelPaddingX: CGFloat, knobPadding: CGFloat
-    private let knob = DiscreteKnob(CGSize(width: 6, height: 4), lineWidth: 1)
-    private let lineLayer: Layer = {
-        let lineLayer = Layer()
-        lineLayer.lineColor = .content
-        return lineLayer
+    private let knobView = DiscreteKnobView(CGSize(width: 6, height: 4), lineWidth: 1)
+    private let linePathView: View = {
+        let linePathView = View(isForm: true)
+        linePathView.lineColor = .content
+        return linePathView
     } ()
     let formStringView: TextView
     
@@ -316,7 +326,7 @@ final class DiscreteOneDimensionalView
         super.init()
         updateWithModel()
         isClipped = true
-        replace(children: [formStringView, lineLayer, knob])
+        children = [formStringView, linePathView, knobView]
         self.frame = frame
     }
     
@@ -329,7 +339,7 @@ final class DiscreteOneDimensionalView
         let paddingX = sizeType == .small ? 3.0.cf : 5.0.cf
         knobLineFrame = CGRect(x: paddingX, y: sizeType == .small ? 1 : 2,
                                width: bounds.width - paddingX * 2, height: 1)
-        lineLayer.frame = knobLineFrame
+        linePathView.frame = knobLineFrame
         formStringView.frame.origin = CGPoint(x: bounds.width - formStringView.frame.width - labelPaddingX,
                                           y: round((bounds.height - formStringView.frame.height) / 2))
         
@@ -343,7 +353,7 @@ final class DiscreteOneDimensionalView
     }
     func updateknob() {
         let x = knobLineFrame.width * option.ratioFromDefaultModel(with: model) + knobLineFrame.minX
-        knob.position = CGPoint(x: round(x), y: knobPadding)
+        knobView.position = CGPoint(x: round(x), y: knobPadding)
     }
     
     private func model(at p: CGPoint, old oldModel: T) -> T {
@@ -355,70 +365,65 @@ final class DiscreteOneDimensionalView
     var disabledRegisterUndo = false
     
     struct Binding<T> {
-        let view: DiscreteOneDimensionalView, model: T, oldModel: T, type: Action.SendType
+        let view: DiscreteOneDimensionalView, model: T, oldModel: T, phase: Phase
     }
     var binding: ((Binding<T>) -> ())?
     
-    func delete(with event: KeyInputEvent) -> Bool {
+    func delete(for p: CGPoint) {
         let model = option.defaultModel.clip(min: option.minModel, max: option.maxModel)
         if model != self.model {
             set(model, old: self.model)
         }
-        return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        return [model, option.string(with: model)]
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
+        return [model]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let model = (object as? T)?.clip(min: option.minModel, max: option.maxModel) {
                 if model != self.model {
                     set(model, old: self.model)
-                    return true
+                    return
                 }
             } else if let string = object as? String {
                 if let model = option.model(with: string)?.clip(min: option.minModel,
                                                                 max: option.maxModel) {
                     if model != self.model {
                         set(model, old: self.model)
-                        return true
+                        return
                     }
                 }
             }
         }
-        return false
     }
     
-    func run(with event: ClickEvent) -> Bool {
-        let p = point(from: event)
+    func run(for p: CGPoint) {
         let model = self.model(at: p, old: self.model)
         if model != self.model {
             set(model, old: self.model)
         }
-        return true
     }
     
     private var oldModel: T?, oldPoint = CGPoint()
-    func move(with event: DragEvent) -> Bool {
-        let p = point(from: event)
-        switch event.sendType {
-        case .begin:
-            knob.fillColor = .editing
+    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        switch phase {
+        case .began:
+            knobView.fillColor = .editing
             let oldModel = model
             self.oldModel = oldModel
             oldPoint = p
-            binding?(Binding(view: self, model: model, oldModel: oldModel, type: .begin))
+            binding?(Binding(view: self, model: model, oldModel: oldModel, phase: .began))
             model = self.model(at: p, old: oldModel)
-            binding?(Binding(view: self, model: model, oldModel: oldModel, type: .sending))
-        case .sending:
+            binding?(Binding(view: self, model: model, oldModel: oldModel, phase: .changed))
+        case .changed:
             guard let oldModel = oldModel else {
-                return true
+                return
             }
             model = self.model(at: p, old: oldModel)
-            binding?(Binding(view: self, model: model, oldModel: oldModel, type: .sending))
-        case .end:
+            binding?(Binding(view: self, model: model, oldModel: oldModel, phase: .changed))
+        case .ended:
             guard let oldModel = oldModel else {
-                return true
+                return
             }
             model = self.model(at: p, old: oldModel)
             if model != oldModel {
@@ -426,21 +431,20 @@ final class DiscreteOneDimensionalView
                     $0.set(oldModel, old: model)
                 }
             }
-            binding?(Binding(view: self, model: model, oldModel: oldModel, type: .end))
-            knob.fillColor = .knob
+            binding?(Binding(view: self, model: model, oldModel: oldModel, phase: .ended))
+            knobView.fillColor = .knob
         }
-        return true
     }
     
     private func set(_ model: T, old oldModel: T) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldModel, old: model) }
-        binding?(Binding(view: self, model: oldModel, oldModel: oldModel, type: .begin))
+        binding?(Binding(view: self, model: oldModel, oldModel: oldModel, phase: .began))
         self.model = model
-        binding?(Binding(view: self, model: model, oldModel: oldModel, type: .end))
+        binding?(Binding(view: self, model: model, oldModel: oldModel, phase: .ended))
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        var reference = model.reference
+    func reference(at p: CGPoint) -> Reference {
+        var reference = T.reference
         reference.viewDescription = Localization(english: "Discrete Slider", japanese: "離散スライダー")
         return reference
     }
@@ -507,8 +511,8 @@ extension Int: Referenceable {
     static let name = Localization(english: "Integer", japanese: "整数")
 }
 extension Int: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return String(self).view(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return String(self).view(withBounds: bounds, sizeType)
     }
 }
 

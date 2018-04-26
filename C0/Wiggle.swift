@@ -68,12 +68,12 @@ extension Wiggle: Referenceable {
     static let name = Localization(english: "Wiggle", japanese: "振動")
 }
 extension Wiggle: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return Layer()
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return View(isForm: true)
     }
 }
 
-final class WiggleView: View {
+final class WiggleView: View, Assignable {
     var wiggle = Wiggle() {
         didSet {
             if wiggle != oldValue {
@@ -100,9 +100,9 @@ final class WiggleView: View {
                                                sizeType: sizeType)
         
         super.init()
-        replace(children: [classNameView,
-                           classAmplitudeNameView, amplitudeView,
-                           classFrequencyNameView, frequencyView])
+        children = [classNameView,
+                    classAmplitudeNameView, amplitudeView,
+                    classFrequencyNameView, frequencyView]
         
         amplitudeView.binding = { [unowned self] in self.setWiggle(with: $0) }
         frequencyView.binding = { [unowned self] in self.setWiggle(with: $0) }
@@ -131,7 +131,8 @@ final class WiggleView: View {
         _ = Layout.leftAlignment([classFrequencyNameView, frequencyView],
                                  y: y, height: Layout.basicHeight)
         y -= Layout.basicHeight
-        classFrequencyNameView.frame.origin.x = frequencyView.frame.minX - classFrequencyNameView.frame.width
+        classFrequencyNameView.frame.origin.x
+            = frequencyView.frame.minX - classFrequencyNameView.frame.width
     }
     private func updateWithWiggle() {
         amplitudeView.model = 10 * wiggle.amplitude / standardAmplitude
@@ -144,15 +145,16 @@ final class WiggleView: View {
     
     struct Binding {
         let wiggleView: WiggleView
-        let wiggle: Wiggle, oldWiggle: Wiggle, type: Action.SendType
+        let wiggle: Wiggle, oldWiggle: Wiggle, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
     private var oldWiggle = Wiggle()
     private func setWiggle(with obj: DiscreteRealNumberView.Binding<RealNumber>) {
-        if obj.type == .begin {
+        if obj.phase == .began {
             oldWiggle = wiggle
-            binding?(Binding(wiggleView: self, wiggle: oldWiggle, oldWiggle: oldWiggle, type: .begin))
+            binding?(Binding(wiggleView: self,
+                             wiggle: oldWiggle, oldWiggle: oldWiggle, phase: .began))
         } else {
             switch obj.view {
             case amplitudeView:
@@ -162,43 +164,42 @@ final class WiggleView: View {
             default:
                 fatalError("No case")
             }
-            binding?(Binding(wiggleView: self, wiggle: wiggle, oldWiggle: oldWiggle, type: obj.type))
+            binding?(Binding(wiggleView: self,
+                             wiggle: wiggle, oldWiggle: oldWiggle, phase: obj.phase))
         }
     }
     
-    func delete(with event: KeyInputEvent) -> Bool {
+    func delete(for p: CGPoint) {
         let wiggle = Wiggle()
         guard wiggle != self.wiggle else {
-            return false
+            return
         }
         set(wiggle, oldWiggle: self.wiggle)
-        return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [wiggle]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let wiggle = object as? Wiggle {
                 if wiggle != self.wiggle {
                     set(wiggle, oldWiggle: self.wiggle)
-                    return true
+                    return
                 }
             }
         }
-        return false
     }
     
     private func set(_ wiggle: Wiggle, oldWiggle: Wiggle) {
         registeringUndoManager?.registerUndo(withTarget: self) {
             $0.set(oldWiggle, oldWiggle: wiggle)
         }
-        binding?(Binding(wiggleView: self, wiggle: oldWiggle, oldWiggle: oldWiggle, type: .begin))
+        binding?(Binding(wiggleView: self, wiggle: oldWiggle, oldWiggle: oldWiggle, phase: .began))
         self.wiggle = wiggle
-        binding?(Binding(wiggleView: self, wiggle: wiggle, oldWiggle: oldWiggle, type: .end))
+        binding?(Binding(wiggleView: self, wiggle: wiggle, oldWiggle: oldWiggle, phase: .ended))
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return wiggle.reference
+    func reference(at p: CGPoint) -> Reference {
+        return Wiggle.reference
     }
 }

@@ -21,7 +21,7 @@ import Foundation
 import AVFoundation
 
 final class SceneImageRendedrer {
-    private let drawLayer = DrawLayer()
+    private let drawView = View(drawClosure: { _, _ in })
     let scene: Scene, renderSize: CGSize, cut: Cut
     let fileType: String
     init(scene: Scene, renderSize: CGSize, cut: Cut, fileType: String = kUTTypePNG as String) {
@@ -35,8 +35,8 @@ final class SceneImageRendedrer {
                                                              y: renderSize.height / 2),
                                         scale: CGPoint(x: scale, y: scale),
                                         rotation: 0)
-        drawLayer.bounds.size = renderSize
-        drawLayer.drawBlock = { [unowned self] ctx in
+        drawView.bounds.size = renderSize
+        drawView.drawClosure = { [unowned self] ctx, _ in
             ctx.concatenate(scene.viewTransform.affineTransform)
             self.scene.editCut.draw(scene: self.scene, viewType: .preview, in: ctx)
         }
@@ -46,7 +46,7 @@ final class SceneImageRendedrer {
         guard let ctx = CGContext.bitmap(with: renderSize, CGColorSpace.default) else {
             return nil
         }
-        drawLayer.render(in: ctx)
+        drawView.render(in: ctx)
         return ctx.makeImage()
     }
     func writeImage(to url: URL) throws {
@@ -83,14 +83,14 @@ final class SceneMovieRenderer {
                                                               y: renderSize.height / 2),
                                          scale: CGPoint(x: scale, y: scale),
                                          rotation: 0)
-        drawLayer.bounds.size = renderSize
-        drawLayer.drawBlock = { [unowned self] ctx in
+        drawView.bounds.size = renderSize
+        drawView.drawClosure = { [unowned self] ctx, _ in
             ctx.concatenate(scene.viewTransform.affineTransform)
             self.scene.editCut.draw(scene: self.scene, viewType: .preview, in: ctx)
         }
     }
     
-    let drawLayer = DrawLayer()
+    let drawView = View(drawClosure: { _, _ in })
     var screenTransform = Transform()
     
     func writeMovie(to url: URL,
@@ -169,7 +169,7 @@ final class SceneMovieRenderer {
                     let cutTime = scene.cutTime(withFrameTime: i)
                     scene.editCutIndex = cutTime.cutItemIndex
                     cutTime.cut.currentTime = cutTime.time
-                    drawLayer.render(in: ctx)
+                    drawView.render(in: ctx)
                 }
                 CVPixelBufferUnlockBaseAddress(pb, CVPixelBufferLockFlags(rawValue: CVOptionFlags(0)))
                 append = adaptor.append(pb, withPresentationTime: CMTime(value: Int64(i),
@@ -263,7 +263,7 @@ final class SceneMovieRenderer {
 }
 
 final class RendererManager {
-    weak var progressesEdgeLayer: Layer?
+    weak var progressesEdgeView: View?
     lazy var scene = Scene()
     var rendingContentScale = 1.0.cf
     
@@ -278,7 +278,7 @@ final class RendererManager {
     var bars = [ProgressNumberView]()
     func beginProgress(_ progressBar: ProgressNumberView) {
         bars.append(progressBar)
-        progressesEdgeLayer?.parent?.append(child: progressBar)
+        progressesEdgeView?.parent?.append(child: progressBar)
         progressBar.begin()
         updateProgresssPosition()
     }
@@ -292,7 +292,7 @@ final class RendererManager {
     }
     private let progressWidth = 200.0.cf
     func updateProgresssPosition() {
-        guard let view = progressesEdgeLayer else {
+        guard let view = progressesEdgeView else {
             return
         }
         _ = bars.reduce(CGPoint(x: view.frame.origin.x, y: view.frame.maxY)) {
@@ -320,10 +320,7 @@ final class RendererManager {
                                                                      japanese: "書き出し中"))
             let operation = BlockOperation()
             progressBar.operation = operation
-            progressBar.deleteClosure = { [unowned self] in
-                self.endProgress($0)
-                return true
-            }
+            progressBar.deleteClosure = { [unowned self] in self.endProgress($0) }
             self.beginProgress(progressBar)
             
             operation.addExecutionBlock() { [unowned operation] in
@@ -412,10 +409,7 @@ final class RendererManager {
         progressBar.name = name
         progressBar.state = Localization(english: "Error", japanese: "エラー")
         progressBar.nameView.textFrame.color = .warning
-        progressBar.deleteClosure = { [unowned self] in
-            self.endProgress($0)
-            return true
-        }
+        progressBar.deleteClosure = { [unowned self] in self.endProgress($0) }
         beginProgress(progressBar)
     }
 }

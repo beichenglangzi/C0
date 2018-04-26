@@ -19,19 +19,22 @@
 
 import Foundation
 
-struct Point: Equatable {
+/**
+ Issue: Core Graphicsとの置き換え
+ */
+struct _Point: Equatable {
     var x = 0.0, y = 0.0
     
     var isEmpty: Bool {
         return x == 0 && y == 0
     }
 }
-extension Point: Hashable {
+extension _Point: Hashable {
     var hashValue: Int {
         return Hash.uniformityHashValue(with: [x.hashValue, y.hashValue])
     }
 }
-extension Point: Codable {
+extension _Point: Codable {
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
         let x = try container.decode(Double.self)
@@ -44,10 +47,11 @@ extension Point: Codable {
         try container.encode(y)
     }
 }
-extension Point: Referenceable {
+extension _Point: Referenceable {
     static let name = Localization(english: "Point", japanese: "ポイント")
 }
 
+typealias Point = CGPoint
 extension CGPoint {
     func mid(_ other: CGPoint) -> CGPoint {
         return CGPoint(x: (x + other.x) / 2, y: (y + other.y) / 2)
@@ -279,19 +283,19 @@ extension CGPoint: Interpolatable {
 extension CGPoint: Referenceable {
     static let name = Localization(english: "Point", japanese: "ポイント")
 }
-extension CGPoint: Copiable {
+extension CGPoint: DeepCopiable {
 }
 extension CGPoint: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return string.view(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return string.view(withBounds: bounds, sizeType)
     }
 }
 
-final class PointView: View {
+final class PointView: View, Assignable, Movable, Runnable {
     var point = CGPoint() {
         didSet {
             if point != oldValue {
-                formKnob.position = position(from: point)
+                formKnobView.position = position(from: point)
             }
         }
     }
@@ -304,24 +308,24 @@ final class PointView: View {
         }
     }
     
-    var formBackgroundLayers = [Layer]() {
+    var formBackgroundViews = [View]() {
         didSet {
-            replace(children: formBackgroundLayers + [formKnob])
+            children = formBackgroundViews + [formKnobView]
         }
     }
-    let formKnob = Knob()
+    let formKnobView = KnobView()
     
     var padding = 5.0.cf
     
     init(frame: CGRect = CGRect()) {
         super.init()
         self.frame = frame
-        append(child: formKnob)
+        append(child: formKnobView)
     }
     
     override var bounds: CGRect {
         didSet {
-            formKnob.position = position(from: point)
+            formKnobView.position = position(from: point)
         }
     }
     
@@ -342,89 +346,83 @@ final class PointView: View {
     }
     
     struct Binding {
-        let view: PointView, point: CGPoint, oldPoint: CGPoint, type: Action.SendType
+        let view: PointView, point: CGPoint, oldPoint: CGPoint, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
     var disabledRegisterUndo = false
     
-    func delete(with event: KeyInputEvent) -> Bool {
+    func delete(for p: CGPoint) {
         let point = defaultPoint
         if point != self.point {
             push(point, old: self.point)
         }
-        return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        return [point, point.string]
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
+        return [point]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let unclippedPoint = object as? CGPoint {
                 let point = clippedPoint(with: unclippedPoint)
                 if point != self.point {
                     push(point, old: self.point)
-                    return true
+                    return
                 }
             } else if let string = object as? String {
                 let point = clippedPoint(with: CGPoint(string))
                 if point != self.point {
                     push(point, old: self.point)
-                    return true
+                    return
                 }
             }
         }
-        return false
     }
     
-    func run(with event: ClickEvent) -> Bool {
-        let p = self.point(from: event)
+    func run(for p: CGPoint) {
         let point = clippedPoint(with: self.point(withPosition: p))
         if point != self.point {
             push(point, old: self.point)
         }
-        return true
     }
     
     private var oldPoint = CGPoint()
-    func move(with event: DragEvent) -> Bool {
-        let p = self.point(from: event)
-        switch event.sendType {
-        case .begin:
-            formKnob.fillColor = .editing
+    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        switch phase {
+        case .began:
+            formKnobView.fillColor = .editing
             oldPoint = point
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .begin))
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .began))
             point = clippedPoint(with: self.point(withPosition: p))
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .sending))
-        case .sending:
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .changed))
+        case .changed:
             point = clippedPoint(with: self.point(withPosition: p))
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .sending))
-        case .end:
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .changed))
+        case .ended:
             point = clippedPoint(with: self.point(withPosition: p))
             if point != oldPoint {
                 registeringUndoManager?.registerUndo(withTarget: self) { [point, oldPoint] in
                     $0.push(oldPoint, old: point)
                 }
             }
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .end))
-            formKnob.fillColor = .knob
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .ended))
+            formKnobView.fillColor = .knob
         }
-        return true
     }
     
     func push(_ point: CGPoint, old oldPoint: CGPoint) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.push(oldPoint, old: point) }
-        binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .begin))
+        binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .began))
         self.point = point
-        binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .end))
+        binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .ended))
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return point.reference
+    func reference(at p: CGPoint) -> Reference {
+        return _Point.reference
     }
 }
 
-final class DiscretePointView: View {
+final class DiscretePointView: View, Assignable {
     var point = CGPoint() {
         didSet {
             if point != oldValue {
@@ -474,7 +472,7 @@ final class DiscretePointView: View {
                                        sizeType: sizeType)
         
         super.init()
-        replace(children: [classXNameView, xView, classYNameView, yView])
+        children = [classXNameView, xView, classYNameView, yView]
         xView.binding = { [unowned self] in self.setPoint(with: $0) }
         yView.binding = { [unowned self] in self.setPoint(with: $0) }
         updateLayout()
@@ -512,7 +510,7 @@ final class DiscretePointView: View {
     
     struct Binding {
         let view: DiscretePointView
-        let point: CGPoint, oldPoint: CGPoint, type: Action.SendType
+        let point: CGPoint, oldPoint: CGPoint, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
@@ -520,55 +518,53 @@ final class DiscretePointView: View {
     
     private var oldPoint = CGPoint()
     private func setPoint(with obj: DiscreteRealNumberView.Binding<RealNumber>) {
-        if obj.type == .begin {
+        if obj.phase == .began {
             oldPoint = point
-            binding?(Binding(view: self, point: oldPoint, oldPoint: oldPoint, type: .begin))
+            binding?(Binding(view: self, point: oldPoint, oldPoint: oldPoint, phase: .began))
         } else {
             if obj.view == xView {
                 point.x = obj.model
             } else {
                 point.y = obj.model
             }
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: obj.type))
+            binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: obj.phase))
         }
     }
     
-    func delete(with event: KeyInputEvent) -> Bool {
+    func delete(for p: CGPoint) {
         let point = defaultPoint
         if point != self.point {
             push(point, old: self.point)
         }
-        return true
     }
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        return [point, point.string]
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
+        return [point]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for p: CGPoint) {
         for object in objects {
             if let point = object as? CGPoint {
                 if point != self.point {
                     push(point, old: self.point)
-                    return true
+                    return
                 }
             } else if let string = object as? String {
                 let point = CGPoint(string)
                 if point != self.point {
                     push(point, old: self.point)
-                    return true
+                    return
                 }
             }
         }
-        return false
     }
     
     func push(_ point: CGPoint, old oldPoint: CGPoint) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.push(oldPoint, old: point) }
-        binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .begin))
+        binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .began))
         self.point = point
-        binding?(Binding(view: self, point: point, oldPoint: oldPoint, type: .end))
+        binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .ended))
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return point.reference
+    func reference(at p: CGPoint) -> Reference {
+        return _Point.reference
     }
 }

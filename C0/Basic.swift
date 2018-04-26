@@ -19,6 +19,50 @@
 
 import Foundation
 
+protocol DeepCopiable {
+    var copied: Self { get }
+    func copied(from deepCopier: DeepCopier) -> Self
+}
+extension DeepCopiable {
+    var copied: Self {
+        return self
+    }
+    func copied(from deepCopier: DeepCopier) -> Self {
+        return self
+    }
+}
+protocol ClassDeepCopiable: class, DeepCopiable {
+}
+extension ClassDeepCopiable {
+    var copied: Self {
+        return DeepCopier().copied(self)
+    }
+}
+final class DeepCopier {
+    var userInfo = [String: Any]()
+    func copied<T: ClassDeepCopiable>(_ object: T) -> T {
+        let key = String(describing: T.self)
+        let oim: ObjectIdentifierManager<T>
+        if let o = userInfo[key] as? ObjectIdentifierManager<T> {
+            oim = o
+        } else {
+            oim = ObjectIdentifierManager<T>()
+            userInfo[key] = oim
+        }
+        let objectID = ObjectIdentifier(object)
+        if let copyManager = oim.objects[objectID] {
+            return copyManager
+        } else {
+            let copyManager = object.copied(from: self)
+            oim.objects[objectID] = copyManager
+            return copyManager
+        }
+    }
+}
+private final class ObjectIdentifierManager<T> {
+    var objects = [ObjectIdentifier: T]()
+}
+
 extension Data {
     var bytesString: String {
         return ByteCountFormatter().string(fromByteCount: Int64(count))
@@ -29,30 +73,42 @@ extension Data: Referenceable {
 }
 
 final class LockTimer {
-    private var count = 0
-    private(set) var wait = false
-    func begin(endDuration: Second, beginClosure: () -> Void,
-               waitClosure: () -> Void, endClosure: @escaping () -> Void) {
-        if wait {
+    private var workItem: DispatchWorkItem?
+    func begin(endDuration: Second,
+               beginClosure: () -> (),
+               waitClosure: () -> (),
+               endClosure: @escaping () -> ()) {
+        if isWait {
+            cancel()
             waitClosure()
-            count += 1
         } else {
             beginClosure()
-            wait = true
         }
-        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + endDuration) {
-            if self.count == 0 {
-                endClosure()
-                self.wait = false
-            } else {
-                self.count -= 1
-            }
+        let workItem = DispatchWorkItem(block: endClosure)
+        workItem.notify(queue: .main) { [unowned self] in
+            self.workItem = nil
+        }
+        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + endDuration, execute: workItem)
+        self.workItem = workItem
+    }
+    var isWait: Bool {
+        if let workItem = workItem {
+            return !workItem.isCancelled
+        } else {
+            return false
         }
     }
+    func cancel() {
+        if isWait {
+            workItem?.cancel()
+            workItem = nil
+        }
+    }
+    
     private(set) var inUse = false
     private weak var timer: Timer?
     func begin(interval: Second, repeats: Bool = true,
-               tolerance: Second = 0.0, closure: @escaping () -> Void) {
+               tolerance: Second = 0.0, closure: @escaping () -> ()) {
         let time = interval + CFAbsoluteTimeGetCurrent()
         let rInterval = repeats ? interval : 0
         let timer = CFRunLoopTimerCreateWithHandler(kCFAllocatorDefault,

@@ -24,7 +24,9 @@ import Foundation
  Issue: スクロール後の元の位置までの距離を表示
  Issue: sceneを取り除く
  */
-final class Canvas: DrawView {
+final class Canvas: View, Indicatable, Selectable, Assignable, Newable,
+Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
+    
     let player = Player()
     
     var scene = Scene() {
@@ -54,10 +56,9 @@ final class Canvas: DrawView {
     }
     
     override init() {
-        super.init()
-        drawBlock = { [unowned self] in self.draw(in: $0) }
+        super.init(drawClosure: { $1.draw(in: $0) }, isForm: false)
         player.endPlayClosure = { [unowned self] _ in self.isOpenedPlayer = false }
-        cellView.copiedObjectsClosure = { [unowned self] _, _ in self.copiedCells() }
+        cellView.copiedViewablesClosure = { [unowned self] _, _ in self.copiedCells() }
     }
     
     var cursor = Cursor.arrow
@@ -88,20 +89,12 @@ final class Canvas: DrawView {
     var materialViewType = MaterialViewType.none {
         didSet {
             updateViewType()
-            editCellLineLayer.isHidden = materialViewType == .preview
+            editCellLinePathView.isHidden = materialViewType == .preview
         }
     }
-    
-    override var viewQuasimode: ViewQuasimode {
+    var viewQuasimode = ViewQuasimode.none {
         didSet {
-//            switch viewQuasimode {
-//            case .move, .stroke, .lassoErase, .select, .deselect:
-//                cursor = .stroke
-//            default:
-//                cursor = .arrow
-//            }
             updateViewType()
-            updateEditView(with: convertToCurrentLocal(cursorPoint))
         }
     }
     private func updateViewType() {
@@ -111,26 +104,18 @@ final class Canvas: DrawView {
             viewType = .changingMaterial
         } else {
             switch viewQuasimode {
-            case .stroke:
+            case .none:
                 viewType = .edit
-            case .movePoint:
+            case .editPoint:
                 viewType = .editPoint
-            case .moveVertex:
+            case .vertex:
                 viewType = .editVertex
             case .moveZ:
                 viewType = .editMoveZ
-            case .move:
-                viewType = .edit
             case .warp:
                 viewType = .editWarp
             case .transform:
                 viewType = .editTransform
-            case .select:
-                viewType = .editSelected
-            case .deselect:
-                viewType = .editDeselected
-            case .lassoErase:
-                viewType = .editDeselected
             }
         }
     }
@@ -420,7 +405,7 @@ final class Canvas: DrawView {
         draw(convertFromCurrentLocal(rect))
     }
     
-    func draw(in ctx: CGContext) {
+    override func draw(in ctx: CGContext) {
         ctx.saveGState()
         ctx.concatenate(screenTransform)
         cut.draw(scene: scene, viewType: viewType, in: ctx)
@@ -452,18 +437,111 @@ final class Canvas: DrawView {
         undoManager?.registerUndo(withTarget: self) { [oldTime = time] in closure($0, oldTime) }
     }
     
-    func delete(with event: KeyInputEvent) -> Bool {
-        let point = convertToCurrentLocal(self.point(from: event))
-        if deleteCells(for: point) {
-            return true
+    
+    func indicate(at point: CGPoint) {
+        updateEditView(with: convertToCurrentLocal(point))
+    }
+    
+    func select(from rect: CGRect, _ phase: Phase) {
+        select(from: rect, phase, isDeselect: false)
+    }
+    func selectAll() {
+        selectAll(isDeselect: false)
+    }
+    func deselect(from rect: CGRect, _ phase: Phase) {
+        select(from: rect, phase, isDeselect: true)
+    }
+    func deselectAll() {
+        selectAll(isDeselect: true)
+    }
+    private struct SelectOption {
+        var selectedLineIndexes = [Int](), selectedCellItems = [CellItem]()
+        var node: Node?, drawing: Drawing?, track: NodeTrack?
+    }
+    private var selectOption = SelectOption()
+    func select(from rect: CGRect, _ phase: Phase, isDeselect: Bool) {
+        func unionWithStrokeLine(with drawing: Drawing,
+                                 _ track: NodeTrack) -> (lineIndexes: [Int], cellItems: [CellItem]) {
+            func selected() -> (lineIndexes: [Int], cellItems: [CellItem]) {
+                let transform = currentTransform.inverted()
+                let lines = [Line].rectangle(rect).map { $0.applying(transform) }
+                let lasso = LineLasso(lines: lines)
+                return (drawing.lines.enumerated().compactMap { lasso.intersects($1) ? $0 : nil },
+                        track.cellItems.filter { $0.cell.intersects(lasso) })
+            }
+            let s = selected()
+            if isDeselect {
+                return (Array(Set(selectOption.selectedLineIndexes).subtracting(Set(s.lineIndexes))),
+                        Array(Set(selectOption.selectedCellItems).subtracting(Set(s.cellItems))))
+            } else {
+                return (Array(Set(selectOption.selectedLineIndexes).union(Set(s.lineIndexes))),
+                        Array(Set(selectOption.selectedCellItems).union(Set(s.cellItems))))
+            }
         }
-        if deleteSelectedDrawingLines(for: point) {
-            return true
+        
+        switch phase {
+        case .began:
+            selectOption.node = cut.editNode
+            let drawing = cut.editNode.editTrack.drawingItem.drawing, track = cut.editNode.editTrack
+            selectOption.drawing = drawing
+            selectOption.track = track
+            selectOption.selectedLineIndexes = drawing.selectedLineIndexes
+            selectOption.selectedCellItems = track.selectedCellItems
+        case .changed:
+            guard let drawing = selectOption.drawing, let track = selectOption.track else {
+                return
+            }
+            (drawing.selectedLineIndexes, track.selectedCellItems)
+                = unionWithStrokeLine(with: drawing, track)
+        case .ended:
+            guard let drawing = selectOption.drawing,
+                let track = selectOption.track, let node = selectOption.node else {
+                    return
+            }
+            let (selectedLineIndexes, selectedCellItems)
+                = unionWithStrokeLine(with: drawing, track)
+            if selectedLineIndexes != selectOption.selectedLineIndexes {
+                setSelectedLineIndexes(selectedLineIndexes,
+                                       oldLineIndexes: selectOption.selectedLineIndexes,
+                                       in: drawing, node, time: time)
+            }
+            if selectedCellItems != selectOption.selectedCellItems {
+                setSelectedCellItems(selectedCellItems,
+                                     oldCellItems: selectOption.selectedCellItems,
+                                     in: track, time: time)
+            }
+            selectOption = SelectOption()
+            stroker.line = nil
         }
-        if deleteDrawingLines(for: point) {
-            return true
+        setNeedsDisplay()
+    }
+    func selectAll(isDeselect: Bool) {
+        let inNode = cut.editNode
+        let track = inNode.editTrack
+        let drawing = track.drawingItem.drawing
+        let lineIndexes = isDeselect ? [] : Array(0 ..< drawing.lines.count)
+        if Set(lineIndexes) != Set(drawing.selectedLineIndexes) {
+            setSelectedLineIndexes(lineIndexes, oldLineIndexes: drawing.selectedLineIndexes,
+                                   in: drawing, inNode, time: time)
         }
-        return false
+        let cellItems = isDeselect ? [] : track.cellItems
+        if Set(cellItems) != Set(track.selectedCellItems) {
+            setSelectedCellItems(cellItems, oldCellItems: track.selectedCellItems,
+                                 in: track, time: time)
+        }
+    }
+    
+    func delete(for point: CGPoint) {
+        let p = convertToCurrentLocal(point)
+        if deleteCells(for: p) {
+            return
+        }
+        if deleteSelectedDrawingLines(for: p) {
+            return
+        }
+        if deleteDrawingLines(for: p) {
+            return
+        }
     }
     func deleteSelectedDrawingLines(for p: CGPoint) -> Bool {
         let inNode = cut.editNode
@@ -535,8 +613,8 @@ final class Canvas: DrawView {
         return false
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
-        let p = convertToCurrentLocal(point(from: event))
+    func copiedViewables(at point: CGPoint) -> [Viewable] {
+        let p = convertToCurrentLocal(point)
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         switch ict.type {
         case .none:
@@ -559,37 +637,36 @@ final class Canvas: DrawView {
         }
         return []
     }
-    func copiedCells() -> [Cell]? {
+    func copiedCells() -> [Cell] {
         guard let editCell = editCell else {
-            return nil
+            return []
         }
         let cells = cut.editNode.selectedCells(with: editCell)
         let cell = cut.editNode.rootCell.intersection(cells, isNewID: true)
         return [cell]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
+    func paste(_ objects: [Any], for point: CGPoint) {
         for object in objects {
-            if let color = object as? Color, paste(color, with: event) {
-                return true
-            } else if let material = object as? Material, paste(material, with: event) {
-                return true
-            } else if let drawing = object as? Drawing, paste(drawing.copied, with: event) {
-                return true
-            } else if let lines = object as? [Line], paste(lines, with: event) {
-                return true
+            if let color = object as? Color, paste(color, for: point) {
+                return
+            } else if let material = object as? Material, paste(material, for: point) {
+                return
+            } else if let drawing = object as? Drawing, paste(drawing.copied, for: point) {
+                return
+            } else if let lines = object as? [Line], paste(lines, for: point) {
+                return
             } else if !cut.editNode.editTrack.animation.isInterpolated {
-                if let joiningCell = object as? JoiningCell, paste(joiningCell.copied, with: event) {
-                    return true
-                } else if let rootCell = object as? Cell, paste(rootCell.copied, with: event) {
-                    return true
+                if let joiningCell = object as? JoiningCell, paste(joiningCell.copied, for: point) {
+                    return
+                } else if let rootCell = object as? Cell, paste(rootCell.copied, for: point) {
+                    return
                 }
             }
         }
-        return false
     }
     var pasteColorBinding: ((Canvas, Color, [Cell]) -> ())?
-    func paste(_ color: Color, with event: KeyInputEvent) -> Bool {
-        let p = convertToCurrentLocal(point(from: event))
+    func paste(_ color: Color, for point: CGPoint) -> Bool {
+        let p = convertToCurrentLocal(point)
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         guard !ict.cellItems.isEmpty else {
             return false
@@ -607,8 +684,8 @@ final class Canvas: DrawView {
         return true
     }
     var pasteMaterialBinding: ((Canvas, Material, [Cell]) -> ())?
-    func paste(_ material: Material, with event: KeyInputEvent) -> Bool {
-        let p = convertToCurrentLocal(point(from: event))
+    func paste(_ material: Material, for point: CGPoint) -> Bool {
+        let p = convertToCurrentLocal(point)
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         guard !ict.cellItems.isEmpty else {
             return false
@@ -625,7 +702,7 @@ final class Canvas: DrawView {
         }
         return isPaste
     }
-    func paste(_ copyJoiningCell: JoiningCell, with event: KeyInputEvent) -> Bool {
+    func paste(_ copyJoiningCell: JoiningCell, for point: CGPoint) -> Bool {
         let inNode = cut.editNode
         let isEmptyCellsInEditTrack: Bool = {
             for copyCell in copyJoiningCell.cell.allCells {
@@ -638,7 +715,7 @@ final class Canvas: DrawView {
             return true
         } ()
         if isEmptyCellsInEditTrack {
-            return paste(copyJoiningCell, in: inNode.editTrack, inNode, with: event)
+            return paste(copyJoiningCell, in: inNode.editTrack, inNode, for: point)
         } else {
             var isChanged = false
             for copyCell in copyJoiningCell.cell.allCells {
@@ -657,7 +734,7 @@ final class Canvas: DrawView {
         }
     }
     func paste(_ copyJoiningCell: JoiningCell, in track: NodeTrack, _ node: Node,
-               with event: KeyInputEvent) -> Bool {
+               for point: CGPoint) -> Bool {
         node.tracks.forEach { fromTrack in
             guard fromTrack != track else {
                 return
@@ -712,7 +789,7 @@ final class Canvas: DrawView {
         sceneDataModel?.isWrite = true
         setNeedsDisplay()
     }
-    func paste(_ copyRootCell: Cell, with event: KeyInputEvent) -> Bool {
+    func paste(_ copyRootCell: Cell, for point: CGPoint) -> Bool {
         let inNode = cut.editNode
         let lki = inNode.editTrack.animation.loopedKeyframeIndex(withTime: cut.currentTime)
         var newCellItems = [CellItem]()
@@ -731,11 +808,11 @@ final class Canvas: DrawView {
                               in: inNode.editTrack, time: time)
         return true
     }
-    func paste(_ copyDrawing: Drawing, with event: KeyInputEvent) -> Bool {
-        return paste(copyDrawing.lines, with: event)
+    func paste(_ copyDrawing: Drawing, for point: CGPoint) -> Bool {
+        return paste(copyDrawing.lines, for: point)
     }
-    func paste(_ copyLines: [Line], with event: KeyInputEvent) -> Bool {
-        let p = convertToCurrentLocal(point(from: event))
+    func paste(_ copyLines: [Line], for point: CGPoint) -> Bool {
+        let p = convertToCurrentLocal(point)
         let inNode = cut.editNode
         let ict = inNode.indicatedCellsTuple(with : p, reciprocalScale: scene.reciprocalScale)
         if !inNode.editTrack.animation.isInterpolated && ict.type != .none,
@@ -832,51 +909,18 @@ final class Canvas: DrawView {
         setNeedsDisplay()
     }
     
-    func selectAll(with event: KeyInputEvent) -> Bool {
-        let inNode = cut.editNode
-        let track = inNode.editTrack
-        let drawing = track.drawingItem.drawing
-        let lineIndexes = Array(0 ..< drawing.lines.count)
-        if Set(drawing.selectedLineIndexes) != Set(lineIndexes) {
-            setSelectedLineIndexes(lineIndexes, oldLineIndexes: drawing.selectedLineIndexes,
-                                    in: drawing, inNode, time: time)
-        }
-        if Set(track.selectedCellItems) != Set(track.cellItems) {
-            setSelectedCellItems(track.cellItems, oldCellItems: track.selectedCellItems,
-                                  in: track, time: time)
-        }
-        return true
-    }
-    func deselectAll(with event: KeyInputEvent) -> Bool {
-        let inNode = cut.editNode
-        let track = inNode.editTrack
-        let drawing = track.drawingItem.drawing
-        if !drawing.selectedLineIndexes.isEmpty {
-            setSelectedLineIndexes([], oldLineIndexes: drawing.selectedLineIndexes,
-                                    in: drawing, inNode, time: time)
-        }
-        if !track.selectedCellItems.isEmpty {
-            setSelectedCellItems([], oldCellItems: track.selectedCellItems,
-                                  in: track, time: time)
-        }
-        return true
-    }
-    
-    func play(with event: KeyInputEvent) {
-        play()
-    }
     func play() {
         isOpenedPlayer = true
         player.play()
     }
     
-    func new(with event: KeyInputEvent) -> Bool {
+    func new(for p: CGPoint) {
         let inNode = cut.editNode
         let track = inNode.editTrack
         let drawingItem = track.drawingItem, rootCell = inNode.rootCell
         let geometry = Geometry(lines: drawingItem.drawing.editLines, scale: scene.scale)
         guard !geometry.isEmpty else {
-            return false
+            return
         }
         let isDrawingSelectedLines = !drawingItem.drawing.selectedLineIndexes.isEmpty
         let unselectedLines = drawingItem.drawing.uneditLines
@@ -893,7 +937,6 @@ final class Canvas: DrawView {
         let newCellItem = CellItem(cell: Cell(geometry: geometry, material: newMaterial),
                                    keyGeometries: keyGeometries)
         
-        let p = point(from: event)
         let ict = inNode.indicatedCellsTuple(with: convertToCurrentLocal(p),
                                              reciprocalScale: scene.reciprocalScale)
         if ict.type == .selected {
@@ -905,7 +948,6 @@ final class Canvas: DrawView {
             let newCellItems = [(rootCell, addCellIndex(with: newCellItem.cell, in: rootCell))]
             insertCell(newCellItem, in: newCellItems, inNode.editTrack, inNode, time: time)
         }
-        return true
     }
     
     private func addCellIndex(with cell: Cell, in parent: Cell) -> Int {
@@ -958,79 +1000,6 @@ final class Canvas: DrawView {
         node.differentialDataModel.isWrite = true
         sceneDataModel?.isWrite = true
         setNeedsDisplay()
-    }
-    
-    func lassoErase(with event: DragEvent) -> Bool {
-        _ = stroke(with: event, isAppendLine: false)
-        switch event.sendType {
-        case .begin:
-            break
-        case .sending:
-            if let line = stroker.line {
-                let b = line.visibleImageBounds(withLineWidth: stroker.lineWidth)
-                setNeedsDisplay(inCurrentLocalBounds: b)
-            }
-        case .end:
-            if let line = stroker.line {
-                lassoErase(with: line)
-                stroker.line = nil
-            }
-        }
-        return true
-    }
-    func lassoErase(with line: Line) {
-        let inNode = cut.editNode
-        let drawing = inNode.editTrack.drawingItem.drawing, track = inNode.editTrack
-        if let index = drawing.lines.index(of: line) {
-            removeLine(at: index, in: drawing, inNode, time: time)
-        }
-        if !drawing.selectedLineIndexes.isEmpty {
-            setSelectedLineIndexes([], oldLineIndexes: drawing.selectedLineIndexes,
-                                    in: drawing, inNode, time: time)
-        }
-        var isRemoveLineInDrawing = false, isRemoveLineInCell = false
-        let lasso = LineLasso(lines: [line])
-        let newDrawingLines = drawing.lines.reduce(into: [Line]()) {
-            if let splitLines = lasso.split($1) {
-                isRemoveLineInDrawing = true
-                $0 += splitLines
-            } else {
-                $0.append($1)
-            }
-        }
-        if isRemoveLineInDrawing {
-            set(newDrawingLines, old: drawing.lines, in: drawing, inNode, time: time)
-        }
-        var removeCellItems = [CellItem]()
-        removeCellItems = track.cellItems.filter { cellItem in
-            if cellItem.cell.intersects(lasso) {
-                set(Geometry(), old: cellItem.cell.geometry,
-                    at: track.animation.editKeyframeIndex, in: cellItem, track, inNode, time: time)
-                if cellItem.isEmptyKeyGeometries {
-                    return true
-                }
-                isRemoveLineInCell = true
-            }
-            return false
-        }
-        if !isRemoveLineInDrawing && !isRemoveLineInCell {
-            if let hitCellItem = inNode.cellItem(at: line.firstPoint,
-                                                 reciprocalScale: scene.reciprocalScale,
-                                                 with: track) {
-                let lines = hitCellItem.cell.geometry.lines
-                set(Geometry(), old: hitCellItem.cell.geometry,
-                    at: track.animation.editKeyframeIndex,
-                    in: hitCellItem, track, inNode, time: time)
-                if hitCellItem.isEmptyKeyGeometries {
-                    removeCellItems.append(hitCellItem)
-                }
-                set(drawing.lines + lines, old: drawing.lines,
-                         in: drawing, inNode, time: time)
-            }
-        }
-        if !removeCellItems.isEmpty {
-            self.removeCellItems(removeCellItems)
-        }
     }
     
     private func insertCell(_ cellItem: CellItem,
@@ -1263,27 +1232,22 @@ final class Canvas: DrawView {
         set(newLines, old: drawing.lines, in: drawing, inNode, time: time)
     }
     
-    func moveCursor(with event: MoveCursorEvent) -> Bool {
-        updateEditView(with: convertToCurrentLocal(point(from: event)))
-        return true
-    }
-    
     var editCell: Cell?
-    var (editCellLineLayer, subEditCellLineLayer): (PathLayer, PathLayer) = {
-        let layer = PathLayer()
-        layer.lineColor = .subSelected
-        layer.lineWidth = 3
-        let sublayer = PathLayer()
-        sublayer.lineColor = .selected
-        sublayer.lineWidth = 1
-        layer.append(child: sublayer)
-        return (layer, sublayer)
+    var (editCellLinePathView, subEditCellLinePathView): (View, View) = {
+        let view = View(path: CGMutablePath())
+        view.lineColor = .subSelected
+        view.lineWidth = 3
+        let subview = View(path: CGMutablePath())
+        subview.lineColor = .selected
+        subview.lineWidth = 1
+        view.append(child: subview)
+        return (view, subview)
     } ()
     private let bindingLineHeight = 5.0.cf
-    let editCellBindingLineLayer: PathLayer = {
-        let layer = PathLayer()
-        layer.fillColor = .bindingBorder
-        return layer
+    let editCellBindingLinePathView: View = {
+        let view = View(path: CGMutablePath())
+        view.fillColor = .bindingBorder
+        return view
     } ()
     
     func isVisible(_ cell: Cell) -> Bool {
@@ -1291,15 +1255,14 @@ final class Canvas: DrawView {
     }
     
     let materialView = MaterialView(), cellView = CellView(sizeType: .small)
-    func bind(with event: SubClickEvent) -> Bool {
-        let p = convertToCurrentLocal(point(from: event))
+    func bind(for point: CGPoint) {
+        let p = convertToCurrentLocal(point)
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         if let cell = ict.cellItems.first?.cell {
             bind(cut.editNode.editTrack.keyMaterial(with: cell), cell, time: time)
         } else {
             bind(materialView.defaultMaterial, nil, time: time)
         }
-        return true
     }
     var bindClosure: ((Canvas, Material, Cell?) -> ())?
     func bind(_ material: Material, _ editCell: Cell?, time: Beat) {
@@ -1320,8 +1283,8 @@ final class Canvas: DrawView {
                                            y: midY - bindingLineHeight / 2,
                                            width: width,
                                            height: bindingLineHeight), transform: nil)
-            editCellBindingLineLayer.fillColor = .bindingBorder
-            editCellBindingLineLayer.path = path
+            editCellBindingLinePathView.fillColor = .bindingBorder
+            editCellBindingLinePathView.path = path
             
             let fp = CGPoint(x: bounds.maxX, y: bounds.midY)
             if let n = editCell.geometry.nearestBezier(with: fp) {
@@ -1329,102 +1292,30 @@ final class Canvas: DrawView {
                     .bezier(at: n.bezierIndex).position(withT: n.t)
                 let p = np.applying(currentTransform)
                 if bounds.contains(p) {
-                    if editCellLineLayer.parent == nil {
-                        append(child: editCellLineLayer)
+                    if editCellLinePathView.parent == nil {
+                        append(child: editCellLinePathView)
                     }
                     let path = CGMutablePath()
                     path.move(to: fp)
                     path.addLine(to: CGPoint(x: p.x, y: bounds.midY))
                     path.addLine(to: p)
-                    editCellLineLayer.path = path
-                    subEditCellLineLayer.path = path
+                    editCellLinePathView.path = path
+                    subEditCellLinePathView.path = path
                 } else {
-                    editCellLineLayer.removeFromParent()
+                    editCellLinePathView.removeFromParent()
                 }
             }
         } else {
-            editCellBindingLineLayer.fillColor = .warning
+            editCellBindingLinePathView.fillColor = .warning
             let path = CGMutablePath()
             path.move(to: CGPoint(x: frame.maxX, y: midY))
             path.addLine(to: CGPoint(x: maxX, y: midY - bindingLineHeight / 2))
             path.addLine(to: CGPoint(x: maxX, y: midY + bindingLineHeight / 2))
             path.closeSubpath()
-            editCellBindingLineLayer.path = path
+            editCellBindingLinePathView.path = path
             
-            editCellLineLayer.removeFromParent()
+            editCellLinePathView.removeFromParent()
         }
-    }
-    
-    private struct SelectOption {
-        var selectedLineIndexes = [Int](), selectedCellItems = [CellItem]()
-        var node: Node?, drawing: Drawing?, track: NodeTrack?
-    }
-    private var selectOption = SelectOption()
-    func select(with event: DragEvent) -> Bool {
-        return select(with: event, isDeselect: false)
-    }
-    func deselect(with event: DragEvent) -> Bool {
-        return select(with: event, isDeselect: true)
-    }
-    func select(with event: DragEvent, isDeselect: Bool) -> Bool {
-        _ = stroke(with: event, isAppendLine: false)
-        
-        func unionWithStrokeLine(with drawing: Drawing,
-                                 _ track: NodeTrack) -> (lineIndexes: [Int], cellItems: [CellItem]) {
-            func selected() -> (lineIndexes: [Int], cellItems: [CellItem]) {
-                guard let line = stroker.line else {
-                    return ([], [])
-                }
-                let lasso = LineLasso(lines: [line])
-                return (drawing.lines.enumerated().compactMap { lasso.intersects($1) ? $0 : nil },
-                        track.cellItems.filter { $0.cell.intersects(lasso) })
-            }
-            let s = selected()
-            if isDeselect {
-                return (Array(Set(selectOption.selectedLineIndexes).subtracting(Set(s.lineIndexes))),
-                        Array(Set(selectOption.selectedCellItems).subtracting(Set(s.cellItems))))
-            } else {
-                return (Array(Set(selectOption.selectedLineIndexes).union(Set(s.lineIndexes))),
-                        Array(Set(selectOption.selectedCellItems).union(Set(s.cellItems))))
-            }
-        }
-        
-        switch event.sendType {
-        case .begin:
-            selectOption.node = cut.editNode
-            let drawing = cut.editNode.editTrack.drawingItem.drawing, track = cut.editNode.editTrack
-            selectOption.drawing = drawing
-            selectOption.track = track
-            selectOption.selectedLineIndexes = drawing.selectedLineIndexes
-            selectOption.selectedCellItems = track.selectedCellItems
-        case .sending:
-            guard let drawing = selectOption.drawing, let track = selectOption.track else {
-                return true
-            }
-            (drawing.selectedLineIndexes, track.selectedCellItems)
-                = unionWithStrokeLine(with: drawing, track)
-        case .end:
-            guard let drawing = selectOption.drawing,
-                let track = selectOption.track, let node = selectOption.node else {
-                    return true
-            }
-            let (selectedLineIndexes, selectedCellItems)
-                = unionWithStrokeLine(with: drawing, track)
-            if selectedLineIndexes != selectOption.selectedLineIndexes {
-                setSelectedLineIndexes(selectedLineIndexes,
-                                        oldLineIndexes: selectOption.selectedLineIndexes,
-                                        in: drawing, node, time: time)
-            }
-            if selectedCellItems != selectOption.selectedCellItems {
-                setSelectedCellItems(selectedCellItems,
-                                      oldCellItems: selectOption.selectedCellItems,
-                                      in: track, time: time)
-            }
-            self.selectOption = SelectOption()
-            self.stroker.line = nil
-        }
-        setNeedsDisplay()
-        return true
     }
     
     private struct Stroker {
@@ -1531,40 +1422,37 @@ final class Canvas: DrawView {
         }
     }
     private var stroker = Stroker()
-//    func move(with event: DragEvent) -> Bool {
-//        return stroke(with: event)
-//    }
-    func stroke(with event: DragEvent) -> Bool {
-        return stroke(with: event, isAppendLine: true)
+    func stroke(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: true)
     }
-    func stroke(with event: DragEvent, isAppendLine: Bool) -> Bool {
-        let p = convertToCurrentLocal(point(from: event)), scale = scene.scale
-        switch event.sendType {
-        case .begin:
-            let fc = Line.Control(point: p, pressure: event.pressure)
+    func stroke(for point: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase,
+                isAppendLine: Bool) {
+        let p = convertToCurrentLocal(point), scale = scene.scale
+        switch phase {
+        case .began:
+            let fc = Line.Control(point: p, pressure: pressure)
             stroker.line = Line(controls: [fc, fc, fc])
             stroker.oldPoint = p
-            stroker.oldTime = event.time
-            stroker.oldTempTime = event.time
+            stroker.oldTime = time
+            stroker.oldTempTime = time
             stroker.tempDistance = 0
             stroker.temps = [Stroker.Temp(control: fc, speed: 0)]
-            stroker.beginTime = event.time
-        case .sending:
+            stroker.beginTime = time
+        case .changed:
             guard var line = stroker.line, p != stroker.oldPoint else {
-                return true
+                return
             }
             let d = p.distance(stroker.oldPoint)
             stroker.tempDistance += d
             
-            let pressure = (stroker.temps.first!.control.pressure + event.pressure) / 2
+            let pressure = (stroker.temps.first!.control.pressure + pressure) / 2
             let rc = Line.Control(point: line.controls[line.controls.count - 3].point,
                                   pressure: pressure)
             line = line.withReplaced(rc, at: line.controls.count - 3)
             set(line)
             
-            let speed = d / (event.time - stroker.oldTime).cf
-            stroker.temps.append(Stroker.Temp(control: Line.Control(point: p,
-                                                                    pressure: event.pressure),
+            let speed = d / (time - stroker.oldTime).cf
+            stroker.temps.append(Stroker.Temp(control: Line.Control(point: p, pressure: pressure),
                                               speed: speed))
             let lPressure = stroker.temps.reduce(0.0.cf) { $0 + $1.control.pressure }
                 / stroker.temps.count.cf
@@ -1575,16 +1463,16 @@ final class Canvas: DrawView {
                 line = line.withInsert(jc, at: line.controls.count - 2)
                 set(line, updateBounds: line.strokeLastBoundingBox)
                 stroker.temps = [Stroker.Temp(control: lc, speed: speed)]
-                stroker.oldTempTime = event.time
+                stroker.oldTempTime = time
                 stroker.tempDistance = 0
             } else if stroker.interval.isAppendPointWith(distance: stroker.tempDistance / scale,
-                                                         deltaTime: event.time - stroker.oldTempTime,
+                                                         deltaTime: time - stroker.oldTempTime,
                                                          stroker.temps,
                                                          scale: scale) {
                 line = line.withInsert(lc, at: line.controls.count - 2)
                 set(line, updateBounds: line.strokeLastBoundingBox)
                 stroker.temps = [Stroker.Temp(control: lc, speed: speed)]
-                stroker.oldTempTime = event.time
+                stroker.oldTempTime = time
                 stroker.tempDistance = 0
             }
             
@@ -1592,31 +1480,30 @@ final class Canvas: DrawView {
             line = line.withReplaced(lc, at: line.controls.count - 1)
             set(line, updateBounds: line.strokeLastBoundingBox)
             
-            stroker.oldTime = event.time
+            stroker.oldTime = time
             stroker.oldPoint = p
-        case .end:
+        case .ended:
             guard var line = stroker.line else {
-                return true
+                return
             }
             if !stroker.interval.isAppendPointWith(distance: stroker.tempDistance / scale,
-                                                   deltaTime: event.time - stroker.oldTempTime,
+                                                   deltaTime: time - stroker.oldTempTime,
                                                    stroker.temps,
                                                    scale: scale) {
                 line = line.withRemoveControl(at: line.controls.count - 2)
             }
             line = line.withReplaced(Line.Control(point: p, pressure: line.controls.last!.pressure),
                                      at: line.controls.count - 1)
-            line = stroker.short.shortedLineWith(line, deltaTime: event.time - stroker.beginTime,
+            line = stroker.short.shortedLineWith(line, deltaTime: time - stroker.beginTime,
                                                  scale: scale)
             if isAppendLine {
                 let node = cut.editNode
-                addLine(line, in: node.editTrack.drawingItem.drawing, node, time: time)
+                addLine(line, in: node.editTrack.drawingItem.drawing, node, time: self.time)
                 stroker.line = nil
             } else {
                 stroker.line = line
             }
         }
-        return true
     }
     private func set(_ line: Line) {
         stroker.line = line
@@ -1632,6 +1519,78 @@ final class Canvas: DrawView {
         let b = Line.visibleImageBoundsWith(imageBounds: ub, lineWidth: stroker.lineWidth)
         setNeedsDisplay(inCurrentLocalBounds: b)
         stroker.oldLastBounds = lastBounds
+    }
+    
+    func lassoErase(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        _ = stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: false)
+        switch phase {
+        case .began:
+            break
+        case .changed:
+            if let line = stroker.line {
+                let b = line.visibleImageBounds(withLineWidth: stroker.lineWidth)
+                setNeedsDisplay(inCurrentLocalBounds: b)
+            }
+        case .ended:
+            if let line = stroker.line {
+                lassoErase(with: line)
+                stroker.line = nil
+            }
+        }
+    }
+    func lassoErase(with line: Line) {
+        let inNode = cut.editNode
+        let drawing = inNode.editTrack.drawingItem.drawing, track = inNode.editTrack
+        if let index = drawing.lines.index(of: line) {
+            removeLine(at: index, in: drawing, inNode, time: time)
+        }
+        if !drawing.selectedLineIndexes.isEmpty {
+            setSelectedLineIndexes([], oldLineIndexes: drawing.selectedLineIndexes,
+                                   in: drawing, inNode, time: time)
+        }
+        var isRemoveLineInDrawing = false, isRemoveLineInCell = false
+        let lasso = LineLasso(lines: [line])
+        let newDrawingLines = drawing.lines.reduce(into: [Line]()) {
+            if let splitLines = lasso.split($1) {
+                isRemoveLineInDrawing = true
+                $0 += splitLines
+            } else {
+                $0.append($1)
+            }
+        }
+        if isRemoveLineInDrawing {
+            set(newDrawingLines, old: drawing.lines, in: drawing, inNode, time: time)
+        }
+        var removeCellItems = [CellItem]()
+        removeCellItems = track.cellItems.filter { cellItem in
+            if cellItem.cell.intersects(lasso) {
+                set(Geometry(), old: cellItem.cell.geometry,
+                    at: track.animation.editKeyframeIndex, in: cellItem, track, inNode, time: time)
+                if cellItem.isEmptyKeyGeometries {
+                    return true
+                }
+                isRemoveLineInCell = true
+            }
+            return false
+        }
+        if !isRemoveLineInDrawing && !isRemoveLineInCell {
+            if let hitCellItem = inNode.cellItem(at: line.firstPoint,
+                                                 reciprocalScale: scene.reciprocalScale,
+                                                 with: track) {
+                let lines = hitCellItem.cell.geometry.lines
+                set(Geometry(), old: hitCellItem.cell.geometry,
+                    at: track.animation.editKeyframeIndex,
+                    in: hitCellItem, track, inNode, time: time)
+                if hitCellItem.isEmptyKeyGeometries {
+                    removeCellItems.append(hitCellItem)
+                }
+                set(drawing.lines + lines, old: drawing.lines,
+                    in: drawing, inNode, time: time)
+            }
+        }
+        if !removeCellItems.isEmpty {
+            self.removeCellItems(removeCellItems)
+        }
     }
     
     private func addLine(_ line: Line, in drawing: Drawing, _ node: Node, time: Beat) {
@@ -1707,10 +1666,10 @@ final class Canvas: DrawView {
         setNeedsDisplay()
     }
     
-    func insertPoint(with event: KeyInputEvent) -> Bool {
-        let p = convertToCurrentLocal(point(from: event)), inNode = cut.editNode
+    func insert(_ point: CGPoint) {
+        let p = convertToCurrentLocal(point), inNode = cut.editNode
         guard let nearest = inNode.nearestLine(at: p) else {
-            return true
+            return
         }
         if let drawing = nearest.drawing {
             replaceLine(nearest.line.splited(at: nearest.pointIndex), oldLine: nearest.line,
@@ -1726,12 +1685,11 @@ final class Canvas: DrawView {
             cut.updateWithCurrentTime()
             updateEditView(with: p)
         }
-        return true
     }
-    func removePoint(with event: KeyInputEvent) -> Bool {
-        let p = convertToCurrentLocal(point(from: event)), inNode = cut.editNode
+    func removeNearestPoint(for point: CGPoint) {
+        let p = convertToCurrentLocal(point), inNode = cut.editNode
         guard let nearest = inNode.nearestLine(at: p) else {
-            return true
+            return
         }
         if let drawing = nearest.drawing {
             if nearest.line.controls.count > 2 {
@@ -1755,7 +1713,6 @@ final class Canvas: DrawView {
             cut.updateWithCurrentTime()
             updateEditView(with: p)
         }
-        return true
     }
     private func insert(_ control: Line.Control, at index: Int,
                         in drawing: Drawing, atLineIndex li: Int, _ node: Node, time: Beat) {
@@ -1781,16 +1738,17 @@ final class Canvas: DrawView {
     private weak var movePointNode: Node?
     private let snapPointSnapDistance = 8.0.cf
     private var bezierSortedResult: Node.Nearest.BezierSortedResult?
-    func movePoint(with event: DragEvent) -> Bool {
-        return movePoint(with: event, isVertex: false)
+    func movePoint(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        movePoint(for: p, pressure: pressure, time: time, phase, isVertex: false)
     }
-    func moveVertex(with event: DragEvent) -> Bool {
-        return movePoint(with: event, isVertex: true)
+    func moveVertex(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        movePoint(for: p, pressure: pressure, time: time, phase, isVertex: true)
     }
-    func movePoint(with event: DragEvent, isVertex: Bool) -> Bool {
-        let p = convertToCurrentLocal(point(from: event))
-        switch event.sendType {
-        case .begin:
+    func movePoint(for point: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase,
+                   isVertex: Bool) {
+        let p = convertToCurrentLocal(point)
+        switch phase {
+        case .began:
             if let nearest = cut.editNode.nearest(at: p, isVertex: isVertex) {
                 bezierSortedResult = nearest.bezierSortedResult(at: p)
                 movePointNearest = nearest
@@ -1800,9 +1758,9 @@ final class Canvas: DrawView {
             updateEditView(with: p)
             movePointNode = cut.editNode
             movePointOldPoint = p
-        case .sending:
+        case .changed:
             let dp = p - movePointOldPoint
-            movePointIsSnap = movePointIsSnap ? true : event.pressure == 1
+            movePointIsSnap = movePointIsSnap ? true : pressure == 1
             
             if let nearest = movePointNearest {
                 if nearest.drawingEdit != nil || nearest.cellItemEdit != nil {
@@ -1817,7 +1775,7 @@ final class Canvas: DrawView {
                     }
                 }
             }
-        case .end:
+        case .ended:
             let dp = p - movePointOldPoint
             if let nearest = movePointNearest, let node = movePointNode {
                 if nearest.drawingEdit != nil || nearest.cellItemEdit != nil {
@@ -1839,7 +1797,6 @@ final class Canvas: DrawView {
             }
         }
         setNeedsDisplay()
-        return true
     }
     private func movingPoint(with nearest: Node.Nearest, dp: CGPoint, in track: NodeTrack) {
         let snapD = snapPointSnapDistance / scene.scale
@@ -1966,14 +1923,16 @@ final class Canvas: DrawView {
                                                                    at: pointIndex).autoPressure()
                         let newLines = geometry.lines.withReplaced(newBLine,
                                                                    at: b.lineCap.lineIndex)
-                        cellItem.cell.geometry = Geometry(lines: newLines)
+                        let i = cut.editNode.editTrack.animation.editKeyframeIndex
+                        cellItem.replace(Geometry(lines: newLines), at: i)
                         np = control.point
                     } else if isVertex {
                         let warpedLine = b.lineCap.line.warpedWith(deltaPoint: np - nearest.point,
                                                                    isFirst: b.lineCap.isFirst)
                         let newLine = warpedLine.autoPressure()
                         let lines = geometry.lines.withReplaced(newLine, at: b.lineCap.lineIndex)
-                        cellItem.cell.geometry = Geometry(lines: lines)
+                        let i = cut.editNode.editTrack.animation.editKeyframeIndex
+                        cellItem.replace(Geometry(lines: lines), at: i)
                     } else {
                         let pointIndex = b.lineCap.isFirst ? 0 : b.lineCap.line.controls.count - 1
                         var control = geometry.lines[b.lineCap.lineIndex].controls[pointIndex]
@@ -2196,9 +2155,6 @@ final class Canvas: DrawView {
         setNeedsDisplay()
     }
     
-    func clipCellInSelected(with event: KeyInputEvent) {
-        clipCellInSelected()
-    }
     func clipCellInSelected() {
         guard let fromCell = editCell else {
             return
@@ -2240,14 +2196,13 @@ final class Canvas: DrawView {
     private var moveZCellTuple: (indexes: [Int], parent: Cell, oldChildren: [Cell])?
     private var moveZMinDeltaIndex = 0, moveZMaxDeltaIndex = 0
     private weak var moveZOldCell: Cell?, moveZNode: Node?
-    func moveZ(with event: DragEvent) -> Bool {
-        let p = point(from: event), cp = convertToCurrentLocal(point(from: event))
-        switch event.sendType {
-        case .begin:
-            let ict = cut.editNode.indicatedCellsTuple(with : cp,
-                                                       reciprocalScale: scene.reciprocalScale)
+    func moveZ(for point: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        let p = convertToCurrentLocal(point)
+        switch phase {
+        case .began:
+            let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
             guard !ict.cellItems.isEmpty else {
-                return true
+                return
             }
             switch ict.type {
             case .none:
@@ -2290,8 +2245,8 @@ final class Canvas: DrawView {
             }
             moveZNode = cut.editNode
             moveZOldPoint = p
-        case .sending:
-            self.editZ?.point = cp
+        case .changed:
+            self.editZ?.point = p
             if let moveZCellTuple = moveZCellTuple, let node = moveZNode {
                 let deltaIndex = Int((p.y - moveZOldPoint.y) / node.editZHeight)
                 var children = moveZCellTuple.oldChildren
@@ -2306,7 +2261,7 @@ final class Canvas: DrawView {
                 }
                 moveZCellTuple.parent.children = children
             }
-        case .end:
+        case .ended:
             if let moveZCellTuple = moveZCellTuple, let node = moveZNode {
                 let deltaIndex = Int((p.y - moveZOldPoint.y) / node.editZHeight)
                 var children = moveZCellTuple.oldChildren
@@ -2320,13 +2275,12 @@ final class Canvas: DrawView {
                         .clip(min: 0, max: moveZCellTuple.oldChildren.count - 1))
                 }
                 setChildren(children, oldChildren: moveZCellTuple.oldChildren,
-                            inParent: moveZCellTuple.parent, in: node, time: time)
+                            inParent: moveZCellTuple.parent, in: node, time: self.time)
                 self.moveZCellTuple = nil
                 moveZNode = nil
             }
         }
         setNeedsDisplay()
-        return true
     }
     private func setChildren(_ children: [Cell], oldChildren: [Cell],
                              inParent parent: Cell, in node: Node, time: Beat) {
@@ -2345,50 +2299,48 @@ final class Canvas: DrawView {
     enum TransformEditType {
         case move, warp, transform
     }
-//    func moveInStrokable(with event: DragEvent) -> Bool {
-//        return move(with: event, type: .move)
-//    }
-    func move(with event: DragEvent) -> Bool {
-        return move(with: event, type: .move)
+    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        move(for: p, pressure: pressure, time: time, phase, type: .move)
     }
-    func transform(with event: DragEvent) -> Bool {
-        return move(with: event, type: .transform)
+    func transform(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        move(for: p, pressure: pressure, time: time, phase, type: .transform)
     }
-    func warp(with event: DragEvent) -> Bool {
-        return move(with: event, type: .warp)
+    func warp(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        move(for: p, pressure: pressure, time: time, phase, type: .warp)
     }
     let moveTransformAngleTime = 0.1
-    var moveTransformAngleOldTime = 0.0
+    var moveEditTransform: Node.EditTransform?, moveTransformAngleOldTime = 0.0
     var moveTransformAnglePoint = CGPoint(), moveTransformAngleOldPoint = CGPoint()
     var isMoveTransformAngle = false
     private weak var moveNode: Node?
-    func move(with event: DragEvent, type: TransformEditType) -> Bool {
-        let viewP = point(from: event)
-        let p = convertToCurrentLocal(viewP)
+    func move(for point: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase,
+              type: TransformEditType) {
+        let p = convertToCurrentLocal(point)
         func affineTransform(with node: Node) -> CGAffineTransform {
             switch type {
             case .move:
                 return CGAffineTransform(translationX: p.x - moveOldPoint.x, y: p.y - moveOldPoint.y)
             case .warp:
-                if let editTransform = editTransform {
+                if let editTransform = moveEditTransform {
                     return node.warpAffineTransform(with: editTransform)
                 } else {
                     return CGAffineTransform.identity
                 }
             case .transform:
-                if let editTransform = editTransform {
+                if let editTransform = moveEditTransform {
                     return node.transformAffineTransform(with: editTransform)
                 } else {
                     return CGAffineTransform.identity
                 }
             }
         }
-        switch event.sendType {
-        case .begin:
+        switch phase {
+        case .began:
             moveSelected = cut.editNode.selection(with: p, reciprocalScale: scene.reciprocalScale)
             if type != .move {
-                self.editTransform = editTransform(at: p)
-                self.moveTransformAngleOldTime = event.time
+                self.moveEditTransform = editTransform(at: p)
+                editTransform = moveEditTransform
+                self.moveTransformAngleOldTime = time
                 self.moveTransformAngleOldPoint = p
                 self.isMoveTransformAngle = false
                 self.moveTransformOldPoint = p
@@ -2401,9 +2353,9 @@ final class Canvas: DrawView {
             }
             moveNode = cut.editNode
             moveOldPoint = p
-        case .sending:
+        case .changed:
             if type != .move {
-                if var editTransform = editTransform {
+                if var editTransform = moveEditTransform {
                     
                     func newEditTransform(with lines: [Line]) -> Node.EditTransform {
                         var ps = [CGPoint]()
@@ -2478,13 +2430,14 @@ final class Canvas: DrawView {
                     }
                     
                     let ep = p - moveTransformOldPoint + editTransform.oldPoint
-                    self.editTransform = editTransform.with(ep)
+                    self.moveEditTransform = editTransform.with(ep)
+                    self.editTransform = moveEditTransform
                 }
             }
             if type == .warp {
-                if let editTransform = editTransform, editTransform.isCenter {
-                    distanceWarp(with: event)
-                    return true
+                if let editTransform = moveEditTransform, editTransform.isCenter {
+                    distanceWarp(for: p, pressure: pressure, time: time, phase)
+                    return
                 }
             }
             if !moveSelected.isEmpty, let node = moveNode {
@@ -2503,12 +2456,13 @@ final class Canvas: DrawView {
                 }
                 cut.updateWithCurrentTime()
             }
-        case .end:
+        case .ended:
             if type == .warp {
                 if editTransform?.isCenter ?? false {
-                    distanceWarp(with: event)
+                    distanceWarp(for: p, pressure: pressure, time: time, phase)
+                    moveEditTransform = nil
                     editTransform = nil
-                    return true
+                    return
                 }
             }
             if !moveSelected.isEmpty, let node = moveNode {
@@ -2518,35 +2472,35 @@ final class Canvas: DrawView {
                     for index in mdp.lineIndexes {
                         newLines[index] = mdp.oldLines[index].applying(affine)
                     }
-                    set(newLines, old: mdp.oldLines, in: mdp.drawing, node, time: time)
+                    set(newLines, old: mdp.oldLines, in: mdp.drawing, node, time: self.time)
                 }
                 for mcp in moveSelected.cellTuples {
                     set(mcp.geometry.applying(affine),
                         old: mcp.geometry,
                         at: mcp.track.animation.editKeyframeIndex,
-                        in:mcp.cellItem, mcp.track, node, time: time)
+                        in:mcp.cellItem, mcp.track, node, time: self.time)
                 }
                 cut.updateWithCurrentTime()
                 moveSelected = Node.Selection()
             }
-            self.editTransform = nil
+            self.moveEditTransform = nil
+            editTransform = nil
         }
         setNeedsDisplay()
-        return true
     }
     
     private var minWarpDistance = 0.0.cf, maxWarpDistance = 0.0.cf
-    func distanceWarp(with event: DragEvent) {
-        let p = convertToCurrentLocal(point(from: event))
-        switch event.sendType {
-        case .begin:
+    func distanceWarp(for point: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+        let p = convertToCurrentLocal(point)
+        switch phase {
+        case .began:
             moveSelected = cut.editNode.selection(with: p, reciprocalScale: scene.reciprocalScale)
             let mm = minMaxPointFrom(p)
             moveNode = cut.editNode
             moveOldPoint = p
             minWarpDistance = mm.minDistance
             maxWarpDistance = mm.maxDistance
-        case .sending:
+        case .changed:
             if !moveSelected.isEmpty {
                 let dp = p - moveOldPoint
                 if let wdp = moveSelected.drawingTuple {
@@ -2567,7 +2521,7 @@ final class Canvas: DrawView {
                                          at: wcp.track.animation.editKeyframeIndex)
                 }
             }
-        case .end:
+        case .ended:
             if !moveSelected.isEmpty, let node = moveNode {
                 let dp = p - moveOldPoint
                 if let wdp = moveSelected.drawingTuple {
@@ -2578,7 +2532,7 @@ final class Canvas: DrawView {
                                                                  minDistance: minWarpDistance,
                                                                  maxDistance: maxWarpDistance)
                     }
-                    set(newLines, old: wdp.oldLines, in: wdp.drawing, node, time: time)
+                    set(newLines, old: wdp.oldLines, in: wdp.drawing, node, time: self.time)
                 }
                 for wcp in moveSelected.cellTuples {
                     set(wcp.geometry.warpedWith(deltaPoint: dp, editPoint: moveOldPoint,
@@ -2586,7 +2540,7 @@ final class Canvas: DrawView {
                                                 maxDistance: maxWarpDistance),
                         old: wcp.geometry,
                         at: wcp.track.animation.editKeyframeIndex,
-                        in: wcp.cellItem, wcp.track, node, time: time)
+                        in: wcp.cellItem, wcp.track, node, time: self.time)
                 }
                 moveSelected = Node.Selection()
             }
@@ -2624,29 +2578,25 @@ final class Canvas: DrawView {
         return (sqrt(minDistance), sqrt(maxDistance), minPoint, maxPoint)
     }
     
-    var isUseScrollView = false
-    func scroll(with event: ScrollEvent) -> Bool {
-        guard isUseScrollView else {
-            return false
-        }
-        viewTransform.translation += event.scrollDeltaPoint
-        updateEditView(with: convertToCurrentLocal(point(from: event)))
-        return true
-    }
+//    func scroll(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+//                phase: Phase, momentumPhase: Phase?) {
+//        viewTransform.translation += scrollDeltaPoint
+//        updateEditView(with: convertToCurrentLocal(p))
+//    }
     
     var minScale = 0.00001.cf, blockScale = 1.0.cf, maxScale = 64.0.cf
     var correctionScale = 1.28.cf, correctionRotation = 1.0.cf / (4.2 * (.pi))
     private var isBlockScale = false, oldScale = 0.0.cf
-    func zoom(with event: PinchEvent) -> Bool {
+    func zoom(for p: CGPoint, time: Second, magnification: CGFloat, _ phase: Phase) {
         let scale = viewTransform.scale.x
-        switch event.sendType {
-        case .begin:
+        switch phase {
+        case .began:
             oldScale = scale
             isBlockScale = false
-        case .sending:
+        case .changed:
             if !isBlockScale {
-                zoom(at: point(from: event)) {
-                    let newScale = (scale * pow(event.magnification * correctionScale + 1, 2))
+                zoom(at: p) {
+                    let newScale = (scale * pow(magnification * correctionScale + 1, 2))
                         .clip(min: minScale, max: maxScale)
                     if blockScale.isOver(old: scale, new: newScale) {
                         isBlockScale = true
@@ -2654,28 +2604,27 @@ final class Canvas: DrawView {
                     viewTransform.scale = CGPoint(x: newScale, y: newScale)
                 }
             }
-        case .end:
+        case .ended:
             if isBlockScale {
-                zoom(at: point(from: event)) {
+                zoom(at: p) {
                     viewTransform.scale = CGPoint(x: blockScale, y: blockScale)
                 }
             }
         }
-        return true
     }
     var blockRotations: [CGFloat] = [-.pi, 0.0, .pi]
     private var isBlockRotation = false, blockRotation = 0.0.cf, oldRotation = 0.0.cf
-    func rotate(with event: RotateEvent) -> Bool {
+    func rotate(for p: CGPoint, time: Second, rotationQuantity: CGFloat, _ phase: Phase) {
         let rotation = viewTransform.rotation
-        switch event.sendType {
-        case .begin:
+        switch phase {
+        case .began:
             oldRotation = rotation
             isBlockRotation = false
-        case .sending:
+        case .changed:
             if !isBlockRotation {
-                zoom(at: point(from: event)) {
+                zoom(at: p) {
                     let oldRotation = rotation
-                    let newRotation = rotation + event.rotation * correctionRotation
+                    let newRotation = rotation + rotationQuantity * correctionRotation
                     for br in blockRotations {
                         if br.isOver(old: oldRotation, new: newRotation) {
                             isBlockRotation = true
@@ -2686,22 +2635,20 @@ final class Canvas: DrawView {
                     viewTransform.rotation = newRotation.clipRotation
                 }
             }
-        case .end:
+        case .ended:
             if isBlockRotation {
-                zoom(at: point(from: event)) {
+                zoom(at: p) {
                     viewTransform.rotation = blockRotation
                 }
             }
         }
-        return true
     }
-    func resetView(with event: DoubleTapEvent) -> Bool {
+    func resetView(for p: CGPoint) {
         guard !viewTransform.isIdentity else {
-            return false
+            return
         }
         viewTransform = Transform()
-        updateEditView(with: convertToCurrentLocal(point(from: event)))
-        return true
+        updateEditView(with: convertToCurrentLocal(p))
     }
     func zoom(at p: CGPoint, closure: () -> ()) {
         let point = convertToCurrentLocal(p)
@@ -2710,13 +2657,13 @@ final class Canvas: DrawView {
         viewTransform.translation -= (newPoint - p)
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        let ict = cut.editNode.indicatedCellsTuple(with: convertToCurrentLocal(point(from: event)),
+    func reference(at p: CGPoint) -> Reference {
+        let ict = cut.editNode.indicatedCellsTuple(with: convertToCurrentLocal(p),
                                                    reciprocalScale: scene.reciprocalScale)
-        if let cellItem = ict.cellItems.first {
-            return cellItem.cell.reference
+        if ict.cellItems.first != nil {
+            return Cell.reference
         } else {
-            return reference
+            return Canvas.reference
         }
     }
 }

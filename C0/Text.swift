@@ -42,8 +42,8 @@ extension String: Referenceable {
         return Localization(english: "String", japanese: "文字")
     }
 }
-extension String: ViewExpression {
-    func view(withBounds bounds: CGRect, sizeType: SizeType) -> View {
+extension String: Viewable {
+    func view(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
         return TextView(text: Localization(self), font: Font.default(with: sizeType),
                         frame: bounds, isSizeToFit: false, isForm: false)
     }
@@ -52,14 +52,12 @@ extension String: ViewExpression {
 /**
  Issue: モードレス文字入力
  */
-final class TextView: DrawView {
+final class TextView: View, Indicatable, Assignable, Runnable, KeyInputtable {
     var text: Text {
         didSet {
             string = text.currentString
         }
     }
-    
-    let isLiteral = true
     
     var isSizeToFit = false
     
@@ -102,7 +100,7 @@ final class TextView: DrawView {
         }
     }
     
-    var isLocked = true
+    var isReadOnly = true
     var baseFont: Font, baselineDelta: CGFloat, height: CGFloat, padding: CGFloat
     
     init(text localization: Localization = Localization(),
@@ -134,11 +132,9 @@ final class TextView: DrawView {
         self.frameAlignment = frameAlignment
         self.isSizeToFit = isSizeToFit
         
-        super.init()
-        self.isForm = isForm
-        drawBlock = { [unowned self] ctx in
-            self.draw(in: ctx)
-        }
+        super.init(drawClosure: { $1.draw(in: $0) }, isForm: isForm)
+        
+        isLiteral = true
         
         if isSizeToFit {
             let w = frame.width == 0 ? ceil(textFrame.pathBounds.width) + padding * 2 : frame.width
@@ -147,8 +143,8 @@ final class TextView: DrawView {
         } else {
             self.frame = frame
         }
-        noIndicatedLineColor = isForm ? nil : (isLocked ? .getBorder : .getSetBorder)
-        indicatedLineColor = isForm ? .noBorderIndicated : (isLocked ? .indicated : .indicated)
+        noIndicatedLineColor = isForm ? nil : (isReadOnly ? .getBorder : .getSetBorder)
+        indicatedLineColor = isForm ? .noBorderIndicated : (isReadOnly ? .indicated : .indicated)
     }
     
     func word(for p: CGPoint) -> String {
@@ -194,7 +190,7 @@ final class TextView: DrawView {
     func updateTextFrame() {
         textFrame.attributedString = backingStore
     }
-    func draw(in ctx: CGContext) {
+    override func draw(in ctx: CGContext) {
         textFrame.draw(in: bounds.inset(by: padding), baseFont: baseFont, in: ctx)
     }
     
@@ -253,80 +249,73 @@ final class TextView: DrawView {
     }
     
     struct Binding {
-        let view: TextView, text: String, oldText: String, type: Action.SendType
+        let view: TextView, text: String, oldText: String, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
-    func delete(with event: KeyInputEvent) -> Bool {
-        guard !isLocked else {
-            return false
+    func delete(for p: CGPoint) {
+        guard !isReadOnly else {
+            return
         }
         deleteBackward()
-        return true
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         guard let backingStore = backingStore.copy() as? NSAttributedString else {
-            return nil
+            return []
         }
         return [backingStore.string]
     }
-    func paste(_ objects: [Any], with event: KeyInputEvent) -> Bool {
-        guard !isLocked else {
-            return false
+    func paste(_ objects: [Any], for p: CGPoint) {
+        guard !isReadOnly else {
+            return
         }
         for object in objects {
             if let string = object as? String {
                 let oldText = string
-                binding?(Binding(view: self, text: oldText, oldText: oldText, type: .begin))
+                binding?(Binding(view: self, text: oldText, oldText: oldText, phase: .began))
                 self.string = string
-                binding?(Binding(view: self, text: string, oldText: oldText, type: .end))
+                binding?(Binding(view: self, text: string, oldText: oldText, phase: .ended))
                 
                 draw()
-                return true
+                return
             }
         }
-        return false
     }
     
-    func moveCursor(with event: MoveCursorEvent) -> Bool {
-        selectedRange = NSRange(location: editCharacterIndex(for: point(from: event)), length: 0)
-        return true
+    func indicate(at p: CGPoint) {
+        selectedRange = NSRange(location: editCharacterIndex(for: p), length: 0)
     }
     
     private let timer = LockTimer()
     private var oldText = ""
-    func keyInput(with event: KeyInputEvent) -> Bool {
-        guard !isLocked else {
-            return false
+    func insert(_ string: String, for p: CGPoint) {
+        guard !isReadOnly else {
+            return
         }
         let beginClosure: () -> () = { [unowned self] in
             self.oldText = self.string
             self.binding?(Binding(view: self,
-                                  text: self.oldText, oldText: self.oldText, type: .begin))
+                                  text: self.oldText, oldText: self.oldText, phase: .began))
         }
         let waitClosure: () -> () = { [unowned self] in
             self.binding?(Binding(view: self,
-                                  text: self.string, oldText: self.oldText, type: .sending))
+                                  text: self.string, oldText: self.oldText, phase: .changed))
         }
         let endClosure: () -> () = { [unowned self] in
             self.binding?(Binding(view: self,
-                                  text: self.string, oldText: self.oldText, type: .end))
+                                  text: self.string, oldText: self.oldText, phase: .ended))
         }
         timer.begin(endDuration: 1,
                     beginClosure: beginClosure,
                     waitClosure: waitClosure,
                     endClosure: endClosure)
-        return true
     }
     
-    func run(with event: ClickEvent) -> Bool {
-        let word = self.word(for: point(from: event))
+    func run(for p: CGPoint) {
+        let word = self.word(for: p)
         if word == "=" {
             string += string.calculate
-            return true
-        } else {
-            return false
         }
     }
     
@@ -391,9 +380,9 @@ final class TextView: DrawView {
         }
         
         let oldText = string
-        binding?(Binding(view: self, text: oldText, oldText: oldText, type: .begin))
+        binding?(Binding(view: self, text: oldText, oldText: oldText, phase: .began))
         backingStore.deleteCharacters(in: range)
-        binding?(Binding(view: self, text: string, oldText: oldText, type: .end))
+        binding?(Binding(view: self, text: string, oldText: oldText, phase: .ended))
         
         self.selectedRange = NSRange(location: range.location, length: 0)
         TextInputContext.invalidateCharacterCoordinates()
@@ -492,7 +481,7 @@ final class TextView: DrawView {
         return textFrame.typographicBounds(for: range)
     }
     
-    func reference(with event: TapEvent) -> Reference? {
+    func reference(at p: CGPoint) -> Reference {
         return Reference(name: Localization(english: "Text", japanese: "テキスト"),
                          viewDescription: Localization(english: "Run (Verb sentence only): Click",
                                                        japanese: "実行 (動詞文のみ): クリック"))

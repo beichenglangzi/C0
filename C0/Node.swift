@@ -193,15 +193,15 @@ final class Node: NSObject, NSCoding {
             }
         }
     }
-    func allParentsAndSelf(_ closure: ((Node) -> ())) {
+    func selfAndAllParents(_ closure: ((Node) -> ())) {
         closure(self)
-        parent?.allParentsAndSelf(closure)
+        parent?.selfAndAllParents(closure)
     }
-    func allParentsAndSelf(_ closure: ((Node) -> (Bool))) {
+    func selfAndAllParents(_ closure: ((Node) -> (Bool))) {
         if closure(self) {
             return
         }
-        parent?.allParentsAndSelf(closure)
+        parent?.selfAndAllParents(closure)
     }
     var treeNode: TreeNode<Node> {
         return TreeNode(self, children: children.map { $0.treeNode })
@@ -452,9 +452,9 @@ final class Node: NSObject, NSCoding {
         let selectedCellItems = editTrack.selectedCellItemsWithNoEmptyGeometry(at: point)
         if !selectedCellItems.isEmpty {
             return (sort(selectedCellItems), [], .selected)
-        } else if
-            let cell = rootCell.at(point, reciprocalScale: reciprocalScale),
+        } else if let cell = rootCell.at(point, reciprocalScale: reciprocalScale),
             let cellItem = editTrack.cellItem(with: cell) {
+        
             return ([cellItem], [], .indicated)
         } else {
             let drawing = editTrack.drawingItem.drawing
@@ -1436,15 +1436,15 @@ final class Node: NSObject, NSCoding {
         ctx.strokePath()
     }
 }
-extension Node: ClassCopiable {
-    func copied(from copier: Copier) -> Node {
+extension Node: ClassDeepCopiable {
+    func copied(from deepCopier: DeepCopier) -> Node {
         let node = Node(name: name,
-                        parent: nil, children: children.map { copier.copied($0) },
-                        rootCell: copier.copied(rootCell),
+                        parent: nil, children: children.map { deepCopier.copied($0) },
+                        rootCell: deepCopier.copied(rootCell),
                         effect: effect,
                         transform: transform,
                         wiggle: xWiggle, wigglePhase: wigglePhase,
-                        tracks: tracks.map { copier.copied($0) },
+                        tracks: tracks.map { deepCopier.copied($0) },
                         editTrackIndex: editTrackIndex,
                         time: time)
         node.children.forEach { $0.parent = node }
@@ -1455,12 +1455,12 @@ extension Node: Referenceable {
     static let name = Localization(english: "Node", japanese: "ノード")
 }
 extension Node: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, sizeType: SizeType) -> Layer {
-        return name.view(withBounds: bounds, sizeType: sizeType)
+    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+        return name.view(withBounds: bounds, sizeType)
     }
 }
 
-final class NodeView: View {
+final class NodeView: View, Copiable {
     var node = Node() {
         didSet {
             isHiddenView.bool = node.isHidden
@@ -1478,7 +1478,7 @@ final class NodeView: View {
                                 sizeType: sizeType)
         
         super.init()
-        replace(children: [classNameView, isHiddenView])
+        children = [classNameView, isHiddenView]
         
         isHiddenView.binding = { [unowned self] in self.setIsHidden(with: $0) }
     }
@@ -1510,29 +1510,29 @@ final class NodeView: View {
     
     struct Binding {
         let nodeView: NodeView, isHidden: Bool, oldIsHidden: Bool
-        let inNode: Node, type: Action.SendType
+        let inNode: Node, phase: Phase
     }
     var setIsHiddenClosure: ((Binding) -> ())?
     
     private var oldNode = Node()
     
     private func setIsHidden(with binding: BoolView.Binding) {
-        if binding.type == .begin {
+        if binding.phase == .began {
             oldNode = node
         } else {
             node.isHidden = binding.bool
         }
         setIsHiddenClosure?(Binding(nodeView: self, isHidden: binding.bool,
                                     oldIsHidden: binding.oldBool, inNode: oldNode,
-                                    type: binding.type))
+                                    phase: binding.phase))
     }
     
-    func copiedObjects(with event: KeyInputEvent) -> [ViewExpression]? {
+    func copiedViewables(at p: CGPoint) -> [Viewable] {
         return [node.copied]
     }
     
-    func reference(with event: TapEvent) -> Reference? {
-        return node.reference
+    func reference(at p: CGPoint) -> Reference {
+        return Node.reference
     }
 }
 
@@ -1546,11 +1546,11 @@ final class NodeTreeManager {
         }
         nodesView.treeLevelClosure = { [unowned self] in
             var i = 0
-            self.cut.node(atTreeNodeIndex: $0).allParentsAndSelf { _ in i += 1 }
+            self.cut.node(atTreeNodeIndex: $0).selfAndAllParents { _ in i += 1 }
             return i - 2
         }
-        nodesView.copiedObjectsClosure = { [unowned self] _, _ in [self.cut.editNode.copied] }
-        nodesView.moveClosure = { [unowned self] in return self.moveNode(with: $1) }
+        nodesView.copiedViewablesClosure = { [unowned self] _, _ in [self.cut.editNode.copied] }
+        nodesView.moveClosure = { [unowned self] in self.moveNode(for: $1, $2) }
     }
     
     var cut = Cut() {
@@ -1576,7 +1576,7 @@ final class NodeTreeManager {
         let nodeTreeView: NodeTreeManager
         let node: Node, index: Int, oldIndex: Int, beginIndex: Int
         let toNode: Node, fromNode: Node, beginNode: Node
-        let type: Action.SendType
+        let phase: Phase
     }
     var setNodesClosure: ((NodesBinding) -> ())?
     
@@ -1587,10 +1587,9 @@ final class NodeTreeManager {
     private weak var editTrack: NodeTrack?
     private var oldParent = Node(), beginParent = Node()
     private var maxMovableNodeIndex = 0, beginTreeNode: TreeNode<Node>?
-    func moveNode(with event: DragEvent) -> Bool {
-        let p = nodesView.point(from: event)
-        switch event.sendType {
-        case .begin:
+    func moveNode(for p: CGPoint, _ phase: Phase) {
+        switch phase {
+        case .began:
             let beginTreeNode = cut.rootNode.treeNode
             beginMovableNodeIndex = beginTreeNode.movableIndex(with: cut.editNode)
             beginTreeNode.remove(atAllIndex: beginTreeNode.allIndex(with: cut.editNode))
@@ -1607,17 +1606,17 @@ final class NodeTreeManager {
                                           node: cut.editNode,
                                           index: oldIndex, oldIndex: oldIndex, beginIndex: beginIndex,
                                           toNode: oldParent, fromNode: oldParent, beginNode: oldParent,
-                                          type: .begin))
-        case .sending, .end:
+                                          phase: .began))
+        case .changed, .ended:
             guard let beginTreeNode = beginTreeNode else {
-                return true
+                return
             }
             let d = p.y - oldP.y
             let ini = (beginMovableNodeIndex + Int(d / moveHeight)).clip(min: 0,
                                                                          max: maxMovableNodeIndex)
             let tuple = beginTreeNode.movableIndexTuple(atMovableIndex: ini)
             if ini != oldMovableNodeIndex
-                || (event.sendType == .end && ini != beginMovableNodeIndex) {
+                || (phase == .ended && ini != beginMovableNodeIndex) {
                 
                 let parent = tuple.parent.object
                 setNodesClosure?(NodesBinding(nodeTreeView: self,
@@ -1626,15 +1625,14 @@ final class NodeTreeManager {
                                               beginIndex: beginIndex,
                                               toNode: parent, fromNode: oldParent,
                                               beginNode: beginParent,
-                                              type: event.sendType))
+                                              phase: phase))
                 oldIndex = tuple.insertIndex
                 oldParent = parent
                 oldMovableNodeIndex = ini
             }
-            if event.sendType == .end {
+            if phase == .ended {
                 self.beginTreeNode = nil
             }
         }
-        return true
     }
 }
