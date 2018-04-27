@@ -24,16 +24,16 @@ import Foundation
  Issue: スクロール後の元の位置までの距離を表示
  Issue: sceneを取り除く
  */
-final class Canvas: View, Indicatable, Selectable, Assignable, Newable,
+final class CanvasView: View, Indicatable, Selectable, Queryable, Assignable, Newable,
 Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     
-    let player = Player()
+    let playerView = PlayerView()
     
     var scene = Scene() {
         didSet {
-            player.updateChildren()
+            playerView.updateChildren()
             cut = scene.editCut
-            player.scene = scene
+            playerView.scene = scene
             materialView.material = scene.editMaterial
             updateScreenTransform()
             updateEditCellBindingLine()
@@ -47,17 +47,17 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         }
     }
     
-    var setContentsScaleClosure: ((Canvas, CGFloat) -> ())?
-    override var contentsScale: CGFloat {
+    var setContentsScaleClosure: ((CanvasView, Real) -> ())?
+    override var contentsScale: Real {
         didSet {
-            player.contentsScale = contentsScale
+            playerView.contentsScale = contentsScale
             setContentsScaleClosure?(self, contentsScale)
         }
     }
     
     override init() {
         super.init(drawClosure: { $1.draw(in: $0) }, isForm: false)
-        player.endPlayClosure = { [unowned self] _ in self.isOpenedPlayer = false }
+        playerView.endPlayClosure = { [unowned self] _ in self.isOpenedPlayer = false }
         cellView.copiedViewablesClosure = { [unowned self] _, _ in self.copiedCells() }
     }
     
@@ -65,7 +65,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     
     override var bounds: Rect {
         didSet {
-            player.frame = bounds
+            playerView.frame = bounds
             updateScreenTransform()
         }
     }
@@ -76,9 +76,9 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
                 return
             }
             if isOpenedPlayer {
-                append(child: player)
+                append(child: playerView)
             } else {
-                player.removeFromParent()
+                playerView.removeFromParent()
             }
         }
     }
@@ -308,12 +308,12 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         }
         set {
             scene.frame = newValue
-            player.updateChildren()
+            playerView.updateChildren()
             updateWithScene()
         }
     }
     
-    var setTimeClosure: ((Canvas, Beat) -> ())?
+    var setTimeClosure: ((CanvasView, Beat) -> ())?
     var time: Beat {
         get {
             return scene.time
@@ -354,7 +354,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         updateSceneClosure?(self)
         setNeedsDisplay()
     }
-    var updateSceneClosure: ((Canvas) -> ())?
+    var updateSceneClosure: ((CanvasView) -> ())?
     
     var currentTransform: CGAffineTransform {
         var affine = CGAffineTransform.identity
@@ -433,7 +433,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         }
     }
     
-    private func registerUndo(_ closure: @escaping (Canvas, Beat) -> Void) {
+    private func registerUndo(_ closure: @escaping (CanvasView, Beat) -> Void) {
         undoManager?.registerUndo(withTarget: self) { [oldTime = time] in closure($0, oldTime) }
     }
     
@@ -664,7 +664,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             }
         }
     }
-    var pasteColorBinding: ((Canvas, Color, [Cell]) -> ())?
+    var pasteColorBinding: ((CanvasView, Color, [Cell]) -> ())?
     func paste(_ color: Color, for point: Point) -> Bool {
         let p = convertToCurrentLocal(point)
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
@@ -683,7 +683,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         }
         return true
     }
-    var pasteMaterialBinding: ((Canvas, Material, [Cell]) -> ())?
+    var pasteMaterialBinding: ((CanvasView, Material, [Cell]) -> ())?
     func paste(_ material: Material, for point: Point) -> Bool {
         let p = convertToCurrentLocal(point)
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
@@ -911,7 +911,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     
     func play() {
         isOpenedPlayer = true
-        player.play()
+        playerView.play()
     }
     
     func new(for p: Point) {
@@ -1122,7 +1122,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             }
         }
     }
-    var setDraftLinesClosure: ((Canvas, Drawing) -> ())? = nil
+    var setDraftLinesClosure: ((CanvasView, Drawing) -> ())? = nil
     private func setDraftLines(_ lines: [Line], old oldLines: [Line],
                                in drawing: Drawing, _ node: Node, time: Beat) {
         registerUndo { $0.setDraftLines(oldLines, old: lines, in: drawing, node, time: $1) }
@@ -1177,7 +1177,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     }
     func appendCircleLines() -> Bool {
         let count = 8, r = polygonRadius
-        let theta = .pi / CGFloat(count)
+        let theta = .pi / Real(count)
         let cp = Point(x: bounds.midX, y: bounds.midY)
         let fp = Point(x: cp.x, y: cp.y + polygonRadius)
         let points = circlePointsWith(centerPosition: cp,
@@ -1190,8 +1190,8 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
                duplicatedTranslation: Point(x: polygonRadius * 2 + Layout.basicPadding, y: 0))
         return true
     }
-    func regularPolygonLinesWith(centerPosition cp: Point, radius r: CGFloat,
-                                 firstAngle: CGFloat = .pi / 2, count: Int) -> [Line] {
+    func regularPolygonLinesWith(centerPosition cp: Point, radius r: Real,
+                                 firstAngle: Real = .pi / 2, count: Int) -> [Line] {
         let points = circlePointsWith(centerPosition: cp, radius: r,
                                       firstAngle: firstAngle, count: count)
         return points.enumerated().map {
@@ -1201,9 +1201,9 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
                                    Line.Control(point: p1, pressure: 1)])
         }
     }
-    func circlePointsWith(centerPosition cp: Point, radius r: CGFloat,
-                          firstAngle: CGFloat = .pi / 2, count: Int) -> [Point] {
-        var angle = firstAngle, theta = (2 * .pi) / CGFloat(count)
+    func circlePointsWith(centerPosition cp: Point, radius r: Real,
+                          firstAngle: Real = .pi / 2, count: Int) -> [Point] {
+        var angle = firstAngle, theta = (2 * .pi) / Real(count)
         return (0 ..< count).map { _ in
             let p = Point(x: cp.x + r * cos(angle), y: cp.y + r * sin(angle))
             angle += theta
@@ -1264,7 +1264,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             bind(materialView.defaultMaterial, nil, time: time)
         }
     }
-    var bindClosure: ((Canvas, Material, Cell?) -> ())?
+    var bindClosure: ((CanvasView, Material, Cell?) -> ())?
     func bind(_ material: Material, _ editCell: Cell?, time: Beat) {
         registerUndo { [oec = editCell] in $0.bind($0.materialView.material, oec, time: $1) }
         self.time = time
@@ -1323,7 +1323,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         var lineWidth = DrawingItem.defaultLineWidth, lineColor = Color.strokeLine
         
         struct Temp {
-            var control: Line.Control, speed: CGFloat
+            var control: Line.Control, speed: Real
         }
         var temps: [Temp] = []
         var oldPoint = Point(), tempDistance = 0.0.cg, oldLastBounds = Rect()
@@ -1347,7 +1347,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
                 } else if dr > lowAngle {
                     let t = 1 - (dr - lowAngle) / (angle - lowAngle)
                     return Line.Control(point: Point.linear(c1.point, c2.point, t: t),
-                                        pressure: CGFloat.linear(c1.pressure, c2.pressure, t: t))
+                                        pressure: Real.linear(c1.pressure, c2.pressure, t: t))
                 } else {
                     return nil
                 }
@@ -1359,12 +1359,12 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             var minSpeed = 100.0.cg, maxSpeed = 1500.0.cg, exp = 2.0.cg
             var minTime = Second(0.1), maxTime = Second(0.03)
             var minDistance = 1.45.cg, maxDistance = 1.5.cg
-            func speedTWith(distance: CGFloat, deltaTime: Second, scale: CGFloat) -> CGFloat {
+            func speedTWith(distance: Real, deltaTime: Second, scale: Real) -> Real {
                 let speed = ((distance / scale) / deltaTime).clip(min: minSpeed, max: maxSpeed)
                 return pow((speed - minSpeed) / (maxSpeed - minSpeed), 1 / exp)
             }
-            func isAppendPointWith(distance: CGFloat, deltaTime: Second,
-                                   _ temps: [Temp], scale: CGFloat) -> Bool {
+            func isAppendPointWith(distance: Real, deltaTime: Second,
+                                   _ temps: [Temp], scale: Real) -> Bool {
                 guard deltaTime > 0 else {
                     return false
                 }
@@ -1372,7 +1372,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
                 let time = minTime + (maxTime - minTime) * t
                 return deltaTime > time || isAppendPointWith(temps, scale: scale)
             }
-            private func isAppendPointWith(_ temps: [Temp], scale: CGFloat) -> Bool {
+            private func isAppendPointWith(_ temps: [Temp], scale: Real) -> Bool {
                 let ap = temps.first!.control.point, bp = temps.last!.control.point
                 for tc in temps {
                     let speed = tc.speed.clip(min: minSpeed, max: maxSpeed)
@@ -1389,7 +1389,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         var short = Short()
         struct Short {
             var minTime = Second(0.1), linearMaxDistance = 1.5.cg
-            func shortedLineWith(_ line: Line, deltaTime: Second, scale: CGFloat) -> Line {
+            func shortedLineWith(_ line: Line, deltaTime: Second, scale: Real) -> Line {
                 guard deltaTime < minTime && line.controls.count > 3 else {
                     return line
                 }
@@ -1423,10 +1423,10 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         }
     }
     private var stroker = Stroker()
-    func stroke(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func stroke(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: true)
     }
-    func stroke(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase,
+    func stroke(for point: Point, pressure: Real, time: Second, _ phase: Phase,
                 isAppendLine: Bool) {
         let p = convertToCurrentLocal(point), scale = scene.scale
         switch phase {
@@ -1456,7 +1456,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             stroker.temps.append(Stroker.Temp(control: Line.Control(point: p, pressure: pressure),
                                               speed: speed))
             let lPressure = stroker.temps.reduce(0.0.cg) { $0 + $1.control.pressure }
-                / CGFloat(stroker.temps.count)
+                / Real(stroker.temps.count)
             let lc = Line.Control(point: p, pressure: lPressure)
             
             let mlc = lc.mid(stroker.temps[stroker.temps.count - 2].control)
@@ -1522,7 +1522,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         stroker.oldLastBounds = lastBounds
     }
     
-    func lassoErase(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func lassoErase(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         _ = stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: false)
         switch phase {
         case .began:
@@ -1739,13 +1739,13 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     private weak var movePointNode: Node?
     private let snapPointSnapDistance = 8.0.cg
     private var bezierSortedResult: Node.Nearest.BezierSortedResult?
-    func movePoint(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func movePoint(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         movePoint(for: p, pressure: pressure, time: time, phase, isVertex: false)
     }
-    func moveVertex(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func moveVertex(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         movePoint(for: p, pressure: pressure, time: time, phase, isVertex: true)
     }
-    func movePoint(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase,
+    func movePoint(for point: Point, pressure: Real, time: Second, _ phase: Phase,
                    isVertex: Bool) {
         let p = convertToCurrentLocal(point)
         switch phase {
@@ -2197,7 +2197,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     private var moveZCellTuple: (indexes: [Int], parent: Cell, oldChildren: [Cell])?
     private var moveZMinDeltaIndex = 0, moveZMaxDeltaIndex = 0
     private weak var moveZOldCell: Cell?, moveZNode: Node?
-    func moveZ(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func moveZ(for point: Point, pressure: Real, time: Second, _ phase: Phase) {
         let p = convertToCurrentLocal(point)
         switch phase {
         case .began:
@@ -2300,13 +2300,13 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     enum TransformEditType {
         case move, warp, transform
     }
-    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         move(for: p, pressure: pressure, time: time, phase, type: .move)
     }
-    func transform(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func transform(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         move(for: p, pressure: pressure, time: time, phase, type: .transform)
     }
-    func warp(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func warp(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         move(for: p, pressure: pressure, time: time, phase, type: .warp)
     }
     let moveTransformAngleTime = Second(0.1)
@@ -2314,7 +2314,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     var moveTransformAnglePoint = Point(), moveTransformAngleOldPoint = Point()
     var isMoveTransformAngle = false
     private weak var moveNode: Node?
-    func move(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase,
+    func move(for point: Point, pressure: Real, time: Second, _ phase: Phase,
               type: TransformEditType) {
         let p = convertToCurrentLocal(point)
         func affineTransform(with node: Node) -> CGAffineTransform {
@@ -2491,7 +2491,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     }
     
     private var minWarpDistance = 0.0.cg, maxWarpDistance = 0.0.cg
-    func distanceWarp(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func distanceWarp(for point: Point, pressure: Real, time: Second, _ phase: Phase) {
         let p = convertToCurrentLocal(point)
         switch phase {
         case .began:
@@ -2549,9 +2549,9 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         setNeedsDisplay()
     }
     func minMaxPointFrom(_ p: Point
-        ) -> (minDistance: CGFloat, maxDistance: CGFloat, minPoint: Point, maxPoint: Point) {
+        ) -> (minDistance: Real, maxDistance: Real, minPoint: Point, maxPoint: Point) {
         
-        var minDistance = CGFloat.infinity, maxDistance = 0.0.cg
+        var minDistance = Real.infinity, maxDistance = 0.0.cg
         var minPoint = Point(), maxPoint = Point()
         func minMaxPointFrom(_ line: Line) {
             for control in line.controls {
@@ -2588,7 +2588,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     var minScale = 0.00001.cg, blockScale = 1.0.cg, maxScale = 64.0.cg
     var correctionScale = 1.28.cg, correctionRotation = 1.0.cg / (4.2 * .pi)
     private var isBlockScale = false, oldScale = 0.0.cg
-    func zoom(for p: Point, time: Second, magnification: CGFloat, _ phase: Phase) {
+    func zoom(for p: Point, time: Second, magnification: Real, _ phase: Phase) {
         let scale = viewTransform.scale.x
         switch phase {
         case .began:
@@ -2613,9 +2613,9 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             }
         }
     }
-    var blockRotations: [CGFloat] = [-.pi, 0.0, .pi]
+    var blockRotations: [Real] = [-.pi, 0.0, .pi]
     private var isBlockRotation = false, blockRotation = 0.0.cg, oldRotation = 0.0.cg
-    func rotate(for p: Point, time: Second, rotationQuantity: CGFloat, _ phase: Phase) {
+    func rotate(for p: Point, time: Second, rotationQuantity: Real, _ phase: Phase) {
         let rotation = viewTransform.rotation
         switch phase {
         case .began:
@@ -2664,10 +2664,10 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         if ict.cellItems.first != nil {
             return Cell.reference
         } else {
-            return Canvas.reference
+            return CanvasView.reference
         }
     }
 }
-extension Canvas: Referenceable {
-    static let name = Localization(english: "Canvas", japanese: "キャンバス")
+extension CanvasView: Referenceable {
+    static let name = Text(english: "Canvas", japanese: "キャンバス")
 }

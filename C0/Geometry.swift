@@ -20,8 +20,6 @@
 import Foundation
 
 final class Geometry: NSObject, NSCoding {
-    static let name = Localization(english: "Geometry", japanese: "ジオメトリ")
-    
     let lines: [Line], path: CGPath
     init(lines: [Line] = []) {
         self.lines = lines
@@ -30,7 +28,7 @@ final class Geometry: NSObject, NSCoding {
     }
     
     private static let distance = 6.0.cg, vertexLineLength = 10.0.cg, minSnapRatio = 0.0625.cg
-    init(lines: [Line], scale: CGFloat) {
+    init(lines: [Line], scale: Real) {
         guard let firstLine = lines.first else {
             self.lines = []
             self.path = CGMutablePath()
@@ -45,7 +43,7 @@ final class Geometry: NSObject, NSCoding {
             oldLines.removeFirst()
             while !oldLines.isEmpty {
                 var minLine = oldLines[0], minFirstEnd = FirstEnd.first
-                var minIndex = 0, minD = CGFloat.infinity
+                var minIndex = 0, minD = Real.infinity
                 for (i, aLine) in oldLines.enumerated() {
                     let firstP = aLine.firstPoint, lastP = aLine.lastPoint
                     let fds = hypot²(firstP.x - oldP.x, firstP.y - oldP.y)
@@ -110,7 +108,7 @@ final class Geometry: NSObject, NSCoding {
         self.lines = newLines
         self.path = Line.path(with: newLines)
     }
-    static func snapPointLinesWith(lines: [Line], scale: CGFloat) -> [Line]? {
+    static func snapPointLinesWith(lines: [Line], scale: Real) -> [Line]? {
         guard var oldLine = lines.last else {
             return nil
         }
@@ -154,7 +152,7 @@ final class Geometry: NSObject, NSCoding {
         return Geometry(lines: lines.map { $0.applying(affine) })
     }
     func warpedWith(deltaPoint dp: Point, editPoint: Point,
-                    minDistance: CGFloat, maxDistance: CGFloat) -> Geometry {
+                    minDistance: Real, maxDistance: Real) -> Geometry {
         func warped(p: Point) -> Point {
             let d =  hypot²(p.x - editPoint.x, p.y - editPoint.y)
             let ds = d > maxDistance ? 0 : (1 - (d - minDistance) / (maxDistance - minDistance))
@@ -206,7 +204,7 @@ final class Geometry: NSObject, NSCoding {
             }
         }
     }
-    static func bezierLineGeometries(with geometries: [Geometry], scale: CGFloat) -> [Geometry] {
+    static func bezierLineGeometries(with geometries: [Geometry], scale: Real) -> [Geometry] {
         return geometries.map {
             return Geometry(lines: $0.lines.map { $0.bezierLine(withScale: scale) })
         }
@@ -237,13 +235,13 @@ final class Geometry: NSObject, NSCoding {
     }
     
     struct NearestBezier {
-        let lineIndex: Int, bezierIndex: Int, t: CGFloat, minDistance²: CGFloat
+        let lineIndex: Int, bezierIndex: Int, t: Real, minDistance²: Real
     }
     func nearestBezier(with point: Point)-> NearestBezier? {
         guard !lines.isEmpty else {
             return nil
         }
-        var minD² = CGFloat.infinity, minT = 0.0.cg, minLineIndex = 0, minBezierIndex = 0
+        var minD² = Real.infinity, minT = 0.0.cg, minLineIndex = 0, minBezierIndex = 0
         for (li, line) in lines.enumerated() {
             line.allBeziers() { bezier, i, stop in
                 let nearest = bezier.nearest(at: point)
@@ -259,7 +257,7 @@ final class Geometry: NSObject, NSCoding {
                              t: minT, minDistance²: minD²)
     }
     func nearestPathLineIndex(at p: Point) -> Int {
-        var minD = CGFloat.infinity, minIndex = 0
+        var minD = Real.infinity, minIndex = 0
         for (i, line) in lines.enumerated() {
             let nextLine = lines[i + 1 < lines.count ? i + 1 : 0]
             let d = p.distanceWithLineSegment(ap: line.lastPoint, bp: nextLine.firstPoint)
@@ -307,11 +305,11 @@ final class Geometry: NSObject, NSCoding {
         ctx.fillPath()
     }
     
-    func drawLines(withColor color: Color, reciprocalScale: CGFloat, in ctx: CGContext) {
+    func drawLines(withColor color: Color, reciprocalScale: Real, in ctx: CGContext) {
         ctx.setFillColor(color.cg)
         draw(withLineWidth: 0.5 * reciprocalScale, in: ctx)
     }
-    func drawPathLine(withReciprocalScale reciprocalScale: CGFloat, in ctx: CGContext) {
+    func drawPathLine(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
         ctx.setLineWidth(0.5 * reciprocalScale)
         ctx.setStrokeColor(Color.getSetBorder.cg)
         for (i, line) in lines.enumerated() {
@@ -324,20 +322,20 @@ final class Geometry: NSObject, NSCoding {
         ctx.strokePath()
     }
     func drawSkin(lineColor: Color, subColor: Color, backColor: Color = .getSetBorder,
-                  skinLineWidth: CGFloat = 1,
-                  reciprocalScale: CGFloat, reciprocalAllScale: CGFloat, in ctx: CGContext) {
+                  skinLineWidth: Real = 1,
+                  reciprocalScale: Real, reciprocalAllScale: Real, in ctx: CGContext) {
         fillPath(with: subColor, path, in: ctx)
         ctx.setFillColor(backColor.cg)
         draw(withLineWidth: 1 * reciprocalAllScale, in: ctx)
         ctx.setFillColor(lineColor.cg)
         draw(withLineWidth: skinLineWidth * reciprocalScale, in: ctx)
     }
-    func draw(withLineWidth lineWidth: CGFloat, in ctx: CGContext) {
+    func draw(withLineWidth lineWidth: Real, in ctx: CGContext) {
         lines.forEach { $0.draw(size: lineWidth, in: ctx) }
     }
 }
 extension Geometry: Interpolatable {
-    static func linear(_ f0: Geometry, _ f1: Geometry, t: CGFloat) -> Geometry {
+    static func linear(_ f0: Geometry, _ f1: Geometry, t: Real) -> Geometry {
         if f0 === f1 {
             return f0
         } else if f0.lines.isEmpty {
@@ -406,4 +404,7 @@ extension Geometry: Interpolatable {
             })
         }
     }
+}
+extension Geometry: Referenceable {
+    static let name = Text(english: "Geometry", japanese: "ジオメトリ")
 }

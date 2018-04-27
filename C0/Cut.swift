@@ -68,7 +68,7 @@ final class CutTrack: NSObject, Track, NSCoding {
     func step(_ f0: Int) {
         cutItem.step(f0)
     }
-    func linear(_ f0: Int, _ f1: Int, t: CGFloat) {
+    func linear(_ f0: Int, _ f1: Int, t: Real) {
         cutItem.linear(f0, f1, t: t)
     }
     func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
@@ -150,7 +150,7 @@ final class CutTrack: NSObject, Track, NSCoding {
     }
 }
 extension CutTrack: Referenceable {
-    static let name = Localization(english: "Cut Track", japanese: "カットトラック")
+    static let name = Text(english: "Cut Track", japanese: "カットトラック")
 }
 extension CutTrack: ClassDeepCopiable {
     func copied(from deepCopier: DeepCopier) -> CutTrack {
@@ -165,7 +165,7 @@ final class CutItem: NSObject, TrackItem, NSCoding {
     func step(_ f0: Int) {
         cut = keyCuts[f0]
     }
-    func linear(_ f0: Int, _ f1: Int, t: CGFloat) {
+    func linear(_ f0: Int, _ f1: Int, t: Real) {
         cut = keyCuts[f0]
     }
     func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
@@ -339,7 +339,7 @@ final class Cut: NSObject, NSCoding {
     }
     
     func drawCautionBorder(scene: Scene, bounds: Rect, in ctx: CGContext) {
-        func drawBorderWith(bounds: Rect, width: CGFloat, color: Color, in ctx: CGContext) {
+        func drawBorderWith(bounds: Rect, width: Real, color: Color, in ctx: CGContext) {
             ctx.setFillColor(color.cg)
             ctx.fill([Rect(x: bounds.minX, y: bounds.minY,
                              width: width, height: bounds.height),
@@ -486,7 +486,7 @@ final class Cut: NSObject, NSCoding {
     }
 }
 extension Cut: Referenceable {
-    static let name = Localization(english: "Cut", japanese: "カット")
+    static let name = Text(english: "Cut", japanese: "カット")
 }
 extension Cut: ClassDeepCopiable {
     func copied(from deepCopier: DeepCopier) -> Cut {
@@ -501,7 +501,7 @@ extension Cut: ObjectViewExpression {
     }
 }
 
-final class CutView: View, Assignable, Scrollable {
+final class CutView: View, Queryable, Assignable, Scrollable {
     let cut: Cut
     
     let classNameView = TextView(text: Cut.name, font: .smallBold)
@@ -597,8 +597,8 @@ final class CutView: View, Assignable, Scrollable {
     
     init(_ cut: Cut,
          beginBaseTime: Beat = 0,
-         baseWidth: CGFloat, baseTimeInterval: Beat,
-         knobHalfHeight: CGFloat, subKnobHalfHeight: CGFloat, maxLineWidth: CGFloat, height: CGFloat) {
+         baseWidth: Real, baseTimeInterval: Beat,
+         knobHalfHeight: Real, subKnobHalfHeight: Real, maxLineWidth: Real, height: Real) {
         
         classNameView.fillColor = nil
         clipView.isClipped = true
@@ -754,18 +754,18 @@ final class CutView: View, Assignable, Scrollable {
         }
     }
     
-    var baseWidth: CGFloat {
+    var baseWidth: Real {
         didSet {
             animationViews.forEach { $0.baseWidth = baseWidth }
             updateChildren()
             updateWithDuration()
         }
     }
-    let knobHalfHeight: CGFloat, subKnobHalfHeight: CGFloat
-    let maxLineWidth: CGFloat
+    let knobHalfHeight: Real, subKnobHalfHeight: Real
+    let maxLineWidth: Real
     
-    func x(withTime time: Beat) -> CGFloat {
-        return DoubleBeat(time / baseTimeInterval) * baseWidth
+    func x(withTime time: Beat) -> Real {
+        return RealBeat(time / baseTimeInterval) * baseWidth
     }
     
     override var locale: Locale {

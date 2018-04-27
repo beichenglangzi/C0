@@ -31,10 +31,10 @@ struct Line: Codable {
         }
     }
     let controls: [Control]
-    let imageBounds: Rect, firstAngle: CGFloat, lastAngle: CGFloat
+    let imageBounds: Rect, firstAngle: Real, lastAngle: Real
     
     init(bezier: Bezier2,
-         p0Pressure: CGFloat, cpPressure: CGFloat, p1Pressure: CGFloat) {
+         p0Pressure: Real, cpPressure: Real, p1Pressure: Real) {
         self.init(controls: [Control(point: bezier.p0, pressure: p0Pressure),
                              Control(point: bezier.cp, pressure: cpPressure),
                              Control(point: bezier.p1, pressure: p1Pressure)])
@@ -123,7 +123,7 @@ struct Line: Codable {
         return Line(controls: newControls)
     }
     func warpedWith(deltaPoint dp: Point, editPoint: Point,
-                    minDistance: CGFloat, maxDistance: CGFloat) -> Line {
+                    minDistance: Real, maxDistance: Real) -> Line {
         return Line(controls: controls.map {
             let d =  hypot($0.point.x - editPoint.x, $0.point.y - editPoint.y)
             let ds = d > maxDistance ? 0 : (1 - (d - minDistance) / (maxDistance - minDistance))
@@ -131,7 +131,7 @@ struct Line: Codable {
                            pressure: $0.pressure)
         })
     }
-    func autoPressure(minPressure: CGFloat = 0.5) -> Line {
+    func autoPressure(minPressure: Real = 0.5) -> Line {
         let maxAngle = .pi / 4.0.cg
         return Line(controls: controls.enumerated().map { i, control in
             if i == 0 || i == controls.count - 1 {
@@ -141,7 +141,7 @@ struct Line: Codable {
                 let angle = abs(Point.differenceAngle(p0: preControl.point,
                                                         p1: control.point, p2: nextControl.point))
                 return Control(point: control.point,
-                               pressure: CGFloat.linear(minPressure, 1,
+                               pressure: Real.linear(minPressure, 1,
                                                         t: min(angle, maxAngle) / maxAngle))
             }
         })
@@ -177,15 +177,15 @@ struct Line: Codable {
     func splited(startIndex: Int, endIndex: Int) -> Line {
         return Line(controls: Array(controls[startIndex...endIndex]))
     }
-    func splited(startIndex: Int, startT: CGFloat, endIndex: Int, endT: CGFloat,
+    func splited(startIndex: Int, startT: Real, endIndex: Int, endT: Real,
                  isMultiLine: Bool = true) -> [Line] {
-        func pressure(at i: Int, t: CGFloat) -> CGFloat {
+        func pressure(at i: Int, t: Real) -> Real {
             if controls.count == 2 {
-                return CGFloat.linear(controls[0].pressure, controls[1].pressure, t: t)
+                return Real.linear(controls[0].pressure, controls[1].pressure, t: t)
             } else if controls.count == 3 {
                 return t < 0.5 ?
-                    CGFloat.linear(controls[0].pressure, controls[1].pressure, t: t * 2) :
-                    CGFloat.linear(controls[1].pressure, controls[2].pressure, t: (t - 0.5) * 2)
+                    Real.linear(controls[0].pressure, controls[1].pressure, t: t * 2) :
+                    Real.linear(controls[1].pressure, controls[2].pressure, t: (t - 0.5) * 2)
             } else {
                 let previousPressure = i == 0 ?
                     controls[0].pressure :
@@ -194,7 +194,7 @@ struct Line: Codable {
                     controls[controls.count - 1].pressure :
                     (controls[i + 1].pressure + controls[i + 2].pressure) / 2
                 return i  > 0 ?
-                    CGFloat.linear(previousPressure, nextPressure, t: t) :
+                    Real.linear(previousPressure, nextPressure, t: t) :
                     controls[i].pressure
             }
         }
@@ -260,7 +260,7 @@ struct Line: Codable {
         }
     }
     
-    func bezierLine(withScale scale: CGFloat) -> Line {
+    func bezierLine(withScale scale: Real) -> Line {
         if controls.count == 2 {
             return Line(controls: [controls[0], controls[0].mid(controls[1]), controls[1]])
         } else if controls.count == 3 {
@@ -312,7 +312,7 @@ struct Line: Codable {
             return b
         }
     }
-    static func imageBounds(with lines: [Line], lineWidth: CGFloat) -> Rect {
+    static func imageBounds(with lines: [Line], lineWidth: Real) -> Rect {
         guard var firstBounds = lines.first?.imageBounds else {
             return Rect()
         }
@@ -321,7 +321,7 @@ struct Line: Codable {
         }
         return Line.visibleImageBoundsWith(imageBounds: firstBounds, lineWidth: lineWidth)
     }
-    static func path(with lines: [Line], length: CGFloat = 0) -> CGPath {
+    static func path(with lines: [Line], length: Real = 0) -> CGPath {
         guard !lines.isEmpty else {
             return CGMutablePath()
         }
@@ -338,18 +338,18 @@ struct Line: Codable {
         return path
     }
     
-    static func visibleLineWidth(withLineWidth lineWidth: CGFloat) -> CGFloat {
+    static func visibleLineWidth(withLineWidth lineWidth: Real) -> Real {
         return lineWidth * sqrt(2) / 2
     }
-    func visibleImageBounds(withLineWidth lineWidth: CGFloat) -> Rect {
+    func visibleImageBounds(withLineWidth lineWidth: Real) -> Rect {
         return imageBounds.inset(by: -lineWidth * sqrt(2) / 2)
     }
-    static func visibleImageBoundsWith(imageBounds: Rect, lineWidth: CGFloat) -> Rect {
+    static func visibleImageBoundsWith(imageBounds: Rect, lineWidth: Real) -> Rect {
         return imageBounds.inset(by: -lineWidth * sqrt(2) / 2)
     }
     
-    func isFirst(at index: Int, t: CGFloat) -> Bool {
-        return controls.count == 2 ? t < 0.5 : (CGFloat(index) + t < CGFloat(controls.count - 2) / 2)
+    func isFirst(at index: Int, t: Real) -> Bool {
+        return controls.count == 2 ? t < 0.5 : (Real(index) + t < Real(controls.count - 2) / 2)
     }
     
     func bezier(at i: Int) -> Bezier2 {
@@ -367,13 +367,13 @@ struct Line: Codable {
             return Bezier2.spline(controls[i].point, controls[i + 1].point, controls[i + 2].point)
         }
     }
-    func bezierT(at p: Point) -> (bezierIndex: Int, t: CGFloat, distance²: CGFloat) {
+    func bezierT(at p: Point) -> (bezierIndex: Int, t: Real, distance²: Real) {
         if controls.count == 2 {
             let t = p.tWithLineSegment(ap: firstPoint, bp: lastPoint)
             let d = p.distanceWithLineSegment(ap: firstPoint, bp: lastPoint)
             return (0, t, d * d)
         } else {
-            var minD² = CGFloat.infinity, minT = 0.0.cg, minBezierIndex = 0
+            var minD² = Real.infinity, minT = 0.0.cg, minBezierIndex = 0
             allBeziers { bezier, i, stop in
                 let nearest = bezier.nearest(at: p)
                 if nearest.distance² < minD² {
@@ -385,8 +385,8 @@ struct Line: Codable {
             return (minBezierIndex, minT, minD²)
         }
     }
-    func bezierT(withLength length: CGFloat) -> (b: Bezier2, t: CGFloat)? {
-        var bs: (b: Bezier2, t: CGFloat)?, allD = 0.0.cg
+    func bezierT(withLength length: Real) -> (b: Bezier2, t: Real)? {
+        var bs: (b: Bezier2, t: Real)?, allD = 0.0.cg
         allBeziers { b, index, stop in
             let d = b.length()
             let newAllD = allD + d
@@ -444,22 +444,22 @@ struct Line: Codable {
         }
     }
     
-    static func maxDistance²(at p: Point, with lines: [Line]) -> CGFloat {
+    static func maxDistance²(at p: Point, with lines: [Line]) -> Real {
         return lines.reduce(0.0.cg) { max($0, $1.maxDistance²(at: p)) }
     }
     static func centroidPoint(with lines: [Line]) -> Point {
-        let reciprocalCount = CGFloat(1 / lines.reduce(0) { $0 + $1.controls.count })
+        let reciprocalCount = Real(1 / lines.reduce(0) { $0 + $1.controls.count })
         let p = lines.reduce(Point()) { $1.controls.reduce($0) { $0 + $1.point } }
         return Point(x: p.x * reciprocalCount, y: p.y * reciprocalCount)
     }
-    func minDistance²(at p: Point) -> CGFloat {
-        var minD² = CGFloat.infinity
+    func minDistance²(at p: Point) -> Real {
+        var minD² = Real.infinity
         allBeziers { b, i ,stop in
             minD² = min(minD², b.minDistance²(at: p))
         }
         return minD²
     }
-    func maxDistance²(at p: Point) -> CGFloat {
+    func maxDistance²(at p: Point) -> Real {
         var maxD² = 0.0.cg
         allBeziers { b, i ,stop in
             maxD² = max(maxD², b.maxDistance²(at: p))
@@ -506,14 +506,14 @@ struct Line: Codable {
         let l0 = other.lastPoint, f1 = firstPoint, l1 = lastPoint
         return hypot²(l1.x - l0.x, l1.y - l0.y) < hypot²(f1.x - l0.x, f1.y - l0.y)
     }
-    func firstExtensionPoint(withLength length: CGFloat) -> Point {
+    func firstExtensionPoint(withLength length: Real) -> Point {
         return extensionPointWith(p0: controls[1].point, p1: controls[0].point, length: length)
     }
-    func lastExtensionPoint(withLength length: CGFloat) -> Point {
+    func lastExtensionPoint(withLength length: Real) -> Point {
         return extensionPointWith(p0: controls[controls.count - 2].point,
                                   p1: controls[controls.count - 1].point, length: length)
     }
-    private func extensionPointWith(p0: Point, p1: Point, length: CGFloat) -> Point {
+    private func extensionPointWith(p0: Point, p1: Point, length: Real) -> Point {
         if p0 == p1 {
             return p1
         } else {
@@ -522,7 +522,7 @@ struct Line: Codable {
             return Point(x: p1.x + x * length * reciprocalD, y: p1.y + y * length * reciprocalD)
         }
     }
-    func angle(withPreviousLine preLine: Line) -> CGFloat {
+    func angle(withPreviousLine preLine: Line) -> Real {
         return abs(lastAngle.differenceRotation(firstAngle))
     }
     static func isConnected(line: Line, isFirst: Bool, otherLine: Line, isOtherFirst: Bool) -> Bool {
@@ -569,7 +569,7 @@ struct Line: Codable {
             return b0.boundingBox.union(b1.boundingBox)
         }
     }
-    var pointsLength: CGFloat {
+    var pointsLength: Real {
         var length = 0.0.cg
         if var oldPoint = controls.first?.point {
             for control in controls {
@@ -628,8 +628,8 @@ struct Line: Codable {
     
     static func drawEditPointsWith(lines: [Line], inColor: Color = .controlEditPointIn,
                                    outColor: Color = .controlPointOut,
-                                   skinLineWidth: CGFloat = 1, skinRadius: CGFloat = 1.5,
-                                   reciprocalScale s: CGFloat, in ctx: CGContext) {
+                                   skinLineWidth: Real = 1, skinRadius: Real = 1.5,
+                                   reciprocalScale s: Real, in ctx: CGContext) {
         let lineWidth = skinLineWidth * s * 0.5, mor = skinRadius * s
         lines.forEach { line in
             line.allEditPoints { p, i in
@@ -647,8 +647,8 @@ struct Line: Codable {
                                   jointOutColor: Color = .controlPointOut,
                                   unionInColor: Color = .controlPointUnionIn,
                                   unionOutColor: Color = .controlPointOut,
-                                  skinLineWidth: CGFloat = 1, skinRadius: CGFloat = 1.5,
-                                  reciprocalScale s: CGFloat, in ctx: CGContext) {
+                                  skinLineWidth: Real = 1, skinRadius: Real = 1.5,
+                                  reciprocalScale s: Real, in ctx: CGContext) {
         let lineWidth = skinLineWidth * s * 0.5, mor = skinRadius * s
         if var oldLine = lines.last {
             for line in lines {
@@ -673,7 +673,7 @@ struct Line: Codable {
         }
     }
     
-    func draw(size: CGFloat, in ctx: CGContext) {
+    func draw(size: Real, in ctx: CGContext) {
         let s = size / 2
         if ctx.boundingBoxOfClipPath.intersects(imageBounds.inset(by: -s)) {
             if controls.count == 2 {
@@ -708,8 +708,8 @@ struct Line: Codable {
                             t += splitDeltaT
                             let p = bezier.position(withT: t)
                             let pres = t < 0.5 ?
-                                CGFloat.linear(pr0, pr1, t: t * 2) :
-                                CGFloat.linear(pr1, pr2, t: (t - 0.5) * 2)
+                                Real.linear(pr0, pr1, t: t * 2) :
+                                Real.linear(pr1, pr2, t: (t - 0.5) * 2)
                             let dp = bezier.difference(withT: t)
                                 .perpendicularDeltaPoint(withDistance: pres)
                             ctx.addLine(to: p + dp)
@@ -729,7 +729,7 @@ struct Line: Codable {
                             for _ in 0 ..< count {
                                 t += splitDeltaT
                                 let p = bezier.position(withT: t)
-                                let pres = CGFloat.linear(s * previousPressure, s * nextPressure, t: t)
+                                let pres = Real.linear(s * previousPressure, s * nextPressure, t: t)
                                 let dp = bezier.difference(withT: t)
                                     .perpendicularDeltaPoint(withDistance: pres)
                                 ctx.addLine(to: p + dp)
@@ -760,7 +760,7 @@ extension Line.Control: Codable {
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
         let point = try container.decode(Point.self)
-        let pressure = try container.decode(CGFloat.self)
+        let pressure = try container.decode(Real.self)
         self.init(point: point, pressure: pressure)
     }
     func encode(to encoder: Encoder) throws {
@@ -780,15 +780,15 @@ extension Line: Hashable {
     }
 }
 extension Line: Referenceable {
-    static let name = Localization(english: "Line", japanese: "線")
+    static let name = Text(english: "Line", japanese: "線")
 }
 extension Line: Interpolatable {
-    static func linear(_ f0: Line, _ f1: Line, t: CGFloat) -> Line {
+    static func linear(_ f0: Line, _ f1: Line, t: Real) -> Line {
         let count = max(f0.controls.count, f1.controls.count)
         return Line(controls: (0 ..< count).map { i in
             let f0c = f0.control(at: i, maxCount: count), f1c = f1.control(at: i, maxCount: count)
             return Control(point: Point.linear(f0c.point, f1c.point, t: t),
-                           pressure: CGFloat.linear(f0c.pressure, f1c.pressure, t: t))
+                           pressure: Real.linear(f0c.pressure, f1c.pressure, t: t))
         })
     }
     static func firstMonospline(_ f1: Line, _ f2: Line, _ f3: Line, with ms: Monospline) -> Line {
@@ -799,7 +799,7 @@ extension Line: Interpolatable {
             let f3c = f3.control(at: i, maxCount: count)
             return Control(point: Point.firstMonospline(f1c.point, f2c.point,
                                                           f3c.point, with: ms),
-                           pressure: CGFloat.firstMonospline(f1c.pressure, f2c.pressure,
+                           pressure: Real.firstMonospline(f1c.pressure, f2c.pressure,
                                                              f3c.pressure, with: ms))
         })
     }
@@ -811,7 +811,7 @@ extension Line: Interpolatable {
             let f2c = f2.control(at: i, maxCount: count), f3c = f3.control(at: i, maxCount: count)
             return Control(point: Point.monospline(f0c.point, f1c.point,
                                                      f2c.point, f3c.point, with: ms),
-                           pressure: CGFloat.monospline(f0c.pressure, f1c.pressure,
+                           pressure: Real.monospline(f0c.pressure, f1c.pressure,
                                                         f2c.pressure, f3c.pressure, with: ms))
         })
     }
@@ -823,7 +823,7 @@ extension Line: Interpolatable {
             let f2c = f2.control(at: i, maxCount: count)
             return Control(point: Point.lastMonospline(f0c.point, f1c.point,
                                                          f2c.point, with: ms),
-                           pressure: CGFloat.lastMonospline(f0c.pressure, f1c.pressure,
+                           pressure: Real.lastMonospline(f0c.pressure, f1c.pressure,
                                                             f2c.pressure, with: ms))
         })
     }
@@ -858,18 +858,18 @@ extension Line: ObjectViewExpression {
 }
 
 extension Array where Element == Line {
-    static let triangleName = Localization(english: "Triangle", japanese: "正三角形")
-    static let squareName = Localization(english: "Square", japanese: "正方形")
-    static let pentagonName = Localization(english: "Pentagon", japanese: "正五角形")
-    static let hexagonName = Localization(english: "Hexagon", japanese: "正六角形")
-    static let circleName = Localization(english: "Circle", japanese: "円")
+    static let triangleName = Text(english: "Triangle", japanese: "正三角形")
+    static let squareName = Text(english: "Square", japanese: "正方形")
+    static let pentagonName = Text(english: "Pentagon", japanese: "正五角形")
+    static let hexagonName = Text(english: "Hexagon", japanese: "正六角形")
+    static let circleName = Text(english: "Circle", japanese: "円")
     
     static func triangle(centerPosition cp: Point = Point(),
-                         radius r: CGFloat = 50) -> [Line] {
+                         radius r: Real = 50) -> [Line] {
         return regularPolygon(centerPosition: cp, radius: r, count: 3)
     }
     static func square(centerPosition cp: Point = Point(),
-                       polygonRadius r: CGFloat = 50) -> [Line] {
+                       polygonRadius r: Real = 50) -> [Line] {
         let p0 = Point(x: cp.x - r, y: cp.y - r), p1 = Point(x: cp.x + r, y: cp.y - r)
         let p2 = Point(x: cp.x + r, y: cp.y + r), p3 = Point(x: cp.x - r, y: cp.y + r)
         let l0 = Line(controls: [Line.Control(point: p0, pressure: 1),
@@ -896,17 +896,17 @@ extension Array where Element == Line {
         return [l0, l1, l2, l3]
     }
     static func pentagon(centerPosition cp: Point = Point(),
-                         radius r: CGFloat = 50) -> [Line] {
+                         radius r: Real = 50) -> [Line] {
         return regularPolygon(centerPosition: cp, radius: r, count: 5)
     }
     static func hexagon(centerPosition cp: Point = Point(),
-                        radius r: CGFloat = 50) -> [Line] {
+                        radius r: Real = 50) -> [Line] {
         return regularPolygon(centerPosition: cp, radius: r, count: 6)
     }
     static func circle(centerPosition cp: Point = Point(),
-                       radius r: CGFloat = 50) -> [Line] {
+                       radius r: Real = 50) -> [Line] {
         let count = 8
-        let theta = .pi / CGFloat(count)
+        let theta = .pi / Real(count)
         let fp = Point(x: cp.x, y: cp.y + r)
         let points = [Point].circle(centerPosition: cp,
                                       radius: r / cos(theta),
@@ -915,8 +915,8 @@ extension Array where Element == Line {
         let newPoints = [fp] + points + [fp]
         return [Line(controls: newPoints.map { Line.Control(point: $0, pressure: 1) })]
     }
-    static func regularPolygon(centerPosition cp: Point = Point(), radius r: CGFloat = 50,
-                               firstAngle: CGFloat = .pi / 2, count: Int) -> [Line] {
+    static func regularPolygon(centerPosition cp: Point = Point(), radius r: Real = 50,
+                               firstAngle: Real = .pi / 2, count: Int) -> [Line] {
         let points = [Point].circle(centerPosition: cp, radius: r,
                                       firstAngle: firstAngle, count: count)
         return points.enumerated().map {
@@ -929,10 +929,10 @@ extension Array where Element == Line {
 }
 extension Array where Element == Point {
     static func circle(centerPosition cp: Point = Point(),
-                       radius r: CGFloat = 50,
-                       firstAngle: CGFloat = .pi / 2,
+                       radius r: Real = 50,
+                       firstAngle: Real = .pi / 2,
                        count: Int) -> [Point] {
-        var angle = firstAngle, theta = (2 * .pi) / CGFloat(count)
+        var angle = firstAngle, theta = (2 * .pi) / Real(count)
         return (0 ..< count).map { _ in
             let p = Point(x: cp.x + r * cos(angle), y: cp.y + r * sin(angle))
             angle += theta
@@ -971,7 +971,7 @@ struct LineLasso {
     }
     
     struct SplitIndex {
-        let startIndex: Int, startT: CGFloat, endIndex: Int, endT: CGFloat
+        let startIndex: Int, startT: Real, endIndex: Int, endT: Real
     }
     func splitIndexes(_ otherLine: Line, isMultiLine: Bool = true) -> [SplitIndex]? {
         func intersectsLineImageBounds(_ otherLine: Line) -> Bool {

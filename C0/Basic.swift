@@ -20,8 +20,8 @@
 import Foundation
 
 extension Double {
-    var cg: CGFloat {
-        return CGFloat(self)
+    var cg: Real {
+        return Real(self)
     }
 }
 
@@ -75,7 +75,7 @@ extension Data {
     }
 }
 extension Data: Referenceable {
-    static let name = Localization(english: "Data", japanese: "データ")
+    static let name = Text(english: "Data", japanese: "データ")
 }
 
 final class LockTimer {

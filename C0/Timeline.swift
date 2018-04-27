@@ -25,7 +25,7 @@ import Foundation
  Issue: sceneを取り除く
  Issue: スクロールの可視性の改善
  */
-final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
+final class TimelineView: View, Queryable, Assignable, Newable, Scrollable, Zoomable {
     var scene = Scene() {
         didSet {
             _scrollPoint.x = x(withTime: scene.time)
@@ -60,7 +60,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         didSet {
             if editedKeyframeTime != oldValue {
 //                let oldFrame = curretEditKeyframeTimeView.frame
-//                curretEditKeyframeTimeView.rationalNumber = scene.curretEditKeyframeTime
+//                curretEditKeyframeTimeView.rational = scene.curretEditKeyframeTime
 //                curretEditKeyframeTimeView.frame.origin.x = oldFrame.maxX - curretEditKeyframeTimeView.bounds.width
             }
         }
@@ -88,13 +88,13 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
     static let leftWidth = 80.0.cg
 //    let curretEditKeyframeTimeExpressionView = ExpressionView(sizeType: .small)
     
-    let baseTimeIntervalView = DiscreteRationalNumberView(model: Q(1, 16),
+    let baseTimeIntervalView = DiscreteRationalView(model: Rational(1, 16),
                                                           option: Scene.timeIntervalOption,
                                                           frame: Layout.valueFrame(with: .regular))
     
     let formTimeRulerView = RulerView()
-    let tempoView = DiscreteRealNumberView(model: 120,
-                                           option: RealNumberOption(defaultModel: 120,
+    let tempoView = DiscreteRealView(model: 120,
+                                           option: RealOption(defaultModel: 120,
                                                                     minModel: 1, maxModel: 10000,
                                                                     modelInterval: 1, exp: 1,
                                                                     numberOfDigits: 0, unit: " bpm"),
@@ -104,7 +104,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
     let tempoAnimationView = AnimationView(height: defaultSumKeyTimesHeight)
     let soundWaveformView = SoundWaveformView()
     let cutViewsView = View(isForm: true)
-    let classSumAnimationNameView = TextView(text: Localization(english: "Sum:", japanese: "合計:"),
+    let classSumAnimationNameView = TextView(text: Text(english: "Sum:", japanese: "合計:"),
                                              font: .small)
     let sumKeyTimesClipView = View(isForm: true)
     let sumKeyTimesView = AnimationView(height: defaultSumKeyTimesHeight)
@@ -353,7 +353,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
     private func updateView(isCut: Bool, isTransform: Bool, isKeyframe: Bool) {
         if isKeyframe {
             updateKeyframeView()
-//            curretEditKeyframeTimeView.rationalNumber = scene.curretEditKeyframeTime
+//            curretEditKeyframeTimeView.rational = scene.curretEditKeyframeTime
             tempoView.model = scene.tempoTrack.tempoItem.tempo
         }
         if isCut {
@@ -444,7 +444,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
                                  beginBaseTime: scene.cutTrack.time(at: $0.offset), height: cutHeight)
         }
     }
-    func bindedCutView(with cut: Cut, beginBaseTime: Beat = 0, height: CGFloat) -> CutView {
+    func bindedCutView(with cut: Cut, beginBaseTime: Beat = 0, height: Real) -> CutView {
         let cutView = CutView(cut,
                               beginBaseTime: beginBaseTime,
                               baseWidth: baseWidth,
@@ -623,7 +623,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         let padding = Layout.basicPadding
         let path = CGMutablePath()
         let rects: [Rect] = (intMinTime ... intMaxTime).map {
-            let i0x = x(withDoubleBeatTime: DoubleBeat($0)) + minX
+            let i0x = x(withDoubleBeatTime: RealBeat($0)) + minX
             let w = beatsPerBar != 0 && $0 % beatsPerBar == 0 ? barLineWidth : beatsLineWidth
             return Rect(x: i0x - w / 2, y: padding, width: w, height: bounds.height - padding * 2)
         }
@@ -635,27 +635,27 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         return Rect(x: _scrollPoint.x, y: 0, width: x(withTime: scene.duration), height: 0)
     }
     
-    func time(withLocalX x: CGFloat, isBased: Bool = true) -> Beat {
+    func time(withLocalX x: Real, isBased: Bool = true) -> Beat {
         return isBased ?
             scene.baseTimeInterval * Beat(Int(round(x / baseWidth))) :
             scene.basedBeatTime(withDoubleBeatTime:
-                DoubleBeat(x / baseWidth) * DoubleBeat(scene.baseTimeInterval))
+                RealBeat(x / baseWidth) * RealBeat(scene.baseTimeInterval))
     }
-    func x(withTime time: Beat) -> CGFloat {
-        return scene.doubleBeatTime(withBeatTime: time / scene.baseTimeInterval) * baseWidth
+    func x(withTime time: Beat) -> Real {
+        return scene.realBeatTime(withBeatTime: time / scene.baseTimeInterval) * baseWidth
     }
-    func doubleBeatTime(withLocalX x: CGFloat, isBased: Bool = true) -> DoubleBeat {
-        return DoubleBeat(isBased ? round(x / baseWidth) : x / baseWidth)
-            * DoubleBeat(scene.baseTimeInterval)
+    func realBeatTime(withLocalX x: Real, isBased: Bool = true) -> RealBeat {
+        return RealBeat(isBased ? round(x / baseWidth) : x / baseWidth)
+            * RealBeat(scene.baseTimeInterval)
     }
-    func x(withDoubleBeatTime doubleBeatTime: DoubleBeat) -> CGFloat {
-        return CGFloat(doubleBeatTime * DoubleBeat(scene.baseTimeInterval.inversed!)) * baseWidth
+    func x(withDoubleBeatTime realBeatTime: RealBeat) -> Real {
+        return Real(realBeatTime * RealBeat(scene.baseTimeInterval.inversed!)) * baseWidth
     }
-    func doubleBaseTime(withLocalX x: CGFloat) -> DoubleBaseTime {
-        return DoubleBaseTime(x / baseWidth)
+    func realBaseTime(withLocalX x: Real) -> RealBaseTime {
+        return RealBaseTime(x / baseWidth)
     }
-    func localX(withDoubleBaseTime doubleBaseTime: DoubleBaseTime) -> CGFloat {
-        return CGFloat(doubleBaseTime) * baseWidth
+    func localX(withRealBaseTime realBaseTime: RealBaseTime) -> Real {
+        return Real(realBaseTime) * baseWidth
     }
     func beatTime(withBaseTime baseTime: BaseTime) -> Beat {
         return baseTime * scene.baseTimeInterval
@@ -663,17 +663,17 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
     func baseTime(withBeatTime beatTime: Beat) -> BaseTime {
         return beatTime / scene.baseTimeInterval
     }
-    func basedBeatTime(withDoubleBaseTime doubleBaseTime: DoubleBaseTime) -> Beat {
-        return Beat(Int(doubleBaseTime)) * scene.baseTimeInterval
+    func basedBeatTime(withRealBaseTime realBaseTime: RealBaseTime) -> Beat {
+        return Beat(Int(realBaseTime)) * scene.baseTimeInterval
     }
-    func doubleBaseTime(withBeatTime beatTime: Beat) -> DoubleBaseTime {
-        return DoubleBaseTime(beatTime / scene.baseTimeInterval)
+    func realBaseTime(withBeatTime beatTime: Beat) -> RealBaseTime {
+        return RealBaseTime(beatTime / scene.baseTimeInterval)
     }
-    func doubleBaseTime(withX x: CGFloat) -> DoubleBaseTime {
-        return DoubleBaseTime(x / baseWidth)
+    func realBaseTime(withX x: Real) -> RealBaseTime {
+        return RealBaseTime(x / baseWidth)
     }
-    func basedBeatTime(withDoubleBeatTime doubleBeatTime: DoubleBeat) -> Beat {
-        return Beat(Int(doubleBeatTime / DoubleBeat(scene.baseTimeInterval))) * scene.baseTimeInterval
+    func basedBeatTime(withDoubleBeatTime realBeatTime: RealBeat) -> Beat {
+        return Beat(Int(realBeatTime / RealBeat(scene.baseTimeInterval))) * scene.baseTimeInterval
     }
     func clipDeltaTime(withTime time: Beat) -> Beat {
         let ft = baseTime(withBeatTime: time)
@@ -683,7 +683,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
             beatTime(withBaseTime: floor(ft)) - time
     }
     
-    func cutIndex(withLocalX x: CGFloat) -> Int {
+    func cutIndex(withLocalX x: Real) -> Int {
         return scene.cutTrack.index(atTime: time(withLocalX: x))
     }
     func cutIndex(withTime time: Beat) -> Int {
@@ -693,17 +693,17 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         return scene.cutTrack.movingCutIndex(withTime: time)
     }
     
-    var editX: CGFloat {
+    var editX: Real {
         return bounds.midX - TimelineView.leftWidth
     }
     
-    var localDeltaX: CGFloat {
+    var localDeltaX: Real {
         return editX - _intervalScrollPoint.x
     }
-    func convertToLocalX(_ x: CGFloat) -> CGFloat {
+    func convertToLocalX(_ x: Real) -> Real {
         return x - TimelineView.leftWidth - localDeltaX
     }
-    func convertFromLocalX(_ x: CGFloat) -> CGFloat {
+    func convertFromLocalX(_ x: Real) -> Real {
         return x - TimelineView.leftWidth + localDeltaX
     }
     func convertToLocal(_ p: Point) -> Point {
@@ -718,7 +718,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         guard cut.editNode.editTrack.animation.keyframes.count > 0 else {
             fatalError()
         }
-        var minD = CGFloat.infinity, minI = 0
+        var minD = Real.infinity, minI = 0
         for (i, k) in cut.editNode.editTrack.animation.keyframes.enumerated() {
             let x = self.x(withTime: ct + k.time)
             let d = abs(p.x - x)
@@ -740,7 +740,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
     func trackIndexTuple(at p: Point) -> (cutIndex: Int, trackIndex: Int, keyframeIndex: Int?) {
         let ci = cutIndex(withLocalX: p.x)
         let cut = scene.cuts[ci], ct = scene.cutTrack.animation.keyframes[ci].time
-        var minD = CGFloat.infinity, minKeyframeIndex = 0, minTrackIndex = 0
+        var minD = Real.infinity, minKeyframeIndex = 0, minTrackIndex = 0
         for (ii, track) in cut.editNode.tracks.enumerated() {
             for (i, k) in track.animation.keyframes.enumerated() {
                 let x = self.x(withTime: ct + k.time)
@@ -914,11 +914,11 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
             }
         }
         let index = minIndex != nil ? minIndex! + 1 : 0
-        return Localization(english: "Node \(index)", japanese: "ノード\(index)").currentString
+        return Text(english: "Node \(index)", japanese: "ノード\(index)").currentString
     }
     func newNode() {
         let node = Node(name: newNodeName)
-        node.editTrack.name = Localization(english: "Track 0", japanese: "トラック0").currentString
+        node.editTrack.name = Text(english: "Track 0", japanese: "トラック0").currentString
         append(node, in: editCutView)
     }
     func pasteFromNodesView(_ objects: [Any], for p: Point) {
@@ -1003,7 +1003,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
             }
         }
         let index = minIndex != nil ? minIndex! + 1 : 0
-        return Localization(english: "Track \(index)", japanese: "トラック\(index)").currentString
+        return Text(english: "Track \(index)", japanese: "トラック\(index)").currentString
     }
     func newNodeTrack() {
         let cutView = cutViews[scene.editCutIndex]
@@ -1596,7 +1596,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
     
     private var baseTimeIntervalOldTime = Second(0)
     private var floatBaseTimeInterval = 0.0.cg, beginBaseTimeInterval = Beat(1)
-    func zoom(for p: Point, time: Second, magnification: CGFloat, _ phase: Phase) {
+    func zoom(for p: Point, time: Second, magnification: Real, _ phase: Phase) {
         switch phase {
         case .began:
             baseTimeIntervalOldTime = scene.secondTime(withBeatTime: scene.time)
@@ -1636,8 +1636,8 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
     }
     
     func reference(at p: Point) -> Reference {
-        return Reference(name: Localization(english: "Timeline", japanese: "タイムライン"),
-                         viewDescription: Localization(english: "Select time: Left and right scroll\nSelect track: Up and down scroll",
+        return Reference(name: Text(english: "Timeline", japanese: "タイムライン"),
+                         viewDescription: Text(english: "Select time: Left and right scroll\nSelect track: Up and down scroll",
                                                        japanese: "時間選択: 左右スクロール\nトラック選択: 上下スクロール"))
     }
 }

@@ -31,7 +31,7 @@ final class SoundItem: TrackItem, Codable {
     func step(_ f0: Int) {
         sound = keySounds[f0]
     }
-    func linear(_ f0: Int, _ f1: Int, t: CGFloat) {
+    func linear(_ f0: Int, _ f1: Int, t: Real) {
         sound = keySounds[f0]
     }
     func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
@@ -56,7 +56,7 @@ extension SoundItem: ClassDeepCopiable {
     }
 }
 extension SoundItem: Referenceable {
-    static let name = Localization(english: "Sound Item", japanese: "サウンドアイテム")
+    static let name = Text(english: "Sound Item", japanese: "サウンドアイテム")
 }
 
 struct Sound {
@@ -131,11 +131,11 @@ struct Sound {
     }
     func dBFSs(withSplitCount count: Int) -> [Float] {
         let samples = self.samples()
-        let rc = 1 / CGFloat(count - 1)
+        let rc = 1 / Real(count - 1)
         var oldSampleIndex = 0
         return (1 ..< count).map { i in
-            let t = CGFloat(i) * rc
-            let sampleIndex = Int(CGFloat(samples.count - 1) * t)
+            let t = Real(i) * rc
+            let sampleIndex = Int(Real(samples.count - 1) * t)
             let subSamples = samples[oldSampleIndex...sampleIndex]
             let p: Float
             if oldSampleIndex < sampleIndex {
@@ -173,7 +173,7 @@ extension Sound: Codable {
     }
 }
 extension Sound: Referenceable {
-    static let name = Localization(english: "Sound", japanese: "サウンド")
+    static let name = Text(english: "Sound", japanese: "サウンド")
 }
 extension Sound: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
@@ -215,19 +215,19 @@ final class SoundWaveformView: View {
         }
     }
     
-    func x(withDoubleBeatTime doubleBeatTime: DoubleBeat) -> CGFloat {
-        return CGFloat(doubleBeatTime * DoubleBeat(baseTimeInterval.inversed!)) * baseWidth
+    func x(withDoubleBeatTime realBeatTime: RealBeat) -> Real {
+        return Real(realBeatTime * RealBeat(baseTimeInterval.inversed!)) * baseWidth
     }
     
     private(set) var secondDuration = Second(0)
-    private(set) var duration = DoubleBeat(0) {
+    private(set) var duration = RealBeat(0) {
         didSet {
             frame.size.width = x(withDoubleBeatTime: duration)
         }
     }
     let waveformView = View(path: CGMutablePath())
     
-    init(height: CGFloat = 12) {
+    init(height: Real = 12) {
         super.init()
         frame.size.height = height
         isClipped = true
@@ -244,20 +244,20 @@ final class SoundWaveformView: View {
                 return
             }
             secondDuration = Second(Double(samples.count) / sampleRate)
-            duration = tempoTrack.doubleBeatTime(withSecondTime: secondDuration)
+            duration = tempoTrack.realBeatTime(withSecondTime: secondDuration)
             
             
             let path = CGMutablePath()
             let count = Int(frame.width / 5)
-            let rc = 1 / CGFloat(count - 1)
+            let rc = 1 / Real(count - 1)
             
             let midY = bounds.midY, halfH = frame.height / 2
-            func y(withSample sample: SoundSample) -> CGFloat {
-                return midY + halfH * CGFloat(sample)
+            func y(withSample sample: SoundSample) -> Real {
+                return midY + halfH * Real(sample)
             }
             path.addLines(between: (0..<count).map { i in
-                let xt = CGFloat(i) * rc
-                let si = Int(CGFloat(samples.count - 1) * xt)
+                let xt = Real(i) * rc
+                let si = Int(Real(samples.count - 1) * xt)
                 return Point(x: frame.width * xt, y: y(withSample: samples[si]))
             })
             waveformView.lineColor = .content
@@ -274,23 +274,23 @@ final class SoundWaveformView: View {
                     return
                 }
                 secondDuration = Second(Double(samples.count) / sampleRate)
-                duration = tempoTrack.doubleBeatTime(withSecondTime: secondDuration)
+                duration = tempoTrack.realBeatTime(withSecondTime: secondDuration)
                 
                 let count = Int(frame.width / 5)
                 dBFSs = sound.dBFSs(withSplitCount: count)
                 cacheDBFSs = dBFSs
             } else {
-                duration = tempoTrack.doubleBeatTime(withSecondTime: secondDuration)
+                duration = tempoTrack.realBeatTime(withSecondTime: secondDuration)
                 dBFSs = cacheDBFSs
             }
             
             let path = CGMutablePath()
             path.move(to: Point(x: bounds.width, y: 0))
             path.addLine(to: Point(x: 0, y: 0))
-            let rc = 1 / CGFloat(dBFSs.count - 1)
+            let rc = 1 / Real(dBFSs.count - 1)
             dBFSs.enumerated().forEach { i, spl in
-                let xt = CGFloat(i) * rc
-                let yt = 1 + CGFloat(spl).clip(min: -30, max: 0) / 30
+                let xt = Real(i) * rc
+                let yt = 1 + Real(spl).clip(min: -30, max: 0) / 30
                 path.addLine(to: Point(x: frame.width * xt, y: frame.height * yt))
             }
             waveformView.fillColor = .content
@@ -303,10 +303,10 @@ final class SoundWaveformView: View {
  Issue: 効果音編集
  Issue: シーケンサー
  */
-final class SoundView: View, Assignable {
+final class SoundView: View, Queryable, Assignable {
     var sound = Sound() {
         didSet {
-            nameView.text = sound.url != nil ? Localization(sound.name) : ""
+            nameView.text = sound.url != nil ? Text(sound.name) : ""
         }
     }
     

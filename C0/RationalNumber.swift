@@ -19,8 +19,7 @@
 
 import Foundation
 
-typealias Q = RationalNumber
-struct RationalNumber: AdditiveGroup, SignedNumeric {
+struct Rational: AdditiveGroup, SignedNumeric {
     var p, q: Int
     init(_ p: Int, _ q: Int) {
         guard q != 0 else {
@@ -39,7 +38,7 @@ struct RationalNumber: AdditiveGroup, SignedNumeric {
             return nil
         }
     }
-    init(_ x: CGFloat, maxDenominator: Int = 10000000, tolerance: CGFloat = 0.000001) {
+    init(_ x: Real, maxDenominator: Int = 10000000, tolerance: Real = 0.000001) {
         var x = x
         var a = floor(x)
         var p1 = Int(a), q1 = 1
@@ -67,7 +66,7 @@ struct RationalNumber: AdditiveGroup, SignedNumeric {
         fatalError()
     }
     
-    static func continuedFractions(with x: CGFloat, maxCount: Int = 32) -> [Int] {
+    static func continuedFractions(with x: Real, maxCount: Int = 32) -> [Int] {
         var x = x, cfs = [Int]()
         var a = floor(x)
         for _ in 0..<maxCount {
@@ -81,23 +80,23 @@ struct RationalNumber: AdditiveGroup, SignedNumeric {
         return cfs
     }
     
-    var inversed: RationalNumber? {
-        return p == 0 ? nil : RationalNumber(q, p)
+    var inversed: Rational? {
+        return p == 0 ? nil : Rational(q, p)
     }
     var integralPart: Int {
         return p / q
     }
-    var decimalPart: RationalNumber {
-        return self - RationalNumber(integralPart)
+    var decimalPart: Rational {
+        return self - Rational(integralPart)
     }
     var isInteger: Bool {
         return q == 1
     }
-    var integerAndProperFraction: (integer: Int, properFraction: RationalNumber) {
+    var integerAndProperFraction: (integer: Int, properFraction: Rational) {
         let i = integralPart
-        return isInteger ? (i, RationalNumber(0, 1)) : (i, self - RationalNumber(i))
+        return isInteger ? (i, Rational(0, 1)) : (i, self - Rational(i))
     }
-    func interval(scale: RationalNumber) -> RationalNumber {
+    func interval(scale: Rational) -> Rational {
         if scale == 0 {
             return self
         } else {
@@ -106,52 +105,52 @@ struct RationalNumber: AdditiveGroup, SignedNumeric {
         }
     }
     
-    var magnitude: RationalNumber {
-        return RationalNumber(abs(p), q)
+    var magnitude: Rational {
+        return Rational(abs(p), q)
     }
-    typealias Magnitude = RationalNumber
+    typealias Magnitude = Rational
     
-    static func +(lhs: RationalNumber, rhs: RationalNumber) -> RationalNumber {
-        return RationalNumber(lhs.p * rhs.q + lhs.q * rhs.p, lhs.q * rhs.q)
+    static func +(lhs: Rational, rhs: Rational) -> Rational {
+        return Rational(lhs.p * rhs.q + lhs.q * rhs.p, lhs.q * rhs.q)
     }
-    static func +=(lhs: inout RationalNumber, rhs: RationalNumber) {
+    static func +=(lhs: inout Rational, rhs: Rational) {
         lhs = lhs + rhs
     }
-    static func -=(lhs: inout RationalNumber, rhs: RationalNumber) {
+    static func -=(lhs: inout Rational, rhs: Rational) {
         lhs = lhs - rhs
     }
-    static func *=(lhs: inout RationalNumber, rhs: RationalNumber) {
+    static func *=(lhs: inout Rational, rhs: Rational) {
         lhs = lhs * rhs
     }
-    prefix static func -(x: RationalNumber) -> RationalNumber {
-        return RationalNumber(-x.p, x.q)
+    prefix static func -(x: Rational) -> Rational {
+        return Rational(-x.p, x.q)
     }
-    static func *(lhs: RationalNumber, rhs: RationalNumber) -> RationalNumber {
-        return RationalNumber(lhs.p * rhs.p, lhs.q * rhs.q)
+    static func *(lhs: Rational, rhs: Rational) -> Rational {
+        return Rational(lhs.p * rhs.p, lhs.q * rhs.q)
     }
-    static func /(lhs: RationalNumber, rhs: RationalNumber) -> RationalNumber {
-        return RationalNumber(lhs.p * rhs.q, lhs.q * rhs.p)
+    static func /(lhs: Rational, rhs: Rational) -> Rational {
+        return Rational(lhs.p * rhs.q, lhs.q * rhs.p)
     }
 }
-extension RationalNumber {
-    static let basicEffectiveFieldOfView: Q = Q(152, 100)
+extension Rational {
+    static let basicEffectiveFieldOfView = Rational(152, 100)
 }
-extension RationalNumber: Equatable {
-    static func ==(lhs: RationalNumber, rhs: RationalNumber) -> Bool {
+extension Rational: Equatable {
+    static func ==(lhs: Rational, rhs: Rational) -> Bool {
         return lhs.p * rhs.q == lhs.q * rhs.p
     }
 }
-extension RationalNumber: Comparable {
-    static func <(lhs: RationalNumber, rhs: RationalNumber) -> Bool {
+extension Rational: Comparable {
+    static func <(lhs: Rational, rhs: Rational) -> Bool {
         return lhs.p * rhs.q < rhs.p * lhs.q
     }
 }
-extension RationalNumber: Hashable {
+extension Rational: Hashable {
     var hashValue: Int {
         return Hash.uniformityHashValue(with: [p.hashValue, q.hashValue])
     }
 }
-extension RationalNumber: Codable {
+extension Rational: Codable {
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
         let p = try container.decode(Int.self)
@@ -164,15 +163,16 @@ extension RationalNumber: Codable {
         try container.encode(q)
     }
 }
-extension RationalNumber: Referenceable {
-    static let name = Localization(english: "Rational Number", japanese: "有理数")
+extension Rational: Referenceable {
+    static let name = Text(english: "Rational Number (\(MemoryLayout<Rational>.size * 8)bit)",
+                                   japanese: "有理数 (\(MemoryLayout<Rational>.size * 8)bit)")
 }
-extension RationalNumber: ObjectViewExpression {
+extension Rational: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return description.view(withBounds: bounds, sizeType)
     }
 }
-extension RationalNumber: CustomStringConvertible {
+extension Rational: CustomStringConvertible {
     var description: String {
         switch q {
         case 1:  return "\(p)"
@@ -180,29 +180,29 @@ extension RationalNumber: CustomStringConvertible {
         }
     }
 }
-extension RationalNumber: ExpressibleByIntegerLiteral {
+extension Rational: ExpressibleByIntegerLiteral {
     typealias IntegerLiteralType = Int
     init(integerLiteral value: Int) {
         self.init(value)
     }
 }
-extension CGFloat {
-    init(_ x: RationalNumber) {
-        self = CGFloat(x.p) / CGFloat(x.q)
+extension Real {
+    init(_ x: Rational) {
+        self = Real(x.p) / Real(x.q)
     }
 }
-func floor(_ x: RationalNumber) -> RationalNumber {
+func floor(_ x: Rational) -> Rational {
     let i = x.integralPart
-    return RationalNumber(x.decimalPart.p == 0 ? i : (x < 0 ? i - 1 : i))
+    return Rational(x.decimalPart.p == 0 ? i : (x < 0 ? i - 1 : i))
 }
-func ceil(_ x: RationalNumber) -> RationalNumber {
-    return RationalNumber(x.decimalPart.p == 0 ? x.integralPart : x.integralPart + 1)
+func ceil(_ x: Rational) -> Rational {
+    return Rational(x.decimalPart.p == 0 ? x.integralPart : x.integralPart + 1)
 }
 
-final class RationalNumberView: View, Copiable {
-    var rationalNumber: RationalNumber {
+final class RationalView: View, Queryable, Copiable {
+    var rational: Rational {
         didSet {
-            updateWithRationalNumber()
+            updateWithRational()
         }
     }
     
@@ -215,7 +215,7 @@ final class RationalNumberView: View, Copiable {
     }
     var unit: String {
         didSet {
-            updateWithRationalNumber()
+            updateWithRational()
         }
     }
     
@@ -226,16 +226,16 @@ final class RationalNumberView: View, Copiable {
     let unitView: TextView
     let formLinePathView = View(path: CGMutablePath())
     
-    init(rationalNumber: RationalNumber = 0,
+    init(rational: Rational = 0,
          isIntegerAndProperFraction: Bool = true, unit: String = "",
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
-        self.rationalNumber = rationalNumber
+        self.rational = rational
         self.isIntegerAndProperFraction = isIntegerAndProperFraction
         self.unit = unit
         self.sizeType = sizeType
         integerView = IntView(model: 0, option: IntGetterOption(unit: ""), sizeType: sizeType)
-        formPlusView = TextView(text: Text("+"), font: Font.default(with: sizeType))
+        formPlusView = TextView(text: "+", font: Font.default(with: sizeType))
         pView = IntView(model: 0, option: IntGetterOption(unit: ""), sizeType: sizeType)
         qView = IntView(model: 1, option: IntGetterOption(unit: ""), sizeType: sizeType)
         unitView = TextView(text: Text(unit), font: Font.default(with: sizeType))
@@ -259,17 +259,17 @@ final class RationalNumberView: View, Copiable {
         }
     }
     private func updateLayout() {
-        updateWithRationalNumber()
+        updateWithRational()
     }
-    private func updateWithRationalNumber() {
+    private func updateWithRational() {
         if isIntegerAndProperFraction {
-            let (integer, properFraction) = rationalNumber.integerAndProperFraction
+            let (integer, properFraction) = rational.integerAndProperFraction
             integerView.model = integer
             pView.model = properFraction.p
             qView.model = properFraction.q
         } else {
-            pView.model = rationalNumber.p
-            qView.model = rationalNumber.q
+            pView.model = rational.p
+            qView.model = rational.q
         }
         
         let padding = Layout.padding(with: sizeType)
@@ -281,16 +281,16 @@ final class RationalNumberView: View, Copiable {
     }
     
     func copiedViewables(at p: Point) -> [Viewable] {
-        return [rationalNumber]
+        return [rational]
     }
     
     func reference(at p: Point) -> Reference {
-        return RationalNumber.reference
+        return Rational.reference
     }
 }
 
-struct RationalNumberOption: OneDimensionalOption {
-    typealias Model = RationalNumber
+struct RationalOption: OneDimensionalOption {
+    typealias Model = Rational
     
     var defaultModel: Model
     var minModel: Model
@@ -306,25 +306,25 @@ struct RationalNumberOption: OneDimensionalOption {
     func string(with model: Model) -> String {
         return "\(model)"
     }
-    func text(with model: Model) -> Localization {
-        return Localization("\(model)\(unit)")
+    func text(with model: Model) -> Text {
+        return Text("\(model)\(unit)")
     }
-    func ratio(with model: Model) -> CGFloat {
-        return CGFloat((model - minModel) / (maxModel - minModel))
+    func ratio(with model: Model) -> Real {
+        return Real((model - minModel) / (maxModel - minModel))
     }
-    func ratioFromDefaultModel(with model: Model) -> CGFloat {
+    func ratioFromDefaultModel(with model: Model) -> Real {
         if model < defaultModel {
-            return CGFloat((model - minModel) / (defaultModel - minModel)) * 0.5
+            return Real((model - minModel) / (defaultModel - minModel)) * 0.5
         } else {
-            return CGFloat((model - defaultModel) / (maxModel - defaultModel)) * 0.5 + 0.5
+            return Real((model - defaultModel) / (maxModel - defaultModel)) * 0.5 + 0.5
         }
     }
     
-    private func model(withDelta delta: CGFloat) -> Model {
+    private func model(withDelta delta: Real) -> Model {
         let d = Model(delta) * modelInterval
         return d.interval(scale: modelInterval)
     }
-    func model(withDelta delta: CGFloat, oldModel: Model) -> Model {
+    func model(withDelta delta: Real, oldModel: Model) -> Model {
         let newModel: Model
         if isInfinitesimal {
             if oldModel.q == 1 {
@@ -339,8 +339,8 @@ struct RationalNumberOption: OneDimensionalOption {
         }
         return newModel.clip(min: minModel, max: maxModel)
     }
-    func model(withRatio ratio: CGFloat) -> Model {
-        return (maxModel - minModel) * RationalNumber(ratio) + minModel
+    func model(withRatio ratio: Real) -> Model {
+        return (maxModel - minModel) * Rational(ratio) + minModel
     }
 }
-typealias DiscreteRationalNumberView = DiscreteOneDimensionalView<RationalNumber, RationalNumberOption>
+typealias DiscreteRationalView = DiscreteOneDimensionalView<Rational, RationalOption>

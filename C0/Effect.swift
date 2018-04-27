@@ -32,24 +32,24 @@ enum BlendType: Int8, Codable, Equatable, Hashable {
             return .plusDarker
         }
     }
-    var displayText: Localization {
+    var displayText: Text {
         switch self {
         case .normal:
-            return Localization(english: "Normal", japanese: "通常")
+            return Text(english: "Normal", japanese: "通常")
         case .add:
-            return Localization(english: "Add", japanese: "加算")
+            return Text(english: "Add", japanese: "加算")
         case .subtract:
-            return Localization(english: "Subtract", japanese: "減算")
+            return Text(english: "Subtract", japanese: "減算")
         }
     }
-    static var displayTexts: [Localization] {
+    static var displayTexts: [Text] {
         return [normal.displayText,
                 add.displayText,
                 subtract.displayText]
     }
 }
 extension BlendType: Referenceable {
-    static let name = Localization(english: "Blend Type", japanese: "ブレンドタイプ")
+    static let name = Text(english: "Blend Type", japanese: "ブレンドタイプ")
 }
 extension BlendType: ObjectViewExpressionWithDisplayText {
 }
@@ -63,49 +63,49 @@ struct Effect: Codable, Equatable, Hashable {
         return self == Effect()
     }
     
-    static func displayText(with keyPath: PartialKeyPath<Effect>) -> Localization {
+    static func displayText(with keyPath: PartialKeyPath<Effect>) -> Text {
         switch keyPath {
         case \Effect.blendType:
-            return Localization(english: "Blend Type", japanese: "ブレンドタイプ")
+            return Text(english: "Blend Type", japanese: "ブレンドタイプ")
         case \Effect.blurRadius:
-            return Localization(english: "Blur Radius", japanese: "ブラー半径")
+            return Text(english: "Blur Radius", japanese: "ブラー半径")
         case \Effect.opacity:
-            return Localization(english: "Opacity", japanese: "不透明度")
+            return Text(english: "Opacity", japanese: "不透明度")
         default:
             fatalError("No case")
         }
     }
 }
 extension Effect: Referenceable {
-    static let name = Localization(english: "Effect", japanese: "エフェクト")
+    static let name = Text(english: "Effect", japanese: "エフェクト")
 }
 extension Effect: Interpolatable {
-    static func linear(_ f0: Effect, _ f1: Effect, t: CGFloat) -> Effect {
-        let blur = CGFloat.linear(f0.blurRadius, f1.blurRadius, t: t)
-        let opacity = CGFloat.linear(f0.opacity, f1.opacity, t: t)
+    static func linear(_ f0: Effect, _ f1: Effect, t: Real) -> Effect {
+        let blur = Real.linear(f0.blurRadius, f1.blurRadius, t: t)
+        let opacity = Real.linear(f0.opacity, f1.opacity, t: t)
         let blendType = f0.blendType
         return Effect(blendType: blendType, blurRadius: blur, opacity: opacity)
     }
     static func firstMonospline(_ f1: Effect, _ f2: Effect, _ f3: Effect,
                                 with ms: Monospline) -> Effect {
-        let blur = CGFloat.firstMonospline(f1.blurRadius, f2.blurRadius, f3.blurRadius, with: ms)
-        let opacity = CGFloat.firstMonospline(f1.opacity, f2.opacity, f3.opacity, with: ms)
+        let blur = Real.firstMonospline(f1.blurRadius, f2.blurRadius, f3.blurRadius, with: ms)
+        let opacity = Real.firstMonospline(f1.opacity, f2.opacity, f3.opacity, with: ms)
         let blendType = f1.blendType
         return Effect(blendType: blendType, blurRadius: blur, opacity: opacity)
     }
     static func monospline(_ f0: Effect, _ f1: Effect, _ f2: Effect, _ f3: Effect,
                            with ms: Monospline) -> Effect {
-        let blur = CGFloat.monospline(f0.blurRadius, f1.blurRadius,
+        let blur = Real.monospline(f0.blurRadius, f1.blurRadius,
                                       f2.blurRadius, f3.blurRadius, with: ms)
-        let opacity = CGFloat.monospline(f0.opacity, f1.opacity,
+        let opacity = Real.monospline(f0.opacity, f1.opacity,
                                          f2.opacity, f3.opacity, with: ms)
         let blendType = f1.blendType
         return Effect(blendType: blendType, blurRadius: blur, opacity: opacity)
     }
     static func lastMonospline(_ f0: Effect, _ f1: Effect, _ f2: Effect,
                                with ms: Monospline) -> Effect {
-        let blur = CGFloat.lastMonospline(f0.blurRadius, f1.blurRadius, f2.blurRadius, with: ms)
-        let opacity = CGFloat.lastMonospline(f0.opacity, f1.opacity, f2.opacity, with: ms)
+        let blur = Real.lastMonospline(f0.blurRadius, f1.blurRadius, f2.blurRadius, with: ms)
+        let opacity = Real.lastMonospline(f0.opacity, f1.opacity, f2.opacity, with: ms)
         let blendType = f1.blendType
         return Effect(blendType: blendType, blurRadius: blur, opacity: opacity)
     }
@@ -116,7 +116,7 @@ extension Effect: ObjectViewExpression {
     }
 }
 
-final class EffectView: View, Assignable {
+final class EffectView: View, Queryable, Assignable {
     var effect: Effect {
         didSet {
             if effect != oldValue {
@@ -138,7 +138,7 @@ final class EffectView: View, Assignable {
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
         classNameView = TextView(text: Effect.name, font: Font.bold(with: sizeType))
-        let blurPropertyText = Effect.displayText(with: \Effect.blurRadius) + Text(":")
+        let blurPropertyText = Effect.displayText(with: \Effect.blurRadius) + ":"
         classBlurNameView = TextView(text: blurPropertyText, font: Font.default(with: sizeType))
         blurView = SlidableNumberView.widthViewWith(min: 0, max: 500, exp: 3, sizeType)
         opacityView = SlidableNumberView.opacityView(sizeType)

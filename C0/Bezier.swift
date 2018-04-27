@@ -20,7 +20,7 @@
 import Foundation
 
 struct BezierIntersection: Codable {
-    var t: CGFloat, isLeft: Bool, point: Point
+    var t: Real, isLeft: Bool, point: Point
 }
 struct Bezier2: Equatable, Codable {
     var p0 = Point(), cp = Point(), p1 = Point()
@@ -82,21 +82,21 @@ struct Bezier2: Equatable, Codable {
         return AABB(self).rect
     }
     
-    func length(withFlatness flatness: Int = 128) -> CGFloat {
+    func length(withFlatness flatness: Int = 128) -> Real {
         var d = 0.0.cg, oldP = p0
-        let nd = 1 / CGFloat(flatness)
+        let nd = 1 / Real(flatness)
         for i in 0 ..< flatness {
-            let newP = position(withT: CGFloat(i + 1) * nd)
+            let newP = position(withT: Real(i + 1) * nd)
             d += oldP.distance(newP)
             oldP = newP
         }
         return d
     }
-    func t(withLength length: CGFloat, flatness: Int = 128) -> CGFloat {
+    func t(withLength length: Real, flatness: Int = 128) -> Real {
         var d = 0.0.cg, oldP = p0
-        let nd = 1 / CGFloat(flatness)
+        let nd = 1 / Real(flatness)
         for i in 0 ..< flatness {
-            let t = CGFloat(i + 1) * nd
+            let t = Real(i + 1) * nd
             let newP = position(withT: t)
             d += oldP.distance(newP)
             if d > length {
@@ -106,15 +106,15 @@ struct Bezier2: Equatable, Codable {
         }
         return 1
     }
-    func difference(withT t: CGFloat) -> Point {
+    func difference(withT t: Real) -> Point {
         return Point(x: 2 * (cp.x - p0.x) + 2 * (p0.x - 2 * cp.x + p1.x) * t,
                        y: 2 * (cp.y - p0.y) + 2 * (p0.y - 2 * cp.y + p1.y) * t)
     }
-    func tangential(withT t: CGFloat) -> CGFloat {
+    func tangential(withT t: Real) -> Real {
         return atan2(2 * (cp.y - p0.y) + 2 * (p0.y - 2 * cp.y + p1.y) * t,
                      2 * (cp.x - p0.x) + 2 * (p0.x - 2 * cp.x + p1.x) * t)
     }
-    func position(withT t: CGFloat) -> Point {
+    func position(withT t: Real) -> Point {
         let rt = 1 - t
         return Point(x: rt * rt * p0.x + 2 * t * rt * cp.x + t * t * p1.x,
                        y: rt * rt * p0.y + 2 * t * rt * cp.y + t * t * p1.y)
@@ -124,7 +124,7 @@ struct Bezier2: Equatable, Codable {
         let p = p0cp.mid(cpp1)
         return (Bezier2(p0: p0, cp: p0cp, p1: p), Bezier2(p0: p, cp: cpp1, p1: p1))
     }
-    func clip(startT t0: CGFloat, endT t1: CGFloat) -> Bezier2 {
+    func clip(startT t0: Real, endT t1: Real) -> Bezier2 {
         let rt0 = 1 - t0, rt1 = 1 - t1
         let t0p0cp = Point(x: rt0 * p0.x + t0 * cp.x, y: rt0 * p0.y + t0 * cp.y)
         let t0cpp1 = Point(x: rt0 * cp.x + t0 * p1.x, y: rt0 * cp.y + t0 * p1.y)
@@ -159,8 +159,8 @@ struct Bezier2: Equatable, Codable {
         return intersects(other, 0, 1, 0, 1, isFlipped: false)
     }
     private static let intersectsMinRange = 0.000001.cg
-    private func intersects(_ other: Bezier2, _ min0: CGFloat, _ max0: CGFloat,
-                            _ min1: CGFloat, _ max1: CGFloat, isFlipped: Bool) -> Bool {
+    private func intersects(_ other: Bezier2, _ min0: Real, _ max0: Real,
+                            _ min1: Real, _ max1: Real, isFlipped: Bool) -> Bool {
         
         let aabb0 = AABB(self), aabb1 = AABB(other)
         if !aabb0.intersects(aabb1) {
@@ -188,7 +188,7 @@ struct Bezier2: Equatable, Codable {
         return results
     }
     private func intersections(_ other: Bezier2, _ results: inout [BezierIntersection],
-                               _ min0: CGFloat, _ max0: CGFloat, _ min1: CGFloat, _ max1: CGFloat,
+                               _ min0: Real, _ max0: Real, _ min1: Real, _ max1: Real,
                                isFlipped: Bool) {
         let aabb0 = AABB(self), aabb1 = AABB(other)
         if !aabb0.intersects(aabb1) {
@@ -219,7 +219,7 @@ struct Bezier2: Equatable, Codable {
         if !isSolution() {
             return
         }
-        let b0t: CGFloat, b1t: CGFloat, b0: Bezier2, b1:Bezier2
+        let b0t: Real, b1t: Real, b0: Bezier2, b1:Bezier2
         if !isFlipped {
             b0t = (min0 + max0) / 2
             b1t = min1 + range1 / 2
@@ -273,12 +273,12 @@ struct Bezier2: Equatable, Codable {
         return []
     }
     
-    func nearest(at p: Point) -> (t: CGFloat, distance²: CGFloat) {
+    func nearest(at p: Point) -> (t: Real, distance²: Real) {
         guard !isLineaer else {
             let d = p.distanceWithLineSegment(ap: p0, bp: p1)
             return (p.tWithLineSegment(ap: p0, bp: p1), d * d)
         }
-        func solveCubic(_ a: CGFloat, _ b: CGFloat, _ c: CGFloat) -> [CGFloat] {
+        func solveCubic(_ a: Real, _ b: Real, _ c: Real) -> [Real] {
             let p = b - a * a / 3, q = a * (2 * a * a - 9 * b) / 27 + c
             let p3 = p * p * p
             let d = q * q + 4 * p3 / 27
@@ -293,7 +293,7 @@ struct Bezier2: Equatable, Codable {
                 return [offset + u * (m + m), offset - u * (n + m), offset + u * (n - m)]
             }
         }
-        func dot(_ a: Point, _ b: Point) -> CGFloat {
+        func dot(_ a: Point, _ b: Point) -> Real {
             return a.x * b.x + a.y * b.y
         }
         let a = p0 - 2 * cp + p1, b = 2 * (cp - p0), c = p0
@@ -319,11 +319,11 @@ struct Bezier2: Equatable, Codable {
         }
         return (minT, minD)
     }
-    func minDistance²(at p: Point) -> CGFloat {
+    func minDistance²(at p: Point) -> Real {
         return nearest(at: p).distance²
     }
     private static let distanceMinRange = 0.0000001.cg
-    func maxDistance²(at p: Point) -> CGFloat {
+    func maxDistance²(at p: Point) -> Real {
         let d = max(p0.distance²(p), p1.distance²(p)), dcp = cp.distance²(p)
         if d >= dcp {
             return d
@@ -343,14 +343,14 @@ struct Bezier3: Codable {
     }
     var bounds: Rect {
         struct MinMax {
-            var min: CGFloat, max: CGFloat
+            var min: Real, max: Real
         }
-        func minMaxWith(_ f0: CGFloat, _ f1: CGFloat, _ f2: CGFloat, _ f3: CGFloat) -> MinMax {
+        func minMaxWith(_ f0: Real, _ f1: Real, _ f2: Real, _ f3: Real) -> MinMax {
             var minMax = MinMax(min: min(f0, f3), max: max(f0, f3))
             let a = f3 - 3 * (f2 - f1) - f0, b = 3 * (f2 - 2 * f1 + f0), c = 3 * (f1 - f0)
             let delta = b * b - 3 * a * c
             if delta > 0 {
-                func ts(with t: CGFloat) -> CGFloat {
+                func ts(with t: Real) -> Real {
                     let tp = 1 - t
                     return tp * tp * tp * f0 + 3 * tp * tp * t * f1
                         + 3 * tp * t * t * f2 + t * t * t * f3
@@ -371,21 +371,21 @@ struct Bezier3: Codable {
         return Rect(x: minMaxX.min, y: minMaxY.min,
                       width: minMaxX.max - minMaxX.min, height: minMaxY.max - minMaxY.min)
     }
-    func length(flatness: Int = 128) -> CGFloat {
+    func length(flatness: Int = 128) -> Real {
         var d = 0.0.cg, oldP = p0
-        let nd = 1 / CGFloat(flatness)
+        let nd = 1 / Real(flatness)
         for i in 0 ..< flatness {
-            let newP = position(withT: CGFloat(i + 1) * nd)
+            let newP = position(withT: Real(i + 1) * nd)
             d += oldP.distance(newP)
             oldP = newP
         }
         return d
     }
-    func tWith(length: CGFloat, flatness: Int = 128) -> CGFloat {
+    func tWith(length: Real, flatness: Int = 128) -> Real {
         var d = 0.0.cg, oldP = p0
-        let nd = 1 / CGFloat(flatness)
+        let nd = 1 / Real(flatness)
         for i in 0 ..< flatness {
-            let t = CGFloat(i + 1) * nd
+            let t = Real(i + 1) * nd
             let newP = position(withT: t)
             d += oldP.distance(newP)
             if d > length {
@@ -398,7 +398,7 @@ struct Bezier3: Codable {
     var boundingBox: Rect {
         return AABB(self).rect
     }
-    func split(withT t: CGFloat) -> (b0: Bezier3, b1: Bezier3) {
+    func split(withT t: Real) -> (b0: Bezier3, b1: Bezier3) {
         let b0cp0 = Point.linear(p0, cp0, t: t)
         let cp0cp1 = Point.linear(cp0, cp1, t: t)
         let b1cp1 = Point.linear(cp1, p1, t: t)
@@ -415,7 +415,7 @@ struct Bezier3: Codable {
         return (Bezier3(p0: p0, cp0: b0cp0, cp1: b0cp1, p1: p),
                 Bezier3(p0: p, cp0: b1cp0, cp1: b1cp1, p1: p1))
     }
-    func y(withX x: CGFloat) -> CGFloat {
+    func y(withX x: Real) -> Real {
         var y = 0.0.cg
         let sb = split(withT: 0.5)
         if !sb.b0.y(withX: x, y: &y) {
@@ -424,7 +424,7 @@ struct Bezier3: Codable {
         return y
     }
     static private let yMinRange = 0.000001.cg
-    private func y(withX x: CGFloat, y: inout CGFloat) -> Bool {
+    private func y(withX x: Real, y: inout Real) -> Bool {
         let aabb = AABB(self)
         if aabb.minX < x && aabb.maxX >= x {
             if aabb.maxY - aabb.minY < Bezier3.yMinRange {
@@ -442,19 +442,19 @@ struct Bezier3: Codable {
             return false
         }
     }
-    func position(withT t: CGFloat) -> Point {
+    func position(withT t: Real) -> Point {
         let dt = 1 - t, t³ = t * t * t, t² = t * t, dt³ = dt * dt * dt, dt² = dt * dt
         let x = t³ * p1.x + 3 * t² * dt * cp1.x + 3 * t * dt² * cp0.x + dt³ * p0.x
         let y = t³ * p1.y + 3 * t² * dt * cp1.y + 3 * t * dt² * cp0.y + dt³ * p0.y
         return Point(x: x, y: y)
     }
-    func difference(withT t: CGFloat) -> Point {
+    func difference(withT t: Real) -> Point {
         let tp = 1 - t
         let dx = 3 * (t * t * (p1.x - cp1.x) + 2 * t * tp * (cp1.x - cp0.x) + tp * tp * (cp0.x - p0.x))
         let dy = 3 * (t * t * (p1.y - cp1.y) + 2 * t * tp * (cp1.y - cp0.y) + tp * tp * (cp0.y - p0.y))
         return Point(x: dx, y: dy)
     }
-    func tangential(withT t: CGFloat) -> CGFloat {
+    func tangential(withT t: Real) -> Real {
         let dp = difference(withT: t)
         return atan2(dp.y, dp.x)
     }
@@ -480,8 +480,8 @@ struct Bezier3: Codable {
     }
     private static let intersectsMinRange = 0.000001.cg
     private func intersects(_ other: Bezier3,
-                            _ min0: CGFloat, _ max0: CGFloat,
-                            _ min1: CGFloat, _ max1: CGFloat, _ isFlipped: Bool) -> Bool {
+                            _ min0: Real, _ max0: Real,
+                            _ min1: Real, _ max1: Real, _ isFlipped: Bool) -> Bool {
         
         let aabb0 = AABB(self), aabb1 = AABB(other)
         if aabb0.minX <= aabb1.maxX && aabb0.maxX >= aabb1.minX
@@ -510,8 +510,8 @@ struct Bezier3: Codable {
         return results
     }
     private func intersections(_ other: Bezier3, _ results: inout [BezierIntersection],
-                               _ min0: CGFloat, _ max0: CGFloat,
-                               _ min1: CGFloat, _ max1: CGFloat, _ flip: Bool) {
+                               _ min0: Real, _ max0: Real,
+                               _ min1: Real, _ max1: Real, _ flip: Bool) {
         
         let aabb0 = AABB(self), aabb1 = AABB(other)
         if aabb0.minX <= aabb1.maxX && aabb0.maxX >= aabb1.minX
@@ -530,7 +530,7 @@ struct Bezier3: Codable {
                     }
                 }
                 if isSolution {
-                    let b0t: CGFloat, b1t: CGFloat, b0: Bezier3, b1:Bezier3
+                    let b0t: Real, b1t: Real, b0: Bezier3, b1:Bezier3
                     if !flip {
                         b0t = (min0 + max0) / 2
                         b1t = min1 + range1 / 2

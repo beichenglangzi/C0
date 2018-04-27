@@ -230,7 +230,7 @@ extension Array: Viewable & DeepCopiable where Element: Viewable & DeepCopiable 
     }
 }
 
-final class AnyArrayView: View, Copiable {
+final class AnyArrayView: View, Queryable, Copiable {
     var array = [Viewable]()
     
     init(children: [View] = [], frame: Rect = Rect()) {
@@ -245,11 +245,11 @@ final class AnyArrayView: View, Copiable {
     }
     
     func reference(at p: Point) -> Reference {
-        return Reference(name: Localization(english: "Array", japanese: "配列"))
+        return Reference(name: Text(english: "Array", japanese: "配列"))
     }
 }
 
-final class ArrayView<T: Viewable & DeepCopiable>: View, Copiable {
+final class ArrayView<T: Viewable & DeepCopiable>: View, Queryable, Copiable {
     var array = [T]()
     
     init(children: [View] = [], frame: Rect = Rect()) {
@@ -268,7 +268,7 @@ final class ArrayView<T: Viewable & DeepCopiable>: View, Copiable {
     }
 }
 
-final class ArrayCountView<T: Viewable & DeepCopiable>: View {
+final class ArrayCountView<T: Viewable & DeepCopiable>: View, Queryable, Copiable {
     var array = [T]() {
         didSet {
             countView.model = array.count
@@ -284,7 +284,7 @@ final class ArrayCountView<T: Viewable & DeepCopiable>: View {
          sizeType: SizeType = .regular) {
         self.array = array
         classNameView = TextView(text: [T].name, font: Font.bold(with: sizeType))
-        classCountNameView = TextView(text: Localization(english: "Count:", japanese: "個数:"),
+        classCountNameView = TextView(text: Text(english: "Count:", japanese: "個数:"),
                                       font: Font.default(with: sizeType))
         countView = IntView(model: array.count, option: IntGetterOption(unit: ""), sizeType: sizeType)
         
@@ -334,7 +334,7 @@ final class ArrayCountView<T: Viewable & DeepCopiable>: View {
 /**
  Issue: ツリー操作が複雑
  */
-final class ListArrayView: View, Assignable, Newable, Movable {
+final class ListArrayView: View, Queryable, Assignable, Newable, Movable {
     private let nameLineView: View = {
         let lineView = View(path: CGMutablePath())
         lineView.fillColor = .subContent
@@ -358,7 +358,7 @@ final class ListArrayView: View, Assignable, Newable, Movable {
     }
     private(set) var selectedIndex = 0
     private(set) var count = 0
-    var nameClosure: ((Int) -> (Localization))? {
+    var nameClosure: ((Int) -> (Text))? {
         didSet {
             updateLayout()
         }
@@ -374,16 +374,16 @@ final class ListArrayView: View, Assignable, Newable, Movable {
     
     private let indexHeight = Layout.basicHeight - Layout.basicPadding * 2
     
-    func flootIndex(atY y: CGFloat) -> CGFloat {
+    func flootIndex(atY y: Real) -> Real {
         let selectedY = bounds.midY - indexHeight / 2
-        return (y - selectedY) / indexHeight + CGFloat(selectedIndex)
+        return (y - selectedY) / indexHeight + Real(selectedIndex)
     }
-    func index(atY y: CGFloat) -> Int {
+    func index(atY y: Real) -> Int {
         return Int(flootIndex(atY: y))
     }
-    func y(at index: Int) -> CGFloat {
+    func y(at index: Int) -> Real {
         let selectedY = bounds.midY - indexHeight / 2
-        return CGFloat(index - selectedIndex) * indexHeight + selectedY
+        return Real(index - selectedIndex) * indexHeight + selectedY
     }
     
     override var bounds: Rect {
@@ -436,7 +436,7 @@ final class ListArrayView: View, Assignable, Newable, Movable {
         
         if let treeLevelClosure = treeLevelClosure {
             treeLevelTextViews = (minIndex...maxIndex).map {
-                let treeLevelTextView = TextView(text: Localization("\(treeLevelClosure($0))"))
+                let treeLevelTextView = TextView(text: Text("\(treeLevelClosure($0))"))
                 treeLevelTextView.fillColor = nil
                 treeLevelTextView.frame.origin = Point(x: knobPaddingWidth, y: y(at: $0))
                 knobLinePath.addRect(Rect(x: knobPaddingWidth / 2 - 2,
@@ -476,7 +476,7 @@ final class ListArrayView: View, Assignable, Newable, Movable {
     }
     
     var moveClosure: ((ListArrayView, Point, Phase) -> ())?
-    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         moveClosure?(self, p, phase)
     }
     

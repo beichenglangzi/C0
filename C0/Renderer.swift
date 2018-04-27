@@ -94,7 +94,7 @@ final class SceneMovieRenderer {
     var screenTransform = Transform()
     
     func writeMovie(to url: URL,
-                    progressClosure: @escaping (CGFloat, UnsafeMutablePointer<Bool>) -> Void,
+                    progressClosure: @escaping (Real, UnsafeMutablePointer<Bool>) -> Void,
                     completionClosure: @escaping (Error?) -> ()) throws {
         let colorSpace = CGColorSpace.default
         guard let colorSpaceProfile = colorSpace.iccData else {
@@ -139,7 +139,7 @@ final class SceneMovieRenderer {
         for i in 0 ..< allFrameCount {
             autoreleasepool {
                 while !writerInput.isReadyForMoreMediaData {
-                    progressClosure(CGFloat(i) / CGFloat(allFrameCount - 1), &stop)
+                    progressClosure(Real(i) / Real(allFrameCount - 1), &stop)
                     if stop {
                         append = false
                         return
@@ -178,7 +178,7 @@ final class SceneMovieRenderer {
             if !append {
                 break
             }
-            progressClosure(CGFloat(i) / CGFloat(allFrameCount - 1), &stop)
+            progressClosure(Real(i) / Real(allFrameCount - 1), &stop)
             if stop {
                 break
             }
@@ -316,7 +316,7 @@ final class RendererManager {
                                                                height: Layout.basicHeight),
                                                  name: e.url.deletingPathExtension().lastPathComponent,
                                                  type: e.url.pathExtension.uppercased(),
-                                                 state: Localization(english: "Exporting",
+                                                 state: Text(english: "Exporting",
                                                                      japanese: "書き出し中"))
             let operation = BlockOperation()
             progressBar.operation = operation
@@ -324,7 +324,7 @@ final class RendererManager {
             self.beginProgress(progressBar)
             
             operation.addExecutionBlock() { [unowned operation] in
-                let progressClosure: (CGFloat, UnsafeMutablePointer<Bool>) -> () =
+                let progressClosure: (Real, UnsafeMutablePointer<Bool>) -> () =
                 { (totalProgress, stop) in
                     if operation.isCancelled {
                         stop.pointee = true
@@ -349,7 +349,7 @@ final class RendererManager {
                         }
                     } catch {
                         OperationQueue.main.addOperation() {
-                            progressBar.state = Localization(english: "Error", japanese: "エラー")
+                            progressBar.state = Text(english: "Error", japanese: "エラー")
                             progressBar.nameView.textFrame.color = .warning
                         }
                     }
@@ -360,7 +360,7 @@ final class RendererManager {
                                             completionClosure: completionClosure)
                 } catch {
                     OperationQueue.main.addOperation() {
-                        progressBar.state = Localization(english: "Error", japanese: "エラー")
+                        progressBar.state = Text(english: "Error", japanese: "エラー")
                         progressBar.nameView.textFrame.color = .warning
                     }
                 }
@@ -389,7 +389,7 @@ final class RendererManager {
     }
     
     func exportSubtitles() -> Bool {
-        let message = Localization(english: "Export Subtitles",
+        let message = Text(english: "Export Subtitles",
                                    japanese: "字幕として書き出す").currentString
         URL.file(message: message, name: nil, fileTypes: ["vtt"]) { [unowned self] exportURL in
             let vttData = self.scene.vtt
@@ -407,7 +407,7 @@ final class RendererManager {
     func showError(withName name: String) {
         let progressBar = ProgressNumberView()
         progressBar.name = name
-        progressBar.state = Localization(english: "Error", japanese: "エラー")
+        progressBar.state = Text(english: "Error", japanese: "エラー")
         progressBar.nameView.textFrame.color = .warning
         progressBar.deleteClosure = { [unowned self] in self.endProgress($0) }
         beginProgress(progressBar)

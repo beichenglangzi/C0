@@ -22,19 +22,19 @@ import Foundation
 struct Keyframe: Codable, Equatable, Hashable {
     enum Interpolation: Int8, Codable {
         case spline, bound, linear, step
-        var displayText: Localization {
+        var displayText: Text {
             switch self {
             case .spline:
-                return Localization(english: "Spline", japanese: "スプライン")
+                return Text(english: "Spline", japanese: "スプライン")
             case .bound:
-                return Localization(english: "Bound", japanese: "バウンド")
+                return Text(english: "Bound", japanese: "バウンド")
             case .linear:
-                return Localization(english: "Linear", japanese: "リニア")
+                return Text(english: "Linear", japanese: "リニア")
             case .step:
-                return Localization(english: "Step", japanese: "ステップ")
+                return Text(english: "Step", japanese: "ステップ")
             }
         }
-        static var displayTexts: [Localization] {
+        static var displayTexts: [Text] {
             return [spline.displayText,
                     bound.displayText,
                     linear.displayText,
@@ -43,17 +43,17 @@ struct Keyframe: Codable, Equatable, Hashable {
     }
     enum Loop: Int8, Codable {
         case none, began, ended
-        var displayText: Localization {
+        var displayText: Text {
             switch self {
             case .none:
-                return Localization(english: "None", japanese: "なし")
+                return Text(english: "None", japanese: "なし")
             case .began:
-                return Localization(english: "Began", japanese: "開始")
+                return Text(english: "Began", japanese: "開始")
             case .ended:
-                return Localization(english: "Ended", japanese: "終了")
+                return Text(english: "Ended", japanese: "終了")
             }
         }
-        static var displayTexts: [Localization] {
+        static var displayTexts: [Text] {
             return [none.displayText,
                     began.displayText,
                     ended.displayText]
@@ -61,15 +61,15 @@ struct Keyframe: Codable, Equatable, Hashable {
     }
     enum Label: Int8, Codable {
         case main, sub
-        var displayText: Localization {
+        var displayText: Text {
             switch self {
             case .main:
-                return Localization(english: "Main", japanese: "メイン")
+                return Text(english: "Main", japanese: "メイン")
             case .sub:
-                return Localization(english: "Sub", japanese: "サブ")
+                return Text(english: "Sub", japanese: "サブ")
             }
         }
-        static var displayTexts: [Localization] {
+        static var displayTexts: [Text] {
             return [main.displayText,
                     sub.displayText]
         }
@@ -97,7 +97,7 @@ struct Keyframe: Codable, Equatable, Hashable {
     }
 }
 extension Keyframe: Referenceable {
-    static let name = Localization(english: "Keyframe", japanese: "キーフレーム")
+    static let name = Text(english: "Keyframe", japanese: "キーフレーム")
 }
 extension Keyframe: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
@@ -105,29 +105,29 @@ extension Keyframe: ObjectViewExpression {
     }
 }
 extension Keyframe.Interpolation: Referenceable {
-    static let uninheritanceName = Localization(english: "Interpolation", japanese: "補間")
+    static let uninheritanceName = Text(english: "Interpolation", japanese: "補間")
     static let name = Keyframe.name.spacedUnion(uninheritanceName)
-    static let classDescription = Localization(english: "\"Bound\": Uses \"Spline\" without interpolation on previous, Not previous and next: Use \"Linear\"",
+    static let classDescription = Text(english: "\"Bound\": Uses \"Spline\" without interpolation on previous, Not previous and next: Use \"Linear\"",
                                                japanese: "バウンド: 前方側の補間をしないスプライン補間, 前後が足りない場合: リニア補間を使用")
 }
 extension Keyframe.Interpolation: ObjectViewExpressionWithDisplayText {
 }
 extension Keyframe.Loop: Referenceable {
-    static let uninheritanceName = Localization(english: "Loop", japanese: "ループ")
+    static let uninheritanceName = Text(english: "Loop", japanese: "ループ")
     static let name = Keyframe.name.spacedUnion(uninheritanceName)
-    static let classDescription = Localization(english: "Loop from \"Began Loop\" keyframe to \"Ended Loop\" keyframe on \"Ended Loop\" keyframe",
+    static let classDescription = Text(english: "Loop from \"Began Loop\" keyframe to \"Ended Loop\" keyframe on \"Ended Loop\" keyframe",
                                                japanese: "「ループ開始」キーフレームから「ループ終了」キーフレームの間を「ループ終了」キーフレーム上でループ")
 }
 extension Keyframe.Loop: ObjectViewExpressionWithDisplayText {
 }
 extension Keyframe.Label: Referenceable {
-    static let uninheritanceName = Localization(english: "Label", japanese: "ラベル")
+    static let uninheritanceName = Text(english: "Label", japanese: "ラベル")
     static let name = Keyframe.name.spacedUnion(uninheritanceName)
 }
 extension Keyframe.Label: ObjectViewExpressionWithDisplayText {
 }
 
-final class KeyframeView: View, Assignable {
+final class KeyframeView: View, Queryable, Assignable {
     var keyframe = Keyframe() {
         didSet {
             if !keyframe.equalOption(other: oldValue) {

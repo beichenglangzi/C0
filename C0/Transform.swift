@@ -37,7 +37,7 @@ struct Transform: Codable {
                                                         scale: scale, rotation: rotation)
         }
     }
-    var z: CGFloat {
+    var z: Real {
         get {
             return _z
         }
@@ -49,8 +49,8 @@ struct Transform: Codable {
                                                         scale: scale, rotation: rotation)
         }
     }
-    private var _scale: Point, _z: CGFloat
-    var rotation: CGFloat {
+    private var _scale: Point, _z: Real
+    var rotation: Real {
         didSet {
             affineTransform = Transform.affineTransform(translation: translation,
                                                         scale: scale, rotation: rotation)
@@ -58,11 +58,11 @@ struct Transform: Codable {
     }
     private(set) var affineTransform: CGAffineTransform
     
-    static let zOption = RealNumberOption(defaultModel: 0, minModel: -20, maxModel: 20,
+    static let zOption = RealOption(defaultModel: 0, minModel: -20, maxModel: 20,
                                           modelInterval: 0.01, exp: 1,
                                           numberOfDigits: 2, unit: "")
     
-    init(translation: Point = Point(), z: CGFloat = 0, rotation: CGFloat = 0) {
+    init(translation: Point = Point(), z: Real = 0, rotation: Real = 0) {
         let pow2 = pow(2, z)
         self.translation = translation
         _scale = Point(x: pow2, y: pow2)
@@ -71,7 +71,7 @@ struct Transform: Codable {
         affineTransform = Transform.affineTransform(translation: translation,
                                                     scale: _scale, rotation: rotation)
     }
-    init(translation: Point = Point(), scale: Point, rotation: CGFloat = 0) {
+    init(translation: Point = Point(), scale: Point, rotation: Real = 0) {
         self.translation = translation
         _z = log2(scale.x)
         _scale = scale
@@ -79,7 +79,7 @@ struct Transform: Codable {
         affineTransform = Transform.affineTransform(translation: translation,
                                                     scale: scale, rotation: rotation)
     }
-    private init(translation: Point, z: CGFloat, scale: Point, rotation: CGFloat) {
+    private init(translation: Point, z: Real, scale: Point, rotation: Real) {
         self.translation = translation
         _z = z
         _scale = scale
@@ -89,7 +89,7 @@ struct Transform: Codable {
     }
     
     private static func affineTransform(translation: Point,
-                                        scale: Point, rotation: CGFloat) -> CGAffineTransform {
+                                        scale: Point, rotation: Real) -> CGAffineTransform {
         var affine = CGAffineTransform(translationX: translation.x, y: translation.y)
         if rotation != 0 {
             affine = affine.rotated(by: rotation)
@@ -111,11 +111,11 @@ extension Transform: Equatable {
     }
 }
 extension Transform: Interpolatable {
-    static func linear(_ f0: Transform, _ f1: Transform, t: CGFloat) -> Transform {
+    static func linear(_ f0: Transform, _ f1: Transform, t: Real) -> Transform {
         let translation = Point.linear(f0.translation, f1.translation, t: t)
-        let scaleX = CGFloat.linear(f0.scale.x, f1.scale.x, t: t)
-        let scaleY = CGFloat.linear(f0.scale.y, f1.scale.y, t: t)
-        let rotation = CGFloat.linear(f0.rotation, f1.rotation, t: t)
+        let scaleX = Real.linear(f0.scale.x, f1.scale.x, t: t)
+        let scaleY = Real.linear(f0.scale.y, f1.scale.y, t: t)
+        let rotation = Real.linear(f0.rotation, f1.rotation, t: t)
         return Transform(translation: translation,
                          scale: Point(x: scaleX, y: scaleY), rotation: rotation)
     }
@@ -123,9 +123,9 @@ extension Transform: Interpolatable {
                                 with ms: Monospline) -> Transform {
         let translation = Point.firstMonospline(f1.translation, f2.translation,
                                                   f3.translation, with: ms)
-        let scaleX = CGFloat.firstMonospline(f1.scale.x, f2.scale.x, f3.scale.x, with: ms)
-        let scaleY = CGFloat.firstMonospline(f1.scale.y, f2.scale.y, f3.scale.y, with: ms)
-        let rotation = CGFloat.firstMonospline(f1.rotation, f2.rotation, f3.rotation, with: ms)
+        let scaleX = Real.firstMonospline(f1.scale.x, f2.scale.x, f3.scale.x, with: ms)
+        let scaleY = Real.firstMonospline(f1.scale.y, f2.scale.y, f3.scale.y, with: ms)
+        let rotation = Real.firstMonospline(f1.rotation, f2.rotation, f3.rotation, with: ms)
         return Transform(translation: translation,
                          scale: Point(x: scaleX, y: scaleY), rotation: rotation)
     }
@@ -133,11 +133,11 @@ extension Transform: Interpolatable {
                            with ms: Monospline) -> Transform {
         let translation = Point.monospline(f0.translation, f1.translation,
                                              f2.translation, f3.translation, with: ms)
-        let scaleX = CGFloat.monospline(f0.scale.x, f1.scale.x,
+        let scaleX = Real.monospline(f0.scale.x, f1.scale.x,
                                         f2.scale.x, f3.scale.x, with: ms)
-        let scaleY = CGFloat.monospline(f0.scale.y, f1.scale.y,
+        let scaleY = Real.monospline(f0.scale.y, f1.scale.y,
                                         f2.scale.y, f3.scale.y, with: ms)
-        let rotation = CGFloat.monospline(f0.rotation, f1.rotation,
+        let rotation = Real.monospline(f0.rotation, f1.rotation,
                                           f2.rotation, f3.rotation, with: ms)
         return Transform(translation: translation,
                          scale: Point(x: scaleX, y: scaleY), rotation: rotation)
@@ -147,15 +147,15 @@ extension Transform: Interpolatable {
         
         let translation = Point.lastMonospline(f0.translation, f1.translation,
                                                  f2.translation, with: ms)
-        let scaleX = CGFloat.lastMonospline(f0.scale.x, f1.scale.x, f2.scale.x, with: ms)
-        let scaleY = CGFloat.lastMonospline(f0.scale.y, f1.scale.y, f2.scale.y, with: ms)
-        let rotation = CGFloat.lastMonospline(f0.rotation, f1.rotation, f2.rotation, with: ms)
+        let scaleX = Real.lastMonospline(f0.scale.x, f1.scale.x, f2.scale.x, with: ms)
+        let scaleY = Real.lastMonospline(f0.scale.y, f1.scale.y, f2.scale.y, with: ms)
+        let rotation = Real.lastMonospline(f0.rotation, f1.rotation, f2.rotation, with: ms)
         return Transform(translation: translation,
                          scale: Point(x: scaleX, y: scaleY), rotation: rotation)
     }
 }
 extension Transform: Referenceable {
-    static let name = Localization(english: "Transform", japanese: "トランスフォーム")
+    static let name = Text(english: "Transform", japanese: "トランスフォーム")
 }
 extension Transform: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
@@ -164,7 +164,7 @@ extension Transform: ObjectViewExpression {
 }
 
 
-final class TransformView: View, Assignable {
+final class TransformView: View, Queryable, Assignable {
     var transform = Transform() {
         didSet {
             if transform != oldValue {
@@ -176,18 +176,18 @@ final class TransformView: View, Assignable {
     let translationView = DiscretePointView(xInterval: 0.01, xNumberOfDigits: 2,
                                             yInterval: 0.01, yNumberOfDigits: 2,
                                             sizeType: .regular)
-    let zView = DiscreteRealNumberView(model: 0, option: Transform.zOption,
+    let zView = DiscreteRealView(model: 0, option: Transform.zOption,
                                        frame: Layout.valueFrame(with: .regular))
-    let thetaView = DiscreteRealNumberView(model: 0,
-                                       option: RealNumberOption(defaultModel: 0,
+    let thetaView = DiscreteRealView(model: 0,
+                                       option: RealOption(defaultModel: 0,
                                                             minModel: -10000, maxModel: 10000,
                                                             modelInterval: 0.5, exp: 1,
                                                             numberOfDigits: 1, unit: "°"),
                                        frame: Layout.valueFrame(with: .regular))
     
     private let classNameView = TextView(text: Transform.name, font: .bold)
-    private let classZNameView = TextView(text: Localization("z:"))
-    private let classRotationNameView = TextView(text: Localization("θ:"))
+    private let classZNameView = TextView(text: "z:")
+    private let classRotationNameView = TextView(text: "θ:")
     
     override init() {
         super.init()
@@ -265,7 +265,7 @@ final class TransformView: View, Assignable {
                              transform: transform, oldTransform: oldTransform, phase: obj.phase))
         }
     }
-    private func setTransform(with obj: DiscreteRealNumberView.Binding<RealNumber>) {
+    private func setTransform(with obj: DiscreteRealView.Binding<Real>) {
         if obj.phase == .began {
             oldTransform = transform
             binding?(Binding(transformView: self,

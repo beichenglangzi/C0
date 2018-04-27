@@ -25,23 +25,23 @@ final class Material: NSObject, NSCoding {
         var isDrawLine: Bool {
             return self == .normal
         }
-        var displayText: Localization {
+        var displayText: Text {
             switch self {
             case .normal:
-                return Localization(english: "Normal", japanese: "通常")
+                return Text(english: "Normal", japanese: "通常")
             case .lineless:
-                return Localization(english: "Lineless", japanese: "線なし")
+                return Text(english: "Lineless", japanese: "線なし")
             case .blur:
-                return Localization(english: "Blur", japanese: "ぼかし")
+                return Text(english: "Blur", japanese: "ぼかし")
             case .luster:
-                return Localization(english: "Luster", japanese: "光沢")
+                return Text(english: "Luster", japanese: "光沢")
             case .add:
-                return Localization(english: "Add", japanese: "加算")
+                return Text(english: "Add", japanese: "加算")
             case .subtract:
-                return Localization(english: "Subtract", japanese: "減算")
+                return Text(english: "Subtract", japanese: "減算")
             }
         }
-        static var displayTexts: [Localization] {
+        static var displayTexts: [Text] {
             return [normal.displayText,
                     lineless.displayText,
                     blur.displayText,
@@ -53,13 +53,13 @@ final class Material: NSObject, NSCoding {
     
     let type: MaterialType
     let color: Color, lineColor: Color
-    let lineWidth: CGFloat, opacity: CGFloat
+    let lineWidth: Real, opacity: Real
     let id: UUID
     
     static let defaultLineWidth = 1.0.cg
     init(type: MaterialType = .normal,
          color: Color = Color(), lineColor: Color = .black,
-         lineWidth: CGFloat = defaultLineWidth, opacity: CGFloat = 1) {
+         lineWidth: Real = defaultLineWidth, opacity: Real = 1) {
         
         self.color = color
         self.lineColor = lineColor
@@ -108,12 +108,12 @@ final class Material: NSObject, NSCoding {
                         color: color, lineColor: lineColor,
                         lineWidth: lineWidth, opacity: opacity)
     }
-    func with(lineWidth: CGFloat) -> Material {
+    func with(lineWidth: Real) -> Material {
         return Material(type: type,
                         color: color, lineColor: lineColor,
                         lineWidth: lineWidth, opacity: opacity)
     }
-    func with(opacity: CGFloat) -> Material {
+    func with(opacity: Real) -> Material {
         return Material(type: type,
                         color: color, lineColor: lineColor,
                         lineWidth: lineWidth, opacity: opacity)
@@ -126,18 +126,18 @@ final class Material: NSObject, NSCoding {
 }
 
 extension Material: Referenceable {
-    static let name = Localization(english: "Material", japanese: "マテリアル")
+    static let name = Text(english: "Material", japanese: "マテリアル")
 }
 extension Material: Interpolatable {
-    static func linear(_ f0: Material, _ f1: Material, t: CGFloat) -> Material {
+    static func linear(_ f0: Material, _ f1: Material, t: Real) -> Material {
         guard f0.id != f1.id else {
             return f0
         }
         let type = f0.type
         let color = Color.linear(f0.color, f1.color, t: t)
         let lineColor = Color.linear(f0.lineColor, f1.lineColor, t: t)
-        let lineWidth = CGFloat.linear(f0.lineWidth, f1.lineWidth, t: t)
-        let opacity = CGFloat.linear(f0.opacity, f1.opacity, t: t)
+        let lineWidth = Real.linear(f0.lineWidth, f1.lineWidth, t: t)
+        let opacity = Real.linear(f0.opacity, f1.opacity, t: t)
         return Material(type: type,
                         color: color, lineColor: lineColor,
                         lineWidth: lineWidth, opacity: opacity)
@@ -150,8 +150,8 @@ extension Material: Interpolatable {
         let type = f1.type
         let color = Color.firstMonospline(f1.color, f2.color, f3.color, with: ms)
         let lineColor = Color.firstMonospline(f1.lineColor, f2.lineColor, f3.lineColor, with: ms)
-        let lineWidth = CGFloat.firstMonospline(f1.lineWidth, f2.lineWidth, f3.lineWidth, with: ms)
-        let opacity = CGFloat.firstMonospline(f1.opacity, f2.opacity, f3.opacity, with: ms)
+        let lineWidth = Real.firstMonospline(f1.lineWidth, f2.lineWidth, f3.lineWidth, with: ms)
+        let opacity = Real.firstMonospline(f1.opacity, f2.opacity, f3.opacity, with: ms)
         return Material(type: type,
                         color: color, lineColor: lineColor,
                         lineWidth: lineWidth, opacity: opacity)
@@ -165,9 +165,9 @@ extension Material: Interpolatable {
         let color = Color.monospline(f0.color, f1.color, f2.color, f3.color, with: ms)
         let lineColor = Color.monospline(f0.lineColor, f1.lineColor,
                                          f2.lineColor, f3.lineColor, with: ms)
-        let lineWidth = CGFloat.monospline(f0.lineWidth, f1.lineWidth,
+        let lineWidth = Real.monospline(f0.lineWidth, f1.lineWidth,
                                            f2.lineWidth, f3.lineWidth, with: ms)
-        let opacity = CGFloat.monospline(f0.opacity, f1.opacity, f2.opacity, f3.opacity, with: ms)
+        let opacity = Real.monospline(f0.opacity, f1.opacity, f2.opacity, f3.opacity, with: ms)
         return Material(type: type,
                         color: color, lineColor: lineColor,
                         lineWidth: lineWidth, opacity: opacity)
@@ -180,8 +180,8 @@ extension Material: Interpolatable {
         let type = f1.type
         let color = Color.lastMonospline(f0.color, f1.color, f2.color, with: ms)
         let lineColor = Color.lastMonospline(f0.lineColor, f1.lineColor, f2.lineColor, with: ms)
-        let lineWidth = CGFloat.lastMonospline(f0.lineWidth, f1.lineWidth, f2.lineWidth, with: ms)
-        let opacity = CGFloat.lastMonospline(f0.opacity, f1.opacity, f2.opacity, with: ms)
+        let lineWidth = Real.lastMonospline(f0.lineWidth, f1.lineWidth, f2.lineWidth, with: ms)
+        let opacity = Real.lastMonospline(f0.opacity, f1.opacity, f2.opacity, with: ms)
         return Material(type: type,
                         color: color, lineColor: lineColor,
                         lineWidth: lineWidth, opacity: opacity)
@@ -198,7 +198,7 @@ extension Material: ObjectViewExpression {
     }
 }
 extension Material.MaterialType: Referenceable {
-    static let uninheritanceName = Localization(english: "Type", japanese: "タイプ")
+    static let uninheritanceName = Text(english: "Type", japanese: "タイプ")
     static let name = Keyframe.name.spacedUnion(uninheritanceName)
 }
 extension Material.MaterialType {
@@ -221,7 +221,7 @@ extension SlidableNumberView {
         return SlidableNumberView(number: 1, defaultNumber: 1, min: 0, max: 1, sizeType: sizeType)
     }
     private static func opacityViewViews(with bounds: Rect,
-                                         checkerWidth: CGFloat, padding: CGFloat) -> [View] {
+                                         checkerWidth: Real, padding: Real) -> [View] {
         let frame = Rect(x: padding, y: bounds.height / 2 - checkerWidth,
                            width: bounds.width - padding * 2, height: checkerWidth * 2)
         
@@ -247,12 +247,12 @@ extension SlidableNumberView {
     }
 }
 extension SlidableNumberView {
-    static func widthViewWith(min: CGFloat, max: CGFloat, exp: CGFloat,
+    static func widthViewWith(min: Real, max: Real, exp: Real,
                               _ sizeType: SizeType = .regular) -> SlidableNumberView {
         return SlidableNumberView(min: min, max: max, exp: exp, sizeType: sizeType)
     }
     private static func widthView(with bounds: Rect,
-                                   halfWidth: CGFloat, padding: CGFloat) -> View {
+                                   halfWidth: Real, padding: Real) -> View {
         let path = CGMutablePath()
         path.addLines(between: [Point(x: padding,y: bounds.height / 2),
                                 Point(x: bounds.width - padding,
@@ -276,7 +276,7 @@ extension SlidableNumberView {
 /**
  Issue: 「線の強さ」を追加
  */
-final class MaterialView: View, Assignable {
+final class MaterialView: View, Queryable, Assignable {
     var material: Material {
         didSet {
             guard material.id != oldValue.id else {
@@ -304,7 +304,7 @@ final class MaterialView: View, Assignable {
                                                                  max: 500,
                                                                  exp: 3)
     private let opacityView = SlidableNumberView.opacityView()
-    private let classLineColorNameView = TextView(text: Localization(english: "Line Color:",
+    private let classLineColorNameView = TextView(text: Text(english: "Line Color:",
                                                                      japanese: "線のカラー:"))
     private let lineColorView = ColorView(hLineWidth: 2, hWidth: 8, slPadding: 4, sizeType: .small)
     
@@ -337,7 +337,7 @@ final class MaterialView: View, Assignable {
                       width: cw + MaterialView.defaultRightWidth + padding * 2,
                       height: cw + classNameView.frame.height + h + padding * 2)
     }
-    func defaultBounds(withWidth width: CGFloat) -> Rect {
+    func defaultBounds(withWidth width: Real) -> Rect {
         let padding = Layout.basicPadding, h = Layout.basicHeight
         let cw = width - MaterialView.defaultRightWidth + padding * 2
         return Rect(x: 0, y: 0,
@@ -416,14 +416,14 @@ final class MaterialView: View, Assignable {
     
     struct LineWidthBinding {
         let view: MaterialView
-        let lineWidth: CGFloat, oldLineWidth: CGFloat
+        let lineWidth: Real, oldLineWidth: Real
         let material: Material, oldMaterial: Material, phase: Phase
     }
     var lineWidthBinding: ((LineWidthBinding) -> ())?
     
     struct OpacityBinding {
         let view: MaterialView
-        let opacity: CGFloat, oldOpacity: CGFloat
+        let opacity: Real, oldOpacity: Real
         let material: Material, oldMaterial: Material, phase: Phase
     }
     var opacityBinding: ((OpacityBinding) -> ())?

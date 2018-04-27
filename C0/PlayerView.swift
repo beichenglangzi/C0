@@ -20,7 +20,7 @@
 import Foundation
 import AVFoundation
 
-final class Player: View {
+final class PlayerView: View {
     private let drawView = View(drawClosure: { _, _ in })
     override init() {
         super.init()
@@ -222,7 +222,7 @@ final class Player: View {
         }
     }
     
-    var endPlayClosure: ((Player) -> (Void))? = nil
+    var endPlayClosure: ((PlayerView) -> (Void))? = nil
     func stop() {
         if isPlaying {
             isPlaying = false
@@ -231,14 +231,13 @@ final class Player: View {
     }
     
     func reference(at p: Point) -> Reference {
-        return Reference(name: Localization(english: "Player", japanese: "プレイヤー"))
+        return Reference(name: Text(english: "Player", japanese: "プレイヤー"))
     }
 }
 
-final class SeekBar: View {
-    let timeTextView = TextView(text: Text("00:00"), color: .locked)
-    let frameRateView = RealNumberView(model: 0, option: RealNumberGetterOption(numberOfDigits: 1,
-                                                                                unit: " fps"))
+final class PlayManagerView: View {
+    let timeTextView = TextView(text: "00:00", color: .locked)
+    let frameRateView = RealView(model: 0, option: RealGetterOption(numberOfDigits: 1, unit: " fps"))
     let timeView = SlidableNumberView(min: 0, max: 1)
     
     override init() {
@@ -278,10 +277,10 @@ final class SeekBar: View {
         let sliderWidth = frameRateView.frame.minX - timeTextView.frame.maxX - padding * 2
         timeView.frame = Rect(x: timeTextView.frame.maxX + padding,
                               y: sliderY, width: sliderWidth, height: height)
-        timeView.backgroundViews = [SeekBar.sliderView(with: timeView.bounds,
+        timeView.backgroundViews = [PlayManagerView.sliderView(with: timeView.bounds,
                                                        padding: timeView.padding)]
     }
-    static func sliderView(with bounds: Rect, padding: CGFloat) -> View {
+    static func sliderView(with bounds: Rect, padding: Real) -> View {
         let shapeRect = Rect(x: padding, y: bounds.midY - 1,
                                width: bounds.width - padding * 2, height: 2)
         let view = View(path: CGPath(rect: shapeRect, transform: nil))

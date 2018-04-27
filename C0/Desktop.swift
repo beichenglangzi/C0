@@ -49,13 +49,13 @@ extension Desktop: Codable {
     }
 }
 extension Desktop: Referenceable {
-    static let name = Localization(english: "Desktop", japanese: "デスクトップ")
+    static let name = Text(english: "Desktop", japanese: "デスクトップ")
 }
 
 /**
  Issue: sceneViewを取り除く
  */
-final class DesktopView: View {
+final class DesktopView: View, Queryable {
     var desktop = Desktop() {
         didSet {
             versionView.version = desktop.version
@@ -111,16 +111,16 @@ final class DesktopView: View {
         }
     }
     let versionView = VersionView()
-    let classCopiedViewablesNameView = TextView(text: Localization(english: "Copied:",
+    let classCopiedViewablesNameView = TextView(text: Text(english: "Copied:",
                                                                  japanese: "コピー済み:"))
     let copiedViewablesView = AnyArrayView()
-    let isHiddenActionManagerView = BoolView(name: Localization(english: "Action Manager",
+    let isHiddenActionManagerView = BoolView(name: Text(english: "Action Manager",
                                                                 japanese: "アクション管理"),
                                              boolInfo: BoolInfo.hidden)
-    let isSimpleReferenceView = BoolView(name: Localization(english: "Reference", japanese: "情報"),
-                                         boolInfo: BoolInfo(trueName: Localization(english: "Outline",
+    let isSimpleReferenceView = BoolView(name: Text(english: "Reference", japanese: "情報"),
+                                         boolInfo: BoolInfo(trueName: Text(english: "Outline",
                                                                                    japanese: "概略"),
-                                                            falseName: Localization(english: "detail",
+                                                            falseName: Text(english: "detail",
                                                                                     japanese: "詳細")))
     let referenceView = ReferenceView()
     let actionManagerView = SenderView()
@@ -161,12 +161,7 @@ final class DesktopView: View {
         return desktop.version
     }
     
-//    var rootCursorPoint = Point()
-//    override var cursorPoint: Point {
-//        return rootCursorPoint
-//    }
-    
-    override var contentsScale: CGFloat {
+    override var contentsScale: Real {
         didSet {
             if contentsScale != oldValue {
                 allChildrenAndSelf { $0.contentsScale = contentsScale }

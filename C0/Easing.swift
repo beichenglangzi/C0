@@ -22,7 +22,7 @@ import Foundation
 struct Easing: Codable, Equatable, Hashable, DeepCopiable {
     var cp0 = Point(), cp1 = Point(x: 1, y: 1)
     
-    func split(with t: CGFloat) -> (b0: Easing, b1: Easing) {
+    func split(with t: Real) -> (b0: Easing, b1: Easing) {
         guard !isDefault else {
             return (Easing(), Easing())
         }
@@ -35,7 +35,7 @@ struct Easing: Codable, Equatable, Hashable, DeepCopiable {
         let nb1 = Easing(cp0: sb.b1.cp0.applying(b1Affine), cp1: sb.b1.cp1.applying(b1Affine))
         return (nb0, nb1)
     }
-    func convertT(_ t: CGFloat) -> CGFloat {
+    func convertT(_ t: Real) -> Real {
         return isLinear ? t : bezier.y(withX: t)
     }
     var bezier: Bezier3 {
@@ -58,7 +58,7 @@ struct Easing: Codable, Equatable, Hashable, DeepCopiable {
     }
 }
 extension Easing: Referenceable {
-    static let name = Localization(english: "Easing", japanese: "イージング")
+    static let name = Text(english: "Easing", japanese: "イージング")
 }
 extension Easing: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
@@ -78,7 +78,7 @@ extension Easing: ObjectViewExpression {
 /**
  Issue: 前後キーフレームからの傾斜スナップ
  */
-final class EasingView: View, Assignable {
+final class EasingView: View, Queryable, Assignable {
     var easing = Easing() {
         didSet {
             if easing != oldValue {
@@ -114,8 +114,8 @@ final class EasingView: View, Assignable {
     }
     
     init(frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        classXNameView = TextView(text: Localization("t"), font: Font.italic(with: sizeType))
-        classYNameView = TextView(text: Localization("t'"), font: Font.italic(with: sizeType))
+        classXNameView = TextView(text: "t", font: Font.italic(with: sizeType))
+        classYNameView = TextView(text: "t'", font: Font.italic(with: sizeType))
         super.init()
         children = [classXNameView, classYNameView,
                     controlLinePathView, easingLinePathVIew, axisPathVIew, cp0View, cp1View]
@@ -225,7 +225,7 @@ final class EasingView: View, Assignable {
     
     func reference(at p: Point) -> Reference {
         var reference = Easing.reference
-        reference.viewDescription = Localization(english: "Horizontal axis t: Time\nVertical axis t': Correction time",
+        reference.viewDescription = Text(english: "Horizontal axis t: Time\nVertical axis t': Correction time",
                                                  japanese: "横軸t: 時間\n縦軸t': 補正後の時間")
         return reference
     }

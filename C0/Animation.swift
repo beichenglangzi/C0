@@ -21,7 +21,7 @@ import Foundation
 
 protocol Animatable {
     func step(_ f0: Int)
-    func linear(_ f0: Int, _ f1: Int, t: CGFloat)
+    func linear(_ f0: Int, _ f1: Int, t: Real)
     func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline)
     func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline)
     func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline)
@@ -166,7 +166,7 @@ struct Animation: Codable {
             return
         }
         isInterpolated = true
-        let t = k1.easing.convertT(CGFloat(interTime / timeResult.duration))
+        let t = k1.easing.convertT(Real(interTime / timeResult.duration))
         if k1.interpolation == .linear || keyframes.count <= 2 {
             animatable.linear(lf1.index, lf2.index, t: t)
         } else {
@@ -178,25 +178,25 @@ struct Animation: Codable {
             if isUseIndex0 {
                 if isUseIndex3 {
                     let lf0 = loopFrames[li1 - 1], lf3 = loopFrames[li1 + 2]
-                    let ms = Monospline(x0: CGFloat(lf0.time),
-                                        x1: CGFloat(lf1.time),
-                                        x2: CGFloat(lf2.time),
-                                        x3: CGFloat(lf3.time),
+                    let ms = Monospline(x0: Real(lf0.time),
+                                        x1: Real(lf1.time),
+                                        x2: Real(lf2.time),
+                                        x3: Real(lf3.time),
                                         t: t)
                     animatable.monospline(lf0.index, lf1.index, lf2.index, lf3.index, with: ms)
                 } else {
                     let lf0 = loopFrames[li1 - 1]
-                    let ms = Monospline(x0: CGFloat(lf0.time),
-                                        x1: CGFloat(lf1.time),
-                                        x2: CGFloat(lf2.time),
+                    let ms = Monospline(x0: Real(lf0.time),
+                                        x1: Real(lf1.time),
+                                        x2: Real(lf2.time),
                                         t: t)
                     animatable.lastMonospline(lf0.index, lf1.index, lf2.index, with: ms)
                 }
             } else if isUseIndex3 {
                 let lf3 = loopFrames[li1 + 2]
-                let ms = Monospline(x1: CGFloat(lf1.time),
-                                    x2: CGFloat(lf2.time),
-                                    x3: CGFloat(lf3.time),
+                let ms = Monospline(x1: Real(lf1.time),
+                                    x2: Real(lf2.time),
+                                    x3: Real(lf3.time),
                                     t: t)
                 animatable.firstMonospline(lf1.index, lf2.index, lf3.index, with: ms)
             } else {
@@ -311,21 +311,21 @@ extension Animation: Equatable {
     }
 }
 extension Animation: Referenceable {
-    static let name = Localization(english: "Animation", japanese: "アニメーション")
+    static let name = Text(english: "Animation", japanese: "アニメーション")
 }
 extension Animation: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        let text = Localization(english: "\(keyframes.count) Keyframes",
+        let text = Text(english: "\(keyframes.count) Keyframes",
             japanese: "\(keyframes.count)キーフレーム")
         return text.thumbnail(withBounds: bounds, sizeType)
     }
 }
 
-final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, Movable {
+final class AnimationView: View, Indicatable, Selectable, Queryable, Assignable, Newable, Movable {
     init(_ animation: Animation = Animation(),
          beginBaseTime: Beat = 0, baseTimeInterval: Beat = Beat(1, 16),
          origin: Point = Point(),
-         height: CGFloat = Layout.basicHeight, smallHeight: CGFloat = 8.0,
+         height: Real = Layout.basicHeight, smallHeight: Real = 8.0,
          sizeType: SizeType = .small) {
         
         self.animation = animation
@@ -341,8 +341,8 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
     }
     
     private static func knobLinePathView(from p: Point, lineColor: Color,
-                                         baseWidth: CGFloat, lineHeight: CGFloat,
-                                         lineWidth: CGFloat = 4, linearLineWidth: CGFloat = 2,
+                                         baseWidth: Real, lineHeight: Real,
+                                         lineWidth: Real = 4, linearLineWidth: Real = 2,
                                          with interpolation: Keyframe.Interpolation) -> View {
         let path = CGMutablePath()
         switch interpolation {
@@ -364,8 +364,8 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
     }
     private static func knobView(from p: Point,
                                  fillColor: Color, lineColor: Color,
-                                 baseWidth: CGFloat,
-                                 knobHalfHeight: CGFloat, subKnobHalfHeight: CGFloat,
+                                 baseWidth: Real,
+                                 knobHalfHeight: Real, subKnobHalfHeight: Real,
                                  with label: Keyframe.Label) -> DiscreteKnobView {
         let kh = label == .main ? knobHalfHeight : subKnobHalfHeight
         let knobView = DiscreteKnobView()
@@ -376,9 +376,9 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         return knobView
     }
     private static func keyLinePathViewWith(_ keyframe: Keyframe, lineColor: Color,
-                                            baseWidth: CGFloat,
-                                            lineWidth: CGFloat, maxLineWidth: CGFloat,
-                                            position: Point, width: CGFloat) -> View {
+                                            baseWidth: Real,
+                                            lineWidth: Real, maxLineWidth: Real,
+                                            position: Point, width: Real) -> View {
         let path = CGMutablePath()
         if keyframe.easing.isLinear {
             path.addRect(Rect(x: position.x, y: position.y - lineWidth / 2,
@@ -386,9 +386,9 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         } else {
             let b = keyframe.easing.bezier, bw = width
             let bx = position.x, count = Int(width / 5.0)
-            let d = 1 / CGFloat(count)
+            let d = 1 / Real(count)
             let points: [Point] = (0 ... count).map { i in
-                let dx = d * CGFloat(i)
+                let dx = d * Real(i)
                 let dp = b.difference(withT: dx)
                 let dy = max(0.5, min(maxLineWidth, (dp.x == dp.y ?
                     .pi / 2 : 1.8 * atan2(dp.y, dp.x)) / (.pi / 2)))
@@ -556,12 +556,12 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
             Color.getSetBorder : Color.warning
     }
     
-    var height: CGFloat {
+    var height: Real {
         didSet {
             updateWithHeight()
         }
     }
-    var smallHeight: CGFloat {
+    var smallHeight: Real {
         didSet {
             updateWithHeight()
         }
@@ -686,29 +686,29 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
     func baseTime(withBeatTime beatTime: Beat) -> BaseTime {
         return beatTime / baseTimeInterval
     }
-    func basedBeatTime(withDoubleBaseTime doubleBaseTime: DoubleBaseTime) -> Beat {
-        return Beat(Int(doubleBaseTime)) * baseTimeInterval
+    func basedBeatTime(withRealBaseTime realBaseTime: RealBaseTime) -> Beat {
+        return Beat(Int(realBaseTime)) * baseTimeInterval
     }
-    func doubleBaseTime(withBeatTime beatTime: Beat) -> DoubleBaseTime {
-        return DoubleBaseTime(beatTime / baseTimeInterval)
+    func realBaseTime(withBeatTime beatTime: Beat) -> RealBaseTime {
+        return RealBaseTime(beatTime / baseTimeInterval)
     }
-    func doubleBaseTime(withX x: CGFloat) -> DoubleBaseTime {
-        return DoubleBaseTime(x / baseWidth)
+    func realBaseTime(withX x: Real) -> RealBaseTime {
+        return RealBaseTime(x / baseWidth)
     }
-    func basedBeatTime(withDoubleBeatTime doubleBeatTime: DoubleBeat) -> Beat {
-        return Beat(Int(doubleBeatTime / DoubleBeat(baseTimeInterval))) * baseTimeInterval
+    func basedBeatTime(withDoubleBeatTime realBeatTime: RealBeat) -> Beat {
+        return Beat(Int(realBeatTime / RealBeat(baseTimeInterval))) * baseTimeInterval
     }
-    func time(withX x: CGFloat, isBased: Bool = true) -> Beat {
+    func time(withX x: Real, isBased: Bool = true) -> Beat {
         let dt = beginBaseTime - floor(beginBaseTime / baseTimeInterval) * baseTimeInterval
         let basedX = x + self.x(withTime: dt)
         let t =  isBased ?
             baseTimeInterval * Beat(Int(round(basedX / baseWidth))) :
             basedBeatTime(withDoubleBeatTime:
-                DoubleBeat(basedX / baseWidth) * DoubleBeat(baseTimeInterval))
+                RealBeat(basedX / baseWidth) * RealBeat(baseTimeInterval))
         return t - (beginBaseTime - floor(beginBaseTime / baseTimeInterval) * baseTimeInterval)
     }
-    func x(withTime time: Beat) -> CGFloat {
-        return DoubleBeat(time / baseTimeInterval) * baseWidth
+    func x(withTime time: Beat) -> Real {
+        return RealBeat(time / baseTimeInterval) * baseWidth
     }
     func clipDeltaTime(withTime time: Beat) -> Beat {
         let ft = baseTime(withBeatTime: time)
@@ -721,7 +721,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         guard !animation.keyframes.isEmpty else {
             return nil
         }
-        var minD = CGFloat.infinity, minIndex: Int?
+        var minD = Real.infinity, minIndex: Int?
         func updateMin(index: Int?, time: Beat) {
             let x = self.x(withTime: time)
             let d = abs(p.x - x)
@@ -836,7 +836,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         }
         let k = animation.keyframes[ki.index]
         let newEaing = ki.duration != 0 ?
-            k.easing.split(with: CGFloat(ki.interTime / ki.duration)) :
+            k.easing.split(with: Real(ki.interTime / ki.duration)) :
             (b0: k.easing, b1: Easing())
         let splitKeyframe0 = Keyframe(time: k.time, easing: newEaing.b0,
                                       interpolation: k.interpolation, loop: k.loop, label: k.label)
@@ -921,18 +921,18 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         updateChildren()
     }
     
-    private var isDrag = false, oldTime = DoubleBaseTime(0), oldKeyframeIndex: Int?
+    private var isDrag = false, oldTime = RealBaseTime(0), oldKeyframeIndex: Int?
     private struct DragObject {
         var clipDeltaTime = Beat(0), minDeltaTime = Beat(0), oldTime = Beat(0)
         var oldAnimation = Animation()
     }
     
     private var dragObject = DragObject()
-    func move(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func move(for point: Point, pressure: Real, time: Second, _ phase: Phase) {
         let p = point
         switch phase {
         case .began:
-            oldTime = doubleBaseTime(withX: p.x)
+            oldTime = realBaseTime(withX: p.x)
             if let ki = nearestKeyframeIndex(at: p), animation.keyframes.count > 1 {
                 let keyframeIndex = ki > 0 ? ki : 1
                 oldKeyframeIndex = keyframeIndex
@@ -942,9 +942,9 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
                 moveDuration(withDeltaTime: 0, phase)
             }
         case .changed, .ended:
-            let t = doubleBaseTime(withX: point.x)
+            let t = realBaseTime(withX: point.x)
             let fdt = t - oldTime + (t - oldTime >= 0 ? 0.5 : -0.5)
-            let dt = basedBeatTime(withDoubleBaseTime: fdt)
+            let dt = basedBeatTime(withRealBaseTime: fdt)
             let deltaTime = max(dragObject.minDeltaTime, dt + dragObject.clipDeltaTime)
             if let keyframeIndex = oldKeyframeIndex, keyframeIndex < animation.keyframes.count {
                 moveKeyframe(withDeltaTime: deltaTime,

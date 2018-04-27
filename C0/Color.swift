@@ -105,19 +105,19 @@ struct Color: Codable {
     static let subtitleBorder = Color(white: 0)
     static let subtitleFill = white
     
-    var hue: CGFloat {
+    var hue: Real {
         didSet {
             rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
             id = UUID()
         }
     }
-    var saturation: CGFloat {
+    var saturation: Real {
         didSet {
             rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
             id = UUID()
         }
     }
-    var lightness: CGFloat {
+    var lightness: Real {
         didSet {
             rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
             id = UUID()
@@ -132,7 +132,7 @@ struct Color: Codable {
             self.lightness = newValue.y
         }
     }
-    var alpha: CGFloat {
+    var alpha: Real {
         didSet {
             id = UUID()
         }
@@ -144,8 +144,8 @@ struct Color: Codable {
     }
     private(set) var rgb: RGB, id: UUID
     
-    init(hue: CGFloat = 0, saturation: CGFloat = 0, lightness: CGFloat = 0,
-         alpha: CGFloat = 1, colorSpace: ColorSpace = .sRGB) {
+    init(hue: Real = 0, saturation: Real = 0, lightness: Real = 0,
+         alpha: Real = 1, colorSpace: ColorSpace = .sRGB) {
         self.hue = hue
         self.saturation = saturation
         self.lightness = lightness
@@ -154,24 +154,24 @@ struct Color: Codable {
         self.colorSpace = colorSpace
         id = UUID()
     }
-    init(hue: CGFloat, saturation: CGFloat, brightness: CGFloat,
-         alpha: CGFloat = 1, colorSpace: ColorSpace = .sRGB) {
+    init(hue: Real, saturation: Real, brightness: Real,
+         alpha: Real = 1, colorSpace: ColorSpace = .sRGB) {
         let hsv = HSV(h: hue, s: saturation, v: brightness)
         self.init(hsv: hsv, rgb: hsv.rgb, alpha: alpha, colorSpace: colorSpace)
     }
-    init(red: CGFloat, green: CGFloat, blue: CGFloat,
-         alpha: CGFloat = 1, colorSpace: ColorSpace = .sRGB) {
+    init(red: Real, green: Real, blue: Real,
+         alpha: Real = 1, colorSpace: ColorSpace = .sRGB) {
         
         let rgb = RGB(r: red, g: green, b: blue)
         self.init(hsv: rgb.hsv, rgb: rgb, alpha: alpha, colorSpace: colorSpace)
     }
-    init(rgb: RGB, alpha: CGFloat = 1, colorSpace: ColorSpace = .sRGB) {
+    init(rgb: RGB, alpha: Real = 1, colorSpace: ColorSpace = .sRGB) {
         self.init(hsv: rgb.hsv, rgb: rgb, alpha: alpha, colorSpace: colorSpace)
     }
-    init(white: CGFloat, alpha: CGFloat = 1, colorSpace: ColorSpace = .sRGB) {
+    init(white: Real, alpha: Real = 1, colorSpace: ColorSpace = .sRGB) {
         self.init(hue: 0, saturation: 0, lightness: white, alpha: alpha, colorSpace: colorSpace)
     }
-    init(hsv: HSV, rgb: RGB, alpha: CGFloat, colorSpace: ColorSpace = .sRGB) {
+    init(hsv: HSV, rgb: RGB, alpha: Real, colorSpace: ColorSpace = .sRGB) {
         (hue, saturation, lightness) = Color.hsl(with: hsv)
         self.rgb = rgb
         self.alpha = alpha
@@ -180,40 +180,40 @@ struct Color: Codable {
     }
     
     static func random(colorSpace: ColorSpace = .sRGB) -> Color {
-        let hue = CGFloat.random(min: 0, max: 1)
-        let saturation = CGFloat.random(min: 0.5, max: 1)
-        let lightness = CGFloat.random(min: 0.4, max: 0.9)
+        let hue = Real.random(min: 0, max: 1)
+        let saturation = Real.random(min: 0.5, max: 1)
+        let lightness = Real.random(min: 0.4, max: 0.9)
         return Color(hue: hue, saturation: saturation, lightness: lightness, colorSpace: colorSpace)
     }
     
-    func with(hue: CGFloat) -> Color {
+    func with(hue: Real) -> Color {
         return Color(hue: hue, saturation: saturation, lightness:  lightness, alpha: alpha)
     }
-    func with(saturation: CGFloat) -> Color {
+    func with(saturation: Real) -> Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
     }
-    func with(lightness: CGFloat) -> Color {
+    func with(lightness: Real) -> Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
     }
-    func with(saturation: CGFloat, lightness: CGFloat) -> Color {
+    func with(saturation: Real, lightness: Real) -> Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
     }
-    func with(alpha: CGFloat) -> Color {
+    func with(alpha: Real) -> Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
     }
     func withNewID() -> Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
     }
     
-    func multiply(alpha: CGFloat) -> Color {
+    func multiply(alpha: Real) -> Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness,
                      alpha: self.alpha * alpha)
     }
-    func multiply(white: CGFloat) -> Color {
+    func multiply(white: Real) -> Color {
         return Color.linear(self, Color.white, t: white)
     }
     
-    private static func hsl(with hsv: HSV) -> (h: CGFloat, s: CGFloat, l: CGFloat) {
+    private static func hsl(with hsv: HSV) -> (h: Real, s: Real, l: Real) {
         let h = hsv.h, s = hsv.s, v = hsv.v
         let y = Color.y(withHue: h)
         let n = s * (1 - y) + y
@@ -226,7 +226,7 @@ struct Color: Codable {
             return (h, nb == 1 ? 0 : s / (1 - nb), n * nb + y)
         }
     }
-    private static func hsvWithHSL(h: CGFloat, s: CGFloat, l: CGFloat) -> HSV {
+    private static func hsvWithHSL(h: Real, s: Real, l: Real) -> HSV {
         let y = Color.y(withHue: h)
         if y < l {
             let by = y == 1 ? 0 : (l - y) / (1 - y)
@@ -240,7 +240,7 @@ struct Color: Codable {
         return Color.hsvWithHSL(h: hue, s: saturation, l: lightness)
     }
     
-    static func y(withHue hue: CGFloat) -> CGFloat {
+    static func y(withHue hue: Real) -> Real {
         let hueRGB = HSV(h: hue, s: 1, v: 1).rgb
         return 0.299 * hueRGB.r + 0.587 * hueRGB.g + 0.114 * hueRGB.b
     }
@@ -256,27 +256,27 @@ extension Color: Hashable {
     }
 }
 extension Color: Referenceable {
-    static let name = Localization(english: "Color", japanese: "カラー")
+    static let name = Text(english: "Color", japanese: "カラー")
 }
 extension Color: Interpolatable {
-    static func linear(_ f0: Color, _ f1: Color, t: CGFloat) -> Color {
+    static func linear(_ f0: Color, _ f1: Color, t: Real) -> Color {
         let rgb = RGB.linear(f0.rgb, f1.rgb, t: t)
-        let alpha = CGFloat.linear(f0.alpha, f1.alpha, t: t)
+        let alpha = Real.linear(f0.alpha, f1.alpha, t: t)
         let color = Color(rgb: rgb, alpha: alpha)
         return color.saturation > 0 ?
             color :
-            color.with(hue: CGFloat.linear(f0.hue,
+            color.with(hue: Real.linear(f0.hue,
                                            f1.hue.loopValue(other: f0.hue),
                                            t: t).loopValue())
     }
     static func firstMonospline(_ f1: Color, _ f2: Color, _ f3: Color,
                                 with ms: Monospline) -> Color {
         let rgb = RGB.firstMonospline(f1.rgb, f2.rgb, f3.rgb, with: ms)
-        let alpha = CGFloat.firstMonospline(f1.alpha, f2.alpha, f3.alpha, with: ms)
+        let alpha = Real.firstMonospline(f1.alpha, f2.alpha, f3.alpha, with: ms)
         let color = Color(rgb: rgb, alpha: alpha)
         return color.saturation > 0 ?
             color :
-            color.with(hue: CGFloat.firstMonospline(f1.hue,
+            color.with(hue: Real.firstMonospline(f1.hue,
                                                     f2.hue.loopValue(other: f1.hue),
                                                     f3.hue.loopValue(other: f1.hue),
                                                     with: ms).loopValue())
@@ -284,12 +284,12 @@ extension Color: Interpolatable {
     static func monospline(_ f0: Color, _ f1: Color, _ f2: Color, _ f3: Color,
                            with ms: Monospline) -> Color {
         let rgb = RGB.monospline(f0.rgb, f1.rgb, f2.rgb, f3.rgb, with: ms)
-        let alpha = CGFloat.monospline(f0.alpha, f1.alpha, f2.alpha, f3.alpha,
+        let alpha = Real.monospline(f0.alpha, f1.alpha, f2.alpha, f3.alpha,
                                        with: ms)
         let color = Color(rgb: rgb, alpha: alpha)
         return color.saturation > 0 ?
             color :
-            color.with(hue: CGFloat.monospline(f0.hue,
+            color.with(hue: Real.monospline(f0.hue,
                                                f1.hue.loopValue(other: f0.hue),
                                                f2.hue.loopValue(other: f0.hue),
                                                f3.hue.loopValue(other: f0.hue),
@@ -298,11 +298,11 @@ extension Color: Interpolatable {
     static func lastMonospline(_ f0: Color, _ f1: Color, _ f2: Color,
                                with ms: Monospline) -> Color {
         let rgb = RGB.lastMonospline(f0.rgb, f1.rgb, f2.rgb, with: ms)
-        let alpha = CGFloat.lastMonospline(f0.alpha, f1.alpha, f2.alpha, with: ms)
+        let alpha = Real.lastMonospline(f0.alpha, f1.alpha, f2.alpha, with: ms)
         let color = Color(rgb: rgb, alpha: alpha)
         return color.saturation > 0 ?
             color :
-            color.with(hue: CGFloat.lastMonospline(f0.hue,
+            color.with(hue: Real.lastMonospline(f0.hue,
                                                    f1.hue.loopValue(other: f0.hue),
                                                    f2.hue.loopValue(other: f0.hue),
                                                    with: ms).loopValue())
@@ -316,7 +316,7 @@ struct RGB {
         let minValue = min(r, g, b), maxValue = max(r, g, b)
         let d = maxValue - minValue
         let s = maxValue == 0 ? d : d / maxValue, v = maxValue
-        let h: CGFloat = {
+        let h: Real = {
             guard d > 0 else {
                 return d / 6
             }
@@ -335,9 +335,9 @@ struct RGB {
 extension RGB: Codable {
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
-        let r = try container.decode(CGFloat.self)
-        let g = try container.decode(CGFloat.self)
-        let b = try container.decode(CGFloat.self)
+        let r = try container.decode(Real.self)
+        let g = try container.decode(Real.self)
+        let b = try container.decode(Real.self)
         self.init(r: r, g: g, b: b)
     }
     func encode(to encoder: Encoder) throws {
@@ -348,28 +348,28 @@ extension RGB: Codable {
     }
 }
 extension RGB: Interpolatable {
-    static func linear(_ f0: RGB, _ f1: RGB, t: CGFloat) -> RGB {
-        let r = CGFloat.linear(f0.r, f1.r, t: t)
-        let g = CGFloat.linear(f0.g, f1.g, t: t)
-        let b = CGFloat.linear(f0.b, f1.b, t: t)
+    static func linear(_ f0: RGB, _ f1: RGB, t: Real) -> RGB {
+        let r = Real.linear(f0.r, f1.r, t: t)
+        let g = Real.linear(f0.g, f1.g, t: t)
+        let b = Real.linear(f0.b, f1.b, t: t)
         return RGB(r: r, g: g, b: b)
     }
     static func firstMonospline(_ f1: RGB, _ f2: RGB, _ f3: RGB, with ms: Monospline) -> RGB {
-        let r = CGFloat.firstMonospline(f1.r, f2.r, f3.r, with: ms)
-        let g = CGFloat.firstMonospline(f1.g, f2.g, f3.g, with: ms)
-        let b = CGFloat.firstMonospline(f1.b, f2.b, f3.b, with: ms)
+        let r = Real.firstMonospline(f1.r, f2.r, f3.r, with: ms)
+        let g = Real.firstMonospline(f1.g, f2.g, f3.g, with: ms)
+        let b = Real.firstMonospline(f1.b, f2.b, f3.b, with: ms)
         return RGB(r: r, g: g, b: b)
     }
     static func monospline(_ f0: RGB, _ f1: RGB, _ f2: RGB, _ f3: RGB, with ms: Monospline) -> RGB {
-        let r = CGFloat.monospline(f0.r, f1.r, f2.r, f3.r, with: ms)
-        let g = CGFloat.monospline(f0.g, f1.g, f2.g, f3.g, with: ms)
-        let b = CGFloat.monospline(f0.b, f1.b, f2.b, f3.b, with: ms)
+        let r = Real.monospline(f0.r, f1.r, f2.r, f3.r, with: ms)
+        let g = Real.monospline(f0.g, f1.g, f2.g, f3.g, with: ms)
+        let b = Real.monospline(f0.b, f1.b, f2.b, f3.b, with: ms)
         return RGB(r: r, g: g, b: b)
     }
     static func lastMonospline(_ f0: RGB, _ f1: RGB, _ f2: RGB, with ms: Monospline) -> RGB {
-        let r = CGFloat.lastMonospline(f0.r, f1.r, f2.r, with: ms)
-        let g = CGFloat.lastMonospline(f0.g, f1.g, f2.g, with: ms)
-        let b = CGFloat.lastMonospline(f0.b, f1.b, f2.b, with: ms)
+        let r = Real.lastMonospline(f0.r, f1.r, f2.r, with: ms)
+        let g = Real.lastMonospline(f0.g, f1.g, f2.g, with: ms)
+        let b = Real.lastMonospline(f0.b, f1.b, f2.b, with: ms)
         return RGB(r: r, g: g, b: b)
     }
 }
@@ -383,7 +383,7 @@ struct HSV {
         }
         let h6 = 6 * h
         let hi = Int(h6)
-        let nh = h6 - CGFloat(hi)
+        let nh = h6 - Real(hi)
         switch (hi) {
         case 0:
             return RGB(r: v, g: v * (1 - s * (1 - nh)), b: v * (1 - s))
@@ -403,9 +403,9 @@ struct HSV {
 extension HSV: Codable {
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
-        let h = try container.decode(CGFloat.self)
-        let s = try container.decode(CGFloat.self)
-        let v = try container.decode(CGFloat.self)
+        let h = try container.decode(Real.self)
+        let s = try container.decode(Real.self)
+        let v = try container.decode(Real.self)
         self.init(h: h, s: s, v: v)
     }
     func encode(to encoder: Encoder) throws {
@@ -430,12 +430,12 @@ enum ColorSpace: Int8, Codable {
     var displayText: Text {
         return Text(description)
     }
-    static var displayTexts: [Localization] {
+    static var displayTexts: [Text] {
         return [sRGB.displayText, displayP3.displayText]
     }
 }
 extension ColorSpace: Referenceable {
-    static let name = Localization(english: "Color space", japanese: "色空間")
+    static let name = Text(english: "Color space", japanese: "色空間")
 }
 extension ColorSpace: ObjectViewExpressionWithDisplayText {
 }
@@ -450,16 +450,16 @@ extension Color {
         }
         switch name {
         case String(CGColorSpace.sRGB):
-            self.init(red: CGFloat(components[0]),
-                      green: CGFloat(components[1]),
-                      blue: CGFloat(components[2]),
-                      alpha: CGFloat(components[3]),
+            self.init(red: Real(components[0]),
+                      green: Real(components[1]),
+                      blue: Real(components[2]),
+                      alpha: Real(components[3]),
                       colorSpace: .sRGB)
         case String(CGColorSpace.displayP3):
-            self.init(red: CGFloat(components[0]),
-                      green: CGFloat(components[1]),
-                      blue: CGFloat(components[2]),
-                      alpha: CGFloat(components[3]),
+            self.init(red: Real(components[0]),
+                      green: Real(components[1]),
+                      blue: Real(components[2]),
+                      alpha: Real(components[3]),
                       colorSpace: .displayP3)
         default:
             self.init()
@@ -473,8 +473,8 @@ extension Color {
             let cps = cgColor.components, cgColor.numberOfComponents == 4 else {
                 return self
         }
-        return Color(red: CGFloat(cps[0]), green: CGFloat(cps[1]), blue: CGFloat(cps[2]),
-                     alpha: CGFloat(cps[3]), colorSpace: colorSpace)
+        return Color(red: Real(cps[0]), green: Real(cps[1]), blue: Real(cps[2]),
+                     alpha: Real(cps[3]), colorSpace: colorSpace)
     }
     
     var cg: CGColor {
@@ -493,9 +493,9 @@ extension Color: ObjectViewExpression {
 }
 
 extension CGColor {
-    static func with(rgb: RGB, alpha a: CGFloat = 1, colorSpace: CGColorSpace? = nil) -> CGColor {
+    static func with(rgb: RGB, alpha a: Real = 1, colorSpace: CGColorSpace? = nil) -> CGColor {
         let cs = colorSpace ?? CGColorSpaceCreateDeviceRGB()
-        let cps = [CGFloat(rgb.r), CGFloat(rgb.g), CGFloat(rgb.b), CGFloat(a)]
+        let cps = [Real(rgb.r), Real(rgb.g), Real(rgb.b), Real(a)]
         return CGColor(colorSpace: cs, components: cps)
             ?? CGColor(red: cps[0], green: cps[1], blue: cps[2], alpha: cps[3])
     }
@@ -518,31 +518,31 @@ extension CGColorSpace {
 }
 
 struct HueCircle {
-    var lineWidth: CGFloat, colorSpace: ColorSpace
+    var lineWidth: Real, colorSpace: ColorSpace
     var bounds: Rect {
         didSet {
             radius = min(bounds.width, bounds.height) / 2
         }
     }
-    private(set) var radius: CGFloat
+    private(set) var radius: Real
     
-    init(lineWidth: CGFloat = 2, bounds: Rect = Rect(), colorSpace: ColorSpace = .sRGB) {
+    init(lineWidth: Real = 2, bounds: Rect = Rect(), colorSpace: ColorSpace = .sRGB) {
         self.lineWidth = lineWidth
         self.bounds = bounds
         self.radius = min(bounds.width, bounds.height) / 2
         self.colorSpace = colorSpace
     }
     
-    func hue(withAngle angle: CGFloat) -> CGFloat {
+    func hue(withAngle angle: Real) -> Real {
         let a = (angle < -.pi + .pi / 6 ? 2 * (.pi) : 0) +  angle - .pi / 6
         return hue(withRevisionHue: (a < 0 ? 1 : 0) + a / (2 * (.pi)))
     }
-    func angle(withHue hue: CGFloat) -> CGFloat {
+    func angle(withHue hue: Real) -> Real {
         return revisionHue(withHue: hue) * 2 * (.pi) + .pi / 6
     }
     
     private let split = 1.0.cg / 12.0.cg, slow = 0.5.cg, fast = 1.5.cg
-    private func revisionHue(withHue hue: CGFloat) -> CGFloat {
+    private func revisionHue(withHue hue: Real) -> Real {
         if hue < split {
             return hue * fast
         } else if hue < split * 2 {
@@ -569,7 +569,7 @@ struct HueCircle {
             return (hue - split * 11) * fast + split * (fast * 5 + slow * 6)
         }
     }
-    private func hue(withRevisionHue revisionHue: CGFloat) -> CGFloat {
+    private func hue(withRevisionHue revisionHue: Real) -> Real {
         if revisionHue < split * fast {
             return revisionHue / fast
         } else if revisionHue < split * (fast + slow) {
@@ -610,7 +610,7 @@ struct HueCircle {
         ctx.translateBy(x: bounds.midX, y: bounds.midY)
         ctx.rotate(by: .pi / 6 - deltaAngle / 2)
         for i in 0 ..< splitCount {
-            let color = Color(hue: revisionHue(withHue: CGFloat(i) / CGFloat(splitCount)),
+            let color = Color(hue: revisionHue(withHue: Real(i) / Real(splitCount)),
                               saturation: 1,
                               brightness: 1,
                               colorSpace: colorSpace)
@@ -623,7 +623,7 @@ struct HueCircle {
     }
 }
 
-final class ColorView: View, Assignable {    
+final class ColorView: View, Queryable, Assignable {    
     var color = Color() {
         didSet {
             updateWithColor()
@@ -637,7 +637,7 @@ final class ColorView: View, Assignable {
     let slView = PointView()
     
     let formHueDrawView = View(drawClosure: { _, _ in })
-    var formHueLineWidth: CGFloat {
+    var formHueLineWidth: Real {
         didSet {
             formHueCircle.lineWidth = formHueLineWidth
         }
@@ -664,7 +664,7 @@ final class ColorView: View, Assignable {
                                                                endPoint: Point(x: 0, y: 1)))
     
     init(frame: Rect = Rect(),
-         hLineWidth: CGFloat = 2.5, hWidth: CGFloat = 16, slPadding: CGFloat? = nil,
+         hLineWidth: Real = 2.5, hWidth: Real = 16, slPadding: Real? = nil,
          sizeType: SizeType = .regular) {
         
         hueView = CircularNumberView(width: hWidth)
@@ -810,7 +810,7 @@ final class ColorView: View, Assignable {
     
     func reference(at p: Point) -> Reference {
         var reference = Color.reference
-        reference.viewDescription = Localization(english: "Ring: Hue, Width: Saturation, Height: Luminance",
+        reference.viewDescription = Text(english: "Ring: Hue, Width: Saturation, Height: Luminance",
                                                  japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
         return reference
     }

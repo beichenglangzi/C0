@@ -28,40 +28,40 @@ struct _Rect: Equatable {
         self.origin = origin
         self.size = size
     }
-    init(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat) {
+    init(x: Real, y: Real, width: Real, height: Real) {
         self.init(origin: _Point(x: x, y: y), size: _Size(width: width, height: height))
     }
     
-    func insetBy(dx: CGFloat, dy: CGFloat) -> _Rect {
+    func insetBy(dx: Real, dy: Real) -> _Rect {
         return _Rect(x: minX + dx, y: minY + dy,
                     width: width - dx * 2, height: height - dy * 2)
     }
-    func inset(by width: CGFloat) -> _Rect {
+    func inset(by width: Real) -> _Rect {
         return insetBy(dx: width, dy: width)
     }
     
-    var minX: CGFloat {
+    var minX: Real {
         return origin.x
     }
-    var minY: CGFloat {
+    var minY: Real {
         return origin.y
     }
-    var midX: CGFloat {
+    var midX: Real {
         return origin.x + size.width / 2
     }
-    var midY: CGFloat {
+    var midY: Real {
         return origin.y + size.height / 2
     }
-    var maxX: CGFloat {
+    var maxX: Real {
         return origin.x + size.width
     }
-    var maxY: CGFloat {
+    var maxY: Real {
         return origin.y + size.height
     }
-    var width: CGFloat {
+    var width: Real {
         return size.width
     }
-    var height: CGFloat {
+    var height: Real {
         return size.height
     }
     var isEmpty: Bool {
@@ -101,12 +101,12 @@ extension _Rect: Codable {
     }
 }
 extension _Rect: Referenceable {
-    static let name = Localization(english: "Rect", japanese: "矩形")
+    static let name = Text(english: "Rect", japanese: "矩形")
 }
 
 typealias Rect = CGRect
 extension Rect {
-    func distance²(_ point: Point) -> CGFloat {
+    func distance²(_ point: Point) -> Real {
         return AABB(self).nearestDistance²(point)
     }
     func unionNoEmpty(_ other: Rect) -> Rect {
@@ -116,7 +116,7 @@ extension Rect {
         let r = hypot(width, height) / 2
         return Rect(x: midX - r, y: midY - r, width: r * 2, height: r * 2)
     }
-    func inset(by width: CGFloat) -> Rect {
+    func inset(by width: Real) -> Rect {
         return insetBy(dx: width, dy: width)
     }
     var centerPoint: Point {
@@ -131,7 +131,7 @@ func round(_ rect: Rect) -> Rect {
 
 struct AABB: Codable {
     var minX = 0.0.cg, maxX = 0.0.cg, minY = 0.0.cg, maxY = 0.0.cg
-    init(minX: CGFloat = 0, maxX: CGFloat = 0, minY: CGFloat = 0, maxY: CGFloat = 0) {
+    init(minX: Real = 0, maxX: Real = 0, minY: Real = 0, maxY: Real = 0) {
         self.minX = minX
         self.minY = minY
         self.maxX = maxX
@@ -156,10 +156,10 @@ struct AABB: Codable {
         maxY = max(b.p0.y, b.cp0.y, b.cp1.y, b.p1.y)
     }
     
-    var width: CGFloat {
+    var width: Real {
         return maxX - minX
     }
-    var height: CGFloat {
+    var height: Real {
         return maxY - minY
     }
     var position: Point {
@@ -175,7 +175,7 @@ struct AABB: Codable {
         return Point(x: point.x.clip(min: minX, max: maxX),
                        y: point.y.clip(min: minY, max: maxY))
     }
-    func nearestDistance²(_ p: Point) -> CGFloat {
+    func nearestDistance²(_ p: Point) -> Real {
         if p.x < minX {
             if p.y < minY {
                 return hypot²(minX - p.x, minY - p.y)
@@ -209,7 +209,7 @@ struct AABB: Codable {
 }
 
 struct RotatedRect: Codable, Equatable {
-    var centerPoint: Point, size: Size, angle: CGFloat
+    var centerPoint: Point, size: Size, angle: Real
     
     init(convexHullPoints chps: [Point]) {
         guard !chps.isEmpty else {
@@ -221,7 +221,7 @@ struct RotatedRect: Codable, Equatable {
             self.angle = 0.0
             return
         }
-        var minArea = CGFloat.infinity, minAngle = 0.0.cg, minBounds = Rect()
+        var minArea = Real.infinity, minAngle = 0.0.cg, minBounds = Rect()
         for (i, p) in chps.enumerated() {
             let nextP = chps[i == chps.count - 1 ? 0 : i + 1]
             let angle = p.tangential(nextP)

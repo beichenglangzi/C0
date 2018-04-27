@@ -45,30 +45,30 @@ struct Font {
             updateWith(name: name, size: size)
         }
     }
-    var size: CGFloat {
+    var size: Real {
         didSet {
             updateWith(name: name, size: size)
         }
     }
-    private(set) var ascent: CGFloat, descent: CGFloat, leading: CGFloat, ctFont: CTFont
+    private(set) var ascent: Real, descent: Real, leading: Real, ctFont: CTFont
     
-    init(size: CGFloat) {
+    init(size: Real) {
         self.init(NSFont.systemFont(ofSize: size))
     }
-    init(boldSize size: CGFloat) {
+    init(boldSize size: Real) {
         self.init(NSFont.boldSystemFont(ofSize: size))
     }
-    init(monospacedSize size: CGFloat) {
+    init(monospacedSize size: Real) {
         self.init(NSFont.monospacedDigitSystemFont(ofSize: size, weight: .medium))
     }
-    init(boldMonospacedSize size: CGFloat) {
+    init(boldMonospacedSize size: Real) {
         self.init(NSFont.monospacedDigitSystemFont(ofSize: size, weight: .heavy))
     }
-    init(italicMonospacedSize size: CGFloat) {
+    init(italicMonospacedSize size: Real) {
         let font = NSFont.monospacedDigitSystemFont(ofSize: size, weight: .medium)
         self.init(NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask))
     }
-    init(name: String, size: CGFloat) {
+    init(name: String, size: Real) {
         self.init(CTFontCreateWithName(name as CFString, size, nil))
     }
     init(_ ctFont: CTFont) {
@@ -80,14 +80,14 @@ struct Font {
         self.ctFont = ctFont
     }
     
-    private mutating func updateWith(name: String, size: CGFloat) {
+    private mutating func updateWith(name: String, size: Real) {
         ctFont = CTFontCreateWithName(name as CFString, size, nil)
         ascent = CTFontGetAscent(ctFont)
         descent = -CTFontGetDescent(ctFont)
         leading = -CTFontGetLeading(ctFont)
     }
     
-    func ceilHeight(withPadding padding: CGFloat) -> CGFloat {
+    func ceilHeight(withPadding padding: Real) -> Real {
         return ceil(ascent - descent) + padding * 2
     }
 }
@@ -100,7 +100,7 @@ struct Cursor {
     static let pointingHand = Cursor(NSCursor.pointingHand)
     static let stroke = circleCursor(size: 2)
     
-    static func circleCursor(size s: CGFloat, color: Color = .black,
+    static func circleCursor(size s: Real, color: Color = .black,
                              outlineColor: Color = .white) -> Cursor {
         let lineWidth = 2.0.cg, subLineWidth = 1.0.cg
         let d = subLineWidth + lineWidth / 2
@@ -265,7 +265,7 @@ fileprivate struct C0Coder {
             return try? decoder.decode(Color.self, from: data)
         case typeKey(from: URL.self):
             return try? decoder.decode(URL.self, from: data)
-        case typeKey(from: CGFloat.self):
+        case typeKey(from: Real.self):
             return try? decoder.decode(URL.self, from: data)
         case typeKey(from: Size.self):
             return try? decoder.decode(URL.self, from: data)
@@ -346,31 +346,27 @@ final class C0Application: NSApplication {
     
     func updateString(with locale :Locale) {
         let appName = Bundle.main.infoDictionary?[kCFBundleNameKey as String] as? String ?? "C0"
-        aboutAppItem?.title = Localization(english: "About \(appName)",
+        aboutAppItem?.title = Text(english: "About \(appName)",
             japanese: "\(appName) について").string(with: locale)
-        servicesItem?.title = Localization(english: "Services",
-                                           japanese: "サービス").string(with: locale)
-        hideAppItem?.title = Localization(english: "Hide \(appName)",
+        servicesItem?.title = Text(english: "Services", japanese: "サービス").string(with: locale)
+        hideAppItem?.title = Text(english: "Hide \(appName)",
             japanese: "\(appName) を隠す").string(with: locale)
-        hideOthersItem?.title = Localization(english: "Hide Others",
-                                             japanese: "ほかを隠す").string(with: locale)
-        showAllItem?.title = Localization(english: "Show All",
-                                          japanese: "すべてを表示").string(with: locale)
-        quitAppItem?.title = Localization(english: "Quit \(appName)",
+        hideOthersItem?.title = Text(english: "Hide Others", japanese: "ほかを隠す").string(with: locale)
+        showAllItem?.title = Text(english: "Show All", japanese: "すべてを表示").string(with: locale)
+        quitAppItem?.title = Text(english: "Quit \(appName)",
             japanese: "\(appName) を終了").string(with: locale)
-        fileMenu?.title = Localization(english: "File", japanese: "ファイル").string(with: locale)
-        newItem?.title = Localization(english: "New", japanese: "新規").string(with: locale)
-        openItem?.title = Localization(english: "Open…", japanese: "開く…").string(with: locale)
-        saveAsItem?.title = Localization(english: "Save As…",
-                                         japanese: "別名で保存…").string(with: locale)
-        openRecentItem?.title = Localization(english: "Open Recent",
+        fileMenu?.title = Text(english: "File", japanese: "ファイル").string(with: locale)
+        newItem?.title = Text(english: "New", japanese: "新規").string(with: locale)
+        openItem?.title = Text(english: "Open…", japanese: "開く…").string(with: locale)
+        saveAsItem?.title = Text(english: "Save As…", japanese: "別名で保存…").string(with: locale)
+        openRecentItem?.title = Text(english: "Open Recent",
                                              japanese: "最近使った項目を開く").string(with: locale)
-        closeItem?.title = Localization(english: "Close", japanese: "閉じる").string(with: locale)
-        saveItem?.title = Localization(english: "Save…", japanese: "保存…").string(with: locale)
-        windowMenu?.title = Localization(english: "Window", japanese: "ウインドウ").string(with: locale)
-        minimizeItem?.title = Localization(english: "Minimize", japanese: "しまう").string(with: locale)
-        zoomItem?.title = Localization(english: "Zoom", japanese: "拡大／縮小").string(with: locale)
-        bringAllToFrontItem?.title = Localization(english: "Bring All to Front",
+        closeItem?.title = Text(english: "Close", japanese: "閉じる").string(with: locale)
+        saveItem?.title = Text(english: "Save…", japanese: "保存…").string(with: locale)
+        windowMenu?.title = Text(english: "Window", japanese: "ウインドウ").string(with: locale)
+        minimizeItem?.title = Text(english: "Minimize", japanese: "しまう").string(with: locale)
+        zoomItem?.title = Text(english: "Zoom", japanese: "拡大／縮小").string(with: locale)
+        bringAllToFrontItem?.title = Text(english: "Bring All to Front",
                                                   japanese: "すべてを手前に移動").string(with: locale)
     }
     
@@ -744,7 +740,7 @@ final class C0View: NSView, NSTextInputClient {
     }
     func draggerEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Dragger.Event {
         return Dragger.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
-                             pressure: CGFloat(nsEvent.pressure), phase: phase)
+                             pressure: Real(nsEvent.pressure), phase: phase)
     }
     func scrollerEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Scroller.Event {
         var scrollMomentumPhase: Phase? {
@@ -771,7 +767,7 @@ final class C0View: NSView, NSTextInputClient {
     }
     func rotaterEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Rotater.Event {
         return Rotater.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
-                             rotationQuantity: CGFloat(nsEvent.rotation), phase: phase)
+                             rotationQuantity: Real(nsEvent.rotation), phase: phase)
     }
     func inputterEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Inputter.Event {
         return Inputter.Event(rootLocation: cursorPoint, time: nsEvent.timestamp.cg,
@@ -1010,7 +1006,7 @@ final class C0View: NSView, NSTextInputClient {
     func attributedString() -> NSAttributedString {
         return editTextView?.attributedString ?? NSAttributedString()
     }
-    func fractionOfDistanceThroughGlyph(for point: NSPoint) -> CGFloat {
+    func fractionOfDistanceThroughGlyph(for point: NSPoint) -> Real {
         if let editText = editTextView {
             let p = editText.convertFromRoot(convertFromTopScreen(point))
             return editText.characterFraction(for: p)
@@ -1018,7 +1014,7 @@ final class C0View: NSView, NSTextInputClient {
             return 0
         }
     }
-    func baselineDeltaForCharacter(at anIndex: Int) -> CGFloat {
+    func baselineDeltaForCharacter(at anIndex: Int) -> Real {
         return editTextView?.baselineDelta(at: anIndex) ?? 0
     }
     func windowLevel() -> Int {

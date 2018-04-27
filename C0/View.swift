@@ -27,7 +27,7 @@ final class Screen {
 
 struct Gradient {
     var colors = [Color]()
-    var locations = [CGFloat]()
+    var locations = [Real]()
     var startPoint = Point(), endPoint = Point(x: 1, y: 0)
 }
 
@@ -36,7 +36,7 @@ struct Gradient {
  Issue: リニアワークフロー、マクロ拡散光
  Issue: GradientLayer, PathLayerなどをLayerに統合
  */
-class View: Undoable, Queryable {
+class View: Undoable {
     static var selection: View {
         let view = View(isForm: true)
         view.fillColor = .select
@@ -276,16 +276,16 @@ class View: Undoable, Queryable {
             changed(frame)
         }
     }
-    var opacity: CGFloat {
+    var opacity: Real {
         get {
-            return CGFloat(caLayer.opacity)
+            return Real(caLayer.opacity)
         }
         set {
             caLayer.opacity = Float(newValue)
         }
     }
     
-    var cornerRadius: CGFloat {
+    var cornerRadius: Real {
         get {
             return caLayer.cornerRadius
         }
@@ -335,7 +335,7 @@ class View: Undoable, Queryable {
             caLayer.backgroundColor = fillColor
         }
     }
-    var contentsScale: CGFloat {
+    var contentsScale: Real {
         get {
             return caLayer.contentsScale
         }
@@ -368,7 +368,7 @@ class View: Undoable, Queryable {
             caLayer.borderColor = lineColor
         }
     }
-    fileprivate func set(lineWidth: CGFloat) {
+    fileprivate func set(lineWidth: Real) {
         if let caShapeLayer = caLayer as? CAShapeLayer {
             caShapeLayer.lineWidth = lineWidth
         } else {
@@ -550,7 +550,7 @@ private final class C0DrawLayer: CALayer {
             setNeedsDisplay()
         }
     }
-    override var contentsScale: CGFloat {
+    override var contentsScale: Real {
         didSet {
             setNeedsDisplay()
         }
@@ -622,10 +622,10 @@ extension CGPath {
         let xCount = Int(frame.width / size.width)
         let yCount = Int(frame.height / (size.height * 2))
         for xi in 0 ..< xCount {
-            let x = frame.minX + CGFloat(xi) * size.width
+            let x = frame.minX + Real(xi) * size.width
             let fy = xi % 2 == 0 ? size.height : 0
             for yi in 0 ..< yCount {
-                let y = frame.minY + CGFloat(yi) * size.height * 2 + fy
+                let y = frame.minY + Real(yi) * size.height * 2 + fy
                 path.addRect(Rect(x: x, y: y, width: size.width, height: size.height))
             }
         }
@@ -646,12 +646,12 @@ extension CGContext {
 }
 
 extension CGContext {
-    func drawBlurWith(color fillColor: Color, width: CGFloat, strength: CGFloat,
-                      isLuster: Bool, path: CGPath, scale: CGFloat, rotation: CGFloat) {
+    func drawBlurWith(color fillColor: Color, width: Real, strength: Real,
+                      isLuster: Bool, path: CGPath, scale: Real, rotation: Real) {
         let nFillColor: Color
         if fillColor.alpha < 1 {
             saveGState()
-            setAlpha(CGFloat(fillColor.alpha))
+            setAlpha(Real(fillColor.alpha))
             nFillColor = fillColor.with(alpha: 1)
         } else {
             nFillColor = fillColor
@@ -683,7 +683,7 @@ extension CGContext {
             restoreGState()
         }
     }
-    func drawBlur(withBlurRadius blurRadius: CGFloat, to ctx: CGContext) {
+    func drawBlur(withBlurRadius blurRadius: Real, to ctx: CGContext) {
         guard let image = makeImage() else {
             return
         }
@@ -730,7 +730,7 @@ extension ObjectViewExpression {
     }
 }
 protocol ObjectViewExpressionWithDisplayText: ObjectViewExpression {
-    var displayText: Localization { get }
+    var displayText: Text { get }
 }
 extension ObjectViewExpressionWithDisplayText {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
@@ -739,14 +739,14 @@ extension ObjectViewExpressionWithDisplayText {
 }
 
 final class KnobView: View {
-    init(radius: CGFloat = 5, lineWidth: CGFloat = 1) {
+    init(radius: Real = 5, lineWidth: Real = 1) {
         super.init(isForm: true)
         fillColor = .knob
         lineColor = .getSetBorder
         self.lineWidth = lineWidth
         self.radius = radius
     }
-    var radius: CGFloat {
+    var radius: Real {
         get {
             return min(bounds.width, bounds.height) / 2
         }
@@ -758,7 +758,7 @@ final class KnobView: View {
     }
 }
 final class DiscreteKnobView: View {
-    init(_ size: Size = Size(width: 5, height: 10), lineWidth: CGFloat = 1) {
+    init(_ size: Size = Size(width: 5, height: 10), lineWidth: Real = 1) {
         super.init(isForm: true)
         fillColor = .knob
         lineColor = .getSetBorder
@@ -767,7 +767,7 @@ final class DiscreteKnobView: View {
     }
 }
 
-final class GetterView<T: Viewable>: View, Copiable {
+final class GetterView<T: Viewable>: View, Queryable, Copiable {
     var sizeType: SizeType
     let classNameView: TextView
     
@@ -800,12 +800,12 @@ final class GetterView<T: Viewable>: View, Copiable {
     }
 }
 
-final class ObjectView<T: DeepCopiable & Viewable & Referenceable>: View, Copiable {
+final class ObjectView<T: DeepCopiable & Viewable & Referenceable>: View, Queryable, Copiable {
     let object: T
     
     var sizeType: SizeType
     let classNameView: TextView, thumbnailView: View
-    init(object: T, thumbnailView: View?, minFrame: Rect, thumbnailWidth: CGFloat = 40.0,
+    init(object: T, thumbnailView: View?, minFrame: Rect, thumbnailWidth: Real = 40.0,
          _ sizeType: SizeType = .regular) {
         self.object = object
         classNameView = TextView(text: T.name, font: Font.bold(with: sizeType))

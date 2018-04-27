@@ -20,17 +20,17 @@
 import Foundation
 
 protocol Referenceable {
-    static var uninheritanceName: Localization { get }
-    static var name: Localization { get }
-    static var classDescription: Localization { get }
+    static var uninheritanceName: Text { get }
+    static var name: Text { get }
+    static var classDescription: Text { get }
     static var reference: Reference { get }
 }
 extension Referenceable {
-    static var uninheritanceName: Localization {
+    static var uninheritanceName: Text {
         return name
     }
-    static var classDescription: Localization {
-        return Localization()
+    static var classDescription: Text {
+        return Text()
     }
     static var reference: Reference {
         return Reference(name: name, classDescription: classDescription)
@@ -41,17 +41,17 @@ extension Referenceable {
  Issue: リファレンス表示の具体化
  */
 struct Reference {
-    var name: Localization, classDescription: Localization, viewDescription: Localization
-    init(name: Localization = Localization(),
-         classDescription: Localization = Localization(),
-         viewDescription: Localization = Localization()) {
+    var name: Text, classDescription: Text, viewDescription: Text
+    init(name: Text = "",
+         classDescription: Text = "",
+         viewDescription: Text = "") {
         self.name = name
         self.classDescription = classDescription
         self.viewDescription = viewDescription
     }
 }
 extension Reference: Referenceable {
-    static let name = Localization(english: "Reference", japanese: "情報")
+    static let name = Text(english: "Reference", japanese: "情報")
 }
 extension Reference: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
@@ -59,7 +59,7 @@ extension Reference: ObjectViewExpression {
     }
 }
 
-final class ReferenceView: View {
+final class ReferenceView: View, Queryable {
     var reference = Reference() {
         didSet {
             updateWithReference()
@@ -68,11 +68,11 @@ final class ReferenceView: View {
     
     let classNameView = TextView(text: Reference.name, font: .bold)
     let nameView = TextView()
-    let classClassDescriptionView = TextView(text: Localization(english: "Class Description:",
+    let classClassDescriptionView = TextView(text: Text(english: "Class Description:",
                                                                 japanese: "クラス説明:"),
                                              font: .small)
     let classDescriptionView = TextView()
-    let classViewDescriptionView = TextView(text: Localization(english: "View Description:",
+    let classViewDescriptionView = TextView(text: Text(english: "View Description:",
                                                                japanese: "表示説明:"),
                                             font: .small)
     let viewDescriptionView = TextView()

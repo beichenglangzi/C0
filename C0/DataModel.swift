@@ -175,9 +175,21 @@ extension Decodable {
             return nil
         }
     }
+    init?(jsonString: String) {
+        guard let jsonData = jsonString.data(using: .utf8) else {
+            return nil
+        }
+        self.init(jsonData: jsonData)
+    }
 }
 extension Encodable {
     var jsonData: Data? {
         return try? JSONEncoder().encode(self)
+    }
+    var jsonString: String? {
+        guard let data = try? JSONEncoder().encode(self) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
     }
 }

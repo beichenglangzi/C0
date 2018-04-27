@@ -22,7 +22,7 @@ import Foundation
 typealias Version = UndoManager
 
 extension Version: Referenceable {
-    static let name = Localization(english: "Version", japanese: "バージョン")
+    static let name = Text(english: "Version", japanese: "バージョン")
 }
 
 /**
@@ -30,7 +30,7 @@ extension Version: Referenceable {
  Issue: バージョン管理UndoManager
  Issue: ブランチ機能
  */
-final class VersionView: View {
+final class VersionView: View, Queryable {
     var version = Version() {
         didSet {
             removeNotification()
@@ -84,7 +84,7 @@ final class VersionView: View {
     
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
-        _ = Layout.leftAlignment([formClassNameView, Padding(), allCountView],
+        _ = Layout.leftAlignment([formClassNameView, PaddingView(), allCountView],
                                  height: Layout.basicHeight)
         
         super.init()
@@ -126,7 +126,7 @@ final class VersionView: View {
         formClassNameView.frame.origin = Point(x: padding,
                                              y: bounds.height - formClassNameView.frame.height - padding)
         if undoCount < allCount {
-            _ = Layout.leftAlignment([allCountView, Padding(), differentialCountView],
+            _ = Layout.leftAlignment([allCountView, PaddingView(), differentialCountView],
                                      minX: formClassNameView.frame.maxX + padding,
                                      height: frame.height)
         } else {
@@ -162,7 +162,7 @@ final class VersionView: View {
     
     func reference(at p: Point) -> Reference {
         var reference = Version.reference
-        reference.classDescription  = Localization(english: "Show undoable count and undoed count in parent view",
+        reference.classDescription  = Text(english: "Show undoable count and undoed count in parent view",
                                                    japanese: "親表示での取り消し可能回数、取り消し済み回数を表示")
         return reference
     }

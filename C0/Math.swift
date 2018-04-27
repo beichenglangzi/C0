@@ -99,7 +99,7 @@ func hypot²<T: BinaryFloatingPoint>(_ lhs: T, _ rhs: T) -> T {
 }
 
 protocol Interpolatable {
-    static func linear(_ f0: Self, _ f1: Self, t: CGFloat) -> Self
+    static func linear(_ f0: Self, _ f1: Self, t: Real) -> Self
     static func firstMonospline(_ f1: Self, _ f2: Self, _ f3: Self,
                                 with ms: Monospline) -> Self
     static func monospline(_ f0: Self, _ f1: Self, _ f2: Self, _ f3: Self,
@@ -109,18 +109,18 @@ protocol Interpolatable {
 }
 
 struct Monospline {
-    let h0: CGFloat, h1: CGFloat, h2: CGFloat
-    let reciprocalH0: CGFloat, reciprocalH1: CGFloat, reciprocalH2: CGFloat
-    let reciprocalH0H1: CGFloat, reciprocalH1H2: CGFloat, reciprocalH1H1: CGFloat
-    private(set) var xx3: CGFloat, xx2: CGFloat, xx1: CGFloat
-    var t: CGFloat {
+    let h0: Real, h1: Real, h2: Real
+    let reciprocalH0: Real, reciprocalH1: Real, reciprocalH2: Real
+    let reciprocalH0H1: Real, reciprocalH1H2: Real, reciprocalH1H1: Real
+    private(set) var xx3: Real, xx2: Real, xx1: Real
+    var t: Real {
         didSet {
             xx1 = h1 * t
             xx2 = xx1 * xx1
             xx3 = xx1 * xx1 * xx1
         }
     }
-    init(x1: CGFloat, x2: CGFloat, x3: CGFloat, t: CGFloat) {
+    init(x1: Real, x2: Real, x3: Real, t: Real) {
         h0 = 0
         h1 = x2 - x1
         h2 = x3 - x2
@@ -135,7 +135,7 @@ struct Monospline {
         xx3 = xx1 * xx1 * xx1
         self.t = t
     }
-    init(x0: CGFloat, x1: CGFloat, x2: CGFloat, x3: CGFloat, t: CGFloat) {
+    init(x0: Real, x1: Real, x2: Real, x3: Real, t: Real) {
         h0 = x1 - x0
         h1 = x2 - x1
         h2 = x3 - x2
@@ -150,7 +150,7 @@ struct Monospline {
         xx3 = xx1 * xx1 * xx1
         self.t = t
     }
-    init(x0: CGFloat, x1: CGFloat, x2: CGFloat, t: CGFloat) {
+    init(x0: Real, x1: Real, x2: Real, t: Real) {
         h0 = x1 - x0
         h1 = x2 - x1
         h2 = 0
@@ -166,20 +166,20 @@ struct Monospline {
         self.t = t
     }
     
-    func firstInterpolatedValue(_ f1: CGFloat, _ f2: CGFloat, _ f3: CGFloat) -> CGFloat {
+    func firstInterpolatedValue(_ f1: Real, _ f2: Real, _ f3: Real) -> Real {
         let s1 = (f2 - f1) * reciprocalH1, s2 = (f3 - f2) * reciprocalH2
-        let signS1: CGFloat = s1 > 0 ? 1 : -1, signS2: CGFloat = s2 > 0 ? 1 : -1
+        let signS1: Real = s1 > 0 ? 1 : -1, signS2: Real = s2 > 0 ? 1 : -1
         let yPrime1 = s1
         let yPrime2 = (signS1 + signS2) * min(abs(s1),
                                               abs(s2),
                                               0.5 * abs((h2 * s1 + h1 * s2) * reciprocalH1H2))
         return interpolatedValue(f1: f1, s1: s1, yPrime1: yPrime1, yPrime2: yPrime2)
     }
-    func interpolatedValue(_ f0: CGFloat, _ f1: CGFloat, _ f2: CGFloat, _ f3: CGFloat) -> CGFloat {
+    func interpolatedValue(_ f0: Real, _ f1: Real, _ f2: Real, _ f3: Real) -> Real {
         let s0 = (f1 - f0) * reciprocalH0
         let s1 = (f2 - f1) * reciprocalH1, s2 = (f3 - f2) * reciprocalH2
-        let signS0: CGFloat = s0 > 0 ? 1 : -1
-        let signS1: CGFloat = s1 > 0 ? 1 : -1, signS2: CGFloat = s2 > 0 ? 1 : -1
+        let signS0: Real = s0 > 0 ? 1 : -1
+        let signS1: Real = s1 > 0 ? 1 : -1, signS2: Real = s2 > 0 ? 1 : -1
         let yPrime1 = (signS0 + signS1) * min(abs(s0),
                                               abs(s1),
                                               0.5 * abs((h1 * s0 + h0 * s1) * reciprocalH0H1))
@@ -188,38 +188,38 @@ struct Monospline {
                                               0.5 * abs((h2 * s1 + h1 * s2) * reciprocalH1H2))
         return interpolatedValue(f1: f1, s1: s1, yPrime1: yPrime1, yPrime2: yPrime2)
     }
-    func lastInterpolatedValue(_ f0: CGFloat, _ f1: CGFloat, _ f2: CGFloat) -> CGFloat {
+    func lastInterpolatedValue(_ f0: Real, _ f1: Real, _ f2: Real) -> Real {
         let s0 = (f1 - f0) * reciprocalH0, s1 = (f2 - f1) * reciprocalH1
-        let signS0: CGFloat = s0 > 0 ? 1 : -1, signS1: CGFloat = s1 > 0 ? 1 : -1
+        let signS0: Real = s0 > 0 ? 1 : -1, signS1: Real = s1 > 0 ? 1 : -1
         let yPrime1 = (signS0 + signS1) * min(abs(s0),
                                               abs(s1),
                                               0.5 * abs((h1 * s0 + h0 * s1) * reciprocalH0H1))
         let yPrime2 = s1
         return interpolatedValue(f1: f1, s1: s1, yPrime1: yPrime1, yPrime2: yPrime2)
     }
-    private func interpolatedValue(f1: CGFloat, s1: CGFloat,
-                                   yPrime1: CGFloat, yPrime2: CGFloat) -> CGFloat {
+    private func interpolatedValue(f1: Real, s1: Real,
+                                   yPrime1: Real, yPrime2: Real) -> Real {
         let a = (yPrime1 + yPrime2 - 2 * s1) * reciprocalH1H1
         let b = (3 * s1 - 2 * yPrime1 - yPrime2) * reciprocalH1, c = yPrime1, d = f1
         return a * xx3 + b * xx2 + c * xx1 + d
     }
     
-    func integralFirstInterpolatedValue(_ f1: CGFloat, _ f2: CGFloat, _ f3: CGFloat,
-                                        a: CGFloat, b: CGFloat) -> CGFloat {
+    func integralFirstInterpolatedValue(_ f1: Real, _ f2: Real, _ f3: Real,
+                                        a: Real, b: Real) -> Real {
         let s1 = (f2 - f1) * reciprocalH1, s2 = (f3 - f2) * reciprocalH2
-        let signS1: CGFloat = s1 > 0 ? 1 : -1, signS2: CGFloat = s2 > 0 ? 1 : -1
+        let signS1: Real = s1 > 0 ? 1 : -1, signS2: Real = s2 > 0 ? 1 : -1
         let yPrime1 = s1
         let yPrime2 = (signS1 + signS2) * min(abs(s1),
                                               abs(s2),
                                               0.5 * abs((h2 * s1 + h1 * s2) * reciprocalH1H2))
         return integral(f1: f1, s1: s1, yPrime1: yPrime1, yPrime2: yPrime2, a: a, b: b)
     }
-    func integralInterpolatedValue(_ f0: CGFloat, _ f1: CGFloat, _ f2: CGFloat, _ f3: CGFloat,
-                                   a: CGFloat, b: CGFloat) -> CGFloat {
+    func integralInterpolatedValue(_ f0: Real, _ f1: Real, _ f2: Real, _ f3: Real,
+                                   a: Real, b: Real) -> Real {
         let s0 = (f1 - f0) * reciprocalH0
         let s1 = (f2 - f1) * reciprocalH1, s2 = (f3 - f2) * reciprocalH2
-        let signS0: CGFloat = s0 > 0 ? 1 : -1
-        let signS1: CGFloat = s1 > 0 ? 1 : -1, signS2: CGFloat = s2 > 0 ? 1 : -1
+        let signS0: Real = s0 > 0 ? 1 : -1
+        let signS1: Real = s1 > 0 ? 1 : -1, signS2: Real = s2 > 0 ? 1 : -1
         let yPrime1 = (signS0 + signS1) * min(abs(s0),
                                               abs(s1),
                                               0.5 * abs((h1 * s0 + h0 * s1) * reciprocalH0H1))
@@ -228,18 +228,18 @@ struct Monospline {
                                               0.5 * abs((h2 * s1 + h1 * s2) * reciprocalH1H2))
         return integral(f1: f1, s1: s1, yPrime1: yPrime1, yPrime2: yPrime2, a: a, b: b)
     }
-    func integralLastInterpolatedValue(_ f0: CGFloat, _ f1: CGFloat, _ f2: CGFloat,
-                                       a: CGFloat, b: CGFloat) -> CGFloat {
+    func integralLastInterpolatedValue(_ f0: Real, _ f1: Real, _ f2: Real,
+                                       a: Real, b: Real) -> Real {
         let s0 = (f1 - f0) * reciprocalH0, s1 = (f2 - f1) * reciprocalH1
-        let signS0: CGFloat = s0 > 0 ? 1 : -1, signS1: CGFloat = s1 > 0 ? 1 : -1
+        let signS0: Real = s0 > 0 ? 1 : -1, signS1: Real = s1 > 0 ? 1 : -1
         let yPrime1 = (signS0 + signS1) * min(abs(s0),
                                               abs(s1),
                                               0.5 * abs((h1 * s0 + h0 * s1) * reciprocalH0H1))
         let yPrime2 = s1
         return integral(f1: f1, s1: s1, yPrime1: yPrime1, yPrime2: yPrime2, a: a, b: b)
     }
-    private func integral(f1: CGFloat, s1: CGFloat, yPrime1: CGFloat, yPrime2: CGFloat,
-                          a xa: CGFloat, b xb: CGFloat) -> CGFloat {
+    private func integral(f1: Real, s1: Real, yPrime1: Real, yPrime2: Real,
+                          a xa: Real, b xb: Real) -> Real {
         let a = (yPrime1 + yPrime2 - 2 * s1) * reciprocalH1H1
         let b = (3 * s1 - 2 * yPrime1 - yPrime2) * reciprocalH1, c = yPrime1, nd = f1
         
@@ -273,10 +273,10 @@ protocol OneDimensionalOption: NumberGetterOption {
     var minModel: Model { get }
     var maxModel: Model { get }
     func model(with string: String) -> Model?
-    func ratio(with model: Model) -> CGFloat
-    func ratioFromDefaultModel(with model: Model) -> CGFloat
-    func model(withDelta delta: CGFloat, oldModel: Model) -> Model
-    func model(withRatio ratio: CGFloat) -> Model
+    func ratio(with model: Model) -> Real
+    func ratioFromDefaultModel(with model: Model) -> Real
+    func model(withDelta delta: Real, oldModel: Model) -> Model
+    func model(withRatio ratio: Real) -> Model
 }
 
 enum Orientation {
@@ -287,7 +287,8 @@ enum Orientation {
  Issue: スクロールによる値の変更
  */
 final class DiscreteOneDimensionalView
-    <T: Comparable & Viewable & Referenceable, U: OneDimensionalOption>: View, Assignable, Runnable, Movable where U.Model == T {
+    <T: Comparable & Viewable & Referenceable, U: OneDimensionalOption>
+: View, Queryable, Assignable, Runnable, Movable where U.Model == T {
     var model: T {
         didSet {
             updateWithModel()
@@ -302,7 +303,7 @@ final class DiscreteOneDimensionalView
     var interval = 1.5.cg
     var orientation: Orientation, layoutOrientation: LayoutOrientation
     private var knobLineFrame = Rect()
-    private let labelPaddingX: CGFloat, knobPadding: CGFloat
+    private let labelPaddingX: Real, knobPadding: Real
     private let knobView = DiscreteKnobView(Size(width: 6, height: 4), lineWidth: 1)
     private let linePathView: View = {
         let linePathView = View(isForm: true)
@@ -408,7 +409,7 @@ final class DiscreteOneDimensionalView
     }
     
     private var oldModel: T?, oldPoint = Point()
-    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
         case .began:
             knobView.fillColor = .editing
@@ -448,12 +449,13 @@ final class DiscreteOneDimensionalView
     
     func reference(at p: Point) -> Reference {
         var reference = T.reference
-        reference.viewDescription = Localization(english: "Discrete Slider", japanese: "離散スライダー")
+        reference.viewDescription = Text(english: "Discrete Slider", japanese: "離散スライダー")
         return reference
     }
 }
 
-final class NumberGetterView<T: Comparable & Viewable & Referenceable, U: NumberGetterOption>: View, Copiable where U.Model == T {
+final class NumberGetterView<T: Comparable & Viewable & Referenceable, U: NumberGetterOption>
+: View, Queryable, Copiable where U.Model == T {
     var model: T {
         didSet {
             updateWithModel()
@@ -465,7 +467,7 @@ final class NumberGetterView<T: Comparable & Viewable & Referenceable, U: Number
     var formPropertyNameView: TextView?
     let formStringView: TextView
     var orientation: Orientation
-    private let labelPaddingX: CGFloat
+    private let labelPaddingX: Real
     
     init(model: T, option: U,
          orientation: Orientation = .rightHanded,
@@ -476,7 +478,8 @@ final class NumberGetterView<T: Comparable & Viewable & Referenceable, U: Number
         self.option = option
         self.orientation = orientation
         labelPaddingX = Layout.padding(with: sizeType)
-        formStringView = TextView(font: Font.default(with: sizeType),
+        formStringView = TextView(text: option.text(with: model),
+                                  font: Font.default(with: sizeType),
                                   frameAlignment: .right, alignment: .right)
         self.sizeType = sizeType
         
@@ -497,8 +500,8 @@ final class NumberGetterView<T: Comparable & Viewable & Referenceable, U: Number
         }
     }
     private func updateLayout() {
-        formStringView.frame.origin = Point(x: bounds.width - formStringView.frame.width - labelPaddingX,
-                                            y: round((bounds.height - formStringView.frame.height) / 2))
+        formStringView.frame.origin = Point(x: bounds.width - formStringView.frame.width,
+                                            y: bounds.height - formStringView.frame.height)
     }
     func updateWithModel() {
         updateString()
@@ -527,34 +530,6 @@ extension AdditiveGroup {
     }
 }
 
-extension Int {
-    static func gcd(_ m: Int, _ n: Int) -> Int {
-        return n == 0 ? m : gcd(n, m % n)
-    }
-}
-extension Int: Interpolatable {
-    static func linear(_ f0: Int, _ f1: Int, t: CGFloat) -> Int {
-        return Int(CGFloat.linear(CGFloat(f0), CGFloat(f1), t: t))
-    }
-    static func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) -> Int {
-        return Int(CGFloat.firstMonospline(CGFloat(f1), CGFloat(f2), CGFloat(f3), with: ms))
-    }
-    static func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) -> Int {
-        return Int(CGFloat.monospline(CGFloat(f0), CGFloat(f1), CGFloat(f2), CGFloat(f3), with: ms))
-    }
-    static func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) -> Int {
-        return Int(CGFloat.lastMonospline(CGFloat(f0), CGFloat(f1), CGFloat(f2), with: ms))
-    }
-}
-extension Int: Referenceable {
-    static let name = Localization(english: "Integer", japanese: "整数")
-}
-extension Int: ObjectViewExpression {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return String(self).view(withBounds: bounds, sizeType)
-    }
-}
-
 struct Hash {
     static func uniformityHashValue(with hashValues: [Int]) -> Int {
         return Int(bitPattern: hashValues.reduce(into: UInt(bitPattern: 0), unionHashValues))
@@ -570,8 +545,8 @@ struct Hash {
     }
 }
 
-extension CGFloat {
-    func interval(scale: CGFloat) -> CGFloat {
+extension Real {
+    func interval(scale: Real) -> Real {
         if scale == 0 {
             return self
         } else {
@@ -579,20 +554,20 @@ extension CGFloat {
             return self - t > scale / 2 ? t + scale : t
         }
     }
-    func differenceRotation(_ other: CGFloat) -> CGFloat {
+    func differenceRotation(_ other: Real) -> Real {
         let a = self - other
         return a + (a > .pi ? -2 * (.pi) : (a < -.pi ? 2 * (.pi) : 0))
     }
-    var clipRotation: CGFloat {
+    var clipRotation: Real {
         return self < -.pi ? self + 2 * (.pi) : (self > .pi ? self - 2 * (.pi) : self)
     }
-    func isApproximatelyEqual(other: CGFloat, roundingError: CGFloat = 0.0000000001) -> Bool {
+    func isApproximatelyEqual(other: Real, roundingError: Real = 0.0000000001) -> Bool {
         return abs(self - other) < roundingError
     }
-    var ²: CGFloat {
+    var ²: Real {
         return self * self
     }
-    func loopValue(other: CGFloat, begin: CGFloat = 0, end: CGFloat = 1) -> CGFloat {
+    func loopValue(other: Real, begin: Real = 0, end: Real = 1) -> Real {
         if other < self {
             let value = (other - begin) + (end - self)
             return self - other < value ? self : self - (end - begin)
@@ -601,35 +576,35 @@ extension CGFloat {
             return other - self < value ? self : self + (end - begin)
         }
     }
-    func loopValue(begin: CGFloat = 0, end: CGFloat = 1) -> CGFloat {
+    func loopValue(begin: Real = 0, end: Real = 1) -> Real {
         return self < begin ? self + (end - begin) : (self > end ? self - (end - begin) : self)
     }
-    static func random(min: CGFloat, max: CGFloat) -> CGFloat {
-        return (max - min) * (CGFloat(arc4random_uniform(UInt32.max)) / CGFloat(UInt32.max)) + min
+    static func random(min: Real, max: Real) -> Real {
+        return (max - min) * (Real(arc4random_uniform(UInt32.max)) / Real(UInt32.max)) + min
     }
-    static func bilinear(x: CGFloat, y: CGFloat,
-                         a: CGFloat, b: CGFloat, c: CGFloat, d: CGFloat) -> CGFloat {
+    static func bilinear(x: Real, y: Real,
+                         a: Real, b: Real, c: Real, d: Real) -> Real {
         return x * y * (a - b - c + d) + x * (b - a) + y * (c - a) + a
     }
     
-    static func simpsonIntegral(splitHalfCount m: Int, a: CGFloat, b: CGFloat,
-                                f: (CGFloat) -> (CGFloat)) -> CGFloat {
-        let n = CGFloat(2 * m)
+    static func simpsonIntegral(splitHalfCount m: Int, a: Real, b: Real,
+                                f: (Real) -> (Real)) -> Real {
+        let n = Real(2 * m)
         let h = (b - a) / n
-        func x(at i: Int) -> CGFloat {
-            return a + CGFloat(i) * h
+        func x(at i: Int) -> Real {
+            return a + Real(i) * h
         }
         let s0 = 2 * (1..<m - 1).reduce(0.0.cg) { $0 + f(x(at: 2 * $1)) }
         let s1 = 4 * (1..<m).reduce(0.0.cg) { $0 + f(x(at: 2 * $1 - 1)) }
         return (h / 3) * (f(a) + s0 + s1 + f(b))
     }
-    static func simpsonIntegralB(splitHalfCount m: Int, a: CGFloat, maxB: CGFloat,
-                                 s: CGFloat, bisectionCount: Int = 3,
-                                 f: (CGFloat) -> (CGFloat)) -> CGFloat {
+    static func simpsonIntegralB(splitHalfCount m: Int, a: Real, maxB: Real,
+                                 s: Real, bisectionCount: Int = 3,
+                                 f: (Real) -> (Real)) -> Real {
         let n = 2 * m
-        let h = (maxB - a) / CGFloat(n)
-        func x(at i: Int) -> CGFloat {
-            return a + CGFloat(i) * h
+        let h = (maxB - a) / Real(n)
+        func x(at i: Int) -> Real {
+            return a + Real(i) * h
         }
         let h3 = h / 3
         var a = a
@@ -663,24 +638,24 @@ extension CGFloat {
         return maxB
     }
 }
-extension CGFloat: Interpolatable {
-    static func linear(_ f0: CGFloat, _ f1: CGFloat, t: CGFloat) -> CGFloat {
+extension Real: Interpolatable {
+    static func linear(_ f0: Real, _ f1: Real, t: Real) -> Real {
         return f0 * (1 - t) + f1 * t
     }
-    static func firstMonospline(_ f1: CGFloat, _ f2: CGFloat, _ f3: CGFloat,
-                                with ms: Monospline) -> CGFloat {
+    static func firstMonospline(_ f1: Real, _ f2: Real, _ f3: Real,
+                                with ms: Monospline) -> Real {
         return ms.firstInterpolatedValue(f1, f2, f3)
     }
-    static func monospline(_ f0: CGFloat, _ f1: CGFloat, _ f2: CGFloat, _ f3: CGFloat,
-                           with ms: Monospline) -> CGFloat {
+    static func monospline(_ f0: Real, _ f1: Real, _ f2: Real, _ f3: Real,
+                           with ms: Monospline) -> Real {
         return ms.interpolatedValue(f0, f1, f2, f3)
     }
-    static func lastMonospline(_ f0: CGFloat, _ f1: CGFloat, _ f2: CGFloat,
-                              with ms: Monospline) -> CGFloat {
+    static func lastMonospline(_ f0: Real, _ f1: Real, _ f2: Real,
+                              with ms: Monospline) -> Real {
         return ms.lastInterpolatedValue(f0, f1, f2)
     }
     
-    static func integralLinear(_ f0: CGFloat, _ f1: CGFloat, a: CGFloat, b: CGFloat) -> CGFloat {
+    static func integralLinear(_ f0: Real, _ f1: Real, a: Real, b: Real) -> Real {
         let f01 = f1 - f0
         let fa = a * (f01 * a / 2 + f0)
         let fb = b * (f01 * b / 2 + f0)
@@ -690,7 +665,7 @@ extension CGFloat: Interpolatable {
 
 extension CGAffineTransform {
     static func centering(from fromFrame: Rect,
-                          to toFrame: Rect) -> (scale: CGFloat, affine: CGAffineTransform) {
+                          to toFrame: Rect) -> (scale: Real, affine: CGAffineTransform) {
         guard !fromFrame.isEmpty && !toFrame.isEmpty else {
             return (1, CGAffineTransform.identity)
         }
@@ -711,7 +686,7 @@ extension CGAffineTransform {
             return (yScale, affine.translatedBy(x: -fromFrame.origin.x, y: -fromFrame.origin.y))
         }
     }
-    func flippedHorizontal(by width: CGFloat) -> CGAffineTransform {
+    func flippedHorizontal(by width: Real) -> CGAffineTransform {
         return translatedBy(x: width, y: 0).scaledBy(x: -1, y: 1)
     }
 }

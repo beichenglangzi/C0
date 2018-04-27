@@ -198,12 +198,12 @@ final class Cell: NSObject, NSCoding {
         return parents
     }
     
-    func at(_ p: Point, reciprocalScale: CGFloat,
-            maxArea: CGFloat = 200.0, maxDistance: CGFloat = 5.0) -> Cell? {
+    func at(_ p: Point, reciprocalScale: Real,
+            maxArea: Real = 200.0, maxDistance: Real = 5.0) -> Cell? {
         
         let scaleMaxArea = reciprocalScale * reciprocalScale * maxArea
         let scaleMaxDistance = reciprocalScale * maxDistance
-        var minD² = CGFloat.infinity, minCell: Cell? = nil
+        var minD² = Real.infinity, minCell: Cell? = nil
         var scaleMaxDistance² = scaleMaxDistance * scaleMaxDistance
         func at(_ point: Point, with cell: Cell) -> Cell? {
             if cell.contains(point) || cell.geometry.isEmpty {
@@ -313,7 +313,7 @@ final class Cell: NSObject, NSCoding {
         return false
     }
     
-    func maxDistance²(at p: Point) -> CGFloat {
+    func maxDistance²(at p: Point) -> Real {
         return Line.maxDistance²(at: p, with: geometry.lines)
     }
     
@@ -511,8 +511,8 @@ final class Cell: NSObject, NSCoding {
         }
     }
     func draw(isEdit: Bool = false, isUseDraw: Bool = false,
-              reciprocalScale: CGFloat, reciprocalAllScale: CGFloat,
-              scale: CGFloat, rotation: CGFloat, in ctx: CGContext) {
+              reciprocalScale: Real, reciprocalAllScale: Real,
+              scale: Real, rotation: Real, in ctx: CGContext) {
         let isEditAndUseDraw = isEdit && isUseDraw
         if isEditAndUseDraw && self.geometry == drawGeometry {
             children.forEach {
@@ -567,7 +567,7 @@ final class Cell: NSObject, NSCoding {
                 ctx.setFillColor(lineColor.cg)
                 geometry.draw(withLineWidth: material.lineWidth * reciprocalScale, in: ctx)
             } else if material.lineWidth > Material.defaultLineWidth {
-                func drawStrokePath(path: CGPath, lineWidth: CGFloat, color: Color) {
+                func drawStrokePath(path: CGPath, lineWidth: Real, color: Color) {
                     ctx.setLineWidth(lineWidth)
                     ctx.setStrokeColor(color.cg)
                     ctx.setLineJoin(.round)
@@ -609,7 +609,7 @@ final class Cell: NSObject, NSCoding {
     }
     
     static func drawCellPaths(_ cells: [Cell], _ color: Color,
-                              alpha: CGFloat = 0.3, in ctx: CGContext) {
+                              alpha: Real = 0.3, in ctx: CGContext) {
         ctx.setAlpha(alpha)
         ctx.beginTransparencyLayer(auxiliaryInfo: nil)
         ctx.setFillColor(color.cg)
@@ -642,7 +642,7 @@ extension Cell: ClassDeepCopiable {
     }
 }
 extension Cell: Referenceable {
-    static let name = Localization(english: "Cell", japanese: "セル")
+    static let name = Text(english: "Cell", japanese: "セル")
 }
 extension Cell: Viewable {
     func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
@@ -691,7 +691,7 @@ final class JoiningCell: NSObject, NSCoding {
     }
 }
 extension JoiningCell: Referenceable {
-    static let name = Localization(english: "Joining Cell", japanese: "接続セル")
+    static let name = Text(english: "Joining Cell", japanese: "接続セル")
 }
 extension JoiningCell: ClassDeepCopiable {
 }
@@ -703,7 +703,7 @@ extension JoiningCell: ObjectViewExpression {
     }
 }
 
-final class CellView: View, Copiable {
+final class CellView: View, Queryable, Copiable {
     var cell = Cell() {
         didSet {
             isLockedView.bool = cell.isLocked

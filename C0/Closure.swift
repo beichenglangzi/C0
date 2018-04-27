@@ -21,14 +21,14 @@ import Foundation
 
 typealias Closure = (() -> ())
 
-final class ClosureView: View, Runnable {
+final class ClosureView: View, Queryable, Runnable {
     var closure: Closure
     
     let nameView: TextView
     var sizeType: SizeType
     
     init(closure: @escaping Closure = {},
-         name: Localization = Localization(),
+         name: Text = "",
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
         self.closure = closure
@@ -63,6 +63,6 @@ final class ClosureView: View, Runnable {
     }
     
     func reference(at p: Point) -> Reference {
-        return Reference(name: Localization(english: "Closure", japanese: "クロージャ"))
+        return Reference(name: Text(english: "Closure", japanese: "クロージャ"))
     }
 }

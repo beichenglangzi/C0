@@ -19,14 +19,14 @@
 
 import Foundation
 
-typealias BPM = CGFloat
-typealias FPS = CGFloat
+typealias BPM = Real
+typealias FPS = Real
 typealias FrameTime = Int
-typealias BaseTime = Q
-typealias Beat = Q
-typealias DoubleBeat = CGFloat
-typealias DoubleBaseTime = CGFloat
-typealias Second = CGFloat
+typealias BaseTime = Rational
+typealias Beat = Rational
+typealias RealBeat = Real
+typealias RealBaseTime = Real
+typealias Second = Real
 
 /**
  Issue: 複数のサウンド
@@ -48,8 +48,8 @@ final class Scene: NSObject, NSCoding {
             self.reciprocalViewScale = 1 / viewTransform.scale.x
         }
     }
-    private(set) var scale: CGFloat, reciprocalViewScale: CGFloat
-    var reciprocalScale: CGFloat {
+    private(set) var scale: Real, reciprocalViewScale: Real
+    var reciprocalScale: Real {
         return reciprocalViewScale / editNode.worldScale
     }
     
@@ -104,12 +104,12 @@ final class Scene: NSObject, NSCoding {
         return data
     }
     
-    static let timeIntervalOption = RationalNumberOption(defaultModel: Q(1, 16),
-                                                         minModel: Q(1, 100000), maxModel: 100000,
-                                                         modelInterval: 1,
-                                                         isInfinitesimal: true, unit: " b")
+    static let timeIntervalOption = RationalOption(defaultModel: Rational(1, 16),
+                                                   minModel: Rational(1, 100000), maxModel: 100000,
+                                                   modelInterval: 1,
+                                                   isInfinitesimal: true, unit: " b")
     
-    init(name: String = Localization(english: "Untitled", japanese: "名称未設定").currentString,
+    init(name: String = Text(english: "Untitled", japanese: "名称未設定").currentString,
          frame: Rect = Rect(x: -288, y: -162, width: 576, height: 324),
          frameRate: FPS = 24,
          baseTimeInterval: Beat = Beat(1, 24),
@@ -192,10 +192,10 @@ final class Scene: NSObject, NSCoding {
     }
     
     func beatTime(withFrameTime frameTime: FrameTime) -> Beat {
-        return Beat(tempoTrack.doubleBeatTime(withSecondTime: Second(frameTime) / Second(frameRate)))
+        return Beat(tempoTrack.realBeatTime(withSecondTime: Second(frameTime) / Second(frameRate)))
     }
     func basedBeatTime(withSecondTime secondTime: Second) -> Beat {
-        return basedBeatTime(withDoubleBeatTime: tempoTrack.doubleBeatTime(withSecondTime: secondTime))
+        return basedBeatTime(withDoubleBeatTime: tempoTrack.realBeatTime(withSecondTime: secondTime))
     }
     func secondTime(withBeatTime beatTime: Beat) -> Second {
         return tempoTrack.secondTime(withBeatTime: beatTime)
@@ -210,11 +210,11 @@ final class Scene: NSObject, NSCoding {
     func frameTime(withSecondTime secondTime: Second) -> FrameTime {
         return FrameTime(secondTime * Second(frameRate))
     }
-    func basedBeatTime(withDoubleBeatTime doubleBeatTime: DoubleBeat) -> Beat {
-        return Beat(Int(doubleBeatTime / DoubleBeat(baseTimeInterval))) * baseTimeInterval
+    func basedBeatTime(withDoubleBeatTime realBeatTime: RealBeat) -> Beat {
+        return Beat(Int(realBeatTime / RealBeat(baseTimeInterval))) * baseTimeInterval
     }
-    func doubleBeatTime(withBeatTime beatTime: Beat) -> DoubleBeat {
-        return DoubleBeat(beatTime)
+    func realBeatTime(withBeatTime beatTime: Beat) -> RealBeat {
+        return RealBeat(beatTime)
     }
     func beatTime(withBaseTime baseTime: BaseTime) -> Beat {
         return baseTime * baseTimeInterval
@@ -222,11 +222,11 @@ final class Scene: NSObject, NSCoding {
     func baseTime(withBeatTime beatTime: Beat) -> BaseTime {
         return beatTime / baseTimeInterval
     }
-    func basedBeatTime(withDoubleBaseTime doubleBaseTime: DoubleBaseTime) -> Beat {
-        return Beat(Int(doubleBaseTime)) * baseTimeInterval
+    func basedBeatTime(withRealBaseTime realBaseTime: RealBaseTime) -> Beat {
+        return Beat(Int(realBaseTime)) * baseTimeInterval
     }
-    func doubleBaseTime(withBeatTime beatTime: Beat) -> DoubleBaseTime {
-        return DoubleBaseTime(beatTime / baseTimeInterval)
+    func realBaseTime(withBeatTime beatTime: Beat) -> RealBaseTime {
+        return RealBaseTime(beatTime / baseTimeInterval)
     }
     
     var curretEditKeyframeTime: Beat {
@@ -253,7 +253,7 @@ final class Scene: NSObject, NSCoding {
         return (Int(second), frameTime - Int(second * frameRate))
     }
     func secondTime(with frameTime: FrameTime) -> (second: Int, frame: Int) {
-        let second = Int(CGFloat(frameTime) / frameRate)
+        let second = Int(Real(frameTime) / frameRate)
         return (second, frameTime - second)
     }
     
@@ -286,14 +286,14 @@ extension Scene: ClassDeepCopiable {
     }
 }
 extension Scene: Referenceable {
-    static let name = Localization(english: "Scene", japanese: "シーン")
+    static let name = Text(english: "Scene", japanese: "シーン")
 }
 
 /**
  Issue: セルをキャンバス外にペースト
  Issue: Display P3サポート
  */
-final class SceneView: View, Scrollable {
+final class SceneView: View, Queryable, Scrollable {
     var scene = Scene() {
         didSet {
             updateWithScene()
@@ -316,7 +316,7 @@ final class SceneView: View, Scrollable {
             }
             
             timelineView.differentialSceneDataModel = differentialSceneDataModel
-            canvas.sceneDataModel = differentialSceneDataModel
+            canvasView.sceneDataModel = differentialSceneDataModel
             updateWithScene()
         }
     }
@@ -337,13 +337,13 @@ final class SceneView: View, Scrollable {
     let versionView = VersionView()
     
     let timelineView = TimelineView()
-    let canvas = Canvas()
-    let seekBar = SeekBar()
+    let canvasView = CanvasView()
+    let playManagerView = PlayManagerView()
     
     let rendererManager = RendererManager()
     let sizeView = DiscreteSizeView(sizeType: .small)
-    let frameRateView = DiscreteRealNumberView(model: 24,
-                                           option: RealNumberOption(defaultModel: 24,
+    let frameRateView = DiscreteRealView(model: 24,
+                                           option: RealOption(defaultModel: 24,
                                                                 minModel: 1, maxModel: 1000,
                                                                 modelInterval: 1, exp: 1,
                                                                 numberOfDigits: 0, unit: " fps"),
@@ -351,13 +351,13 @@ final class SceneView: View, Scrollable {
                                            sizeType: .small)
     
     let isHiddenPreviousView = BoolView(defaultBool: true, cationBool: false,
-                                        name: Localization(english: "Previous", japanese: "前"),
+                                        name: Text(english: "Previous", japanese: "前"),
                                         boolInfo: BoolInfo.hidden)
     let isHiddenNextView = BoolView(defaultBool: true, cationBool: false,
-                                    name: Localization(english: "Next", japanese: "次"),
+                                    name: Text(english: "Next", japanese: "次"),
                                     boolInfo: BoolInfo.hidden)
     let isHiddenSubtitlesView = BoolView(cationBool: true,
-                                         name: Localization(english: "Subtitles", japanese: "字幕"),
+                                         name: Text(english: "Subtitles", japanese: "字幕"),
                                          boolInfo: BoolInfo.hidden,
                                          sizeType: .small)
     
@@ -370,11 +370,11 @@ final class SceneView: View, Scrollable {
                                                           frame: Layout.valueFrame(with: .small),
                                                           sizeType: .small)
     
-    let exportSubtitlesView = ClosureView(closure: {}, name: Localization(english: "Export Subtitles",
+    let exportSubtitlesView = ClosureView(closure: {}, name: Text(english: "Export Subtitles",
                                                                           japanese: "字幕を書き出す"))
-    let exportImageView = ClosureView(closure: {}, name: Localization(english: "Export Image",
+    let exportImageView = ClosureView(closure: {}, name: Text(english: "Export Image",
                                                                       japanese: "画像を書き出す"))
-    let exportMovieView = ClosureView(closure: {}, name: Localization(english: "Export Movie",
+    let exportMovieView = ClosureView(closure: {}, name: Text(english: "Export Movie",
                                                                       japanese: "動画を書き出す"))
     
     let soundView = SoundView(sizeType: .small)
@@ -387,15 +387,15 @@ final class SceneView: View, Scrollable {
     let subtitleView = SubtitleView(sizeType: .small)
     let effectView = EffectView(sizeType: .small)
     
-//    let showAllBox = TextBox(name: Localization(english: "Unlock All Cells",
+//    let showAllBox = TextBox(name: Text(english: "Unlock All Cells",
 //                                                japanese: "すべてのセルのロックを解除"),
 //                             sizeType: .small)
-//    let clipCellInSelectedBox = TextBox(name: Localization(english: "Clip Cell in Selected",
+//    let clipCellInSelectedBox = TextBox(name: Text(english: "Clip Cell in Selected",
 //                                                           japanese: "セルを選択の中へクリップ"),
 //                                        sizeType: .small)
-//    let splitColorBox = TextBox(name: Localization(english: "Split Color", japanese: "カラーを分割"),
+//    let splitColorBox = TextBox(name: Text(english: "Split Color", japanese: "カラーを分割"),
 //                                sizeType: .small)
-//    let splitOtherThanColorBox = TextBox(name: Localization(english: "Split Material",
+//    let splitOtherThanColorBox = TextBox(name: Text(english: "Split Material",
 //                                                            japanese: "マテリアルを分割"), sizeType: .small)
     
     override init() {
@@ -404,7 +404,7 @@ final class SceneView: View, Scrollable {
                               directoryWith: [differentialSceneDataModel,
                                               scene.cutTrack.differentialDataModel])
         timelineView.differentialSceneDataModel = differentialSceneDataModel
-        canvas.sceneDataModel = differentialSceneDataModel
+        canvasView.sceneDataModel = differentialSceneDataModel
         
         versionView.version = scene.version
         
@@ -419,13 +419,13 @@ final class SceneView: View, Scrollable {
                     isHiddenPreviousView, isHiddenNextView, timelineView.baseTimeIntervalView,
                     soundView,
                     timelineView.keyframeView,
-                    drawingView, canvas.materialView, transformView, wiggleXView, wiggleYView,
+                    drawingView, canvasView.materialView, transformView, wiggleXView, wiggleYView,
                     timelineView.tempoView, timelineView.tempoKeyframeView,
                     timelineView.baseTimeIntervalView,
                     isHiddenSubtitlesView,
                     timelineView.nodeView, effectView,
-                    canvas.cellView,
-                    timelineView, canvas, seekBar]
+                    canvasView.cellView,
+                    timelineView, canvasView, playManagerView]
         
         differentialSceneDataModel.dataClosure = { [unowned self] in self.scene.differentialData }
         
@@ -433,7 +433,7 @@ final class SceneView: View, Scrollable {
         sizeView.binding = { [unowned self] in
             self.scene.frame = Rect(origin: Point(x: -$0.size.width / 2,
                                                       y: -$0.size.height / 2), size: $0.size)
-            self.canvas.setNeedsDisplay()
+            self.canvasView.setNeedsDisplay()
             let sp = Point(x: $0.size.width, y: $0.size.height)
             self.transformView.standardTranslation = sp
             self.wiggleXView.standardAmplitude = $0.size.width
@@ -456,13 +456,13 @@ final class SceneView: View, Scrollable {
         }
         
         isHiddenPreviousView.binding = { [unowned self] in
-            self.canvas.isHiddenPrevious = $0.bool
+            self.canvasView.isHiddenPrevious = $0.bool
             if $0.phase == .ended && $0.bool != $0.oldBool {
                 self.differentialSceneDataModel.isWrite = true
             }
         }
         isHiddenNextView.binding = { [unowned self] in
-            self.canvas.isHiddenNext = $0.bool
+            self.canvasView.isHiddenNext = $0.bool
             if $0.phase == .ended && $0.bool != $0.oldBool {
                 self.differentialSceneDataModel.isWrite = true
             }
@@ -480,8 +480,8 @@ final class SceneView: View, Scrollable {
             if $0.phase == .ended && $0.sound != $0.oldSound {
                 self.differentialSceneDataModel.isWrite = true
             }
-            if self.scene.sound.url == nil && self.canvas.player.audioPlayer?.isPlaying ?? false {
-                self.canvas.player.audioPlayer?.stop()
+            if self.scene.sound.url == nil && self.canvasView.playerView.audioPlayer?.isPlaying ?? false {
+                self.canvasView.playerView.audioPlayer?.stop()
             }
         }
         
@@ -523,10 +523,10 @@ final class SceneView: View, Scrollable {
             self.set($0.model, old: $0.oldModel, $0.phase)
         }
         timelineView.setSceneDurationClosure = { [unowned self] in
-            self.seekBar.maxTime = self.scene.secondTime(withBeatTime: $1)
+            self.playManagerView.maxTime = self.scene.secondTime(withBeatTime: $1)
         }
         timelineView.setEditCutItemIndexClosure = { [unowned self] _, _ in
-            self.canvas.cut = self.scene.editCut
+            self.canvasView.cut = self.scene.editCut
             self.drawingView.drawing = self.scene.editNode.editTrack.drawingItem.drawing
             self.transformView.transform =
                 self.scene.editNode.editTrack.transformItem?.transform ?? Transform()
@@ -542,7 +542,7 @@ final class SceneView: View, Scrollable {
 //                if self.canvas.contains(p) {
 //                    self.canvas.updateEditView(with: self.canvas.convertToCurrentLocal(p))
 //                }
-                self.canvas.setNeedsDisplay()
+                self.canvasView.setNeedsDisplay()
             }
             if $0.isTransform {
                 self.drawingView.drawing = self.scene.editNode.editTrack.drawingItem.drawing
@@ -561,7 +561,7 @@ final class SceneView: View, Scrollable {
 //                if self.canvas.contains(p) {
 //                    self.canvas.updateEditView(with: self.canvas.convertToCurrentLocal(p))
 //                }
-                self.canvas.setNeedsDisplay()
+                self.canvasView.setNeedsDisplay()
             }
         }
         timelineView.nodeView.setIsHiddenClosure = { [unowned self] in
@@ -579,78 +579,78 @@ final class SceneView: View, Scrollable {
         exportSubtitlesView.closure = { [unowned self] in _ = self.rendererManager.exportSubtitles() }
         exportImageView.closure = { [unowned self] in
             let size = self.scene.frame.size, p = self.scene.renderingVerticalResolution
-            let newSize = Size(width: floor((size.width * CGFloat(p)) / size.height), height: CGFloat(p))
+            let newSize = Size(width: floor((size.width * Real(p)) / size.height), height: Real(p))
             let sizeString = "w: \(Int(newSize.width)) px, h: \(Int(newSize.height)) px"
-            let message = Localization(english: "Export Image(\(sizeString))",
+            let message = Text(english: "Export Image(\(sizeString))",
                                        japanese: "画像として書き出す(\(sizeString))").currentString
             _ = self.rendererManager.exportImage(message: message, size: newSize)
         }
         exportMovieView.closure = { [unowned self] in
             let size = self.scene.frame.size, p = self.scene.renderingVerticalResolution
-            let newSize = Size(width: floor((size.width * CGFloat(p)) / size.height), height: CGFloat(p))
+            let newSize = Size(width: floor((size.width * Real(p)) / size.height), height: Real(p))
             let sizeString = "w: \(Int(newSize.width)) px, h: \(Int(newSize.height)) px"
-            let message = Localization(english: "Export Movie(\(sizeString))",
+            let message = Text(english: "Export Movie(\(sizeString))",
                                        japanese: "動画として書き出す(\(sizeString))").currentString
             _ = self.rendererManager.exportMovie(message: message, size: newSize)
         }
         
-        canvas.bindClosure = { [unowned self] _, m, _ in self.materialManager.material = m }
-        canvas.setTimeClosure = { [unowned self] _, time in self.timelineView.time = time }
-        canvas.updateSceneClosure = { [unowned self] _ in
+        canvasView.bindClosure = { [unowned self] _, m, _ in self.materialManager.material = m }
+        canvasView.setTimeClosure = { [unowned self] _, time in self.timelineView.time = time }
+        canvasView.updateSceneClosure = { [unowned self] _ in
             self.differentialSceneDataModel.isWrite = true
         }
-        canvas.setDraftLinesClosure = { [unowned self] _, _ in
+        canvasView.setDraftLinesClosure = { [unowned self] _, _ in
             self.timelineView.editCutView.updateChildren()
         }
-        canvas.setContentsScaleClosure = { [unowned self] _, contentsScale in
+        canvasView.setContentsScaleClosure = { [unowned self] _, contentsScale in
             self.rendererManager.rendingContentScale = contentsScale
         }
-        canvas.pasteColorBinding = { [unowned self] in self.materialManager.paste($1, in: $2) }
-        canvas.pasteMaterialBinding = { [unowned self] in self.materialManager.paste($1, in: $2) }
+        canvasView.pasteColorBinding = { [unowned self] in self.materialManager.paste($1, in: $2) }
+        canvasView.pasteMaterialBinding = { [unowned self] in self.materialManager.paste($1, in: $2) }
         
-        canvas.cellView.setIsLockedClosure = { [unowned self] in
+        canvasView.cellView.setIsLockedClosure = { [unowned self] in
             self.setIsLockedInCell(with: $0)
         }
         
-        canvas.materialView.isEditingBinding = { [unowned self] (materialditor, isEditing) in
-            self.canvas.materialViewType = isEditing ?
+        canvasView.materialView.isEditingBinding = { [unowned self] (materialditor, isEditing) in
+            self.canvasView.materialViewType = isEditing ?
                 .preview : (materialditor.isSubIndicated ? .selected : .none)
         }
-        canvas.materialView.isSubIndicatedBinding = { [unowned self] (view, isSubIndicated) in
-            self.canvas.materialViewType = view.isEditing ?
+        canvasView.materialView.isSubIndicatedBinding = { [unowned self] (view, isSubIndicated) in
+            self.canvasView.materialViewType = view.isEditing ?
                 .preview : (isSubIndicated ? .selected : .none)
         }
         
-        canvas.player.didSetTimeClosure = { [unowned self] in
-            self.seekBar.time = self.scene.secondTime(withBeatTime: $0)
+        canvasView.playerView.didSetTimeClosure = { [unowned self] in
+            self.playManagerView.time = self.scene.secondTime(withBeatTime: $0)
         }
-        canvas.player.didSetPlayFrameRateClosure = { [unowned self] in
-            if !self.canvas.player.isPause {
-                self.seekBar.playFrameRate = $0
+        canvasView.playerView.didSetPlayFrameRateClosure = { [unowned self] in
+            if !self.canvasView.playerView.isPause {
+                self.playManagerView.playFrameRate = $0
             }
         }
         
-        seekBar.timeBinding = { [unowned self] in
+        playManagerView.timeBinding = { [unowned self] in
             switch $1 {
             case .began:
-                self.canvas.player.isPause = true
+                self.canvasView.playerView.isPause = true
             case .changed:
                 break
             case .ended:
-                self.canvas.player.isPause = false
+                self.canvasView.playerView.isPause = false
             }
-            self.canvas.player.currentPlaySecond = $0
+            self.canvasView.playerView.currentPlaySecond = $0
         }
-        seekBar.isPlayingBinding = { [unowned self] in
+        playManagerView.isPlayingBinding = { [unowned self] in
             if $0 {
-                self.seekBar.maxTime = self.scene.secondTime(withBeatTime: self.scene.duration)
-                self.seekBar.time = self.scene.secondTime(withBeatTime: self.scene.time)
-                self.seekBar.frameRate = self.scene.frameRate
-                self.canvas.play()
+                self.playManagerView.maxTime = self.scene.secondTime(withBeatTime: self.scene.duration)
+                self.playManagerView.time = self.scene.secondTime(withBeatTime: self.scene.time)
+                self.playManagerView.frameRate = self.scene.frameRate
+                self.canvasView.play()
             } else {
-                self.seekBar.time = self.scene.secondTime(withBeatTime: self.scene.time)
-                self.seekBar.frameRate = 0
-                self.canvas.player.stop()
+                self.playManagerView.time = self.scene.secondTime(withBeatTime: self.scene.time)
+                self.playManagerView.frameRate = 0
+                self.canvasView.playerView.stop()
             }
         }
         
@@ -716,9 +716,9 @@ final class SceneView: View, Scrollable {
         ty -= th
         timelineView.frame = Rect(x: padding, y: ty, width: cs.width, height: th)
         ty -= cs.height
-        canvas.frame = Rect(x: padding, y: ty, width: cs.width, height: cs.height)
+        canvasView.frame = Rect(x: padding, y: ty, width: cs.width, height: cs.height)
         ty -= h
-        seekBar.frame = Rect(x: padding, y: ty, width: cs.width, height: h)
+        playManagerView.frame = Rect(x: padding, y: ty, width: cs.width, height: h)
         
         let px = padding * 2 + cs.width, propertyMaxY = y
         var py = propertyMaxY
@@ -754,9 +754,9 @@ final class SceneView: View, Scrollable {
         py -= dh
         drawingView.frame = Rect(x: px, y: py, width:pw, height: dh)
         py -= padding
-        let mh = canvas.materialView.defaultBounds(withWidth: pw).height
+        let mh = canvasView.materialView.defaultBounds(withWidth: pw).height
         py -= mh
-        canvas.materialView.frame = Rect(x: px, y: py, width: pw, height: mh)
+        canvasView.materialView.frame = Rect(x: px, y: py, width: pw, height: mh)
         py -= padding
         let trb = transformView.defaultBounds
         py -= trb.height
@@ -768,9 +768,9 @@ final class SceneView: View, Scrollable {
         
 //        subtitleView.frame = Rect(x: px, y: padding + sph, width: pw, height: sph)
         timelineView.nodeView.frame = Rect(x: px + 100, y: padding, width: pw, height: sph)
-        let ch = canvas.cellView.defaultBounds.height
+        let ch = canvasView.cellView.defaultBounds.height
         py -= ch
-        canvas.cellView.frame = Rect(x: px, y: padding, width: pw, height: ch)
+        canvasView.cellView.frame = Rect(x: px, y: padding, width: pw, height: ch)
     }
     private func updateWithScene() {
         scene.timeBinding = { [unowned self] (_, time) in self.update(withTime: time) }
@@ -781,7 +781,7 @@ final class SceneView: View, Scrollable {
         materialManager.scene = scene
         rendererManager.scene = scene
         timelineView.scene = scene
-        canvas.scene = scene
+        canvasView.scene = scene
         sizeView.size = scene.frame.size
         frameRateView.model = scene.frameRate
         isHiddenPreviousView.bool = scene.isHiddenPrevious
@@ -804,12 +804,12 @@ final class SceneView: View, Scrollable {
             wiggleXView.wiggle = wiggle
         }
         subtitleView.subtitle = scene.editCut.subtitleTrack.subtitleItem.subtitle
-        seekBar.time = scene.secondTime(withBeatTime: scene.time)
-        seekBar.maxTime = scene.secondTime(withBeatTime: scene.duration)
+        playManagerView.time = scene.secondTime(withBeatTime: scene.time)
+        playManagerView.maxTime = scene.secondTime(withBeatTime: scene.duration)
     }
     
     func update(withTime time: Beat) {
-        seekBar.time = scene.secondTime(withBeatTime: time)
+        playManagerView.time = scene.secondTime(withBeatTime: time)
     }
     
     var time: Beat {
@@ -820,8 +820,8 @@ final class SceneView: View, Scrollable {
             if newValue != time {
                 timelineView.time = newValue
                 differentialSceneDataModel.isWrite = true
-                seekBar.time = scene.secondTime(withBeatTime: newValue)
-                canvas.updateEditCellBindingLine()
+                playManagerView.time = scene.secondTime(withBeatTime: newValue)
+                canvasView.updateEditCellBindingLine()
             }
         }
     }
@@ -874,7 +874,7 @@ final class SceneView: View, Scrollable {
                      in animationView: AnimationView, in cutView: CutView) {
         track.replace(keyframe, at: index)
         animationView.animation = track.animation
-        canvas.setNeedsDisplay()
+        canvasView.setNeedsDisplay()
     }
     private func set(_ keyframe: Keyframe, old oldKeyframe: Keyframe,
                      at index: Int, in track: NodeTrack,
@@ -1000,7 +1000,7 @@ final class SceneView: View, Scrollable {
         track.updateInterpolation()
         cutView.cut.editNode.updateEffect()
         cutView.updateChildren()
-        canvas.setNeedsDisplay()
+        canvasView.setNeedsDisplay()
     }
     private func set(_ effect: Effect, old oldEffect: Effect,
                      at index: Int, in track: NodeTrack, in cutView: CutView, time: Beat) {
@@ -1082,7 +1082,7 @@ final class SceneView: View, Scrollable {
         track.updateInterpolation()
         cutView.cut.editNode.updateTransform()
         cutView.updateChildren()
-        canvas.setNeedsDisplay()
+        canvasView.setNeedsDisplay()
     }
     private func set(_ transform: Transform, old oldTransform: Transform,
                      at index: Int, in track: NodeTrack, in cutView: CutView, time: Beat) {
@@ -1162,7 +1162,7 @@ final class SceneView: View, Scrollable {
         track.replace(wiggle, at: index)
         track.updateInterpolation()
         cutView.cut.editNode.updateWiggle()
-        canvas.setNeedsDisplay()
+        canvasView.setNeedsDisplay()
     }
     private func set(_ wiggle: Wiggle, old oldWiggle: Wiggle,
                      at index: Int, in track: NodeTrack, in cutView: CutView, time: Beat) {
@@ -1178,7 +1178,7 @@ final class SceneView: View, Scrollable {
         case .began:
             self.cutView = timelineView.editCutView
         case .changed:
-            canvas.setNeedsDisplay()
+            canvasView.setNeedsDisplay()
             cutView?.updateChildren()
         case .ended:
             guard let cutView = cutView else {
@@ -1190,7 +1190,7 @@ final class SceneView: View, Scrollable {
                     oldIsHidden: obj.oldIsHidden,
                     in: obj.inNode, in: cutView, time: time)
             } else {
-                canvas.setNeedsDisplay()
+                canvasView.setNeedsDisplay()
                 cutView.updateChildren()
             }
         }
@@ -1201,7 +1201,7 @@ final class SceneView: View, Scrollable {
             $0.set(isHidden: oldIsHidden, oldIsHidden: isHidden, in: node, in: cutView, time: $1)
         }
         node.isHidden = isHidden
-        canvas.setNeedsDisplay()
+        canvasView.setNeedsDisplay()
         cutView.updateChildren()
         differentialSceneDataModel.isWrite = true
     }
@@ -1211,7 +1211,7 @@ final class SceneView: View, Scrollable {
         case .began:
             self.cutView = timelineView.editCutView
         case .changed:
-            canvas.setNeedsDisplay()
+            canvasView.setNeedsDisplay()
         case .ended:
             guard let cutView = cutView else {
                 return
@@ -1221,7 +1221,7 @@ final class SceneView: View, Scrollable {
                     oldIsLocked: obj.oldIsLocked,
                     in: obj.inCell, in: cutView, time: time)
             } else {
-                canvas.setNeedsDisplay()
+                canvasView.setNeedsDisplay()
             }
         }
     }
@@ -1232,7 +1232,7 @@ final class SceneView: View, Scrollable {
                    oldIsLocked: isLocked, in: cell, in: cutView, time: $1)
         }
         cell.isLocked = isLocked
-        canvas.setNeedsDisplay()
+        canvasView.setNeedsDisplay()
         differentialSceneDataModel.isWrite = true
     }
     
@@ -1309,7 +1309,7 @@ final class SceneView: View, Scrollable {
     }
     private func set(_ drawing: Drawing, at index: Int, in track: NodeTrack) {
         track.replace(drawing, at: index)
-        canvas.setNeedsDisplay()
+        canvasView.setNeedsDisplay()
     }
     private func set(_ drawing: Drawing, old oldDrawing: Drawing,
                      at index: Int, in track: NodeTrack, _ node: Node, time: Beat) {
@@ -1371,7 +1371,7 @@ final class SceneMaterialManager {
     lazy var scene = Scene()
     weak var sceneView: SceneView! {
         didSet {
-            let view = sceneView.canvas.materialView
+            let view = sceneView.canvasView.materialView
             view.typeBinding = { [unowned self] in self.setType(with: $0) }
             view.colorBinding = { [unowned self] in self.setColor(with: $0) }
             view.lineColorBinding = { [unowned self] in self.setLineColor(with: $0) }
@@ -1385,11 +1385,11 @@ final class SceneMaterialManager {
     
     var material: Material {
         get {
-            return sceneView.canvas.materialView.material
+            return sceneView.canvasView.materialView.material
         }
         set {
             scene.editMaterial = newValue
-            sceneView.canvas.materialView.material = newValue
+            sceneView.canvasView.materialView.material = newValue
             sceneView.differentialSceneDataModel.isWrite = true
         }
     }
@@ -1669,8 +1669,8 @@ final class SceneMaterialManager {
         }
         set(material, editIndexes: editIndexes, in: materialItem, track)
         sceneView.differentialSceneDataModel.isWrite = true
-        if cut === sceneView.canvas.cut {
-            sceneView.canvas.setNeedsDisplay()
+        if cut === sceneView.canvasView.cut {
+            sceneView.canvasView.setNeedsDisplay()
         }
     }
     
@@ -1685,7 +1685,7 @@ final class SceneMaterialManager {
     }
     
     func splitColor() {
-        guard let editCell = sceneView.canvas.editCell else {
+        guard let editCell = sceneView.canvasView.editCell else {
             return
         }
         let node = scene.editNode
@@ -1695,7 +1695,7 @@ final class SceneMaterialManager {
         }
     }
     func splitOtherThanColor() {
-        guard let editCell = sceneView.canvas.editCell else {
+        guard let editCell = sceneView.canvasView.editCell else {
             return
         }
         let node = scene.editNode
@@ -1793,8 +1793,8 @@ final class SceneMaterialManager {
         }
         cells.forEach { $0.material = material }
         sceneView.differentialSceneDataModel.isWrite = true
-        if cut === sceneView.canvas.cut {
-            sceneView.canvas.setNeedsDisplay()
+        if cut === sceneView.canvasView.cut {
+            sceneView.canvasView.setNeedsDisplay()
         }
     }
     func select(_ material: Material) {
@@ -1817,7 +1817,7 @@ final class SceneMaterialManager {
             materialTuples = [:]
         }
         changeMaterialWith(isColorTuple: false, binding.phase)
-        sceneView.canvas.setNeedsDisplay()
+        sceneView.canvasView.setNeedsDisplay()
     }
     private func setMaterialType(_ type: Material.MaterialType,
                                  in materialTuples: [UUID: MaterialTuple]) {
@@ -1844,7 +1844,7 @@ final class SceneMaterialManager {
             colorTuples = []
         }
         changeMaterialWith(isColorTuple: true, binding.phase)
-        sceneView.canvas.setNeedsDisplay()
+        sceneView.canvasView.setNeedsDisplay()
     }
     private func setColor(_ color: Color, in colorTuples: [ColorTuple]) {
         for colorTuple in colorTuples {
@@ -1874,7 +1874,7 @@ final class SceneMaterialManager {
             materialTuples = [:]
         }
         changeMaterialWith(isColorTuple: false, binding.phase)
-        sceneView.canvas.setNeedsDisplay()
+        sceneView.canvasView.setNeedsDisplay()
     }
     private func setLineColor(_ lineColor: Color, in materialTuples: [UUID: MaterialTuple]) {
         for materialTuple in materialTuples.values {
@@ -1899,14 +1899,14 @@ final class SceneMaterialManager {
             materialTuples = [:]
         }
         changeMaterialWith(isColorTuple: false, binding.phase)
-        sceneView.canvas.setNeedsDisplay()
+        sceneView.canvasView.setNeedsDisplay()
     }
-    private func setLineWidth(_ lineWidth: CGFloat, in materialTuples: [UUID: MaterialTuple]) {
+    private func setLineWidth(_ lineWidth: Real, in materialTuples: [UUID: MaterialTuple]) {
         for materialTuple in materialTuples.values {
             set(materialTuple.material.with(lineWidth: lineWidth), in: materialTuple)
         }
     }
-    private func _setLineWidth(_ lineWidth: CGFloat, in materialTuples: [UUID: MaterialTuple]) {
+    private func _setLineWidth(_ lineWidth: Real, in materialTuples: [UUID: MaterialTuple]) {
         for materialTuple in materialTuples.values {
             _set(materialTuple.material.with(lineWidth: lineWidth), in: materialTuple)
         }
@@ -1924,14 +1924,14 @@ final class SceneMaterialManager {
             materialTuples = [:]
         }
         changeMaterialWith(isColorTuple: false, binding.phase)
-        sceneView.canvas.setNeedsDisplay()
+        sceneView.canvasView.setNeedsDisplay()
     }
-    private func setOpacity(_ opacity: CGFloat, in materialTuples: [UUID: MaterialTuple]) {
+    private func setOpacity(_ opacity: Real, in materialTuples: [UUID: MaterialTuple]) {
         for materialTuple in materialTuples.values {
             set(materialTuple.material.with(opacity: opacity), in: materialTuple)
         }
     }
-    private func _setOpacity(_ opacity: CGFloat, in materialTuples: [UUID: MaterialTuple]) {
+    private func _setOpacity(_ opacity: Real, in materialTuples: [UUID: MaterialTuple]) {
         for materialTuple in materialTuples.values {
             _set(materialTuple.material.with(opacity: opacity), in: materialTuple)
         }

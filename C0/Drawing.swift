@@ -47,7 +47,7 @@ final class Drawing: NSObject, NSCoding {
         coder.encode(selectedLineIndexes, forKey: CodingKeys.selectedLineIndexes.rawValue)
     }
     
-    func imageBounds(withLineWidth lineWidth: CGFloat) -> Rect {
+    func imageBounds(withLineWidth lineWidth: Real) -> Rect {
         return Line.imageBounds(with: lines, lineWidth: lineWidth)
             .unionNoEmpty(Line.imageBounds(with: draftLines, lineWidth: lineWidth))
     }
@@ -56,7 +56,7 @@ final class Drawing: NSObject, NSCoding {
     }
     
     func nearestLine(at p: Point) -> Line? {
-        var minD² = CGFloat.infinity, minLine: Line?
+        var minD² = Real.infinity, minLine: Line?
         lines.forEach {
             let d² = $0.minDistance²(at: p)
             if d² < minD² {
@@ -70,7 +70,7 @@ final class Drawing: NSObject, NSCoding {
         guard !selectedLineIndexes.isEmpty else {
             return false
         }
-        var minD² = CGFloat.infinity, minIndex = 0
+        var minD² = Real.infinity, minIndex = 0
         lines.enumerated().forEach {
             let d² = $0.element.minDistance²(at: p)
             if d² < minD² {
@@ -101,26 +101,26 @@ final class Drawing: NSObject, NSCoding {
         return false
     }
     
-    func drawEdit(lineWidth: CGFloat, lineColor: Color, in ctx: CGContext) {
+    func drawEdit(lineWidth: Real, lineColor: Color, in ctx: CGContext) {
         drawDraft(lineWidth: lineWidth, lineColor: Color.draft, in: ctx)
         draw(lineWidth: lineWidth, lineColor: lineColor, in: ctx)
         drawSelectedLines(lineWidth: lineWidth + 1.5, lineColor: Color.selected, in: ctx)
     }
-    func drawDraft(lineWidth: CGFloat, lineColor: Color, in ctx: CGContext) {
+    func drawDraft(lineWidth: Real, lineColor: Color, in ctx: CGContext) {
         ctx.setFillColor(lineColor.cg)
         draftLines.forEach { $0.draw(size: lineWidth, in: ctx) }
     }
-    func draw(lineWidth: CGFloat, lineColor: Color, in ctx: CGContext) {
+    func draw(lineWidth: Real, lineColor: Color, in ctx: CGContext) {
         ctx.setFillColor(lineColor.cg)
         lines.forEach { $0.draw(size: lineWidth, in: ctx) }
     }
-    func drawSelectedLines(lineWidth: CGFloat, lineColor: Color, in ctx: CGContext) {
+    func drawSelectedLines(lineWidth: Real, lineColor: Color, in ctx: CGContext) {
         ctx.setFillColor(lineColor.cg)
         selectedLineIndexes.forEach { lines[$0].draw(size: lineWidth, in: ctx) }
     }
 }
 extension Drawing: Referenceable {
-    static let name = Localization(english: "Drawing", japanese: "ドローイング")
+    static let name = Text(english: "Drawing", japanese: "ドローイング")
 }
 extension Drawing: ClassDeepCopiable {
     func copied(from deepCopier: DeepCopier) -> Drawing {
@@ -145,7 +145,7 @@ extension Drawing: Viewable {
 /**
  Issue: DraftArray、下書き化などのコマンドを排除
  */
-final class DrawingView: View, Assignable {
+final class DrawingView: View, Queryable, Assignable {
     var drawing = Drawing() {
         didSet {
             linesView.array = drawing.lines
@@ -156,12 +156,12 @@ final class DrawingView: View, Assignable {
     var sizeType: SizeType
     let formClassNameView: TextView
     let linesView = ArrayCountView<Line>()
-    let formClassDraftLinesNameView = TextView(text: Localization(english: "Draft Lines:",
+    let formClassDraftLinesNameView = TextView(text: Text(english: "Draft Lines:",
                                                                   japanese: "下書き線:"))
     let draftLinesView = ArrayCountView<Line>()
-    let changeToDraftView = ClosureView(name: Localization(english: "Change to Draft",
+    let changeToDraftView = ClosureView(name: Text(english: "Change to Draft",
                                                            japanese: "下書き化"))
-    let exchangeWithDraftView = ClosureView(name: Localization(english: "Exchange with Draft",
+    let exchangeWithDraftView = ClosureView(name: Text(english: "Exchange with Draft",
                                                                japanese: "下書きと交換"))
     
     init(drawing: Drawing = Drawing(), sizeType: SizeType = .regular) {

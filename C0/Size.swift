@@ -29,7 +29,7 @@ struct _Size: Equatable {
         return width == 0 && height == 0
     }
     
-    static func *(lhs: _Size, rhs: CGFloat) -> _Size {
+    static func *(lhs: _Size, rhs: Real) -> _Size {
         return _Size(width: lhs.width * rhs, height: lhs.height * rhs)
     }
 }
@@ -41,8 +41,8 @@ extension _Size: Hashable {
 extension _Size: Codable {
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
-        let width = try container.decode(CGFloat.self)
-        let height = try container.decode(CGFloat.self)
+        let width = try container.decode(Real.self)
+        let height = try container.decode(Real.self)
         self.init(width: width, height: height)
     }
     func encode(to encoder: Encoder) throws {
@@ -52,40 +52,40 @@ extension _Size: Codable {
     }
 }
 extension _Size: Referenceable {
-    static let name = Localization(english: "Size", japanese: "サイズ")
+    static let name = Text(english: "Size", japanese: "サイズ")
 }
 
 typealias Size = CGSize
 extension Size {
-    init(square: CGFloat) {
+    init(square: Real) {
         self.init(width: square, height: square)
     }
-    init(_ string: String) {
-        self = NSSizeToCGSize(NSSizeFromString(string))
-    }
+//    init(_ string: String) {
+//        self = NSSizeToCGSize(NSSizeFromString(string))
+//    }
     
-    static func *(lhs: Size, rhs: CGFloat) -> Size {
+    static func *(lhs: Size, rhs: Real) -> Size {
         return Size(width: lhs.width * rhs, height: lhs.height * rhs)
     }
     
-    var string: String {
-        return String(NSStringFromSize(NSSizeFromCGSize(self)))
-    }
+//    var string: String {
+//        return String(NSStringFromSize(NSSizeFromCGSize(self)))
+//    }
     
     static let effectiveFieldSizeOfView = Size(width: tan(.pi * (30.0 / 2) / 180),
                                                  height: tan(.pi * (20.0 / 2) / 180))
     
 }
 extension Size: Referenceable {
-    static let name = Localization(english: "Size", japanese: "サイズ")
+    static let name = Text(english: "Size", japanese: "サイズ")
 }
 extension Size: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return string.view(withBounds: bounds, sizeType)
+        return (jsonString ?? "").view(withBounds: bounds, sizeType)
     }
 }
 
-final class DiscreteSizeView: View, Assignable {
+final class DiscreteSizeView: View, Queryable, Assignable {
     var size = Size() {
         didSet {
             if size != oldValue {
@@ -98,25 +98,25 @@ final class DiscreteSizeView: View, Assignable {
     
     var sizeType: SizeType
     let classWidthNameView: TextView
-    let widthView: DiscreteRealNumberView
+    let widthView: DiscreteRealView
     let classHeightNameView: TextView
-    let heightView: DiscreteRealNumberView
+    let heightView: DiscreteRealView
     init(size: Size = Size(), defaultSize: Size = Size(),
          minSize: Size = Size(width: 0, height: 0),
          maxSize: Size = Size(width: 10000, height: 10000),
-         widthEXP: RealNumber = 1, heightEXP: RealNumber = 1,
-         widthInterval: RealNumber = 1, widthNumberOfDigits: Int = 0, widthUnit: String = "",
-         heightInterval: RealNumber = 1, heightNumberOfDigits: Int = 0, heightUnit: String = "",
+         widthEXP: Real = 1, heightEXP: Real = 1,
+         widthInterval: Real = 1, widthNumberOfDigits: Int = 0, widthUnit: String = "",
+         heightInterval: Real = 1, heightNumberOfDigits: Int = 0, heightUnit: String = "",
          frame: Rect = Rect(),
          sizeType: SizeType) {
         
         self.sizeType = sizeType
         
-        classWidthNameView = TextView(text: Localization("w:"), font: Font.default(with: sizeType))
-        classHeightNameView = TextView(text: Localization("h:"), font: Font.default(with: sizeType))
+        classWidthNameView = TextView(text: "w:", font: Font.default(with: sizeType))
+        classHeightNameView = TextView(text: "h:", font: Font.default(with: sizeType))
         
-        widthView = DiscreteRealNumberView(model: size.width,
-                                       option: RealNumberOption(defaultModel: defaultSize.width,
+        widthView = DiscreteRealView(model: size.width,
+                                       option: RealOption(defaultModel: defaultSize.width,
                                                                 minModel: minSize.width,
                                                                 maxModel: maxSize.width,
                                                                 modelInterval: widthInterval,
@@ -125,8 +125,8 @@ final class DiscreteSizeView: View, Assignable {
                                                                 unit: widthUnit),
                                        frame: Layout.valueFrame(with: sizeType),
                                        sizeType: sizeType)
-        heightView = DiscreteRealNumberView(model: size.height,
-                                       option: RealNumberOption(defaultModel: defaultSize.height,
+        heightView = DiscreteRealView(model: size.height,
+                                       option: RealOption(defaultModel: defaultSize.height,
                                                                 minModel: minSize.height,
                                                                 maxModel: maxSize.height,
                                                                 modelInterval: heightInterval,
@@ -176,7 +176,7 @@ final class DiscreteSizeView: View, Assignable {
     var disabledRegisterUndo = false
     
     private var oldSize = Size()
-    private func setSize(with obj: DiscreteRealNumberView.Binding<RealNumber>) {
+    private func setSize(with obj: DiscreteRealView.Binding<Real>) {
         if obj.phase == .began {
             oldSize = size
             binding?(Binding(view: self, size: oldSize, oldSize: oldSize, phase: .began))
@@ -206,8 +206,7 @@ final class DiscreteSizeView: View, Assignable {
                     push(size, old: self.size)
                     return
                 }
-            } else if let string = object as? String {
-                let size = Size(string)
+            } else if let string = object as? String, let size = Size(jsonString: string) {
                 if size != self.size {
                     push(size, old: self.size)
                     return

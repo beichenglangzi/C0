@@ -19,53 +19,53 @@
 
 import Foundation
 
-typealias RPB = CGFloat
+typealias RPB = Real
 struct Wiggle: Codable, Equatable, Hashable {
     var amplitude = 0.0.cg, frequency = RPB(8)
     
-    static let amplitudeOption = RealNumberOption(defaultModel: 0, minModel: 0, maxModel: 10000,
+    static let amplitudeOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 10000,
                                               modelInterval: 0.01, exp: 1,
                                               numberOfDigits: 2, unit: "")
-    static let frequencyOption = RealNumberOption(defaultModel: 8, minModel: 0.1, maxModel: 100000,
+    static let frequencyOption = RealOption(defaultModel: 8, minModel: 0.1, maxModel: 100000,
                                               modelInterval: 0.1, exp: 1,
                                               numberOfDigits: 1, unit: "rpb")
     var isEmpty: Bool {
         return amplitude == 0
     }
-    func phase(with value: CGFloat, phase: CGFloat) -> CGFloat {
+    func phase(with value: Real, phase: Real) -> Real {
         let x = sin(2 * (.pi) * phase)
         return value + amplitude * x
     }
 }
 extension Wiggle: Interpolatable {
-    static func linear(_ f0: Wiggle, _ f1: Wiggle, t: CGFloat) -> Wiggle {
-        let amplitude = CGFloat.linear(f0.amplitude, f1.amplitude, t: t)
-        let frequency = CGFloat.linear(f0.frequency, f1.frequency, t: t)
+    static func linear(_ f0: Wiggle, _ f1: Wiggle, t: Real) -> Wiggle {
+        let amplitude = Real.linear(f0.amplitude, f1.amplitude, t: t)
+        let frequency = Real.linear(f0.frequency, f1.frequency, t: t)
         return Wiggle(amplitude: amplitude, frequency: frequency)
     }
     static func firstMonospline(_ f1: Wiggle, _ f2: Wiggle,
                                 _ f3: Wiggle, with ms: Monospline) -> Wiggle {
-        let amplitude = CGFloat.firstMonospline(f1.amplitude, f2.amplitude, f3.amplitude, with: ms)
-        let frequency = CGFloat.firstMonospline(f1.frequency, f2.frequency, f3.frequency, with: ms)
+        let amplitude = Real.firstMonospline(f1.amplitude, f2.amplitude, f3.amplitude, with: ms)
+        let frequency = Real.firstMonospline(f1.frequency, f2.frequency, f3.frequency, with: ms)
         return Wiggle(amplitude: amplitude, frequency: frequency)
     }
     static func monospline(_ f0: Wiggle, _ f1: Wiggle,
                            _ f2: Wiggle, _ f3: Wiggle, with ms: Monospline) -> Wiggle {
-        let amplitude = CGFloat.monospline(f0.amplitude, f1.amplitude,
+        let amplitude = Real.monospline(f0.amplitude, f1.amplitude,
                                            f2.amplitude, f3.amplitude, with: ms)
-        let frequency = CGFloat.monospline(f0.frequency, f1.frequency,
+        let frequency = Real.monospline(f0.frequency, f1.frequency,
                                            f2.frequency, f3.frequency, with: ms)
         return Wiggle(amplitude: amplitude, frequency: frequency)
     }
     static func lastMonospline(_ f0: Wiggle, _ f1: Wiggle,
                                _ f2: Wiggle, with ms: Monospline) -> Wiggle {
-        let amplitude = CGFloat.lastMonospline(f0.amplitude, f1.amplitude, f2.amplitude, with: ms)
-        let frequency = CGFloat.lastMonospline(f0.frequency, f1.frequency, f2.frequency, with: ms)
+        let amplitude = Real.lastMonospline(f0.amplitude, f1.amplitude, f2.amplitude, with: ms)
+        let frequency = Real.lastMonospline(f0.frequency, f1.frequency, f2.frequency, with: ms)
         return Wiggle(amplitude: amplitude, frequency: frequency)
     }
 }
 extension Wiggle: Referenceable {
-    static let name = Localization(english: "Wiggle", japanese: "振動")
+    static let name = Text(english: "Wiggle", japanese: "振動")
 }
 extension Wiggle: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
@@ -73,7 +73,7 @@ extension Wiggle: ObjectViewExpression {
     }
 }
 
-final class WiggleView: View, Assignable {
+final class WiggleView: View, Queryable, Assignable {
     var wiggle = Wiggle() {
         didSet {
             if wiggle != oldValue {
@@ -84,18 +84,18 @@ final class WiggleView: View, Assignable {
     
     let classNameView: TextView
     let classAmplitudeNameView: TextView
-    let amplitudeView: DiscreteRealNumberView
+    let amplitudeView: DiscreteRealView
     let classFrequencyNameView: TextView
-    let frequencyView: DiscreteRealNumberView
+    let frequencyView: DiscreteRealView
     
     init(sizeType: SizeType = .regular) {
         classNameView = TextView(text: Wiggle.name, font: Font.bold(with: sizeType))
-        classAmplitudeNameView = TextView(text: Localization("A:"), font: Font.default(with: sizeType))
-        amplitudeView = DiscreteRealNumberView(model: wiggle.amplitude, option: Wiggle.amplitudeOption,
+        classAmplitudeNameView = TextView(text: "A:", font: Font.default(with: sizeType))
+        amplitudeView = DiscreteRealView(model: wiggle.amplitude, option: Wiggle.amplitudeOption,
                                                frame: Layout.valueFrame(with: sizeType),
                                                sizeType: sizeType)
-        classFrequencyNameView = TextView(text: Localization("ƒ:"))
-        frequencyView = DiscreteRealNumberView(model: wiggle.frequency, option: Wiggle.frequencyOption,
+        classFrequencyNameView = TextView(text: "ƒ:")
+        frequencyView = DiscreteRealView(model: wiggle.frequency, option: Wiggle.frequencyOption,
                                                frame: Layout.valueFrame(with: sizeType),
                                                sizeType: sizeType)
         
@@ -150,7 +150,7 @@ final class WiggleView: View, Assignable {
     var binding: ((Binding) -> ())?
     
     private var oldWiggle = Wiggle()
-    private func setWiggle(with obj: DiscreteRealNumberView.Binding<RealNumber>) {
+    private func setWiggle(with obj: DiscreteRealView.Binding<Real>) {
         if obj.phase == .began {
             oldWiggle = wiggle
             binding?(Binding(wiggleView: self,

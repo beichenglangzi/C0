@@ -317,7 +317,7 @@ final class Node: NSObject, NSCoding {
         }
     }
     
-    var effect: Effect, transform: Transform, xWiggle: Wiggle, wigglePhase: CGFloat = 0
+    var effect: Effect, transform: Transform, xWiggle: Wiggle, wigglePhase: Real = 0
     
     static func effectWith(time: Beat, _ tracks: [NodeTrack]) -> Effect {
         var effect = Effect()
@@ -346,7 +346,7 @@ final class Node: NSObject, NSCoding {
             Transform(translation: translation, scale: scale, rotation: rotation) : Transform()
     }
     static func wiggleAndPhaseWith(time: Beat,
-                                   tracks: [NodeTrack]) -> (wiggle: Wiggle, wigglePhase: CGFloat) {
+                                   tracks: [NodeTrack]) -> (wiggle: Wiggle, wigglePhase: Real) {
         var amplitude = 0.0.cg, frequency = 0.0.cg, phase = 0.0.cg, count = 0
         tracks.forEach {
             if let wiggle = $0.wiggleItem?.drawWiggle {
@@ -357,7 +357,7 @@ final class Node: NSObject, NSCoding {
             }
         }
         if count > 0 {
-            let reciprocalCount = 1 / CGFloat(count)
+            let reciprocalCount = 1 / Real(count)
             let wiggle = Wiggle(amplitude: amplitude, frequency: frequency * reciprocalCount)
             return (wiggle, phase * reciprocalCount)
         } else {
@@ -370,7 +370,7 @@ final class Node: NSObject, NSCoding {
          rootCell: Cell = Cell(material: Material(color: .background)),
          effect: Effect = Effect(),
          transform: Transform = Transform(),
-         wiggle: Wiggle = Wiggle(), wigglePhase: CGFloat = 0.0,
+         wiggle: Wiggle = Wiggle(), wigglePhase: Real = 0.0,
          tracks: [NodeTrack] = [NodeTrack()], editTrackIndex: Int = 0,
          time: Beat = 0, duration: Beat = 1) {
         
@@ -446,7 +446,7 @@ final class Node: NSObject, NSCoding {
     enum IndicatedCellType {
         case none, indicated, selected
     }
-    func indicatedCellsTuple(with  point: Point, reciprocalScale: CGFloat
+    func indicatedCellsTuple(with  point: Point, reciprocalScale: Real
         ) -> (cellItems: [CellItem], selectedLineIndexes: [Int], type: IndicatedCellType) {
         
         let selectedCellItems = editTrack.selectedCellItemsWithNoEmptyGeometry(at: point)
@@ -491,7 +491,7 @@ final class Node: NSObject, NSCoding {
             return (drawingTuple?.lineIndexes.isEmpty ?? true) && cellTuples.isEmpty
         }
     }
-    func selection(with point: Point, reciprocalScale: CGFloat) -> Selection {
+    func selection(with point: Point, reciprocalScale: Real) -> Selection {
         let ict = indicatedCellsTuple(with: point, reciprocalScale: reciprocalScale)
         if !ict.cellItems.isEmpty {
             return Selection(cellTuples: ict.cellItems.map { (track(with: $0), $0, $0.cell.geometry) },
@@ -584,7 +584,7 @@ final class Node: NSObject, NSCoding {
         return tracks.reduce(Beat(0)) { $1 != otherTrack ?
             max($0, $1.animation.keyframes.last?.time ?? 0) : $0 }
     }
-    func cellItem(at point: Point, reciprocalScale: CGFloat, with track: NodeTrack) -> CellItem? {
+    func cellItem(at point: Point, reciprocalScale: Real, with track: NodeTrack) -> CellItem? {
         if let cell = rootCell.at(point, reciprocalScale: reciprocalScale) {
             let gc = trackAndCellItem(with: cell)
             return gc.track == track ? gc.cellItem : nil
@@ -626,7 +626,7 @@ final class Node: NSObject, NSCoding {
             return transform.affineTransform
         }
     }
-    var worldScale: CGFloat {
+    var worldScale: Real {
         if let parentScale = parent?.worldScale {
             return transform.scale.x * parentScale
         } else {
@@ -653,7 +653,7 @@ final class Node: NSObject, NSCoding {
         }
         func bezierSortedResult(at p: Point) -> BezierSortedResult? {
             var minDrawing: Drawing?, minCellItem: CellItem?
-            var minLineCap: LineCap?, minD² = CGFloat.infinity
+            var minLineCap: LineCap?, minD² = Real.infinity
             func minNearest(with caps: [LineCap]) -> Bool {
                 var isMin = false
                 for cap in caps {
@@ -692,7 +692,7 @@ final class Node: NSObject, NSCoding {
         }
     }
     func nearest(at point: Point, isVertex: Bool) -> Nearest? {
-        var minD = CGFloat.infinity, minDrawing: Drawing?, minCellItem: CellItem?
+        var minD = Real.infinity, minDrawing: Drawing?, minCellItem: CellItem?
         var minLine: Line?, minLineIndex = 0, minPointIndex = 0, minPoint = Point()
         func nearestEditPoint(from lines: [Line]) -> Bool {
             var isNearest = false
@@ -786,8 +786,8 @@ final class Node: NSObject, NSCoding {
     }
     
     func draw(scene: Scene, viewType: Cut.ViewType,
-              scale: CGFloat, rotation: CGFloat,
-              viewScale: CGFloat, viewRotation: CGFloat,
+              scale: Real, rotation: Real,
+              viewScale: Real, viewRotation: Real,
               in ctx: CGContext) {
         let inScale = scale * transform.scale.x, inRotation = rotation + transform.rotation
         let inViewScale = viewScale * transform.scale.x
@@ -845,8 +845,8 @@ final class Node: NSObject, NSCoding {
     }
     
     private func _draw(scene: Scene, viewType: Cut.ViewType,
-                       reciprocalScale: CGFloat, reciprocalAllScale: CGFloat,
-                       scale: CGFloat, rotation: CGFloat,
+                       reciprocalScale: Real, reciprocalAllScale: Real,
+                       scale: Real, rotation: Real,
                        in ctx: CGContext) {
         let isEdit = !isEdited ? false :
             (viewType != .preview && viewType != .editMaterial && viewType != .changingMaterial)
@@ -918,8 +918,8 @@ final class Node: NSObject, NSCoding {
     }
     func drawEdit(_ edit: Edit,
                   scene: Scene, viewType: Cut.ViewType,
-                  strokeLine: Line?, strokeLineWidth: CGFloat, strokeLineColor: Color,
-                  reciprocalViewScale: CGFloat, scale: CGFloat, rotation: CGFloat,
+                  strokeLine: Line?, strokeLineWidth: Real, strokeLineColor: Color,
+                  reciprocalViewScale: Real, scale: Real, rotation: Real,
                   in ctx: CGContext) {
         let worldScale = self.worldScale
         let rScale = 1 / worldScale
@@ -1106,7 +1106,7 @@ final class Node: NSObject, NSCoding {
     struct EditPoint: Equatable {
         let nearestLine: Line, nearestPointIndex: Int, lines: [Line], point: Point, isSnap: Bool
         
-        func draw(withReciprocalAllScale reciprocalAllScale: CGFloat,
+        func draw(withReciprocalAllScale reciprocalAllScale: Real,
                   lineColor: Color, in ctx: CGContext) {
             for line in lines {
                 ctx.setFillColor((line == nearestLine ? lineColor : Color.subSelected).cg)
@@ -1118,7 +1118,7 @@ final class Node: NSObject, NSCoding {
     }
     private let editPointRadius = 0.5.cg, lineEditPointRadius = 1.5.cg, pointEditPointRadius = 3.0.cg
     func drawEditPoints(with editPoint: EditPoint?, isEditVertex: Bool,
-                        reciprocalAllScale: CGFloat, in ctx: CGContext) {
+                        reciprocalAllScale: Real, in ctx: CGContext) {
         if let ep = editPoint, ep.isSnap {
             let p: Point?, np: Point?
             if ep.nearestPointIndex == 1 {
@@ -1246,7 +1246,7 @@ final class Node: NSObject, NSCoding {
     }
     
     struct EditZ: Equatable {
-        var cells: [Cell], point: Point, firstPoint: Point, firstY: CGFloat
+        var cells: [Cell], point: Point, firstPoint: Point, firstY: Real
     }
     func drawEditZ(_ editZ: EditZ, in ctx: CGContext) {
         rootCell.depthFirstSearch(duplicate: true) { parent, cell in
@@ -1287,7 +1287,7 @@ final class Node: NSObject, NSCoding {
                            width: editZHeight, height: editZHeight))
         ctx.drawPath(using: .fillStroke)
     }
-    func editZFirstY(with cells: [Cell]) -> CGFloat {
+    func editZFirstY(with cells: [Cell]) -> Real {
         guard let firstCell = cells.first else {
             return 0
         }
@@ -1302,7 +1302,7 @@ final class Node: NSObject, NSCoding {
         return y
     }
     func drawNearestCellLine(for p: Point, cell: Cell, lineColor: Color,
-                             reciprocalAllScale: CGFloat, in ctx: CGContext) {
+                             reciprocalAllScale: Real, in ctx: CGContext) {
         if let n = cell.geometry.nearestBezier(with: p) {
             let np = cell.geometry.lines[n.lineIndex].bezier(at: n.bezierIndex).position(withT: n.t)
             ctx.setStrokeColor(Color.background.multiply(alpha: 0.75).cg)
@@ -1363,7 +1363,7 @@ final class Node: NSObject, NSCoding {
         affine = affine.translatedBy(x: -et.anchorPoint.x, y: -et.anchorPoint.y)
         return affine
     }
-    func drawWarp(with et: EditTransform, reciprocalAllScale: CGFloat, in ctx: CGContext) {
+    func drawWarp(with et: EditTransform, reciprocalAllScale: Real, in ctx: CGContext) {
         if et.isCenter {
             drawLine(firstPoint: et.rotatedRect.midXMinYPoint,
                      lastPoint: et.rotatedRect.midXMaxYPoint,
@@ -1380,7 +1380,7 @@ final class Node: NSObject, NSCoding {
         et.anchorPoint.draw(radius: lineEditPointRadius * reciprocalAllScale,
                             lineWidth: reciprocalAllScale, in: ctx)
     }
-    func drawTransform(with et: EditTransform, reciprocalAllScale: CGFloat, in ctx: CGContext) {
+    func drawTransform(with et: EditTransform, reciprocalAllScale: Real, in ctx: CGContext) {
         ctx.setAlpha(0.5)
         drawLine(firstPoint: et.anchorPoint, lastPoint: et.oldPoint,
                  reciprocalAllScale: reciprocalAllScale, in: ctx)
@@ -1396,7 +1396,7 @@ final class Node: NSObject, NSCoding {
         et.anchorPoint.draw(radius: lineEditPointRadius * reciprocalAllScale,
                             lineWidth: reciprocalAllScale, in: ctx)
     }
-    func drawRotatedRect(with et: EditTransform, reciprocalAllScale: CGFloat, in ctx: CGContext) {
+    func drawRotatedRect(with et: EditTransform, reciprocalAllScale: Real, in ctx: CGContext) {
         ctx.setLineWidth(reciprocalAllScale)
         ctx.setStrokeColor(Color.camera.cg)
         ctx.saveGState()
@@ -1410,8 +1410,8 @@ final class Node: NSObject, NSCoding {
         ctx.restoreGState()
     }
     
-    func drawCircleWith(radius r: CGFloat, anchorPoint: Point,
-                        reciprocalAllScale: CGFloat, in ctx: CGContext) {
+    func drawCircleWith(radius r: Real, anchorPoint: Point,
+                        reciprocalAllScale: Real, in ctx: CGContext) {
         let cb = Rect(x: anchorPoint.x - r, y: anchorPoint.y - r, width: r * 2, height: r * 2)
         let outLineWidth = 3 * reciprocalAllScale, inLineWidth = 1.5 * reciprocalAllScale
         ctx.setLineWidth(outLineWidth)
@@ -1422,7 +1422,7 @@ final class Node: NSObject, NSCoding {
         ctx.strokeEllipse(in: cb)
     }
     func drawLine(firstPoint: Point, lastPoint: Point,
-                  reciprocalAllScale: CGFloat, in ctx: CGContext) {
+                  reciprocalAllScale: Real, in ctx: CGContext) {
         let outLineWidth = 3 * reciprocalAllScale, inLineWidth = 1.5 * reciprocalAllScale
         ctx.setLineWidth(outLineWidth)
         ctx.setStrokeColor(Color.controlPointOut.cg)
@@ -1452,7 +1452,7 @@ extension Node: ClassDeepCopiable {
     }
 }
 extension Node: Referenceable {
-    static let name = Localization(english: "Node", japanese: "ノード")
+    static let name = Text(english: "Node", japanese: "ノード")
 }
 extension Node: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
@@ -1460,7 +1460,7 @@ extension Node: ObjectViewExpression {
     }
 }
 
-final class NodeView: View, Copiable {
+final class NodeView: View, Queryable, Copiable {
     var node = Node() {
         didSet {
             isHiddenView.bool = node.isHidden
@@ -1542,7 +1542,7 @@ final class NodeView: View, Copiable {
 final class NodeTreeManager {
     init() {
         nodesView.nameClosure = { [unowned self] in
-            return Localization(self.cut.node(atTreeNodeIndex: $0).name)
+            return Text(self.cut.node(atTreeNodeIndex: $0).name)
         }
         nodesView.treeLevelClosure = { [unowned self] in
             var i = 0

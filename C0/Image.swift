@@ -35,10 +35,10 @@ extension CGImage {
     }
 }
 extension CGImage: Referenceable {
-    static let name = Localization(english: "Image", japanese: "画像")
+    static let name = Text(english: "Image", japanese: "画像")
 }
 
-final class ImageView: View, Movable {
+final class ImageView: View, Queryable, Movable {
     var url: URL? {
         didSet {
             if let url = url {
@@ -72,7 +72,7 @@ final class ImageView: View, Movable {
     }
     var dragType = DragType.move, downPosition = Point(), oldFrame = Rect()
     var resizeWidth = 10.0.cg, ratio = 1.0.cg
-    func move(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func move(for point: Point, pressure: Real, time: Second, _ phase: Phase) {
         guard let parent = parent else {
             return
         }

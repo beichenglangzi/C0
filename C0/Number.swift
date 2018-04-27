@@ -19,9 +19,10 @@
 
 import Foundation
 
-typealias Z = Int
-
 extension Int {
+    static func gcd(_ m: Int, _ n: Int) -> Int {
+        return n == 0 ? m : gcd(n, m % n)
+    }
     func interval(scale: Int) -> Int {
         if scale == 0 {
             return self
@@ -29,6 +30,29 @@ extension Int {
             let t = (self / scale) * scale
             return self - t > scale / 2 ? t + scale : t
         }
+    }
+}
+extension Int: Interpolatable {
+    static func linear(_ f0: Int, _ f1: Int, t: Real) -> Int {
+        return Int(Real.linear(Real(f0), Real(f1), t: t))
+    }
+    static func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) -> Int {
+        return Int(Real.firstMonospline(Real(f1), Real(f2), Real(f3), with: ms))
+    }
+    static func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) -> Int {
+        return Int(Real.monospline(Real(f0), Real(f1), Real(f2), Real(f3), with: ms))
+    }
+    static func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) -> Int {
+        return Int(Real.lastMonospline(Real(f0), Real(f1), Real(f2), with: ms))
+    }
+}
+extension Int: Referenceable {
+    static let name = Text(english: "Integer (\(MemoryLayout<Int>.size * 8)bit)",
+                                   japanese: "整数 (\(MemoryLayout<Int>.size * 8)bit)")
+}
+extension Int: ObjectViewExpression {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
+        return String(self).view(withBounds: bounds, sizeType)
     }
 }
 
@@ -66,31 +90,31 @@ struct IntOption: OneDimensionalOption {
     func text(with model: Model) -> Text {
         return Text("\(model)\(unit)")
     }
-    func ratio(with model: Model) -> CGFloat {
-        return RealNumber(model - minModel) / RealNumber(maxModel - minModel)
+    func ratio(with model: Model) -> Real {
+        return Real(model - minModel) / Real(maxModel - minModel)
     }
-    func ratioFromDefaultModel(with model: Model) -> CGFloat {
+    func ratioFromDefaultModel(with model: Model) -> Real {
         if model < defaultModel {
-            return (RealNumber(model - minModel) / RealNumber(defaultModel - minModel)) * 0.5
+            return (Real(model - minModel) / Real(defaultModel - minModel)) * 0.5
         } else {
-            return (RealNumber(model - defaultModel) / RealNumber(maxModel - defaultModel)) * 0.5 + 0.5
+            return (Real(model - defaultModel) / Real(maxModel - defaultModel)) * 0.5 + 0.5
         }
     }
     
-    private func model(withDelta delta: CGFloat) -> Model {
-        let d = delta * RealNumber(modelInterval)
+    private func model(withDelta delta: Real) -> Model {
+        let d = delta * Real(modelInterval)
         if exp == 1 {
             return Int(d).interval(scale: modelInterval)
         } else {
             return Int(d >= 0 ? pow(d, exp) : -pow(abs(d), exp)).interval(scale: modelInterval)
         }
     }
-    func model(withDelta delta: CGFloat, oldModel: Model) -> Model {
+    func model(withDelta delta: Real, oldModel: Model) -> Model {
         let v = oldModel.interval(scale: modelInterval) + model(withDelta: delta)
         return v.clip(min: minModel, max: maxModel)
     }
-    func model(withRatio ratio: CGFloat) -> Model {
-        return Int(round(RealNumber(maxModel - minModel) * pow(ratio, exp))) + minModel
+    func model(withRatio ratio: Real) -> Model {
+        return Int(round(Real(maxModel - minModel) * pow(ratio, exp))) + minModel
     }
 }
 typealias DiscreteIntView = DiscreteOneDimensionalView<Int, IntOption>
@@ -98,24 +122,23 @@ typealias DiscreteIntView = DiscreteOneDimensionalView<Int, IntOption>
 /**
  Issue: 数を包括するNumberオブジェクトを設計
  */
-typealias RealNumber = CGFloat
-typealias R = CGFloat
-
-extension RealNumber: Referenceable {
-    static let name = Localization(english: "Real Number", japanese: "実数")
+typealias Real = CGFloat
+extension Real: Referenceable {
+    static let name = Text(english: "Real Number (\(MemoryLayout<Real>.size * 8)bit)",
+                                   japanese: "実数 (\(MemoryLayout<Real>.size * 8)bit)")
 }
-extension RealNumber: ObjectViewExpression {
+extension Real: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return String(self).view(withBounds: bounds, sizeType)
     }
 }
 
 extension String {
-    init(_ value: RealNumber) {
+    init(_ value: Real) {
         self = String(Double(value))
     }
 }
-extension RealNumber {
+extension Real {
     init?(_ string: String) {
         if let value = Double(string)?.cg {
             self = value
@@ -125,8 +148,8 @@ extension RealNumber {
     }
 }
 
-struct RealNumberGetterOption: NumberGetterOption {
-    typealias Model = RealNumber
+struct RealGetterOption: NumberGetterOption {
+    typealias Model = Real
     
     var numberOfDigits: Int
     var unit: String
@@ -139,17 +162,17 @@ struct RealNumberGetterOption: NumberGetterOption {
             let string = model - floor(model) > 0 ?
                 String(format: "%g", model) + "\(unit)" :
                 "\(Int(model))" + "\(unit)"
-            return Localization(string)
+            return Text(string)
         } else {
             let string = String(format: "%.\(numberOfDigits)f", model) + "\(unit)"
-            return Localization(string)
+            return Text(string)
         }
     }
 }
-typealias RealNumberView = NumberGetterView<RealNumber, RealNumberGetterOption>
+typealias RealView = NumberGetterView<Real, RealGetterOption>
 
-struct RealNumberOption: OneDimensionalOption {
-    typealias Model = RealNumber
+struct RealOption: OneDimensionalOption {
+    typealias Model = Real
     
     var defaultModel: Model
     var minModel: Model
@@ -161,7 +184,7 @@ struct RealNumberOption: OneDimensionalOption {
     var unit: String
     
     func model(with string: String) -> Model? {
-        return RealNumber(string)
+        return Real(string)
     }
     func string(with model: Model) -> String {
         return "\(model)"
@@ -171,16 +194,16 @@ struct RealNumberOption: OneDimensionalOption {
             let string = model - floor(model) > 0 ?
                 String(format: "%g", model) + "\(unit)" :
                 "\(Int(model))" + "\(unit)"
-            return Localization(string)
+            return Text(string)
         } else {
             let string = String(format: "%.\(numberOfDigits)f", model) + "\(unit)"
-            return Localization(string)
+            return Text(string)
         }
     }
-    func ratio(with model: Model) -> CGFloat {
+    func ratio(with model: Model) -> Real {
         return (model - minModel) / (maxModel - minModel)
     }
-    func ratioFromDefaultModel(with model: Model) -> CGFloat {
+    func ratioFromDefaultModel(with model: Model) -> Real {
         if model < defaultModel {
             return ((model - minModel) / (defaultModel - minModel)) * 0.5
         } else {
@@ -188,7 +211,7 @@ struct RealNumberOption: OneDimensionalOption {
         }
     }
     
-    private func model(withDelta delta: CGFloat) -> Model {
+    private func model(withDelta delta: Real) -> Model {
         let d = delta * modelInterval
         if exp == 1 {
             return d.interval(scale: modelInterval)
@@ -196,126 +219,49 @@ struct RealNumberOption: OneDimensionalOption {
             return (d >= 0 ? pow(d, exp) : -pow(abs(d), exp)).interval(scale: modelInterval)
         }
     }
-    func model(withDelta delta: CGFloat, oldModel: Model) -> Model {
+    func model(withDelta delta: Real, oldModel: Model) -> Model {
         let v = oldModel.interval(scale: modelInterval) + model(withDelta: delta)
         return v.clip(min: minModel, max: maxModel)
     }
-    func model(withRatio ratio: CGFloat) -> Model {
+    func model(withRatio ratio: Real) -> Model {
         return (maxModel - minModel) * pow(ratio, exp) + minModel
     }
 }
-typealias DiscreteRealNumberView = DiscreteOneDimensionalView<RealNumber, RealNumberOption>
-
-//final class RealNumberView: View, Copiable {
-//    var number: RealNumber {
-//        didSet {
-//            updateWithNumber()
-//        }
-//    }
-//
-//    var unit: String {
-//        didSet {
-//            updateWithNumber()
-//        }
-//    }
-//    var numberOfDigits: Int {
-//        didSet {
-//            updateWithNumber()
-//        }
-//    }
-//
-//    var sizeType: SizeType
-//    var formPropertyNameView: TextView?
-//    let formStringView: TextView
-//
-//    init(number: RealNumber = 0,
-//         numberOfDigits: Int = 0, unit: String = "", font: Font = .default,
-//         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-//
-//        self.number = number
-//        self.numberOfDigits = numberOfDigits
-//        self.unit = unit
-//        self.sizeType = sizeType
-//        formStringView = TextView(font: font, frameAlignment: .right, alignment: .right, isForm: true)
-//
-//        super.init()
-//        noIndicatedLineColor = .getBorder
-//        indicatedLineColor = .indicated
-//        isClipped = true
-//        children = [formStringView]
-//        self.frame = frame
-//    }
-//
-//    override var defaultBounds: Rect {
-//        return formStringView.defaultBounds
-//    }
-//    override var bounds: Rect {
-//        didSet {
-//            updateLayout()
-//        }
-//    }
-//    private func updateLayout() {
-//        formStringView.frame.origin = Point(x: bounds.width - formStringView.frame.width,
-//                                              y: bounds.height - formStringView.frame.height)
-//        updateWithNumber()
-//    }
-//    private func updateWithNumber() {
-//        if numberOfDigits == 0 {
-//            let string = number - floor(number) > 0 ?
-//                String(format: "%g", number) + "\(unit)" :
-//                "\(Int(number))" + "\(unit)"
-//            formStringView.text = Localization(string)
-//        } else if numberOfDigits < 0 {
-//            let string = String(format: "%0\(-numberOfDigits)d", Int(number)) + "\(unit)"
-//            formStringView.text = Localization(string)
-//        } else {
-//            let string = String(format: "%.\(numberOfDigits)f", number) + "\(unit)"
-//            formStringView.text = Localization(string)
-//        }
-//    }
-//
-//    func copiedViewables(at p: Point) -> [Viewable] {
-//        return [number]
-//    }
-//
-//    func reference(at p: Point) -> Reference {
-//        return RealNumber.reference
-//    }
-//}
+typealias DiscreteRealView = DiscreteOneDimensionalView<Real, RealOption>
 
 protocol Slidable {
-    var number: RealNumber { get set }
-    var defaultNumber: RealNumber { get }
-    var minNumber: RealNumber { get }
-    var maxNumber: RealNumber { get }
-    var exp: RealNumber { get }
+    var number: Real { get set }
+    var defaultNumber: Real { get }
+    var minNumber: Real { get }
+    var maxNumber: Real { get }
+    var exp: Real { get }
 }
 
-final class SlidableNumberView: View, Assignable, Runnable, Movable, Slidable {
-    var number: RealNumber {
+final class SlidableNumberView: View, Queryable, Assignable, Runnable, Movable, Slidable {
+    var number: Real {
         didSet {
             updateWithNumber()
         }
     }
-    var defaultNumber: RealNumber
+    var defaultNumber: Real
     
-    var minNumber: RealNumber {
+    var minNumber: Real {
         didSet {
             updateWithNumber()
         }
     }
-    var maxNumber: RealNumber {
+    var maxNumber: Real {
         didSet {
             updateWithNumber()
         }
     }
-    var exp: RealNumber {
+    var exp: Real {
         didSet {
             updateWithNumber()
         }
     }
     
-    var numberInterval: CGFloat
+    var numberInterval: Real
     
     var isInverted: Bool {
         didSet {
@@ -327,7 +273,7 @@ final class SlidableNumberView: View, Assignable, Runnable, Movable, Slidable {
             updateWithNumber()
         }
     }
-    var padding: CGFloat {
+    var padding: Real {
         didSet {
             updateWithNumber()
         }
@@ -342,9 +288,9 @@ final class SlidableNumberView: View, Assignable, Runnable, Movable, Slidable {
     }
     
     init(frame: Rect = Rect(),
-         number: RealNumber = 0, defaultNumber: RealNumber = 0,
-         min: RealNumber = 0, max: RealNumber = 1, exp: RealNumber = 1,
-         numberInterval: CGFloat = 0, isInverted: Bool = false, isVertical: Bool = false,
+         number: Real = 0, defaultNumber: Real = 0,
+         min: Real = 0, max: Real = 1, exp: Real = 1,
+         numberInterval: Real = 0, isInverted: Bool = false, isVertical: Bool = false,
          sizeType: SizeType = .regular) {
         
         self.number = number.clip(min: min, max: max)
@@ -385,7 +331,7 @@ final class SlidableNumberView: View, Assignable, Runnable, Movable, Slidable {
         }
     }
     
-    private func intervalNumber(withNumber n: RealNumber) -> RealNumber {
+    private func intervalNumber(withNumber n: Real) -> Real {
         if numberInterval == 0 {
             return n
         } else {
@@ -397,8 +343,8 @@ final class SlidableNumberView: View, Assignable, Runnable, Movable, Slidable {
             }
         }
     }
-    func number(at point: Point) -> RealNumber {
-        let n: RealNumber
+    func number(at point: Point) -> Real {
+        let n: Real
         if isVertical {
             let h = bounds.height - padding * 2
             if h > 0 {
@@ -422,7 +368,7 @@ final class SlidableNumberView: View, Assignable, Runnable, Movable, Slidable {
     var disabledRegisterUndo = false
     
     struct Binding {
-        let view: SlidableNumberView, number: RealNumber, oldNumber: RealNumber, phase: Phase
+        let view: SlidableNumberView, number: Real, oldNumber: Real, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
@@ -437,13 +383,13 @@ final class SlidableNumberView: View, Assignable, Runnable, Movable, Slidable {
     }
     func paste(_ objects: [Any], for p: Point) {
         for object in objects {
-            if let number = (object as? RealNumber)?.clip(min: minNumber, max: maxNumber) {
+            if let number = (object as? Real)?.clip(min: minNumber, max: maxNumber) {
                 if number != self.number {
                     set(number, old: self.number)
                     return
                 }
             } else if let string = object as? String {
-                if let number = RealNumber(string)?.clip(min: minNumber, max: maxNumber) {
+                if let number = Real(string)?.clip(min: minNumber, max: maxNumber) {
                     if number != self.number {
                         set(number, old: self.number)
                         return
@@ -461,7 +407,7 @@ final class SlidableNumberView: View, Assignable, Runnable, Movable, Slidable {
     }
     
     private var oldNumber = 0.0.cg, oldPoint = Point()
-    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
         case .began:
             knobView.fillColor = .editing
@@ -485,7 +431,7 @@ final class SlidableNumberView: View, Assignable, Runnable, Movable, Slidable {
         }
     }
     
-    private func set(_ number: RealNumber, old oldNumber: RealNumber) {
+    private func set(_ number: Real, old oldNumber: Real) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, old: number) }
         binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, phase: .began))
         self.number = number
@@ -493,39 +439,39 @@ final class SlidableNumberView: View, Assignable, Runnable, Movable, Slidable {
     }
     
     func reference(at p: Point) -> Reference {
-        var reference = RealNumber.reference
-        reference.viewDescription = Localization(english: "Slider", japanese: "スライダー")
+        var reference = Real.reference
+        reference.viewDescription = Text(english: "Slider", japanese: "スライダー")
         return reference
     }
 }
 
-final class CircularNumberView: View, Assignable, Runnable, Movable, Slidable {
-    var number: RealNumber {
+final class CircularNumberView: View, Queryable, Assignable, Runnable, Movable, Slidable {
+    var number: Real {
         didSet {
             updateWithNumber()
         }
     }
-    var defaultNumber: RealNumber
+    var defaultNumber: Real
     
-    var minNumber: RealNumber {
+    var minNumber: Real {
         didSet {
             updateWithNumber()
         }
     }
-    var maxNumber: RealNumber {
+    var maxNumber: Real {
         didSet {
             updateWithNumber()
         }
     }
-    var exp: RealNumber {
+    var exp: Real {
         didSet {
             updateWithNumber()
         }
     }
     
-    var isClockwise: Bool, beginAngle: CGFloat
-    var numberInterval: CGFloat
-    var width: CGFloat
+    var isClockwise: Bool, beginAngle: Real
+    var numberInterval: Real
+    var width: Real
     
     let knobView: KnobView
     var backgroundViews = [View]() {
@@ -535,10 +481,10 @@ final class CircularNumberView: View, Assignable, Runnable, Movable, Slidable {
     }
     
     init(frame: Rect = Rect(),
-         number: RealNumber = 0, defaultNumber: RealNumber = 0,
-         min: RealNumber = -.pi, max: RealNumber = .pi, exp: RealNumber = 1,
-         isClockwise: Bool = false, beginAngle: CGFloat = -.pi,
-         numberInterval: CGFloat = 0, width: CGFloat = 16,
+         number: Real = 0, defaultNumber: Real = 0,
+         min: Real = -.pi, max: Real = .pi, exp: Real = 1,
+         isClockwise: Bool = false, beginAngle: Real = -.pi,
+         numberInterval: Real = 0, width: Real = 16,
          sizeType: SizeType = .regular) {
         
         self.number = number
@@ -583,7 +529,7 @@ final class CircularNumberView: View, Assignable, Runnable, Movable, Slidable {
         knobView.position = cp + r * Point(x: cos(theta), y: sin(theta))
     }
     
-    private func intervalNumber(withNumber n: RealNumber) -> RealNumber {
+    private func intervalNumber(withNumber n: Real) -> Real {
         if numberInterval == 0 {
             return n
         } else {
@@ -595,7 +541,7 @@ final class CircularNumberView: View, Assignable, Runnable, Movable, Slidable {
             }
         }
     }
-    func number(at p: Point) -> RealNumber {
+    func number(at p: Point) -> Real {
         guard !bounds.isEmpty else {
             return intervalNumber(withNumber: number).clip(min: minNumber, max: maxNumber)
         }
@@ -610,7 +556,7 @@ final class CircularNumberView: View, Assignable, Runnable, Movable, Slidable {
     var disabledRegisterUndo = false
     
     struct Binding {
-        let view: CircularNumberView, number: RealNumber, oldNumber: RealNumber, phase: Phase
+        let view: CircularNumberView, number: Real, oldNumber: Real, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
@@ -625,13 +571,13 @@ final class CircularNumberView: View, Assignable, Runnable, Movable, Slidable {
     }
     func paste(_ objects: [Any], for p: Point) {
         for object in objects {
-            if let number = (object as? RealNumber)?.clip(min: minNumber, max: maxNumber) {
+            if let number = (object as? Real)?.clip(min: minNumber, max: maxNumber) {
                 if number != self.number {
                     set(number, old: self.number)
                     return
                 }
             } else if let string = object as? String {
-                if let number = RealNumber(string)?.clip(min: minNumber, max: maxNumber) {
+                if let number = Real(string)?.clip(min: minNumber, max: maxNumber) {
                     if number != self.number {
                         set(number, old: self.number)
                         return
@@ -649,7 +595,7 @@ final class CircularNumberView: View, Assignable, Runnable, Movable, Slidable {
     }
     
     private var oldNumber = 0.0.cg, oldPoint = Point()
-    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
         case .began:
             knobView.fillColor = .editing
@@ -673,7 +619,7 @@ final class CircularNumberView: View, Assignable, Runnable, Movable, Slidable {
         }
     }
     
-    private func set(_ number: RealNumber, old oldNumber: RealNumber) {
+    private func set(_ number: Real, old oldNumber: Real) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldNumber, old: number) }
         binding?(Binding(view: self, number: oldNumber, oldNumber: oldNumber, phase: .began))
         self.number = number
@@ -681,8 +627,8 @@ final class CircularNumberView: View, Assignable, Runnable, Movable, Slidable {
     }
     
     func reference(at p: Point) -> Reference {
-        var reference = RealNumber.reference
-        reference.viewDescription = Localization(english: "Circular Slider", japanese: "円状スライダー")
+        var reference = Real.reference
+        reference.viewDescription = Text(english: "Circular Slider", japanese: "円状スライダー")
         return reference
     }
 }
@@ -691,10 +637,10 @@ final class ProgressNumberView: View {
     let barView = View(isForm: true)
     let barBackgroundView = View(isForm: true)
     let nameView: TextView
-    let stopView = ClosureView(closure: {}, name: Localization(english: "Stop", japanese: "中止"))
+    let stopView = ClosureView(closure: {}, name: Text(english: "Stop", japanese: "中止"))
     
     init(frame: Rect = Rect(), backgroundColor: Color = .background,
-         name: String = "", type: String = "", state: Localization? = nil) {
+         name: String = "", type: String = "", state: Text? = nil) {
         
         self.name = name
         self.type = type
@@ -724,7 +670,7 @@ final class ProgressNumberView: View {
     }
     func end() {}
     var startDate: Date?
-    var remainingTime: CGFloat? {
+    var remainingTime: Real? {
         didSet {
             updateString(with: Locale.current)
         }
@@ -740,7 +686,7 @@ final class ProgressNumberView: View {
             updateString(with: locale)
         }
     }
-    var state: Localization? {
+    var state: Text? {
         didSet {
             updateString(with: locale)
         }
@@ -778,11 +724,11 @@ final class ProgressNumberView: View {
             let minutes = Int(ceil(remainingTime)) / 60
             let seconds = Int(ceil(remainingTime)) - minutes * 60
             if minutes == 0 {
-                let translator = Localization(english: "%@sec left",
+                let translator = Text(english: "%@sec left",
                                               japanese: "あと%@秒").string(with: locale)
                 string += (string.isEmpty ? "" : " ") + String(format: translator, String(seconds))
             } else {
-                let translator = Localization(english: "%@min %@sec left",
+                let translator = Text(english: "%@min %@sec left",
                                               japanese: "あと%@分%@秒").string(with: locale)
                 string += (string.isEmpty ? "" : " ") + String(format: translator,
                                                                String(minutes), String(seconds))
@@ -804,8 +750,8 @@ final class ProgressNumberView: View {
     }
     
     func reference(at p: Point) -> Reference {
-        return Reference(name: Localization(english: "Progress", japanese: "進捗"),
-                         viewDescription: Localization(english: "Stop: Send \"Cut\" action",
+        return Reference(name: Text(english: "Progress", japanese: "進捗"),
+                         viewDescription: Text(english: "Stop: Send \"Cut\" action",
                                                        japanese: "停止: \"カット\"アクションを送信"))
     }
 }

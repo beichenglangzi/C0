@@ -36,7 +36,7 @@ final class SubtitleTrack: NSObject, Track, NSCoding {
     func step(_ f0: Int) {
         subtitleItem.step(f0)
     }
-    func linear(_ f0: Int, _ f1: Int, t: CGFloat) {
+    func linear(_ f0: Int, _ f1: Int, t: Real) {
         subtitleItem.linear(f0, f1, t: t)
     }
     func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
@@ -179,7 +179,7 @@ extension SubtitleTrack: ClassDeepCopiable {
     }
 }
 extension SubtitleTrack: Referenceable {
-    static let name = Localization(english: "Subtitle Track", japanese: "字幕トラック")
+    static let name = Text(english: "Subtitle Track", japanese: "字幕トラック")
 }
 
 final class SubtitleItem: NSObject, TrackItem, NSCoding {
@@ -194,7 +194,7 @@ final class SubtitleItem: NSObject, TrackItem, NSCoding {
     func step(_ f0: Int) {
         subtitle = keySubtitles[f0]
     }
-    func linear(_ f0: Int, _ f1: Int, t: CGFloat) {
+    func linear(_ f0: Int, _ f1: Int, t: Real) {
         subtitle = keySubtitles[f0]
     }
     func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
@@ -250,7 +250,7 @@ extension SubtitleItem: ClassDeepCopiable {
     }
 }
 extension SubtitleItem: Referenceable {
-    static let name = Localization(english: "Subtitle Item", japanese: "字幕アイテム")
+    static let name = Text(english: "Subtitle Item", japanese: "字幕アイテム")
 }
 
 struct Subtitle: Codable, Equatable {
@@ -278,8 +278,8 @@ struct Subtitle: Codable, Equatable {
         let framesetter = CTFramesetterCreateWithAttributedString(attString)
         let range = CFRange(location: 0, length: attString.length), ratio = bounds.size.width/640
         let size = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, range, nil,
-                                                                Size(width: CGFloat.infinity,
-                                                                       height: CGFloat.infinity), nil)
+                                                                Size(width: Real.infinity,
+                                                                       height: Real.infinity), nil)
         let lineBounds = Rect(origin: Point(), size: size)
         let ctFrame = CTFramesetterCreateFrame(framesetter, range,
                                                CGPath(rect: lineBounds, transform: nil), nil)
@@ -327,7 +327,7 @@ struct Subtitle: Codable, Equatable {
     }
 }
 extension Subtitle: Referenceable {
-    static let name = Localization(english: "Subtitle", japanese: "字幕")
+    static let name = Text(english: "Subtitle", japanese: "字幕")
 }
 extension Subtitle: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
@@ -335,7 +335,7 @@ extension Subtitle: ObjectViewExpression {
     }
 }
 
-final class SubtitleView: View, Copiable {
+final class SubtitleView: View, Queryable, Copiable {
     var subtitle = Subtitle() {
         didSet {
             isConnectedWithPreviousView.bool = subtitle.isConnectedWithPrevious
@@ -349,7 +349,7 @@ final class SubtitleView: View, Copiable {
         self.sizeType = sizeType
         classNameView = TextView(text: Subtitle.name, font: Font.bold(with: sizeType))
         isConnectedWithPreviousView = BoolView(cationBool: true,
-                                               name: Localization(english: "No Connected With Previous",
+                                               name: Text(english: "No Connected With Previous",
                                                                   japanese: "前と結合なし"),
                                                sizeType: sizeType)
         super.init()

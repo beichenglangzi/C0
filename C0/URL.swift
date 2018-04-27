@@ -48,7 +48,7 @@ extension URL {
     }
 }
 extension URL: Referenceable {
-    static let name = Localization("URL")
+    static let name = Text("URL")
 }
 extension URL: DeepCopiable {
 }

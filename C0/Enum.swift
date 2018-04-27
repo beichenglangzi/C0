@@ -21,7 +21,7 @@ import Foundation
 
 typealias EnumType = RawRepresentable & Referenceable & Viewable & Equatable
 
-final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
+final class EnumView<T: EnumType>: View, Queryable, Assignable, Runnable, Movable {
     var enumeratedType: T {
         didSet {
             index = indexClosure(enumeratedType.rawValue)
@@ -66,7 +66,7 @@ final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
          indexClosure: @escaping ((T.RawValue) -> (Int)) = { $0 as? Int ?? 0 },
          rawValueClosure: @escaping ((Int) -> (T.RawValue?)) = { $0 as? T.RawValue },
          frame: Rect = Rect(),
-         names: [Localization] = [], sizeType: SizeType = .regular) {
+         names: [Text] = [], sizeType: SizeType = .regular) {
         
         classNameView = TextView(text: T.uninheritanceName, font: Font.bold(with: sizeType))
         self.enumeratedType = enumeratedType
@@ -100,7 +100,7 @@ final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
     
     override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
-        let nw = nameViews.reduce(0.0.cg) { $0 + $1.frame.width } + CGFloat(nameViews.count - 1) * padding
+        let nw = nameViews.reduce(0.0.cg) { $0 + $1.frame.width } + Real(nameViews.count - 1) * padding
         return Rect(x: 0, y: 0, width: classNameView.frame.width + nw + padding * 2, height: height)
     }
     override var bounds: Rect {
@@ -116,7 +116,7 @@ final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
         let h = Layout.height(with: sizeType) - padding * 2
         var y = bounds.height - padding - h
         _ = nameViews.reduce(classNameView.frame.maxX + padding) {
-            let x: CGFloat
+            let x: Real
             if $0 + $1.frame.width + padding > bounds.width {
                 x = padding
                 y -= h + padding
@@ -152,7 +152,7 @@ final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
         }
     }
     func enumeratedType(at p: Point) -> T {
-        var minI = 0, minD = CGFloat.infinity
+        var minI = 0, minD = Real.infinity
         for (i, view) in nameViews.enumerated() {
             let d = view.frame.distance²(p)
             if d < minD {
@@ -214,7 +214,7 @@ final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
     }
     
     private var oldEnumeratedType: T?, oldPoint = Point()
-    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
         case .began:
             knobView.fillColor = .editing

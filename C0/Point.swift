@@ -37,8 +37,8 @@ extension _Point: Hashable {
 extension _Point: Codable {
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
-        let x = try container.decode(CGFloat.self)
-        let y = try container.decode(CGFloat.self)
+        let x = try container.decode(Real.self)
+        let y = try container.decode(Real.self)
         self.init(x: x, y: y)
     }
     func encode(to encoder: Encoder) throws {
@@ -48,7 +48,7 @@ extension _Point: Codable {
     }
 }
 extension _Point: Referenceable {
-    static let name = Localization(english: "Point", japanese: "ポイント")
+    static let name = Text(english: "Point", japanese: "ポイント")
 }
 
 typealias Point = CGPoint
@@ -93,20 +93,20 @@ extension Point {
         let u = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d
         return Point(x: p1.x + u * (p2.x - p1.x), y: p1.y + u * (p2.y - p1.y))
     }
-    func isApproximatelyEqual(other: Point, roundingError: CGFloat = 0.0000000001) -> Bool {
+    func isApproximatelyEqual(other: Point, roundingError: Real = 0.0000000001) -> Bool {
         return x.isApproximatelyEqual(other: other.x, roundingError: roundingError)
             && y.isApproximatelyEqual(other: other.y, roundingError: roundingError)
     }
-    func tangential(_ other: Point) -> CGFloat {
+    func tangential(_ other: Point) -> Real {
         return atan2(other.y - y, other.x - x)
     }
-    func crossVector(_ other: Point) -> CGFloat {
+    func crossVector(_ other: Point) -> Real {
         return x * other.y - y * other.x
     }
-    func distance(_ other: Point) -> CGFloat {
+    func distance(_ other: Point) -> Real {
         return hypot(other.x - x, other.y - y)
     }
-    func distanceWithLine(ap: Point, bp: Point) -> CGFloat {
+    func distanceWithLine(ap: Point, bp: Point) -> Real {
         return ap == bp ? distance(ap) : abs((bp - ap).crossVector(self - ap)) / ap.distance(bp)
     }
     func normalLinearInequality(ap: Point, bp: Point) -> Bool {
@@ -118,7 +118,7 @@ extension Point {
             return bp.y > ap.y ? y <= ny : y >= ny
         }
     }
-    func tWithLineSegment(ap: Point, bp: Point) -> CGFloat {
+    func tWithLineSegment(ap: Point, bp: Point) -> Real {
         if ap == bp {
             return 0.5
         } else {
@@ -160,7 +160,7 @@ extension Point {
         }
         return nil
     }
-    func distanceWithLineSegment(ap: Point, bp: Point) -> CGFloat {
+    func distanceWithLineSegment(ap: Point, bp: Point) -> Real {
         if ap == bp {
             return distance(ap)
         } else {
@@ -187,7 +187,7 @@ extension Point {
     var integral: Point {
         return Point(x: round(x), y: round(y))
     }
-    func perpendicularDeltaPoint(withDistance distance: CGFloat) -> Point {
+    func perpendicularDeltaPoint(withDistance distance: Real) -> Point {
         if self == Point() {
             return Point(x: distance, y: 0)
         } else {
@@ -195,21 +195,21 @@ extension Point {
             return Point(x: -r * y, y: r * x)
         }
     }
-    func distance²(_ other: Point) -> CGFloat {
+    func distance²(_ other: Point) -> Real {
         let nx = x - other.x, ny = y - other.y
         return nx * nx + ny * ny
     }
-    static func differenceAngle(_ p0: Point, p1: Point, p2: Point) -> CGFloat {
+    static func differenceAngle(_ p0: Point, p1: Point, p2: Point) -> Real {
         let pa = p1 - p0
         let pb = p2 - pa
         let ab = hypot(pa.x, pa.y) * hypot(pb.x, pb.y)
         return ab == 0 ? 0 :
             (pa.x * pb.y - pa.y * pb.x > 0 ? 1 : -1) * acos((pa.x * pb.x + pa.y * pb.y) / ab)
     }
-    static func differenceAngle(p0: Point, p1: Point, p2: Point) -> CGFloat {
+    static func differenceAngle(p0: Point, p1: Point, p2: Point) -> Real {
         return differenceAngle(a: p1 - p0, b: p2 - p1)
     }
-    static func differenceAngle(a: Point, b: Point) -> CGFloat {
+    static func differenceAngle(a: Point, b: Point) -> Real {
         return atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y)
     }
     static func +(lhs: Point, rha: Point) -> Point {
@@ -229,24 +229,24 @@ extension Point {
     prefix static func -(p: Point) -> Point {
         return Point(x: -p.x, y: -p.y)
     }
-    static func *(lhs: CGFloat, rhs: Point) -> Point {
+    static func *(lhs: Real, rhs: Point) -> Point {
         return Point(x: rhs.x * lhs, y: rhs.y * lhs)
     }
-    static func *(lhs: Point, rhs: CGFloat) -> Point {
+    static func *(lhs: Point, rhs: Real) -> Point {
         return Point(x: lhs.x * rhs, y: lhs.y * rhs)
     }
-    static func /(lhs: Point, rhs: CGFloat) -> Point {
+    static func /(lhs: Point, rhs: Real) -> Point {
         return Point(x: lhs.x / rhs, y: lhs.y / rhs)
     }
+//
+//    init(_ string: String?) {
+//        self = NSPointToCGPoint(NSPointFromString(string))
+//    }
+//    var string: String? {
+//        return jsonString
+//    }
     
-    init(_ string: String) {
-        self = NSPointToCGPoint(NSPointFromString(string))
-    }
-    var string: String {
-        return String(NSStringFromPoint(NSPointFromCGPoint(self)))
-    }
-    
-    func draw(radius r: CGFloat, lineWidth: CGFloat = 1,
+    func draw(radius r: Real, lineWidth: Real = 1,
               inColor: Color = .knob, outColor: Color = .getSetBorder, in ctx: CGContext) {
         let rect = Rect(x: x - r, y: y - r, width: r * 2, height: r * 2)
         ctx.setFillColor(outColor.cg)
@@ -261,37 +261,37 @@ extension Point: Hashable {
     }
 }
 extension Point: Interpolatable {
-    static func linear(_ f0: Point, _ f1: Point, t: CGFloat) -> Point {
-        return Point(x: CGFloat.linear(f0.x, f1.x, t: t), y: CGFloat.linear(f0.y, f1.y, t: t))
+    static func linear(_ f0: Point, _ f1: Point, t: Real) -> Point {
+        return Point(x: Real.linear(f0.x, f1.x, t: t), y: Real.linear(f0.y, f1.y, t: t))
     }
     static func firstMonospline(_ f1: Point, _ f2: Point, _ f3: Point,
                                 with ms: Monospline) -> Point {
-        return Point(x: CGFloat.firstMonospline(f1.x, f2.x, f3.x, with: ms),
-                       y: CGFloat.firstMonospline(f1.y, f2.y, f3.y, with: ms))
+        return Point(x: Real.firstMonospline(f1.x, f2.x, f3.x, with: ms),
+                       y: Real.firstMonospline(f1.y, f2.y, f3.y, with: ms))
     }
     static func monospline(_ f0: Point, _ f1: Point, _ f2: Point, _ f3: Point,
                            with ms: Monospline) -> Point {
-        return Point(x: CGFloat.monospline(f0.x, f1.x, f2.x, f3.x, with: ms),
-                       y: CGFloat.monospline(f0.y, f1.y, f2.y, f3.y, with: ms))
+        return Point(x: Real.monospline(f0.x, f1.x, f2.x, f3.x, with: ms),
+                       y: Real.monospline(f0.y, f1.y, f2.y, f3.y, with: ms))
     }
     static func lastMonospline(_ f0: Point, _ f1: Point, _ f2: Point,
                                with ms: Monospline) -> Point {
-        return Point(x: CGFloat.lastMonospline(f0.x, f1.x, f2.x, with: ms),
-                       y: CGFloat.lastMonospline(f0.y, f1.y, f2.y, with: ms))
+        return Point(x: Real.lastMonospline(f0.x, f1.x, f2.x, with: ms),
+                       y: Real.lastMonospline(f0.y, f1.y, f2.y, with: ms))
     }
 }
 extension Point: Referenceable {
-    static let name = Localization(english: "Point", japanese: "ポイント")
+    static let name = Text(english: "Point", japanese: "ポイント")
 }
 extension Point: DeepCopiable {
 }
 extension Point: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return string.view(withBounds: bounds, sizeType)
+        return (jsonString ?? "").view(withBounds: bounds, sizeType)
     }
 }
 
-final class PointView: View, Assignable, Movable, Runnable {
+final class PointView: View, Queryable, Assignable, Movable, Runnable {
     var point = Point() {
         didSet {
             if point != oldValue {
@@ -369,8 +369,8 @@ final class PointView: View, Assignable, Movable, Runnable {
                     push(point, old: self.point)
                     return
                 }
-            } else if let string = object as? String {
-                let point = clippedPoint(with: Point(string))
+            } else if let string = object as? String, let unclippedPoint = Point(jsonString: string) {
+                let point = clippedPoint(with: unclippedPoint)
                 if point != self.point {
                     push(point, old: self.point)
                     return
@@ -387,7 +387,7 @@ final class PointView: View, Assignable, Movable, Runnable {
     }
     
     private var oldPoint = Point()
-    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
         case .began:
             formKnobView.fillColor = .editing
@@ -422,7 +422,7 @@ final class PointView: View, Assignable, Movable, Runnable {
     }
 }
 
-final class DiscretePointView: View, Assignable {
+final class DiscretePointView: View, Queryable, Assignable {
     var point = Point() {
         didSet {
             if point != oldValue {
@@ -435,22 +435,22 @@ final class DiscretePointView: View, Assignable {
     
     var sizeType: SizeType
     let classXNameView: TextView
-    let xView: DiscreteRealNumberView
+    let xView: DiscreteRealView
     let classYNameView: TextView
-    let yView: DiscreteRealNumberView
+    let yView: DiscreteRealView
     init(point: Point = Point(), defaultPoint: Point = Point(),
          minPoint: Point = Point(x: -10000, y: -10000),
          maxPoint: Point = Point(x: 10000, y: 10000),
-         xEXP: RealNumber = 1, yEXP: RealNumber = 1,
-         xInterval: RealNumber = 1, xNumberOfDigits: Int = 0, xUnit: String = "",
-         yInterval: RealNumber = 1, yNumberOfDigits: Int = 0, yUnit: String = "",
+         xEXP: Real = 1, yEXP: Real = 1,
+         xInterval: Real = 1, xNumberOfDigits: Int = 0, xUnit: String = "",
+         yInterval: Real = 1, yNumberOfDigits: Int = 0, yUnit: String = "",
          frame: Rect = Rect(),
          sizeType: SizeType = .regular) {
         self.sizeType = sizeType
         
-        classXNameView = TextView(text: Localization("x:"), font: Font.default(with: sizeType))
-        xView = DiscreteRealNumberView(model: point.x,
-                                       option: RealNumberOption(defaultModel: defaultPoint.x,
+        classXNameView = TextView(text: "x:", font: Font.default(with: sizeType))
+        xView = DiscreteRealView(model: point.x,
+                                       option: RealOption(defaultModel: defaultPoint.x,
                                                                 minModel: minPoint.x,
                                                                 maxModel: maxPoint.x,
                                                                 modelInterval: xInterval,
@@ -459,9 +459,9 @@ final class DiscretePointView: View, Assignable {
                                                                 unit: xUnit),
                                        frame: Layout.valueFrame(with: sizeType),
                                        sizeType: sizeType)
-        classYNameView = TextView(text: Localization("y:"), font: Font.default(with: sizeType))
-        yView = DiscreteRealNumberView(model: point.y,
-                                       option: RealNumberOption(defaultModel: defaultPoint.y,
+        classYNameView = TextView(text: "y:", font: Font.default(with: sizeType))
+        yView = DiscreteRealView(model: point.y,
+                                       option: RealOption(defaultModel: defaultPoint.y,
                                                                 minModel: minPoint.y,
                                                                 maxModel: maxPoint.y,
                                                                 modelInterval: yInterval,
@@ -517,7 +517,7 @@ final class DiscretePointView: View, Assignable {
     var disabledRegisterUndo = false
     
     private var oldPoint = Point()
-    private func setPoint(with obj: DiscreteRealNumberView.Binding<RealNumber>) {
+    private func setPoint(with obj: DiscreteRealView.Binding<Real>) {
         if obj.phase == .began {
             oldPoint = point
             binding?(Binding(view: self, point: oldPoint, oldPoint: oldPoint, phase: .began))
@@ -547,8 +547,7 @@ final class DiscretePointView: View, Assignable {
                     push(point, old: self.point)
                     return
                 }
-            } else if let string = object as? String {
-                let point = Point(string)
+            } else if let string = object as? String, let point = Point(jsonString: string) {
                 if point != self.point {
                     push(point, old: self.point)
                     return

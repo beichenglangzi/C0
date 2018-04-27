@@ -38,13 +38,13 @@ extension String {
     }
 }
 extension String: Referenceable {
-    static var  name: Localization {
-        return Localization(english: "String", japanese: "文字")
+    static var  name: Text {
+        return Text(english: "String", japanese: "文字")
     }
 }
 extension String: Viewable {
     func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return TextView(text: Localization(self), font: Font.default(with: sizeType),
+        return TextView(text: Text(self), font: Font.default(with: sizeType),
                         frame: bounds, isSizeToFit: false, isForm: false)
     }
 }
@@ -52,7 +52,7 @@ extension String: Viewable {
 /**
  Issue: モードレス文字入力
  */
-final class TextView: View, Indicatable, Assignable, Runnable, KeyInputtable {
+final class TextView: View, Indicatable, Queryable, Assignable, Runnable, KeyInputtable {
     var text: Text {
         didSet {
             string = text.currentString
@@ -101,20 +101,20 @@ final class TextView: View, Indicatable, Assignable, Runnable, KeyInputtable {
     }
     
     var isReadOnly = true
-    var baseFont: Font, baselineDelta: CGFloat, height: CGFloat, padding: CGFloat
+    var baseFont: Font, baselineDelta: Real, height: Real, padding: Real
     
-    init(text localization: Localization = Localization(),
+    init(text: Text = "",
          font: Font = .default, color: Color = .locked,
          frameAlignment: CTTextAlignment = .left, alignment: CTTextAlignment = .natural,
-         frame: Rect = Rect(), padding: CGFloat = 1,
+         frame: Rect = Rect(), padding: Real = 1,
          isSizeToFit: Bool = true, isForm: Bool = true) {
         
-        self.text = localization
+        self.text = text
         self.padding = padding
         self.baseFont = font
         self.defaultAttributes = NSAttributedString.attributesWith(font: font, color: color,
                                                                    alignment: alignment)
-        self.backingStore = NSMutableAttributedString(string: localization.currentString,
+        self.backingStore = NSMutableAttributedString(string: text.currentString,
                                                       attributes: defaultAttributes)
         if frame.width == 0 {
             self.textFrame = TextFrame(attributedString: backingStore)
@@ -467,14 +467,14 @@ final class TextView: View, Indicatable, Assignable, Runnable, KeyInputtable {
     func characterIndex(for p: Point) -> Int {
         return textFrame.characterIndex(for: convertToLocal(p))
     }
-    func characterFraction(for p: Point) -> CGFloat {
+    func characterFraction(for p: Point) -> Real {
         return textFrame.characterFraction(for: convertToLocal(p))
     }
-    func characterOffset(for p: Point) -> CGFloat {
+    func characterOffset(for p: Point) -> Real {
         let i = characterIndex(for: convertToLocal(p))
         return textFrame.characterOffset(at: i)
     }
-    func baselineDelta(at i: Int) -> CGFloat {
+    func baselineDelta(at i: Int) -> Real {
         return textFrame.baselineDelta(at: i)
     }
     func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> Rect {
@@ -482,8 +482,8 @@ final class TextView: View, Indicatable, Assignable, Runnable, KeyInputtable {
     }
     
     func reference(at p: Point) -> Reference {
-        return Reference(name: Localization(english: "Text", japanese: "テキスト"),
-                         viewDescription: Localization(english: "Run (Verb sentence only): Click",
+        return Reference(name: Text(english: "Text", japanese: "テキスト"),
+                         viewDescription: Text(english: "Run (Verb sentence only): Click",
                                                        japanese: "実行 (動詞文のみ): クリック"))
     }
 }
@@ -533,14 +533,14 @@ struct TextFrame {
         return typographicBounds
     }
     
-    var frameWidth: CGFloat? {
+    var frameWidth: Real? {
         didSet {
             self.lines = TextFrame.lineWith(attributedString: attributedString,
                                             frameWidth: frameWidth)
         }
     }
     
-    init(attributedString: NSAttributedString, frameWidth: CGFloat? = nil) {
+    init(attributedString: NSAttributedString, frameWidth: Real? = nil) {
         self.attributedString = attributedString
         self.frameWidth = frameWidth
         self.lines = TextFrame.lineWith(attributedString: attributedString,
@@ -549,7 +549,7 @@ struct TextFrame {
     }
     init(string: String = "",
          font: Font = .default, color: Color = .font, alignment: CTTextAlignment = .natural,
-         frameWidth: CGFloat? = nil) {
+         frameWidth: Real? = nil) {
         
         self.init(attributedString: .with(string: string,
                                           font: font, color: color, alignment: alignment),
@@ -562,12 +562,12 @@ struct TextFrame {
         }
     }
     private static func lineWith(attributedString: NSAttributedString,
-                                 frameWidth: CGFloat?) -> [TextLine] {
-        let width = Double(frameWidth ?? CGFloat.infinity)
+                                 frameWidth: Real?) -> [TextLine] {
+        let width = Double(frameWidth ?? Real.infinity)
         let typesetter = CTTypesetterCreateWithAttributedString(attributedString)
         let length = attributedString.length
         var range = CFRange(), h = 0.0.cg
-        var ls = [(ctLine: CTLine, ascent: CGFloat, descent: CGFloat, leading: CGFloat)]()
+        var ls = [(ctLine: CTLine, ascent: Real, descent: Real, leading: Real)]()
         while range.maxLocation < length {
             range.length = CTTypesetterSuggestLineBreak(typesetter, range.location, width)
             let ctLine = CTTypesetterCreateLine(typesetter, range)
@@ -626,13 +626,13 @@ struct TextFrame {
         }
         return attributedString.length - 1
     }
-    func characterFraction(for point: Point) -> CGFloat {
+    func characterFraction(for point: Point) -> Real {
         guard let line = self.line(for: point) else {
             return 0.0
         }
         return line.characterFraction(for: point - line.origin)
     }
-    func characterOffset(at i: Int) -> CGFloat {
+    func characterOffset(at i: Int) -> Real {
         let lines = self.lines
         for line in lines {
             if line.contains(at: i) {
@@ -661,7 +661,7 @@ struct TextFrame {
             return $0.unionNoEmpty(Rect(origin: $1.origin + bounds.origin, size: bounds.size))
         }
     }
-    func baselineDelta(at i: Int) -> CGFloat {
+    func baselineDelta(at i: Int) -> Real {
         for line in lines {
             if line.contains(at: i) {
                 return line.baselineDelta(at: i)
@@ -737,7 +737,7 @@ struct TextLine {
         }
         return range.maxLocation - 1
     }
-    func characterFraction(for point: Point) -> CGFloat {
+    func characterFraction(for point: Point) -> Real {
         let i = characterIndex(for: point)
         if i < CTLineGetStringRange(ctLine).maxLocation {
             let x = characterOffset(at: i)
@@ -746,12 +746,12 @@ struct TextLine {
         }
         return 0.0
     }
-    func characterOffset(at i: Int) -> CGFloat {
+    func characterOffset(at i: Int) -> Real {
         var offset = 0.0.cg
         CTLineGetOffsetForStringIndex(ctLine, i, &offset)
         return offset
     }
-    func baselineDelta(at i: Int) -> CGFloat {
+    func baselineDelta(at i: Int) -> Real {
         var descent = 0.0.cg, leading = 0.0.cg
         _ = CTLineGetTypographicBounds(ctLine, nil, &descent, &leading)
         return descent + leading

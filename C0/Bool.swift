@@ -20,7 +20,7 @@
 import Foundation
 
 extension Bool: Referenceable {
-    static let name = Localization(english: "Bool", japanese: "ブール値")
+    static let name = Text(english: "Bool", japanese: "ブール値")
 }
 extension Bool: ObjectViewExpression {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
@@ -29,16 +29,16 @@ extension Bool: ObjectViewExpression {
 }
 
 struct BoolInfo {
-    var trueName = Localization(), falseName = Localization()
-    static let `default` = BoolInfo(trueName: Localization(english: "True", japanese: "真"),
-                                    falseName: Localization(english: "False", japanese: "偽"))
-    static let hidden = BoolInfo(trueName: Localization(english: "Hidden", japanese: "隠し済み"),
-                                 falseName: Localization(english: "Shown", japanese: "表示済み"))
-    static let locked = BoolInfo(trueName: Localization(english: "Locked", japanese: "ロック済み"),
-                                 falseName: Localization(english: "Unlocked", japanese: "未ロック"))
+    var trueName = Text(), falseName = Text()
+    static let `default` = BoolInfo(trueName: Text(english: "True", japanese: "真"),
+                                    falseName: Text(english: "False", japanese: "偽"))
+    static let hidden = BoolInfo(trueName: Text(english: "Hidden", japanese: "隠し済み"),
+                                 falseName: Text(english: "Shown", japanese: "表示済み"))
+    static let locked = BoolInfo(trueName: Text(english: "Locked", japanese: "ロック済み"),
+                                 falseName: Text(english: "Unlocked", japanese: "未ロック"))
 }
 
-final class BoolView: View, Assignable, Runnable, Movable {
+final class BoolView: View, Queryable, Assignable, Runnable, Movable {
     var bool: Bool {
         didSet {
             updateWithBool()
@@ -61,12 +61,12 @@ final class BoolView: View, Assignable, Runnable, Movable {
     let lineView = View(path: CGMutablePath())
     
     init(bool: Bool = false, defaultBool: Bool = false, cationBool: Bool? = nil,
-         name: Localization = Localization(), boolInfo: BoolInfo = BoolInfo(),
+         name: Text = "", boolInfo: BoolInfo = BoolInfo(),
          sizeType: SizeType = .regular) {
         self.bool = bool
         self.defaultBool = bool
         self.cationBool = cationBool
-        parentClassTextView = TextView(text: name.isEmpty ? Localization() : name + Localization(":"),
+        parentClassTextView = TextView(text: name.isEmpty ? "" : name + ":",
                                        font: Font.default(with: sizeType))
         self.boolInfo = boolInfo
         parentClassTrueNameView = TextView(text: boolInfo.trueName,
@@ -162,7 +162,7 @@ final class BoolView: View, Assignable, Runnable, Movable {
     }
     
     private var oldBool = false, oldPoint = Point()
-    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
         case .began:
             knobView.fillColor = .editing
