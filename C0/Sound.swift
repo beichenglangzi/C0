@@ -311,18 +311,18 @@ final class SoundView: View, Queryable, Assignable {
     }
     
     var sizeType: SizeType
-    let formClassNameView: TextView
+    let classNameView: TextView
     let nameView: TextView
     
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
-        formClassNameView = TextView(text: Sound.name, font: Font.bold(with: sizeType))
+        classNameView = TextView(text: Sound.name, font: Font.bold(with: sizeType))
         nameView = TextView(text: "", font: Font.default(with: sizeType),
                             isSizeToFit: false, isForm: false)
         
         super.init()
         isClipped = true
-        children = [formClassNameView, nameView]
+        children = [classNameView, nameView]
         updateLayout()
     }
     
@@ -339,10 +339,10 @@ final class SoundView: View, Queryable, Assignable {
     }
     private func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        let y = bounds.height - padding - formClassNameView.frame.height
-        formClassNameView.frame.origin = Point(x: padding, y: y)
-        nameView.frame = Rect(x: formClassNameView.frame.maxX + padding, y: padding,
-                                width: bounds.width - formClassNameView.frame.maxX - padding * 2,
+        let y = bounds.height - padding - classNameView.frame.height
+        classNameView.frame.origin = Point(x: padding, y: y)
+        nameView.frame = Rect(x: classNameView.frame.maxX + padding, y: padding,
+                                width: bounds.width - classNameView.frame.maxX - padding * 2,
                                 height: bounds.height - padding * 2)
     }
     

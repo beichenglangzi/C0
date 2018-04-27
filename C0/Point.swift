@@ -130,17 +130,17 @@ extension Point {
     static func boundsPointWithLine(ap: Point, bp: Point,
                                     bounds: Rect) -> (p0: Point, p1: Point)? {
         let p0 = Point.intersectionLineSegment(Point(x: bounds.minX, y: bounds.minY),
-                                                 Point(x: bounds.minX, y: bounds.maxY),
-                                                 ap, bp, isSegmentP3P4: false)
+                                               Point(x: bounds.minX, y: bounds.maxY),
+                                               ap, bp, isSegmentP3P4: false)
         let p1 = Point.intersectionLineSegment(Point(x: bounds.maxX, y: bounds.minY),
-                                                 Point(x: bounds.maxX, y: bounds.maxY),
-                                                 ap, bp, isSegmentP3P4: false)
+                                               Point(x: bounds.maxX, y: bounds.maxY),
+                                               ap, bp, isSegmentP3P4: false)
         let p2 = Point.intersectionLineSegment(Point(x: bounds.minX, y: bounds.minY),
-                                                 Point(x: bounds.maxX, y: bounds.minY),
-                                                 ap, bp, isSegmentP3P4: false)
+                                               Point(x: bounds.maxX, y: bounds.minY),
+                                               ap, bp, isSegmentP3P4: false)
         let p3 = Point.intersectionLineSegment(Point(x: bounds.minX, y: bounds.maxY),
-                                                 Point(x: bounds.maxX, y: bounds.maxY),
-                                                 ap, bp, isSegmentP3P4: false)
+                                               Point(x: bounds.maxX, y: bounds.maxY),
+                                               ap, bp, isSegmentP3P4: false)
         if let p0 = p0 {
             if let p1 = p1, p0 != p1 {
                 return (p0, p1)
@@ -238,13 +238,13 @@ extension Point {
     static func /(lhs: Point, rhs: Real) -> Point {
         return Point(x: lhs.x / rhs, y: lhs.y / rhs)
     }
-//
-//    init(_ string: String?) {
-//        self = NSPointToCGPoint(NSPointFromString(string))
-//    }
-//    var string: String? {
-//        return jsonString
-//    }
+    //
+    //    init(_ string: String?) {
+    //        self = NSPointToCGPoint(NSPointFromString(string))
+    //    }
+    //    var string: String? {
+    //        return jsonString
+    //    }
     
     func draw(radius r: Real, lineWidth: Real = 1,
               inColor: Color = .knob, outColor: Color = .getSetBorder, in ctx: CGContext) {
@@ -267,17 +267,17 @@ extension Point: Interpolatable {
     static func firstMonospline(_ f1: Point, _ f2: Point, _ f3: Point,
                                 with ms: Monospline) -> Point {
         return Point(x: Real.firstMonospline(f1.x, f2.x, f3.x, with: ms),
-                       y: Real.firstMonospline(f1.y, f2.y, f3.y, with: ms))
+                     y: Real.firstMonospline(f1.y, f2.y, f3.y, with: ms))
     }
     static func monospline(_ f0: Point, _ f1: Point, _ f2: Point, _ f3: Point,
                            with ms: Monospline) -> Point {
         return Point(x: Real.monospline(f0.x, f1.x, f2.x, f3.x, with: ms),
-                       y: Real.monospline(f0.y, f1.y, f2.y, f3.y, with: ms))
+                     y: Real.monospline(f0.y, f1.y, f2.y, f3.y, with: ms))
     }
     static func lastMonospline(_ f0: Point, _ f1: Point, _ f2: Point,
                                with ms: Monospline) -> Point {
         return Point(x: Real.lastMonospline(f0.x, f1.x, f2.x, with: ms),
-                       y: Real.lastMonospline(f0.y, f1.y, f2.y, with: ms))
+                     y: Real.lastMonospline(f0.y, f1.y, f2.y, with: ms))
     }
 }
 extension Point: Referenceable {
@@ -295,7 +295,7 @@ final class PointView: View, Queryable, Assignable, Movable, Runnable {
     var point = Point() {
         didSet {
             if point != oldValue {
-                formKnobView.position = position(from: point)
+                knobView.position = position(from: point)
             }
         }
     }
@@ -310,22 +310,22 @@ final class PointView: View, Queryable, Assignable, Movable, Runnable {
     
     var formBackgroundViews = [View]() {
         didSet {
-            children = formBackgroundViews + [formKnobView]
+            children = formBackgroundViews + [knobView]
         }
     }
-    let formKnobView = KnobView()
+    let knobView = KnobView()
     
     var padding = 5.0.cg
     
     init(frame: Rect = Rect()) {
         super.init()
         self.frame = frame
-        append(child: formKnobView)
+        append(child: knobView)
     }
     
     override var bounds: Rect {
         didSet {
-            formKnobView.position = position(from: point)
+            knobView.position = position(from: point)
         }
     }
     
@@ -390,7 +390,7 @@ final class PointView: View, Queryable, Assignable, Movable, Runnable {
     func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
         case .began:
-            formKnobView.fillColor = .editing
+            knobView.fillColor = .editing
             oldPoint = point
             binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .began))
             point = clippedPoint(with: self.point(withPosition: p))
@@ -406,7 +406,7 @@ final class PointView: View, Queryable, Assignable, Movable, Runnable {
                 }
             }
             binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .ended))
-            formKnobView.fillColor = .knob
+            knobView.fillColor = .knob
         }
     }
     
@@ -418,7 +418,7 @@ final class PointView: View, Queryable, Assignable, Movable, Runnable {
     }
     
     func reference(at p: Point) -> Reference {
-        return _Point.reference
+        return Point.reference
     }
 }
 
@@ -438,6 +438,7 @@ final class DiscretePointView: View, Queryable, Assignable {
     let xView: DiscreteRealView
     let classYNameView: TextView
     let yView: DiscreteRealView
+    
     init(point: Point = Point(), defaultPoint: Point = Point(),
          minPoint: Point = Point(x: -10000, y: -10000),
          maxPoint: Point = Point(x: 10000, y: 10000),
@@ -446,30 +447,28 @@ final class DiscretePointView: View, Queryable, Assignable {
          yInterval: Real = 1, yNumberOfDigits: Int = 0, yUnit: String = "",
          frame: Rect = Rect(),
          sizeType: SizeType = .regular) {
+        
         self.sizeType = sizeType
         
         classXNameView = TextView(text: "x:", font: Font.default(with: sizeType))
         xView = DiscreteRealView(model: point.x,
-                                       option: RealOption(defaultModel: defaultPoint.x,
-                                                                minModel: minPoint.x,
-                                                                maxModel: maxPoint.x,
-                                                                modelInterval: xInterval,
-                                                                exp: xEXP,
-                                                                numberOfDigits: xNumberOfDigits,
-                                                                unit: xUnit),
-                                       frame: Layout.valueFrame(with: sizeType),
-                                       sizeType: sizeType)
+                                 option: RealOption(defaultModel: defaultPoint.x,
+                                                    minModel: minPoint.x, maxModel: maxPoint.x,
+                                                    modelInterval: xInterval, exp: xEXP,
+                                                    numberOfDigits: xNumberOfDigits, unit: xUnit),
+                                 frame: Layout.valueFrame(with: sizeType),
+                                 sizeType: sizeType)
         classYNameView = TextView(text: "y:", font: Font.default(with: sizeType))
         yView = DiscreteRealView(model: point.y,
-                                       option: RealOption(defaultModel: defaultPoint.y,
-                                                                minModel: minPoint.y,
-                                                                maxModel: maxPoint.y,
-                                                                modelInterval: yInterval,
-                                                                exp: yEXP,
-                                                                numberOfDigits: yNumberOfDigits,
-                                                                unit: yUnit),
-                                       frame: Layout.valueFrame(with: sizeType),
-                                       sizeType: sizeType)
+                                 option: RealOption(defaultModel: defaultPoint.y,
+                                                    minModel: minPoint.y, maxModel: maxPoint.y,
+                                                    modelInterval: yInterval, exp: yEXP,
+                                                    numberOfDigits: yNumberOfDigits, unit: yUnit),
+                                 frame: Layout.valueFrame(with: sizeType),
+                                 sizeType: sizeType)
+        
+        self.point = point
+        self.defaultPoint = defaultPoint
         
         super.init()
         children = [classXNameView, xView, classYNameView, yView]
@@ -484,9 +483,9 @@ final class DiscretePointView: View, Queryable, Assignable {
         let xWidth = classXNameView.frame.width + valueFrame.width
         let yWidth = classYNameView.frame.height + valueFrame.width
         return Rect(x: 0,
-                      y: 0,
-                      width: max(xWidth, yWidth) + padding * 2,
-                      height: valueFrame.height * 2 + padding * 2)
+                    y: 0,
+                    width: max(xWidth, yWidth) + padding * 2,
+                    height: valueFrame.height * 2 + padding * 2)
     }
     override var bounds: Rect {
         didSet {
@@ -502,6 +501,8 @@ final class DiscretePointView: View, Queryable, Assignable {
         xView.frame.origin = Point(x: x, y: y)
         x -= classXNameView.frame.width
         classXNameView.frame.origin = Point(x: x, y: y + padding)
+        x = bounds.width - padding
+        x -= valueFrame.width
         y -= valueFrame.height
         yView.frame.origin = Point(x: x, y: y)
         x -= classYNameView.frame.width
@@ -564,6 +565,6 @@ final class DiscretePointView: View, Queryable, Assignable {
     }
     
     func reference(at p: Point) -> Reference {
-        return _Point.reference
+        return Point.reference
     }
 }

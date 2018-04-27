@@ -51,7 +51,6 @@ final class EnumView<T: EnumType>: View, Queryable, Assignable, Runnable, Movabl
     var rawValueClosure: ((Int) -> (T.RawValue?))
     
     var sizeType: SizeType
-    
     let classNameView: TextView
     let knobView: DiscreteKnobView
     private let lineView: View = {
@@ -59,7 +58,7 @@ final class EnumView<T: EnumType>: View, Queryable, Assignable, Runnable, Movabl
         lineView.fillColor = .content
         return lineView
     } ()
-    var nameViews: [TextView]
+    var classNameViews: [TextView]
     
     init(enumeratedType: T, defaultEnumeratedType: T? = nil,
          cationEnumeratedType: T? = nil,
@@ -79,7 +78,7 @@ final class EnumView<T: EnumType>: View, Queryable, Assignable, Runnable, Movabl
             cationIndex = indexClosure(cationEnumeratedType.rawValue)
         }
         
-        nameViews = names.map { TextView(text: $0, font: Font.default(with: sizeType)) }
+        classNameViews = names.map { TextView(text: $0, font: Font.default(with: sizeType)) }
         self.knobView = sizeType == .small ?
             DiscreteKnobView(Size(square: 6), lineWidth: 1) :
             DiscreteKnobView(Size(square: 8), lineWidth: 1)
@@ -87,7 +86,7 @@ final class EnumView<T: EnumType>: View, Queryable, Assignable, Runnable, Movabl
         
         super.init()
         self.frame = frame
-        children = [classNameView, lineView, knobView] + nameViews
+        children = [classNameView, lineView, knobView] + classNameViews
         updateLayout()
         updateWithEnumeratedType()
     }
@@ -100,7 +99,7 @@ final class EnumView<T: EnumType>: View, Queryable, Assignable, Runnable, Movabl
     
     override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
-        let nw = nameViews.reduce(0.0.cg) { $0 + $1.frame.width } + Real(nameViews.count - 1) * padding
+        let nw = classNameViews.reduce(0.0.cg) { $0 + $1.frame.width } + Real(classNameViews.count - 1) * padding
         return Rect(x: 0, y: 0, width: classNameView.frame.width + nw + padding * 2, height: height)
     }
     override var bounds: Rect {
@@ -115,7 +114,7 @@ final class EnumView<T: EnumType>: View, Queryable, Assignable, Runnable, Movabl
         let path = CGMutablePath()
         let h = Layout.height(with: sizeType) - padding * 2
         var y = bounds.height - padding - h
-        _ = nameViews.reduce(classNameView.frame.maxX + padding) {
+        _ = classNameViews.reduce(classNameView.frame.maxX + padding) {
             let x: Real
             if $0 + $1.frame.width + padding > bounds.width {
                 x = padding
@@ -129,17 +128,17 @@ final class EnumView<T: EnumType>: View, Queryable, Assignable, Runnable, Movabl
         }
         lineView.path = path
         
-        knobView.frame = nameViews[index].frame.inset(by: -1)
+        knobView.frame = classNameViews[index].frame.inset(by: -1)
     }
     private func updateWithEnumeratedType() {
-        knobView.frame = nameViews[index].frame.inset(by: -1)
-        nameViews.forEach {
+        knobView.frame = classNameViews[index].frame.inset(by: -1)
+        classNameViews.forEach {
             $0.fillColor = .background
             $0.lineColor = .subContent
         }
-        nameViews[index].fillColor = .knob
-        nameViews[index].lineColor = .knob
-        nameViews.enumerated().forEach {
+        classNameViews[index].fillColor = .knob
+        classNameViews[index].lineColor = .knob
+        classNameViews.enumerated().forEach {
             $0.element.textFrame.color = $0.offset == index ? .locked : .subLocked
         }
     }
@@ -153,7 +152,7 @@ final class EnumView<T: EnumType>: View, Queryable, Assignable, Runnable, Movabl
     }
     func enumeratedType(at p: Point) -> T {
         var minI = 0, minD = Real.infinity
-        for (i, view) in nameViews.enumerated() {
+        for (i, view) in classNameViews.enumerated() {
             let d = view.frame.distance²(p)
             if d < minD {
                 minI = i

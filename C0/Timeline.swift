@@ -92,7 +92,7 @@ final class TimelineView: View, Queryable, Assignable, Newable, Scrollable, Zoom
                                                           option: Scene.timeIntervalOption,
                                                           frame: Layout.valueFrame(with: .regular))
     
-    let formTimeRulerView = RulerView()
+    let timeRulerView = RulerView()
     let tempoView = DiscreteRealView(model: 120,
                                            option: RealOption(defaultModel: 120,
                                                                     minModel: 1, maxModel: 10000,
@@ -145,7 +145,7 @@ final class TimelineView: View, Queryable, Assignable, Newable, Scrollable, Zoom
         sumKeyTimesView.isEdit = true
         sumKeyTimesView.smallHeight = sumKeyTimesHeight
         sumKeyTimesClipView.append(child: sumKeyTimesView)
-        formTimeRulerView.isClipped = true
+        timeRulerView.isClipped = true
         beatsView.isClipped = true
         beatsView.fillColor = .subContent
         beatsView.lineColor = nil
@@ -153,7 +153,7 @@ final class TimelineView: View, Queryable, Assignable, Newable, Scrollable, Zoom
         super.init()
         children = [timeView, //curretEditKeyframeTimeExpressionView,
                     beatsView, classSumAnimationNameView, sumKeyTimesClipView,
-                    formTimeRulerView,
+                    timeRulerView,
                     tempoAnimationClipView, //baseTimeIntervalView,
                     nodeTreeView.nodesView, tracksManager.tracksView,
                     cutViewsView]
@@ -262,7 +262,7 @@ final class TimelineView: View, Queryable, Assignable, Newable, Scrollable, Zoom
         cutHeight = mainHeight - tempoHeight - subtitleHeight - soundHeight
         let midX = bounds.midX, leftWidth = TimelineView.leftWidth
         let rightX = leftWidth
-        formTimeRulerView.frame = Rect(x: rightX, y: bounds.height - timeRulerHeight - sp,
+        timeRulerView.frame = Rect(x: rightX, y: bounds.height - timeRulerHeight - sp,
                                  width: bounds.width - rightX - sp, height: timeRulerHeight)
 //        curretEditKeyframeTimeView.frame.origin = Point(x: rightX - curretEditKeyframeTimeView.frame.width - Layout.smallPadding,
 //                                         y: bounds.height - timeRulerHeight
@@ -381,7 +381,8 @@ final class TimelineView: View, Queryable, Assignable, Newable, Scrollable, Zoom
             cutViews.forEach { subtitleTextViews += $0.subtitleTextViews as [View] }
             
             cutViewsView.children = cutViews.reversed() as [View]
-                + cutViews.map { $0.subtitleAnimationView } as [View] + subtitleTextViews as [View] + [soundWaveformView] as [View]
+                + cutViews.map { $0.subtitleAnimationView } as [View]
+                + subtitleTextViews as [View] + [soundWaveformView] as [View]
             updateCutViewPositions()
         }
     }
@@ -536,11 +537,11 @@ final class TimelineView: View, Queryable, Assignable, Newable, Scrollable, Zoom
         let minSecond = Int(floor(scene.secondTime(withBeatTime: minTime)))
         let maxSecond = Int(ceil(scene.secondTime(withBeatTime: maxTime)))
         guard minSecond < maxSecond else {
-            formTimeRulerView.scaleTextViews = []
+            timeRulerView.scaleTextViews = []
             return
         }
-        formTimeRulerView.scrollPosition.x = localDeltaX
-        formTimeRulerView.scaleTextViews = (minSecond ... maxSecond).compactMap {
+        timeRulerView.scrollPosition.x = localDeltaX
+        timeRulerView.scaleTextViews = (minSecond ... maxSecond).compactMap {
             guard !(maxSecond - minSecond > Int(bounds.width / 40) && $0 % 5 != 0) else {
                 return nil
             }

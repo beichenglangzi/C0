@@ -378,14 +378,13 @@ final class SceneView: View, Queryable, Scrollable {
                                                                       japanese: "動画を書き出す"))
     
     let soundView = SoundView(sizeType: .small)
-    let drawingView = DrawingView()
-    let materialManager = SceneMaterialManager()
-    //bindingView   /cutTrack.cuts[].editNode.tracks[].transforms[]
-    let transformView = TransformView()
-    let wiggleXView = WiggleView()
-    let wiggleYView = WiggleView()
-    let subtitleView = SubtitleView(sizeType: .small)
-    let effectView = EffectView(sizeType: .small)
+    let drawingView = DrawingView()//bind
+    let materialManager = SceneMaterialManager()//bind
+    let transformView = TransformView()//bind
+    let wiggleXView = WiggleView()//bind
+    let wiggleYView = WiggleView()//bind
+    let subtitleView = SubtitleView(sizeType: .small)//
+    let effectView = EffectView(sizeType: .small)//bind
     
 //    let showAllBox = TextBox(name: Text(english: "Unlock All Cells",
 //                                                japanese: "すべてのセルのロックを解除"),

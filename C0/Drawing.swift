@@ -154,9 +154,9 @@ final class DrawingView: View, Queryable, Assignable {
     }
     
     var sizeType: SizeType
-    let formClassNameView: TextView
+    let classNameView: TextView
     let linesView = ArrayCountView<Line>()
-    let formClassDraftLinesNameView = TextView(text: Text(english: "Draft Lines:",
+    let classDraftLinesNameView = TextView(text: Text(english: "Draft Lines:",
                                                                   japanese: "下書き線:"))
     let draftLinesView = ArrayCountView<Line>()
     let changeToDraftView = ClosureView(name: Text(english: "Change to Draft",
@@ -166,14 +166,14 @@ final class DrawingView: View, Queryable, Assignable {
     
     init(drawing: Drawing = Drawing(), sizeType: SizeType = .regular) {
         self.sizeType = sizeType
-        formClassNameView = TextView(text: Drawing.name, font: Font.bold(with: sizeType))
+        classNameView = TextView(text: Drawing.name, font: Font.bold(with: sizeType))
         
         super.init()
         changeToDraftView.closure = { [unowned self] in self.changeToDraft() }
         exchangeWithDraftView.closure = { [unowned self] in self.exchangeWithDraft() }
-        children = [formClassNameView,
+        children = [classNameView,
                     linesView,
-                    formClassDraftLinesNameView, draftLinesView,
+                    classDraftLinesNameView, draftLinesView,
                     changeToDraftView, exchangeWithDraftView]
     }
     
@@ -191,8 +191,8 @@ final class DrawingView: View, Queryable, Assignable {
         let padding = Layout.padding(with: sizeType), buttonH = Layout.height(with: sizeType)
         let px = padding, pw = bounds.width - padding * 2
         var py = bounds.height - padding
-        py -= formClassNameView.frame.height
-        formClassNameView.frame.origin = Point(x: padding, y: py)
+        py -= classNameView.frame.height
+        classNameView.frame.origin = Point(x: padding, y: py)
         let lsdb = linesView.defaultBounds
         py = bounds.height - padding
         py -= lsdb.height
@@ -201,8 +201,8 @@ final class DrawingView: View, Queryable, Assignable {
         py -= lsdb.height
         draftLinesView.frame = Rect(x: bounds.maxX - lsdb.width - padding, y: py,
                                       width: lsdb.width, height: lsdb.height)
-        let fcdlnvw = formClassDraftLinesNameView.frame.width
-        formClassDraftLinesNameView.frame.origin = Point(x: draftLinesView.frame.minX - fcdlnvw,
+        let fcdlnvw = classDraftLinesNameView.frame.width
+        classDraftLinesNameView.frame.origin = Point(x: draftLinesView.frame.minX - fcdlnvw,
                                                            y: py + padding)
         py -= buttonH
         changeToDraftView.frame = Rect(x: px, y: py, width: pw, height: buttonH)

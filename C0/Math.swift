@@ -310,7 +310,7 @@ final class DiscreteOneDimensionalView
         linePathView.lineColor = .content
         return linePathView
     } ()
-    let formStringView: TextView
+    let optionTextView: TextView
     
     init(model: T, option: U,
          orientation: Orientation = .rightHanded,
@@ -324,15 +324,15 @@ final class DiscreteOneDimensionalView
         self.layoutOrientation = layoutOrientation
         self.knobPadding = sizeType == .small ? 2 : 3
         labelPaddingX = Layout.padding(with: sizeType)
-        formStringView = TextView(font: Font.default(with: sizeType),
+        optionTextView = TextView(font: Font.default(with: sizeType),
                                   frameAlignment: .right, alignment: .right)
         self.sizeType = sizeType
         
         super.init()
-        updateWithModel()
         isClipped = true
-        children = [formStringView, linePathView, knobView]
+        children = [optionTextView, linePathView, knobView]
         self.frame = frame
+        updateWithModel()
     }
     
     override var bounds: Rect {
@@ -345,15 +345,15 @@ final class DiscreteOneDimensionalView
         knobLineFrame = Rect(x: paddingX, y: sizeType == .small ? 1 : 2,
                                width: bounds.width - paddingX * 2, height: 1)
         linePathView.frame = knobLineFrame
-        formStringView.frame.origin = Point(x: bounds.width - formStringView.frame.width - labelPaddingX,
-                                          y: round((bounds.height - formStringView.frame.height) / 2))
+        optionTextView.frame.origin = Point(x: bounds.width - optionTextView.frame.width - labelPaddingX,
+                                          y: round((bounds.height - optionTextView.frame.height) / 2))
     }
     func updateWithModel() {
         updateString()
         updateknob()
     }
     func updateString() {
-        formStringView.text = option.text(with: model)
+        optionTextView.text = option.text(with: model)
     }
     func updateknob() {
         let x = knobLineFrame.width * option.ratioFromDefaultModel(with: model) + knobLineFrame.minX
@@ -464,8 +464,8 @@ final class NumberGetterView<T: Comparable & Viewable & Referenceable, U: Number
     var option: U
     
     var sizeType: SizeType
-    var formPropertyNameView: TextView?
-    let formStringView: TextView
+    var classPropertyNameView: TextView?
+    let optionTextView: TextView
     var orientation: Orientation
     private let labelPaddingX: Real
     
@@ -478,7 +478,7 @@ final class NumberGetterView<T: Comparable & Viewable & Referenceable, U: Number
         self.option = option
         self.orientation = orientation
         labelPaddingX = Layout.padding(with: sizeType)
-        formStringView = TextView(text: option.text(with: model),
+        optionTextView = TextView(text: option.text(with: model),
                                   font: Font.default(with: sizeType),
                                   frameAlignment: .right, alignment: .right)
         self.sizeType = sizeType
@@ -487,12 +487,12 @@ final class NumberGetterView<T: Comparable & Viewable & Referenceable, U: Number
         noIndicatedLineColor = .getBorder
         indicatedLineColor = .indicated
         isClipped = true
-        children = [formStringView]
+        children = [optionTextView]
         self.frame = frame
     }
     
     override var defaultBounds: Rect {
-        return formStringView.defaultBounds
+        return optionTextView.defaultBounds
     }
     override var bounds: Rect {
         didSet {
@@ -500,14 +500,14 @@ final class NumberGetterView<T: Comparable & Viewable & Referenceable, U: Number
         }
     }
     private func updateLayout() {
-        formStringView.frame.origin = Point(x: bounds.width - formStringView.frame.width,
-                                            y: bounds.height - formStringView.frame.height)
+        optionTextView.frame.origin = Point(x: bounds.width - optionTextView.frame.width,
+                                            y: bounds.height - optionTextView.frame.height)
     }
     func updateWithModel() {
         updateString()
     }
     func updateString() {
-        formStringView.text = option.text(with: model)
+        optionTextView.text = option.text(with: model)
     }
     
     func copiedViewables(at p: Point) -> [Viewable] {

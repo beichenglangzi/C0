@@ -235,7 +235,7 @@ final class PlayerView: View {
     }
 }
 
-final class PlayManagerView: View {
+final class PlayManagerView: View, Queryable {
     let timeTextView = TextView(text: "00:00", color: .locked)
     let frameRateView = RealView(model: 0, option: RealGetterOption(numberOfDigits: 1, unit: " fps"))
     let timeView = SlidableNumberView(min: 0, max: 1)
@@ -343,7 +343,7 @@ final class PlayManagerView: View {
     private func updateWithFrameRate() {
         let oldBounds = frameRateView.bounds
         frameRateView.model = playFrameRate
-        frameRateView.formStringView.textFrame.color = playFrameRate < frameRate ? .warning : .locked
+        frameRateView.optionTextView.textFrame.color = playFrameRate < frameRate ? .warning : .locked
         if oldBounds.size != frameRateView.bounds.size {
             updateLayout()
         }

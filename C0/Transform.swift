@@ -59,8 +59,8 @@ struct Transform: Codable {
     private(set) var affineTransform: CGAffineTransform
     
     static let zOption = RealOption(defaultModel: 0, minModel: -20, maxModel: 20,
-                                          modelInterval: 0.01, exp: 1,
-                                          numberOfDigits: 2, unit: "")
+                                    modelInterval: 0.01, exp: 1,
+                                    numberOfDigits: 2, unit: "")
     
     init(translation: Point = Point(), z: Real = 0, rotation: Real = 0) {
         let pow2 = pow(2, z)
@@ -133,20 +133,16 @@ extension Transform: Interpolatable {
                            with ms: Monospline) -> Transform {
         let translation = Point.monospline(f0.translation, f1.translation,
                                              f2.translation, f3.translation, with: ms)
-        let scaleX = Real.monospline(f0.scale.x, f1.scale.x,
-                                        f2.scale.x, f3.scale.x, with: ms)
-        let scaleY = Real.monospline(f0.scale.y, f1.scale.y,
-                                        f2.scale.y, f3.scale.y, with: ms)
-        let rotation = Real.monospline(f0.rotation, f1.rotation,
-                                          f2.rotation, f3.rotation, with: ms)
+        let scaleX = Real.monospline(f0.scale.x, f1.scale.x, f2.scale.x, f3.scale.x, with: ms)
+        let scaleY = Real.monospline(f0.scale.y, f1.scale.y, f2.scale.y, f3.scale.y, with: ms)
+        let rotation = Real.monospline(f0.rotation, f1.rotation, f2.rotation, f3.rotation, with: ms)
         return Transform(translation: translation,
                          scale: Point(x: scaleX, y: scaleY), rotation: rotation)
     }
     static func lastMonospline(_ f0: Transform, _ f1: Transform, _ f2: Transform,
                               with ms: Monospline) -> Transform {
-        
         let translation = Point.lastMonospline(f0.translation, f1.translation,
-                                                 f2.translation, with: ms)
+                                               f2.translation, with: ms)
         let scaleX = Real.lastMonospline(f0.scale.x, f1.scale.x, f2.scale.x, with: ms)
         let scaleY = Real.lastMonospline(f0.scale.y, f1.scale.y, f2.scale.y, with: ms)
         let rotation = Real.lastMonospline(f0.rotation, f1.rotation, f2.rotation, with: ms)
@@ -177,13 +173,13 @@ final class TransformView: View, Queryable, Assignable {
                                             yInterval: 0.01, yNumberOfDigits: 2,
                                             sizeType: .regular)
     let zView = DiscreteRealView(model: 0, option: Transform.zOption,
-                                       frame: Layout.valueFrame(with: .regular))
+                                 frame: Layout.valueFrame(with: .regular))
     let thetaView = DiscreteRealView(model: 0,
-                                       option: RealOption(defaultModel: 0,
-                                                            minModel: -10000, maxModel: 10000,
-                                                            modelInterval: 0.5, exp: 1,
-                                                            numberOfDigits: 1, unit: "°"),
-                                       frame: Layout.valueFrame(with: .regular))
+                                     option: RealOption(defaultModel: 0,
+                                                        minModel: -10000, maxModel: 10000,
+                                                        modelInterval: 0.5, exp: 1,
+                                                        numberOfDigits: 1, unit: "°"),
+                                     frame: Layout.valueFrame(with: .regular))
     
     private let classNameView = TextView(text: Transform.name, font: .bold)
     private let classZNameView = TextView(text: "z:")
@@ -191,7 +187,6 @@ final class TransformView: View, Queryable, Assignable {
     
     override init() {
         super.init()
-        
         children = [classNameView,
                     translationView,
                     classZNameView, zView,
@@ -220,22 +215,16 @@ final class TransformView: View, Queryable, Assignable {
         }
     }
     func updateLayout() {
-        var y = bounds.height - Layout.basicPadding - classNameView.frame.height
-        classNameView.frame.origin = Point(x: Layout.basicPadding, y: y)
-//        y -= Layout.basicHeight + Layout.basicPadding
-//        _ = Layout.leftAlignment([classXNameView, xView, Padding(), classYNameView, yView],
-//                                 y: y, height: Layout.basicHeight)
-//        y -= Layout.basicHeight
-//        _ = Layout.leftAlignment([classZNameView, zView, Padding(), classRotationNameView, thetaView],
-//                                 y: y, height: Layout.basicHeight)
-//        if yView.frame.maxX < thetaView.frame.maxX {
-//            yView.frame.origin.x = thetaView.frame.minX
-//            classYNameView.frame.origin.x = yView.frame.minX - classYNameView.frame.width
-//        } else {
-//            thetaView.frame.origin.x = yView.frame.minX
-//            classRotationNameView.frame.origin.x
-//                = thetaView.frame.minX - classRotationNameView.frame.width
-//        }
+        let padding = Layout.basicPadding
+        var y = bounds.height - padding - classNameView.frame.height
+        classNameView.frame.origin = Point(x: padding, y: y)
+        y -= Layout.basicHeight + Layout.basicPadding
+        _ = Layout.leftAlignment([classZNameView, zView, PaddingView(),
+                                  classRotationNameView, thetaView],
+                                 y: y, height: Layout.basicHeight)
+        let tdb = translationView.defaultBounds
+        translationView.frame = Rect(x: bounds.width - Layout.basicPadding - tdb.width, y: padding,
+                                     width: tdb.width, height: tdb.height)
     }
     private func updateWithTransform() {
         translationView.point = transform.translation

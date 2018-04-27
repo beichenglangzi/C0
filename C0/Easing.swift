@@ -165,10 +165,10 @@ final class EasingView: View, Queryable, Assignable {
         let knobLinePath = CGMutablePath()
         knobLinePath.addLines(between: [Point(x: cp0View.frame.minX + cp0View.padding,
                                                 y: cp0View.frame.minY + cp0View.padding),
-                                        cp0View.formKnobView.position + cp0View.frame.origin])
+                                        cp0View.knobView.position + cp0View.frame.origin])
         knobLinePath.addLines(between: [Point(x: cp1View.frame.maxX - cp1View.padding,
                                                 y: cp1View.frame.maxY - cp1View.padding),
-                                        cp1View.formKnobView.position + cp1View.frame.origin])
+                                        cp1View.knobView.position + cp1View.frame.origin])
         controlLinePathView.path = knobLinePath
     }
     

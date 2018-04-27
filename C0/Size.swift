@@ -223,6 +223,6 @@ final class DiscreteSizeView: View, Queryable, Assignable {
     }
     
     func reference(at p: Point) -> Reference {
-        return _Size.reference
+        return Size.reference
     }
 }

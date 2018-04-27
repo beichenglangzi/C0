@@ -336,75 +336,76 @@ final class Geometry: NSObject, NSCoding {
 }
 extension Geometry: Interpolatable {
     static func linear(_ f0: Geometry, _ f1: Geometry, t: Real) -> Geometry {
-        if f0 === f1 {
-            return f0
-        } else if f0.lines.isEmpty {
+        guard !f0.lines.isEmpty else {
             return Geometry()
-        } else {
-            return Geometry(lines: f0.lines.enumerated().map { i, l0 in
-                i >= f1.lines.count ? l0 : Line.linear(l0, f1.lines[i], t: t)
-            })
         }
+        let lines: [Line] = f0.lines.enumerated().map { i, l0 in
+            guard i < f1.lines.count else {
+                return l0
+            }
+            let l1 = f1.lines[i]
+            return Line.linear(l0, l1, t: t)
+        }
+        return Geometry(lines: lines)
     }
     static func firstMonospline(_ f1: Geometry, _ f2: Geometry, _ f3: Geometry,
                                 with ms: Monospline) -> Geometry {
-        if f1 === f2 {
-            return f1
-        } else if f1.lines.isEmpty {
+        guard !f1.lines.isEmpty else {
             return Geometry()
-        } else {
-            return Geometry(lines: f1.lines.enumerated().map { i, l1 in
-                if i >= f2.lines.count {
-                    return l1
-                } else {
-                    let l2 = f2.lines[i]
-                    return Line.firstMonospline(l1, l2, i >= f3.lines.count ?
-                        l2 : f3.lines[i], with: ms)
-                }
-            })
         }
+        let lines: [Line] = f1.lines.enumerated().map { i, l1 in
+            guard i < f2.lines.count else {
+                return l1
+            }
+            let l2 = f2.lines[i]
+            let l3 = i >= f3.lines.count ? l2 : f3.lines[i]
+            return Line.firstMonospline(l1, l2, l3, with: ms)
+        }
+        return Geometry(lines: lines)
     }
     static func monospline(_ f0: Geometry, _ f1: Geometry, _ f2: Geometry, _ f3: Geometry,
                            with ms: Monospline) -> Geometry {
-        if f1 === f2 {
-            return f1
-        } else if f1.lines.isEmpty {
+        guard !f1.lines.isEmpty else {
             return Geometry()
-        } else {
-            return Geometry(lines: f1.lines.enumerated().map { i, l1 in
-                if i >= f2.lines.count {
-                    return l1
-                } else {
-                    let l2 = f2.lines[i]
-                    return Line.monospline(i >= f0.lines.count ? l1 : f0.lines[i],
-                                           l1,
-                                           l2,
-                                           i >= f3.lines.count ? l2 : f3.lines[i],
-                                           with: ms)
-                }
-            })
         }
+        let lines: [Line] = f1.lines.enumerated().map { i, l1 in
+            guard i < f2.lines.count else {
+                return l1
+            }
+            let l0 = i >= f0.lines.count ? l1 : f0.lines[i]
+            let l2 = f2.lines[i]
+            let l3 = i >= f3.lines.count ? l2 : f3.lines[i]
+            return Line.monospline(l0, l1, l2, l3, with: ms)
+        }
+        return Geometry(lines: lines)
     }
     static func lastMonospline(_ f0: Geometry, _ f1: Geometry, _ f2: Geometry,
                               with ms: Monospline) -> Geometry {
-        if f1 === f2 {
-            return f1
-        } else if f1.lines.isEmpty {
+        guard !f1.lines.isEmpty else {
             return Geometry()
-        } else {
-            return Geometry(lines: f1.lines.enumerated().map { i, l1 in
-                if i >= f2.lines.count {
-                    return l1
-                } else {
-                    return Line.lastMonospline(i >= f0.lines.count ? l1 : f0.lines[i],
-                                              l1,
-                                              f2.lines[i],
-                                              with: ms)
-                }
-            })
         }
+        let lines: [Line] = f1.lines.enumerated().map { i, l1 in
+            guard i < f2.lines.count else {
+                return l1
+            }
+            let l0 = i >= f0.lines.count ? l1 : f0.lines[i]
+            let l2 = f2.lines[i]
+            return Line.lastMonospline(l0, l1, l2, with: ms)
+        }
+        return Geometry(lines: lines)
     }
 }
 extension Geometry: Referenceable {
     static let name = Text(english: "Geometry", japanese: "ジオメトリ")
 }
+//extension Geometry: Codable {
+//    init(from decoder: Decoder) throws {
+//        var container = try decoder.unkeyedContainer()
+//        let lines = try container.decode([Line].self)
+//        self.init(lines: lines)
+//    }
+//    func encode(to encoder: Encoder) throws {
+//        var container = encoder.unkeyedContainer()
+//        try container.encode(lines)
+//    }
+//}

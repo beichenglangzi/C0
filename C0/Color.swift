@@ -636,26 +636,26 @@ final class ColorView: View, Queryable, Assignable {
     let hueView: CircularNumberView
     let slView = PointView()
     
-    let formHueDrawView = View(drawClosure: { _, _ in })
-    var formHueLineWidth: Real {
+    let hueDrawView = View(drawClosure: { _, _ in })
+    var hueLineWidth: Real {
         didSet {
-            formHueCircle.lineWidth = formHueLineWidth
+            hueCircle.lineWidth = hueLineWidth
         }
     }
-    var formHueCircle = HueCircle() {
+    var hueCircle = HueCircle() {
         didSet {
-            formHueDrawView.draw()
+            hueDrawView.draw()
         }
     }
-    var formSLRatio = 0.82.cg {
+    var slRatio = 0.82.cg {
         didSet {
             updateLayout()
         }
     }
-    let formSLColorGradientView = View(gradient: Gradient(colors: [], locations: [],
+    let slColorGradientView = View(gradient: Gradient(colors: [], locations: [],
                                                           startPoint: Point(x: 0, y: 0),
                                                           endPoint: Point(x: 1, y: 0)))
-    let formSLBlackWhiteGradientView = View(gradient: Gradient(colors: [Color(white: 0, alpha: 1),
+    let slBlackWhiteGradientView = View(gradient: Gradient(colors: [Color(white: 0, alpha: 1),
                                                                         Color(white: 0, alpha: 0),
                                                                         Color(white: 1, alpha: 0),
                                                                         Color(white: 1, alpha: 1)],
@@ -673,20 +673,20 @@ final class ColorView: View, Queryable, Assignable {
             slView.padding = slPadding
         }
         if sizeType == .small {
-            slView.formKnobView.radius = 4
+            slView.knobView.radius = 4
             hueView.knobView.radius = 4
         }
-        self.formHueLineWidth = hLineWidth
+        self.hueLineWidth = hLineWidth
         hueView.width = hWidth
         
         super.init()
-        formHueDrawView.fillColor = nil
-        formHueDrawView.lineColor = nil
-        formHueDrawView.drawClosure = { [unowned self] ctx, _ in
-            self.formHueCircle.draw(in: ctx)
+        hueDrawView.fillColor = nil
+        hueDrawView.lineColor = nil
+        hueDrawView.drawClosure = { [unowned self] ctx, _ in
+            self.hueCircle.draw(in: ctx)
         }
-        hueView.backgroundViews = [formHueDrawView]
-        slView.formBackgroundViews = [formSLColorGradientView, formSLBlackWhiteGradientView]
+        hueView.backgroundViews = [hueDrawView]
+        slView.formBackgroundViews = [slColorGradientView, slBlackWhiteGradientView]
         children = [hueView, slView]
         self.frame = frame
         
@@ -707,28 +707,28 @@ final class ColorView: View, Queryable, Assignable {
         let r = floor(min(bounds.size.width, bounds.size.height) / 2) - padding
         hueView.frame = Rect(x: padding, y: padding, width: r * 2, height: r * 2)
         let sr = r - hueView.width
-        let b2 = floor(sr * formSLRatio)
+        let b2 = floor(sr * slRatio)
         let a2 = floor(sqrt(sr * sr - b2 * b2))
         slView.frame = Rect(x: bounds.size.width / 2 - a2,
                               y: bounds.size.height / 2 - b2,
                               width: a2 * 2,
                               height: b2 * 2)
         let slInFrame = slView.bounds.inset(by: slView.padding)
-        formSLColorGradientView.frame = slInFrame
-        formSLBlackWhiteGradientView.frame = slInFrame
+        slColorGradientView.frame = slInFrame
+        slBlackWhiteGradientView.frame = slInFrame
         
-        formHueDrawView.frame = hueView.bounds.inset(by: ceil((hueView.width - formHueLineWidth) / 2))
-        formHueCircle = HueCircle(lineWidth: formHueLineWidth,
-                                  bounds: formHueDrawView.bounds,
+        hueDrawView.frame = hueView.bounds.inset(by: ceil((hueView.width - hueLineWidth) / 2))
+        hueCircle = HueCircle(lineWidth: hueLineWidth,
+                                  bounds: hueDrawView.bounds,
                                   colorSpace: color.colorSpace)
         updateWithColor()
     }
     private func updateWithColor() {
         let y = Color.y(withHue: color.hue)
-        formSLColorGradientView.gradient?.colors = [Color(hue: color.hue, saturation: 0, brightness: y),
+        slColorGradientView.gradient?.colors = [Color(hue: color.hue, saturation: 0, brightness: y),
                                              Color(hue: color.hue, saturation: 1, brightness: 1)]
-        formSLBlackWhiteGradientView.gradient?.locations = [0, y, y, 1]
-        hueView.number = formHueCircle.angle(withHue: color.hue)
+        slBlackWhiteGradientView.gradient?.locations = [0, y, y, 1]
+        hueView.number = hueCircle.angle(withHue: color.hue)
         slView.point = Point(x: color.saturation, y: color.lightness)
     }
     private func updateWithColorSpace() {
@@ -736,9 +736,9 @@ final class ColorView: View, Queryable, Assignable {
                       Color(white: 0, alpha: 0, colorSpace: color.colorSpace),
                       Color(white: 1, alpha: 0, colorSpace: color.colorSpace),
                       Color(white: 1, alpha: 1, colorSpace: color.colorSpace)]
-        formSLBlackWhiteGradientView.gradient?.colors = colors
-        formHueCircle = HueCircle(lineWidth: formHueLineWidth,
-                                  bounds: formHueDrawView.bounds,
+        slBlackWhiteGradientView.gradient?.colors = colors
+        hueCircle = HueCircle(lineWidth: hueLineWidth,
+                                  bounds: hueDrawView.bounds,
                                   colorSpace: color.colorSpace)
     }
     
@@ -793,7 +793,7 @@ final class ColorView: View, Queryable, Assignable {
             setColorClosure?(Binding(colorView: self,
                                      color: oldColor, oldColor: oldColor, phase: .began))
         } else {
-            color.hue = formHueCircle.hue(withAngle: obj.number)
+            color.hue = hueCircle.hue(withAngle: obj.number)
             setColorClosure?(Binding(colorView: self,
                                      color: color, oldColor: oldColor, phase: obj.phase))
         }

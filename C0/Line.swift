@@ -140,9 +140,8 @@ struct Line: Codable {
                 let preControl = controls[i - 1], nextControl = controls[i + 1]
                 let angle = abs(Point.differenceAngle(p0: preControl.point,
                                                         p1: control.point, p2: nextControl.point))
-                return Control(point: control.point,
-                               pressure: Real.linear(minPressure, 1,
-                                                        t: min(angle, maxAngle) / maxAngle))
+                let pressure = Real.linear(minPressure, 1, t: min(angle, maxAngle) / maxAngle)
+                return Control(point: control.point, pressure: pressure)
             }
         })
     }

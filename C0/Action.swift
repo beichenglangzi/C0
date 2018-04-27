@@ -1521,7 +1521,7 @@ extension Sender: Referenceable {
 final class QuasimodeView: View, Copiable {
     var quasimode: Quasimode {
         didSet {
-            formTextView.text = quasimode.displayText
+            textView.text = quasimode.displayText
             if isSizeToFit {
                 bounds = defaultBounds
             }
@@ -1530,19 +1530,19 @@ final class QuasimodeView: View, Copiable {
     }
     
     var isSizeToFit: Bool
-    var formTextView: TextView
+    var textView: TextView
     
     init(quasimode: Quasimode, isSizeToFit: Bool = true) {
         self.quasimode = quasimode
         self.isSizeToFit = isSizeToFit
-        formTextView = TextView(text: quasimode.displayText,
+        textView = TextView(text: quasimode.displayText,
                                 font: Font(monospacedSize: 10), frameAlignment: .right)
         
         super.init()
         if isSizeToFit {
             bounds = defaultBounds
         }
-        children = [formTextView]
+        children = [textView]
         updateLayout()
     }
     
@@ -1556,7 +1556,7 @@ final class QuasimodeView: View, Copiable {
     }
     
     override var defaultBounds: Rect {
-        return Rect(x: 0, y: 0, width: formTextView.bounds.width, height: formTextView.bounds.height)
+        return Rect(x: 0, y: 0, width: textView.bounds.width, height: textView.bounds.height)
     }
     override var bounds: Rect {
         didSet {
@@ -1564,7 +1564,7 @@ final class QuasimodeView: View, Copiable {
         }
     }
     func updateLayout() {
-        formTextView.frame.origin = Point(x: 0, y: bounds.height - formTextView.frame.height)
+        textView.frame.origin = Point(x: 0, y: bounds.height - textView.frame.height)
     }
     
     func copiedViewables(at p: Point) -> [Viewable] {
@@ -1668,14 +1668,14 @@ final class ActionManagableView: View {
 final class SenderView: View, Queryable {
     var sender = Sender()
     
-    let formClassNameView = TextView(text: Sender.name, font: .bold)
+    let classNameView = TextView(text: Sender.name, font: .bold)
     var actionManagableViews = [ActionManagableView]()
     
     override init() {
         actionManagableViews = sender.actionManagers.map { ActionManagableView(actionMangable: $0) }
         
         super.init()
-        children = [formClassNameView] + actionManagableViews
+        children = [classNameView] + actionManagableViews
         bounds = defaultBounds
     }
     
@@ -1688,7 +1688,7 @@ final class SenderView: View, Queryable {
     override var defaultBounds: Rect {
         let padding = Layout.basicPadding
         let ah = actionManagableViews.reduce(0.0.cg) { $0 + $1.bounds.height }
-        let height = formClassNameView.frame.height + padding * 3 + ah
+        let height = classNameView.frame.height + padding * 3 + ah
         return Rect(x: 0, y: 0,
                       width: ActionManagableView.defaultWidth + padding * 2,
                       height: height)
@@ -1701,8 +1701,8 @@ final class SenderView: View, Queryable {
     func updateLayout() {
         let padding = Layout.basicPadding
         let w = bounds.width - padding * 2
-        var y = bounds.height - formClassNameView.frame.height - padding
-        formClassNameView.frame.origin = Point(x: padding, y: y)
+        var y = bounds.height - classNameView.frame.height - padding
+        classNameView.frame.origin = Point(x: padding, y: y)
         y -= padding
         _ = actionManagableViews.reduce(y) {
             let ny = $0 - $1.frame.height

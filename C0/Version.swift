@@ -80,16 +80,16 @@ final class VersionView: View, Queryable {
     let differentialCountView = IntView(model: 0, option: IntGetterOption(unit: ""))
     
     var sizeType: SizeType
-    let formClassNameView = TextView(text: Version.name, font: .bold)
+    let classNameView = TextView(text: Version.name, font: .bold)
     
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
-        _ = Layout.leftAlignment([formClassNameView, PaddingView(), allCountView],
+        _ = Layout.leftAlignment([classNameView, PaddingView(), allCountView],
                                  height: Layout.basicHeight)
         
         super.init()
         isClipped = true
-        children = [formClassNameView, allCountView]
+        children = [classNameView, allCountView]
     }
     
     deinit {
@@ -123,15 +123,15 @@ final class VersionView: View, Queryable {
     }
     func updateLayout() {
         let padding = Layout.basicPadding
-        formClassNameView.frame.origin = Point(x: padding,
-                                             y: bounds.height - formClassNameView.frame.height - padding)
+        classNameView.frame.origin = Point(x: padding,
+                                             y: bounds.height - classNameView.frame.height - padding)
         if undoCount < allCount {
             _ = Layout.leftAlignment([allCountView, PaddingView(), differentialCountView],
-                                     minX: formClassNameView.frame.maxX + padding,
+                                     minX: classNameView.frame.maxX + padding,
                                      height: frame.height)
         } else {
             _ = Layout.leftAlignment([allCountView],
-                                     minX: formClassNameView.frame.maxX + padding,
+                                     minX: classNameView.frame.maxX + padding,
                                      height: frame.height)
         }
     }
@@ -139,22 +139,22 @@ final class VersionView: View, Queryable {
         if undoCount < allCount {
             allCountView.model = allCount
             differentialCountView.model = differentialCount
-            allCountView.bounds = Rect(origin: Point(), size: allCountView.formStringView.fitSize)
+            allCountView.bounds = Rect(origin: Point(), size: allCountView.optionTextView.fitSize)
             differentialCountView.bounds = Rect(origin: Point(),
-                                                  size: differentialCountView.formStringView.fitSize)
-            differentialCountView.formStringView.textFrame.color = .warning
+                                                size: differentialCountView.optionTextView.fitSize)
+            differentialCountView.optionTextView.textFrame.color = .warning
             if differentialCountView.parent == nil {
-                children = [formClassNameView, allCountView, differentialCountView]
+                children = [classNameView, allCountView, differentialCountView]
                 updateLayout()
             }
         } else {
             allCountView.model = allCount
-            allCountView.bounds = Rect(origin: Point(), size: allCountView.formStringView.fitSize)
+            allCountView.bounds = Rect(origin: Point(), size: allCountView.optionTextView.fitSize)
             differentialCountView.bounds = Rect(origin: Point(),
-                                                  size: differentialCountView.formStringView.fitSize)
-            differentialCountView.formStringView.textFrame.color = .warning
+                                                size: differentialCountView.optionTextView.fitSize)
+            differentialCountView.optionTextView.textFrame.color = .warning
             if differentialCountView.parent != nil {
-                children = [formClassNameView, allCountView]
+                children = [classNameView, allCountView]
                 updateLayout()
             }
         }

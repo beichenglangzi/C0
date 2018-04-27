@@ -96,9 +96,8 @@ extension Effect: Interpolatable {
     static func monospline(_ f0: Effect, _ f1: Effect, _ f2: Effect, _ f3: Effect,
                            with ms: Monospline) -> Effect {
         let blur = Real.monospline(f0.blurRadius, f1.blurRadius,
-                                      f2.blurRadius, f3.blurRadius, with: ms)
-        let opacity = Real.monospline(f0.opacity, f1.opacity,
-                                         f2.opacity, f3.opacity, with: ms)
+                                   f2.blurRadius, f3.blurRadius, with: ms)
+        let opacity = Real.monospline(f0.opacity, f1.opacity, f2.opacity, f3.opacity, with: ms)
         let blendType = f1.blendType
         return Effect(blendType: blendType, blurRadius: blur, opacity: opacity)
     }
@@ -189,7 +188,7 @@ final class EffectView: View, Queryable, Assignable {
                                                          width: blurW, height: h))
         opacityView.updateOpacityViews(withFrame: Rect(x: blurView.frame.maxX,
                                                           y: padding,
-                                                          width: bounds.width - blurView.frame.maxX - padding,
+                                                       width: bounds.width - blurView.frame.maxX - padding,
                                                           height: h))
     }
     private func updateWithEffect() {

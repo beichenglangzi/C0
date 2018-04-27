@@ -333,6 +333,7 @@ final class ArrayCountView<T: Viewable & DeepCopiable>: View, Queryable, Copiabl
 
 /**
  Issue: ツリー操作が複雑
+ Issue: クリップ表示を廃止し、圧縮表示を実装
  */
 final class ListArrayView: View, Queryable, Assignable, Newable, Movable {
     private let nameLineView: View = {

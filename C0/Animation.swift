@@ -812,14 +812,14 @@ final class AnimationView: View, Indicatable, Selectable, Queryable, Assignable,
         return [animation]
     }
     func paste(_ objects: [Any], for p: Point) {
-        for object in objects {
-            if let animation = object as? Animation {
+//        for object in objects {
+//            if let animation = object as? Animation {
                 //                if keyframe.equalOption(other: self.keyframe) {
                 //                    set(keyframe, old: self.keyframe)
                 //                    return
                 //                }
-            }
-        }
+//            }
+//        }
     }
     func new(for p: Point) {
         _ = splitKeyframe(withTime: time(withX: p.x))

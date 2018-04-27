@@ -221,10 +221,10 @@ final class RationalView: View, Queryable, Copiable {
     
     var sizeType: SizeType
     let integerView: IntView
-    let formPlusView: TextView
+    let plusView: TextView
     let pView: IntView, qView: IntView
     let unitView: TextView
-    let formLinePathView = View(path: CGMutablePath())
+    let linePathView = View(path: CGMutablePath())
     
     init(rational: Rational = 0,
          isIntegerAndProperFraction: Bool = true, unit: String = "",
@@ -235,7 +235,7 @@ final class RationalView: View, Queryable, Copiable {
         self.unit = unit
         self.sizeType = sizeType
         integerView = IntView(model: 0, option: IntGetterOption(unit: ""), sizeType: sizeType)
-        formPlusView = TextView(text: "+", font: Font.default(with: sizeType))
+        plusView = TextView(text: "+", font: Font.default(with: sizeType))
         pView = IntView(model: 0, option: IntGetterOption(unit: ""), sizeType: sizeType)
         qView = IntView(model: 1, option: IntGetterOption(unit: ""), sizeType: sizeType)
         unitView = TextView(text: Text(unit), font: Font.default(with: sizeType))
@@ -253,9 +253,9 @@ final class RationalView: View, Queryable, Copiable {
     }
     private func updateChildren() {
         if isIntegerAndProperFraction {
-            children = [integerView, formPlusView, pView, formLinePathView, qView]
+            children = [integerView, plusView, pView, linePathView, qView]
         } else {
-            children = [pView, formLinePathView, qView]
+            children = [pView, linePathView, qView]
         }
     }
     private func updateLayout() {
