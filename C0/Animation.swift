@@ -166,7 +166,7 @@ struct Animation: Codable {
             return
         }
         isInterpolated = true
-        let t = k1.easing.convertT(Double(interTime / timeResult.duration).cf)
+        let t = k1.easing.convertT(CGFloat(interTime / timeResult.duration))
         if k1.interpolation == .linear || keyframes.count <= 2 {
             animatable.linear(lf1.index, lf2.index, t: t)
         } else {
@@ -178,25 +178,25 @@ struct Animation: Codable {
             if isUseIndex0 {
                 if isUseIndex3 {
                     let lf0 = loopFrames[li1 - 1], lf3 = loopFrames[li1 + 2]
-                    let ms = Monospline(x0: Double(lf0.time).cf,
-                                        x1: Double(lf1.time).cf,
-                                        x2: Double(lf2.time).cf,
-                                        x3: Double(lf3.time).cf,
+                    let ms = Monospline(x0: CGFloat(lf0.time),
+                                        x1: CGFloat(lf1.time),
+                                        x2: CGFloat(lf2.time),
+                                        x3: CGFloat(lf3.time),
                                         t: t)
                     animatable.monospline(lf0.index, lf1.index, lf2.index, lf3.index, with: ms)
                 } else {
                     let lf0 = loopFrames[li1 - 1]
-                    let ms = Monospline(x0: Double(lf0.time).cf,
-                                        x1: Double(lf1.time).cf,
-                                        x2: Double(lf2.time).cf,
+                    let ms = Monospline(x0: CGFloat(lf0.time),
+                                        x1: CGFloat(lf1.time),
+                                        x2: CGFloat(lf2.time),
                                         t: t)
                     animatable.lastMonospline(lf0.index, lf1.index, lf2.index, with: ms)
                 }
             } else if isUseIndex3 {
                 let lf3 = loopFrames[li1 + 2]
-                let ms = Monospline(x1: Double(lf1.time).cf,
-                                    x2: Double(lf2.time).cf,
-                                    x3: Double(lf3.time).cf,
+                let ms = Monospline(x1: CGFloat(lf1.time),
+                                    x2: CGFloat(lf2.time),
+                                    x3: CGFloat(lf3.time),
                                     t: t)
                 animatable.firstMonospline(lf1.index, lf2.index, lf3.index, with: ms)
             } else {
@@ -314,7 +314,7 @@ extension Animation: Referenceable {
     static let name = Localization(english: "Animation", japanese: "アニメーション")
 }
 extension Animation: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         let text = Localization(english: "\(keyframes.count) Keyframes",
             japanese: "\(keyframes.count)キーフレーム")
         return text.thumbnail(withBounds: bounds, sizeType)
@@ -324,7 +324,7 @@ extension Animation: ObjectViewExpression {
 final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, Movable {
     init(_ animation: Animation = Animation(),
          beginBaseTime: Beat = 0, baseTimeInterval: Beat = Beat(1, 16),
-         origin: CGPoint = CGPoint(),
+         origin: Point = Point(),
          height: CGFloat = Layout.basicHeight, smallHeight: CGFloat = 8.0,
          sizeType: SizeType = .small) {
         
@@ -335,12 +335,12 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         self.smallHeight = smallHeight
         self.sizeType = sizeType
         super.init()
-        frame = CGRect(x: origin.x, y: origin.y,
+        frame = Rect(x: origin.x, y: origin.y,
                        width: 0, height: sizeType == .small ? smallHeight : height)
         updateChildren()
     }
     
-    private static func knobLinePathView(from p: CGPoint, lineColor: Color,
+    private static func knobLinePathView(from p: Point, lineColor: Color,
                                          baseWidth: CGFloat, lineHeight: CGFloat,
                                          lineWidth: CGFloat = 4, linearLineWidth: CGFloat = 2,
                                          with interpolation: Keyframe.Interpolation) -> View {
@@ -349,27 +349,27 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         case .spline:
             break
         case .bound:
-            path.addRect(CGRect(x: p.x - linearLineWidth / 2, y: p.y - lineHeight / 2,
+            path.addRect(Rect(x: p.x - linearLineWidth / 2, y: p.y - lineHeight / 2,
                                 width: linearLineWidth, height: lineHeight / 2))
         case .linear:
-            path.addRect(CGRect(x: p.x - linearLineWidth / 2, y: p.y - lineHeight / 2,
+            path.addRect(Rect(x: p.x - linearLineWidth / 2, y: p.y - lineHeight / 2,
                                 width: linearLineWidth, height: lineHeight))
         case .step:
-            path.addRect(CGRect(x: p.x - lineWidth / 2, y: p.y - lineHeight / 2,
+            path.addRect(Rect(x: p.x - lineWidth / 2, y: p.y - lineHeight / 2,
                                 width: lineWidth, height: lineHeight))
         }
         let view = View(path: path)
         view.fillColor = lineColor
         return view
     }
-    private static func knobView(from p: CGPoint,
+    private static func knobView(from p: Point,
                                  fillColor: Color, lineColor: Color,
                                  baseWidth: CGFloat,
                                  knobHalfHeight: CGFloat, subKnobHalfHeight: CGFloat,
                                  with label: Keyframe.Label) -> DiscreteKnobView {
         let kh = label == .main ? knobHalfHeight : subKnobHalfHeight
         let knobView = DiscreteKnobView()
-        knobView.frame = CGRect(x: p.x - baseWidth / 2, y: p.y - kh,
+        knobView.frame = Rect(x: p.x - baseWidth / 2, y: p.y - kh,
                                 width: baseWidth, height: kh * 2)
         knobView.fillColor = fillColor
         knobView.lineColor = lineColor
@@ -378,24 +378,24 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
     private static func keyLinePathViewWith(_ keyframe: Keyframe, lineColor: Color,
                                             baseWidth: CGFloat,
                                             lineWidth: CGFloat, maxLineWidth: CGFloat,
-                                            position: CGPoint, width: CGFloat) -> View {
+                                            position: Point, width: CGFloat) -> View {
         let path = CGMutablePath()
         if keyframe.easing.isLinear {
-            path.addRect(CGRect(x: position.x, y: position.y - lineWidth / 2,
+            path.addRect(Rect(x: position.x, y: position.y - lineWidth / 2,
                                 width: width, height: lineWidth))
         } else {
             let b = keyframe.easing.bezier, bw = width
             let bx = position.x, count = Int(width / 5.0)
-            let d = 1 / count.cf
-            let points: [CGPoint] = (0 ... count).map { i in
-                let dx = d * i.cf
+            let d = 1 / CGFloat(count)
+            let points: [Point] = (0 ... count).map { i in
+                let dx = d * CGFloat(i)
                 let dp = b.difference(withT: dx)
                 let dy = max(0.5, min(maxLineWidth, (dp.x == dp.y ?
                     .pi / 2 : 1.8 * atan2(dp.y, dp.x)) / (.pi / 2)))
-                return CGPoint(x: dx * bw + bx, y: dy)
+                return Point(x: dx * bw + bx, y: dy)
             }
-            let ps0 = points.map { CGPoint(x: $0.x, y: position.y + $0.y) }
-            let ps1 = points.reversed().map { CGPoint(x: $0.x, y: position.y - $0.y) }
+            let ps0 = points.map { Point(x: $0.x, y: position.y + $0.y) }
+            let ps1 = points.reversed().map { Point(x: $0.x, y: position.y - $0.y) }
             path.addLines(between: ps0 + ps1)
         }
         let view = View(path: path)
@@ -423,7 +423,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
     } ()
     func updateChildren() {
         let height = frame.height
-        let midY = height / 2, lineWidth = 2.0.cf
+        let midY = height / 2, lineWidth = 2.0.cg
         let khh = sizeType == .small ? smallKnobHalfHeight : self.knobHalfHeight
         let skhh = sizeType == .small ? smallSubKnobHalfHeight : self.subKnobHalfHeight
         let selectedStartIndex = animation.selectedKeyframeIndexes.first
@@ -438,7 +438,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
                 animation.duration : animation.loopFrames[i + 1].time
             let x = self.x(withTime: time), nextX = self.x(withTime: nextTime)
             let width = nextX - x
-            let position = CGPoint(x: x, y: midY)
+            let position = Point(x: x, y: midY)
             
             if sizeType == .regular {
                 let keyLineColor = lineColorClosure(li.index)
@@ -460,20 +460,20 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
                 if li.loopCount > 0 {
                     let path = CGMutablePath()
                     if i > 0 && animation.loopFrames[i - 1].loopCount < li.loopCount {
-                        path.move(to: CGPoint(x: x, y: midY + height / 2 - 4))
-                        path.addLine(to: CGPoint(x: x + 3, y: midY + height / 2 - 1))
-                        path.addLine(to: CGPoint(x: x, y: midY + height / 2 - 1))
+                        path.move(to: Point(x: x, y: midY + height / 2 - 4))
+                        path.addLine(to: Point(x: x + 3, y: midY + height / 2 - 1))
+                        path.addLine(to: Point(x: x, y: midY + height / 2 - 1))
                         path.closeSubpath()
                     }
-                    path.addRect(CGRect(x: x, y: midY + height / 2 - 2, width: width, height: 1))
+                    path.addRect(Rect(x: x, y: midY + height / 2 - 2, width: width, height: 1))
                     if li.loopingCount > 0 {
                         if i > 0 && animation.loopFrames[i - 1].loopingCount < li.loopingCount {
-                            path.move(to: CGPoint(x: x, y: 1))
-                            path.addLine(to: CGPoint(x: x + 3, y: 1))
-                            path.addLine(to: CGPoint(x: x, y: 4))
+                            path.move(to: Point(x: x, y: 1))
+                            path.addLine(to: Point(x: x + 3, y: 1))
+                            path.addLine(to: Point(x: x, y: 4))
                             path.closeSubpath()
                         }
-                        path.addRect(CGRect(x: x, y: 1, width: width, height: 1))
+                        path.addRect(Rect(x: x, y: 1, width: width, height: 1))
                     }
                     
                     let layer = View(path: path)
@@ -499,12 +499,12 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
             
             if animation.selectedKeyframeIndexes.contains(li.index) {
                 let view = View.selection
-                view.frame = CGRect(x: position.x, y: 0, width: width, height: height)
+                view.frame = Rect(x: position.x, y: 0, width: width, height: height)
                 selectedViews.append(view)
             } else if li.index >= selectedStartIndex && li.index < selectedEndIndex {
-                let path = CGMutablePath(), h = 2.0.cf
-                path.addRect(CGRect(x: position.x, y: 0, width: width, height: h))
-                path.addRect(CGRect(x: position.x, y: height - h, width: width, height: h))
+                let path = CGMutablePath(), h = 2.0.cg
+                path.addRect(Rect(x: position.x, y: 0, width: width, height: h))
+                path.addRect(Rect(x: position.x, y: height - h, width: width, height: h))
                 let view = View(path: path)
                 view.fillColor = .select
                 view.lineColor = .selectBorder
@@ -516,7 +516,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         
         if sizeType == .small {
             let keyLineView = View(isForm: true)
-            keyLineView.frame = CGRect(x: 0, y: midY - 0.5, width: maxX, height: 1)
+            keyLineView.frame = Rect(x: 0, y: midY - 0.5, width: maxX, height: 1)
             keyLineView.fillColor = smallLineColorClosure()
             keyLineView.lineColor = nil
             keyLineViews.append(keyLineView)
@@ -526,7 +526,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
             Color.editing : Color.knob
         let durationLineColor = ((animation.duration + beginBaseTime) / baseTimeInterval).isInteger ?
             Color.getSetBorder : Color.warning
-        let durationKnob = AnimationView.knobView(from: CGPoint(x: maxX, y: midY),
+        let durationKnob = AnimationView.knobView(from: Point(x: maxX, y: midY),
                                                   fillColor: durationFillColor,
                                                   lineColor: durationLineColor,
                                                   baseWidth: baseWidth,
@@ -606,14 +606,14 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
                 time = animation.keyframes[indicatedKeyframeIndex].time
             }
             let x = self.x(withTime: time)
-            indicatedView.frame = CGRect(x: x - baseWidth / 2, y: 0,
+            indicatedView.frame = Rect(x: x - baseWidth / 2, y: 0,
                                          width: baseWidth, height: frame.height)
         }
     }
-    func indicate(at p: CGPoint) {
+    func indicate(at p: Point) {
         updateIndicatedKeyframeIndex(at: p)
     }
-    func updateIndicatedKeyframeIndex(at p: CGPoint) {
+    func updateIndicatedKeyframeIndex(at p: Point) {
         if let i = nearestKeyframeIndex(at: p) {
             indicatedKeyframeIndex = i == 0 ? nil : i
         } else {
@@ -654,18 +654,18 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         }
         let x = self.x(withTime: time)
         editView.fillColor = isInterpolated ? .subSelected : .selected
-        editView.frame = CGRect(x: x - baseWidth / 2, y: 0, width: baseWidth, height: frame.height)
+        editView.frame = Rect(x: x - baseWidth / 2, y: 0, width: baseWidth, height: frame.height)
     }
     var editingKeyframeIndex: Int?
     
-    static let defautBaseWidth = 6.0.cf
+    static let defautBaseWidth = 6.0.cg
     var baseWidth = defautBaseWidth {
         didSet {
             updateChildren()
         }
     }
-    let smallKnobHalfHeight = 3.0.cf, smallSubKnobHalfHeight = 2.0.cf
-    let knobHalfHeight = 6.0.cf, subKnobHalfHeight = 3.0.cf, maxLineWidth = 3.0.cf
+    let smallKnobHalfHeight = 3.0.cg, smallSubKnobHalfHeight = 2.0.cg
+    let knobHalfHeight = 6.0.cg, subKnobHalfHeight = 3.0.cg, maxLineWidth = 3.0.cg
     var baseTimeInterval: Beat {
         didSet {
             updateChildren()
@@ -708,7 +708,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         return t - (beginBaseTime - floor(beginBaseTime / baseTimeInterval) * baseTimeInterval)
     }
     func x(withTime time: Beat) -> CGFloat {
-        return DoubleBeat(time / baseTimeInterval).cf * baseWidth
+        return DoubleBeat(time / baseTimeInterval) * baseWidth
     }
     func clipDeltaTime(withTime time: Beat) -> Beat {
         let ft = baseTime(withBeatTime: time)
@@ -717,7 +717,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
             beatTime(withBaseTime: ceil(ft)) - time :
             beatTime(withBaseTime: floor(ft)) - time
     }
-    func nearestKeyframeIndex(at p: CGPoint) -> Int? {
+    func nearestKeyframeIndex(at p: Point) -> Int? {
         guard !animation.keyframes.isEmpty else {
             return nil
         }
@@ -763,7 +763,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
     }
     var selectClosure: ((SelectBinding) -> ())?
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         deleteKeyframe(at: p)
     }
     var noRemovedClosure: ((AnimationView) -> ())?
@@ -773,7 +773,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
             deleteKeyframe(at: lf.keyframeIndex)
         }
     }
-    func deleteKeyframe(at point: CGPoint) {
+    func deleteKeyframe(at point: Point) {
         guard let ki = nearestKeyframeIndex(at: point) else {
             return
         }
@@ -808,10 +808,10 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         }
         set(keyframes, old: animation.keyframes)
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [animation]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let animation = object as? Animation {
                 //                if keyframe.equalOption(other: self.keyframe) {
@@ -821,7 +821,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
             }
         }
     }
-    func new(for p: CGPoint) {
+    func new(for p: Point) {
         _ = splitKeyframe(withTime: time(withX: p.x))
     }
     
@@ -836,7 +836,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         }
         let k = animation.keyframes[ki.index]
         let newEaing = ki.duration != 0 ?
-            k.easing.split(with: Double(ki.interTime / ki.duration).cf) :
+            k.easing.split(with: CGFloat(ki.interTime / ki.duration)) :
             (b0: k.easing, b1: Easing())
         let splitKeyframe0 = Keyframe(time: k.time, easing: newEaing.b0,
                                       interpolation: k.interpolation, loop: k.loop, label: k.label)
@@ -928,7 +928,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
     }
     
     private var dragObject = DragObject()
-    func move(for point: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func move(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         let p = point
         switch phase {
         case .began:
@@ -1141,13 +1141,13 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         updateChildren()
     }
     
-    func select(from rect: CGRect, _ phase: Phase) {
+    func select(from rect: Rect, _ phase: Phase) {
         select(from: rect, phase, isDeselect: false)
     }
     func selectAll() {
         selectAll(isDeselect: false)
     }
-    func deselect(from rect: CGRect, _ phase: Phase) {
+    func deselect(from rect: Rect, _ phase: Phase) {
         select(from: rect, phase, isDeselect: true)
     }
     func deselectAll() {
@@ -1166,7 +1166,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         var oldAnimation = Animation()
     }
     private var selectObject = SelectObject()
-    func select(from rect: CGRect, _ phase: Phase, isDeselect: Bool) {
+    func select(from rect: Rect, _ phase: Phase, isDeselect: Bool) {
         switch phase {
         case .began:
             selectionView = isDeselect ? View.deselection : View.selection
@@ -1215,7 +1215,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
             selectObject = SelectObject()
         }
     }
-    private func indexes(from rect: CGRect, with selectObject: SelectObject) -> [Int] {
+    private func indexes(from rect: Rect, with selectObject: SelectObject) -> [Int] {
         let startTime = time(withX: rect.minX, isBased: false) + baseTimeInterval / 2
         let startIndexTuple = Keyframe.index(time: startTime,
                                              with: selectObject.oldAnimation.keyframes)
@@ -1229,7 +1229,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
             [startIndex] :
             Array(startIndex < endIndex ? (startIndex ... endIndex) : (endIndex ... startIndex))
     }
-    private func selectedIndex(from rect: CGRect,
+    private func selectedIndex(from rect: Rect,
                                with selectObject: SelectObject, isDeselect: Bool) -> [Int] {
         let selectedIndexes = indexes(from: rect, with: selectObject)
         let oldIndexes = selectObject.oldAnimation.selectedKeyframeIndexes
@@ -1268,7 +1268,7 @@ final class AnimationView: View, Indicatable, Selectable, Assignable, Newable, M
         updateChildren()
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Animation.reference
     }
 }

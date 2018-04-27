@@ -20,8 +20,8 @@
 import Foundation
 
 extension CGImage {
-    var size: CGSize {
-        return CGSize(width: width, height: height)
+    var size: Size {
+        return Size(width: width, height: height)
     }
     func write(to url: URL, fileType: String) throws {
         let cfUrl = url as CFURL, cfFileType = fileType as CFString
@@ -70,24 +70,24 @@ final class ImageView: View, Movable {
     enum DragType {
         case move, resizeMinXMinY, resizeMaxXMinY, resizeMinXMaxY, resizeMaxXMaxY
     }
-    var dragType = DragType.move, downPosition = CGPoint(), oldFrame = CGRect()
-    var resizeWidth = 10.0.cf, ratio = 1.0.cf
-    func move(for point: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    var dragType = DragType.move, downPosition = Point(), oldFrame = Rect()
+    var resizeWidth = 10.0.cg, ratio = 1.0.cg
+    func move(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         guard let parent = parent else {
             return
         }
         let p = parent.convert(point, from: self), ip = point
         switch phase {
         case .began:
-            if CGRect(x: 0, y: 0, width: resizeWidth, height: resizeWidth).contains(ip) {
+            if Rect(x: 0, y: 0, width: resizeWidth, height: resizeWidth).contains(ip) {
                 dragType = .resizeMinXMinY
-            } else if CGRect(x:  bounds.width - resizeWidth, y: 0,
+            } else if Rect(x:  bounds.width - resizeWidth, y: 0,
                              width: resizeWidth, height: resizeWidth).contains(ip) {
                 dragType = .resizeMaxXMinY
-            } else if CGRect(x: 0, y: bounds.height - resizeWidth,
+            } else if Rect(x: 0, y: bounds.height - resizeWidth,
                              width: resizeWidth, height: resizeWidth).contains(ip) {
                 dragType = .resizeMinXMaxY
-            } else if CGRect(x: bounds.width - resizeWidth, y: bounds.height - resizeWidth,
+            } else if Rect(x: bounds.width - resizeWidth, y: bounds.height - resizeWidth,
                              width: resizeWidth, height: resizeWidth).contains(ip) {
                 dragType = .resizeMaxXMaxY
             } else {
@@ -101,7 +101,7 @@ final class ImageView: View, Movable {
             var frame = self.frame
             switch dragType {
             case .move:
-                frame.origin = CGPoint(x: oldFrame.origin.x + dp.x, y: oldFrame.origin.y + dp.y)
+                frame.origin = Point(x: oldFrame.origin.x + dp.x, y: oldFrame.origin.y + dp.y)
             case .resizeMinXMinY:
                 frame.origin.x = oldFrame.origin.x + dp.x
                 frame.origin.y = oldFrame.origin.y + dp.y
@@ -123,7 +123,7 @@ final class ImageView: View, Movable {
         }
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return CGImage.reference
     }
 }

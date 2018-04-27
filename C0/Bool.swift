@@ -23,7 +23,7 @@ extension Bool: Referenceable {
     static let name = Localization(english: "Bool", japanese: "ブール値")
 }
 extension Bool: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return (self ? "true" : "false").view(withBounds: bounds, sizeType)
     }
 }
@@ -85,22 +85,22 @@ final class BoolView: View, Assignable, Runnable, Movable {
         updateLayout()
     }
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType)
-        return CGRect(x: 0, y: 0,
+        return Rect(x: 0, y: 0,
                       width: parentClassTextView.frame.width + parentClassFalseNameView.frame.width + parentClassTrueNameView.frame.width + padding * 4,
                       height: parentClassTextView.frame.height + padding * 2)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        parentClassTextView.frame.origin = CGPoint(x: padding, y: padding)
-        parentClassFalseNameView.frame.origin = CGPoint(x: parentClassTextView.frame.maxX + padding, y: padding)
-        parentClassTrueNameView.frame.origin = CGPoint(x: parentClassFalseNameView.frame.maxX + padding,
+        parentClassTextView.frame.origin = Point(x: padding, y: padding)
+        parentClassFalseNameView.frame.origin = Point(x: parentClassTextView.frame.maxX + padding, y: padding)
+        parentClassTrueNameView.frame.origin = Point(x: parentClassFalseNameView.frame.maxX + padding,
                                                        y: padding)
         updateWithBool()
     }
@@ -119,7 +119,7 @@ final class BoolView: View, Assignable, Runnable, Movable {
         parentClassTrueNameView.textFrame.color = bool ? .locked : .subLocked
     }
     
-    func bool(at p: CGPoint) -> Bool {
+    func bool(at p: Point) -> Bool {
         return parentClassFalseNameView.frame.distance²(p) >
             parentClassTrueNameView.frame.distance²(p)
     }
@@ -132,16 +132,16 @@ final class BoolView: View, Assignable, Runnable, Movable {
     }
     var binding: ((Binding) -> ())?
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let bool = defaultBool
         if bool != self.bool {
             push(bool, old: self.bool)
         }
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [bool]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let string = object as? String {
                 if let bool = Bool(string) {
@@ -154,15 +154,15 @@ final class BoolView: View, Assignable, Runnable, Movable {
         }
     }
     
-    func run(for p: CGPoint) {
+    func run(for p: Point) {
         let bool = self.bool(at: p)
         if bool != self.bool {
             push(bool, old: self.bool)
         }
     }
     
-    private var oldBool = false, oldPoint = CGPoint()
-    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    private var oldBool = false, oldPoint = Point()
+    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         switch phase {
         case .began:
             knobView.fillColor = .editing
@@ -193,7 +193,7 @@ final class BoolView: View, Assignable, Runnable, Movable {
         binding?(Binding(view: self, bool: bool, oldBool: oldBool, phase: .ended))
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Bool.reference
     }
 }

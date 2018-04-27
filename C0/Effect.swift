@@ -55,9 +55,9 @@ extension BlendType: ObjectViewExpressionWithDisplayText {
 }
 
 struct Effect: Codable, Equatable, Hashable {
-    var blendType = BlendType.normal, blurRadius = 0.0.cf, opacity = 1.0.cf
-    static let minBlurRadius = 0.0.cf
-    static let minOpacity = 0.0.cf, maxOpacity = 1.0.cf
+    var blendType = BlendType.normal, blurRadius = 0.0.cg, opacity = 1.0.cg
+    static let minBlurRadius = 0.0.cg
+    static let minOpacity = 0.0.cg, maxOpacity = 1.0.cg
     
     var isEmpty: Bool {
         return self == Effect()
@@ -111,7 +111,7 @@ extension Effect: Interpolatable {
     }
 }
 extension Effect: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return blendType.displayText.thumbnail(withBounds: bounds, sizeType)
     }
 }
@@ -126,7 +126,7 @@ final class EffectView: View, Assignable {
     }
     var defaultEffect = Effect()
     
-    static let defaultWidth = 140.0.cf
+    static let defaultWidth = 140.0.cg
     
     var sizeType: SizeType
     private let classNameView: TextView
@@ -164,12 +164,12 @@ final class EffectView: View, Assignable {
         }
     }
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
         let viewHeight = height * 2 + padding * 2
-        return CGRect(x: 0, y: 0, width: EffectView.defaultWidth, height: viewHeight)
+        return Rect(x: 0, y: 0, width: EffectView.defaultWidth, height: viewHeight)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -179,15 +179,15 @@ final class EffectView: View, Assignable {
         let cw = bounds.width - padding * 2
         let rw = cw - classNameView.frame.width - padding
         let px = bounds.width - rw - padding
-        classNameView.frame.origin = CGPoint(x: padding,
+        classNameView.frame.origin = Point(x: padding,
                                              y: bounds.height - classNameView.frame.height - padding)
-        blendTypeView.frame = CGRect(x: px, y: padding + h, width: rw, height: h)
-        classBlurNameView.frame.origin = CGPoint(x: padding,
+        blendTypeView.frame = Rect(x: px, y: padding + h, width: rw, height: h)
+        classBlurNameView.frame.origin = Point(x: padding,
                                                  y: padding * 2)
         let blurW = ceil((cw - classBlurNameView.frame.width) / 2)
-        blurView.updateLineWidthViews(withFrame: CGRect(x: classBlurNameView.frame.maxX, y: padding,
+        blurView.updateLineWidthViews(withFrame: Rect(x: classBlurNameView.frame.maxX, y: padding,
                                                          width: blurW, height: h))
-        opacityView.updateOpacityViews(withFrame: CGRect(x: blurView.frame.maxX,
+        opacityView.updateOpacityViews(withFrame: Rect(x: blurView.frame.maxX,
                                                           y: padding,
                                                           width: bounds.width - blurView.frame.maxX - padding,
                                                           height: h))
@@ -233,17 +233,17 @@ final class EffectView: View, Assignable {
         }
     }
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let effect = defaultEffect
         guard effect != self.effect else {
             return
         }
         set(effect, old: self.effect)
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [effect]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let effect = object as? Effect {
                 if effect != self.effect {
@@ -263,7 +263,7 @@ final class EffectView: View, Assignable {
         binding?(Binding(view: self, effect: effect, oldEffect: oldEffect, phase: .ended))
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Effect.reference
     }
 }

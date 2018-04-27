@@ -27,8 +27,8 @@ struct Color: Codable {
     static let gray = Color(hue: 0, saturation: 0, lightness: 0.5)
     static let black = Color(hue: 0, saturation: 0, lightness: 0)
     static let red = Color(red: 1, green: 0, blue: 0)
-    static let green = Color(hue: 156.0 / 360.0, saturation: 1, brightness: 0.69)
-    static let orange = Color(hue: 38.0 / 360.0, saturation: 1, brightness: 0.95)
+    static let green = Color(hue: 156.0 / 360, saturation: 1, brightness: 0.69)
+    static let orange = Color(hue: 38.0 / 360, saturation: 1, brightness: 0.95)
     
     static let rgbRed = Color(red: 1, green: 0, blue: 0)
     static let rgbOrange = Color(red: 1, green: 0.5, blue: 0)
@@ -105,34 +105,34 @@ struct Color: Codable {
     static let subtitleBorder = Color(white: 0)
     static let subtitleFill = white
     
-    var hue: Double {
+    var hue: CGFloat {
         didSet {
             rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
             id = UUID()
         }
     }
-    var saturation: Double {
+    var saturation: CGFloat {
         didSet {
             rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
             id = UUID()
         }
     }
-    var lightness: Double {
+    var lightness: CGFloat {
         didSet {
             rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
             id = UUID()
         }
     }
-    var sl: CGPoint {
+    var sl: Point {
         get {
-            return CGPoint(x: saturation, y: lightness)
+            return Point(x: saturation, y: lightness)
         }
         set {
-            self.saturation = newValue.x.d
-            self.lightness = newValue.y.d
+            self.saturation = newValue.x
+            self.lightness = newValue.y
         }
     }
-    var alpha: Double {
+    var alpha: CGFloat {
         didSet {
             id = UUID()
         }
@@ -144,8 +144,8 @@ struct Color: Codable {
     }
     private(set) var rgb: RGB, id: UUID
     
-    init(hue: Double = 0, saturation: Double = 0, lightness: Double = 0,
-         alpha: Double = 1, colorSpace: ColorSpace = .sRGB) {
+    init(hue: CGFloat = 0, saturation: CGFloat = 0, lightness: CGFloat = 0,
+         alpha: CGFloat = 1, colorSpace: ColorSpace = .sRGB) {
         self.hue = hue
         self.saturation = saturation
         self.lightness = lightness
@@ -154,24 +154,24 @@ struct Color: Codable {
         self.colorSpace = colorSpace
         id = UUID()
     }
-    init(hue: Double, saturation: Double, brightness: Double,
-         alpha: Double = 1, colorSpace: ColorSpace = .sRGB) {
+    init(hue: CGFloat, saturation: CGFloat, brightness: CGFloat,
+         alpha: CGFloat = 1, colorSpace: ColorSpace = .sRGB) {
         let hsv = HSV(h: hue, s: saturation, v: brightness)
         self.init(hsv: hsv, rgb: hsv.rgb, alpha: alpha, colorSpace: colorSpace)
     }
-    init(red: Double, green: Double, blue: Double,
-         alpha: Double = 1, colorSpace: ColorSpace = .sRGB) {
+    init(red: CGFloat, green: CGFloat, blue: CGFloat,
+         alpha: CGFloat = 1, colorSpace: ColorSpace = .sRGB) {
         
         let rgb = RGB(r: red, g: green, b: blue)
         self.init(hsv: rgb.hsv, rgb: rgb, alpha: alpha, colorSpace: colorSpace)
     }
-    init(rgb: RGB, alpha: Double = 1, colorSpace: ColorSpace = .sRGB) {
+    init(rgb: RGB, alpha: CGFloat = 1, colorSpace: ColorSpace = .sRGB) {
         self.init(hsv: rgb.hsv, rgb: rgb, alpha: alpha, colorSpace: colorSpace)
     }
-    init(white: Double, alpha: Double = 1, colorSpace: ColorSpace = .sRGB) {
+    init(white: CGFloat, alpha: CGFloat = 1, colorSpace: ColorSpace = .sRGB) {
         self.init(hue: 0, saturation: 0, lightness: white, alpha: alpha, colorSpace: colorSpace)
     }
-    init(hsv: HSV, rgb: RGB, alpha: Double, colorSpace: ColorSpace = .sRGB) {
+    init(hsv: HSV, rgb: RGB, alpha: CGFloat, colorSpace: ColorSpace = .sRGB) {
         (hue, saturation, lightness) = Color.hsl(with: hsv)
         self.rgb = rgb
         self.alpha = alpha
@@ -180,40 +180,40 @@ struct Color: Codable {
     }
     
     static func random(colorSpace: ColorSpace = .sRGB) -> Color {
-        let hue = Double.random(min: 0, max: 1)
-        let saturation = Double.random(min: 0.5, max: 1)
-        let lightness = Double.random(min: 0.4, max: 0.9)
+        let hue = CGFloat.random(min: 0, max: 1)
+        let saturation = CGFloat.random(min: 0.5, max: 1)
+        let lightness = CGFloat.random(min: 0.4, max: 0.9)
         return Color(hue: hue, saturation: saturation, lightness: lightness, colorSpace: colorSpace)
     }
     
-    func with(hue: Double) -> Color {
+    func with(hue: CGFloat) -> Color {
         return Color(hue: hue, saturation: saturation, lightness:  lightness, alpha: alpha)
     }
-    func with(saturation: Double) -> Color {
+    func with(saturation: CGFloat) -> Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
     }
-    func with(lightness: Double) -> Color {
+    func with(lightness: CGFloat) -> Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
     }
-    func with(saturation: Double, lightness: Double) -> Color {
+    func with(saturation: CGFloat, lightness: CGFloat) -> Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
     }
-    func with(alpha: Double) -> Color {
+    func with(alpha: CGFloat) -> Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
     }
     func withNewID() -> Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
     }
     
-    func multiply(alpha: Double) -> Color {
+    func multiply(alpha: CGFloat) -> Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness,
                      alpha: self.alpha * alpha)
     }
-    func multiply(white: Double) -> Color {
-        return Color.linear(self, Color.white, t: white.cf)
+    func multiply(white: CGFloat) -> Color {
+        return Color.linear(self, Color.white, t: white)
     }
     
-    private static func hsl(with hsv: HSV) -> (h: Double, s: Double, l: Double) {
+    private static func hsl(with hsv: HSV) -> (h: CGFloat, s: CGFloat, l: CGFloat) {
         let h = hsv.h, s = hsv.s, v = hsv.v
         let y = Color.y(withHue: h)
         let n = s * (1 - y) + y
@@ -226,7 +226,7 @@ struct Color: Codable {
             return (h, nb == 1 ? 0 : s / (1 - nb), n * nb + y)
         }
     }
-    private static func hsvWithHSL(h: Double, s: Double, l: Double) -> HSV {
+    private static func hsvWithHSL(h: CGFloat, s: CGFloat, l: CGFloat) -> HSV {
         let y = Color.y(withHue: h)
         if y < l {
             let by = y == 1 ? 0 : (l - y) / (1 - y)
@@ -240,7 +240,7 @@ struct Color: Codable {
         return Color.hsvWithHSL(h: hue, s: saturation, l: lightness)
     }
     
-    static func y(withHue hue: Double) -> Double {
+    static func y(withHue hue: CGFloat) -> CGFloat {
         let hueRGB = HSV(h: hue, s: 1, v: 1).rgb
         return 0.299 * hueRGB.r + 0.587 * hueRGB.g + 0.114 * hueRGB.b
     }
@@ -261,62 +261,62 @@ extension Color: Referenceable {
 extension Color: Interpolatable {
     static func linear(_ f0: Color, _ f1: Color, t: CGFloat) -> Color {
         let rgb = RGB.linear(f0.rgb, f1.rgb, t: t)
-        let alpha = CGFloat.linear(f0.alpha.cf, f1.alpha.cf, t: t).d
+        let alpha = CGFloat.linear(f0.alpha, f1.alpha, t: t)
         let color = Color(rgb: rgb, alpha: alpha)
         return color.saturation > 0 ?
             color :
-            color.with(hue: CGFloat.linear(f0.hue.cf,
-                                           f1.hue.cf.loopValue(other: f0.hue.cf),
-                                           t: t).loopValue().d)
+            color.with(hue: CGFloat.linear(f0.hue,
+                                           f1.hue.loopValue(other: f0.hue),
+                                           t: t).loopValue())
     }
     static func firstMonospline(_ f1: Color, _ f2: Color, _ f3: Color,
                                 with ms: Monospline) -> Color {
         let rgb = RGB.firstMonospline(f1.rgb, f2.rgb, f3.rgb, with: ms)
-        let alpha = CGFloat.firstMonospline(f1.alpha.cf, f2.alpha.cf, f3.alpha.cf, with: ms).d
+        let alpha = CGFloat.firstMonospline(f1.alpha, f2.alpha, f3.alpha, with: ms)
         let color = Color(rgb: rgb, alpha: alpha)
         return color.saturation > 0 ?
             color :
-            color.with(hue: CGFloat.firstMonospline(f1.hue.cf,
-                                                    f2.hue.cf.loopValue(other: f1.hue.cf),
-                                                    f3.hue.cf.loopValue(other: f1.hue.cf),
-                                                    with: ms).loopValue().d)
+            color.with(hue: CGFloat.firstMonospline(f1.hue,
+                                                    f2.hue.loopValue(other: f1.hue),
+                                                    f3.hue.loopValue(other: f1.hue),
+                                                    with: ms).loopValue())
     }
     static func monospline(_ f0: Color, _ f1: Color, _ f2: Color, _ f3: Color,
                            with ms: Monospline) -> Color {
         let rgb = RGB.monospline(f0.rgb, f1.rgb, f2.rgb, f3.rgb, with: ms)
-        let alpha = CGFloat.monospline(f0.alpha.cf, f1.alpha.cf, f2.alpha.cf, f3.alpha.cf, 
-                                       with: ms).d
+        let alpha = CGFloat.monospline(f0.alpha, f1.alpha, f2.alpha, f3.alpha,
+                                       with: ms)
         let color = Color(rgb: rgb, alpha: alpha)
         return color.saturation > 0 ?
             color :
-            color.with(hue: CGFloat.monospline(f0.hue.cf,
-                                               f1.hue.cf.loopValue(other: f0.hue.cf),
-                                               f2.hue.cf.loopValue(other: f0.hue.cf),
-                                               f3.hue.cf.loopValue(other: f0.hue.cf),
-                                               with: ms).loopValue().d)
+            color.with(hue: CGFloat.monospline(f0.hue,
+                                               f1.hue.loopValue(other: f0.hue),
+                                               f2.hue.loopValue(other: f0.hue),
+                                               f3.hue.loopValue(other: f0.hue),
+                                               with: ms).loopValue())
     }
     static func lastMonospline(_ f0: Color, _ f1: Color, _ f2: Color,
                                with ms: Monospline) -> Color {
         let rgb = RGB.lastMonospline(f0.rgb, f1.rgb, f2.rgb, with: ms)
-        let alpha = CGFloat.lastMonospline(f0.alpha.cf, f1.alpha.cf, f2.alpha.cf, with: ms).d
+        let alpha = CGFloat.lastMonospline(f0.alpha, f1.alpha, f2.alpha, with: ms)
         let color = Color(rgb: rgb, alpha: alpha)
         return color.saturation > 0 ?
             color :
-            color.with(hue: CGFloat.lastMonospline(f0.hue.cf,
-                                                   f1.hue.cf.loopValue(other: f0.hue.cf),
-                                                   f2.hue.cf.loopValue(other: f0.hue.cf),
-                                                   with: ms).loopValue().d)
+            color.with(hue: CGFloat.lastMonospline(f0.hue,
+                                                   f1.hue.loopValue(other: f0.hue),
+                                                   f2.hue.loopValue(other: f0.hue),
+                                                   with: ms).loopValue())
     }
 }
 
 struct RGB {
-    var r = 0.0, g = 0.0, b = 0.0
+    var r = 0.0.cg, g = 0.0.cg, b = 0.0.cg
     
     var hsv: HSV {
         let minValue = min(r, g, b), maxValue = max(r, g, b)
         let d = maxValue - minValue
         let s = maxValue == 0 ? d : d / maxValue, v = maxValue
-        let h: Double = {
+        let h: CGFloat = {
             guard d > 0 else {
                 return d / 6
             }
@@ -335,9 +335,9 @@ struct RGB {
 extension RGB: Codable {
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
-        let r = try container.decode(Double.self)
-        let g = try container.decode(Double.self)
-        let b = try container.decode(Double.self)
+        let r = try container.decode(CGFloat.self)
+        let g = try container.decode(CGFloat.self)
+        let b = try container.decode(CGFloat.self)
         self.init(r: r, g: g, b: b)
     }
     func encode(to encoder: Encoder) throws {
@@ -349,33 +349,33 @@ extension RGB: Codable {
 }
 extension RGB: Interpolatable {
     static func linear(_ f0: RGB, _ f1: RGB, t: CGFloat) -> RGB {
-        let r = CGFloat.linear(f0.r.cf, f1.r.cf, t: t).d
-        let g = CGFloat.linear(f0.g.cf, f1.g.cf, t: t).d
-        let b = CGFloat.linear(f0.b.cf, f1.b.cf, t: t).d
+        let r = CGFloat.linear(f0.r, f1.r, t: t)
+        let g = CGFloat.linear(f0.g, f1.g, t: t)
+        let b = CGFloat.linear(f0.b, f1.b, t: t)
         return RGB(r: r, g: g, b: b)
     }
     static func firstMonospline(_ f1: RGB, _ f2: RGB, _ f3: RGB, with ms: Monospline) -> RGB {
-        let r = CGFloat.firstMonospline(f1.r.cf, f2.r.cf, f3.r.cf, with: ms).d
-        let g = CGFloat.firstMonospline(f1.g.cf, f2.g.cf, f3.g.cf, with: ms).d
-        let b = CGFloat.firstMonospline(f1.b.cf, f2.b.cf, f3.b.cf, with: ms).d
+        let r = CGFloat.firstMonospline(f1.r, f2.r, f3.r, with: ms)
+        let g = CGFloat.firstMonospline(f1.g, f2.g, f3.g, with: ms)
+        let b = CGFloat.firstMonospline(f1.b, f2.b, f3.b, with: ms)
         return RGB(r: r, g: g, b: b)
     }
     static func monospline(_ f0: RGB, _ f1: RGB, _ f2: RGB, _ f3: RGB, with ms: Monospline) -> RGB {
-        let r = CGFloat.monospline(f0.r.cf, f1.r.cf, f2.r.cf, f3.r.cf, with: ms).d
-        let g = CGFloat.monospline(f0.g.cf, f1.g.cf, f2.g.cf, f3.g.cf, with: ms).d
-        let b = CGFloat.monospline(f0.b.cf, f1.b.cf, f2.b.cf, f3.b.cf, with: ms).d
+        let r = CGFloat.monospline(f0.r, f1.r, f2.r, f3.r, with: ms)
+        let g = CGFloat.monospline(f0.g, f1.g, f2.g, f3.g, with: ms)
+        let b = CGFloat.monospline(f0.b, f1.b, f2.b, f3.b, with: ms)
         return RGB(r: r, g: g, b: b)
     }
     static func lastMonospline(_ f0: RGB, _ f1: RGB, _ f2: RGB, with ms: Monospline) -> RGB {
-        let r = CGFloat.lastMonospline(f0.r.cf, f1.r.cf, f2.r.cf, with: ms).d
-        let g = CGFloat.lastMonospline(f0.g.cf, f1.g.cf, f2.g.cf, with: ms).d
-        let b = CGFloat.lastMonospline(f0.b.cf, f1.b.cf, f2.b.cf, with: ms).d
+        let r = CGFloat.lastMonospline(f0.r, f1.r, f2.r, with: ms)
+        let g = CGFloat.lastMonospline(f0.g, f1.g, f2.g, with: ms)
+        let b = CGFloat.lastMonospline(f0.b, f1.b, f2.b, with: ms)
         return RGB(r: r, g: g, b: b)
     }
 }
 
 struct HSV {
-    var h = 0.0, s = 0.0, v = 0.0
+    var h = 0.0.cg, s = 0.0.cg, v = 0.0.cg
     
     var rgb: RGB {
         guard s != 0 else {
@@ -383,7 +383,7 @@ struct HSV {
         }
         let h6 = 6 * h
         let hi = Int(h6)
-        let nh = h6 - Double(hi)
+        let nh = h6 - CGFloat(hi)
         switch (hi) {
         case 0:
             return RGB(r: v, g: v * (1 - s * (1 - nh)), b: v * (1 - s))
@@ -403,9 +403,9 @@ struct HSV {
 extension HSV: Codable {
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
-        let h = try container.decode(Double.self)
-        let s = try container.decode(Double.self)
-        let v = try container.decode(Double.self)
+        let h = try container.decode(CGFloat.self)
+        let s = try container.decode(CGFloat.self)
+        let v = try container.decode(CGFloat.self)
         self.init(h: h, s: s, v: v)
     }
     func encode(to encoder: Encoder) throws {
@@ -450,16 +450,16 @@ extension Color {
         }
         switch name {
         case String(CGColorSpace.sRGB):
-            self.init(red: Double(components[0]),
-                      green: Double(components[1]),
-                      blue: Double(components[2]),
-                      alpha: Double(components[3]),
+            self.init(red: CGFloat(components[0]),
+                      green: CGFloat(components[1]),
+                      blue: CGFloat(components[2]),
+                      alpha: CGFloat(components[3]),
                       colorSpace: .sRGB)
         case String(CGColorSpace.displayP3):
-            self.init(red: Double(components[0]),
-                      green: Double(components[1]),
-                      blue: Double(components[2]),
-                      alpha: Double(components[3]),
+            self.init(red: CGFloat(components[0]),
+                      green: CGFloat(components[1]),
+                      blue: CGFloat(components[2]),
+                      alpha: CGFloat(components[3]),
                       colorSpace: .displayP3)
         default:
             self.init()
@@ -469,22 +469,22 @@ extension Color {
     func with(colorSpace: ColorSpace) -> Color {
         guard
             let cs = CGColorSpace.with(colorSpace),
-            let cgColor = self.cgColor.converted(to: cs, intent: .defaultIntent, options: nil),
+            let cgColor = self.cg.converted(to: cs, intent: .defaultIntent, options: nil),
             let cps = cgColor.components, cgColor.numberOfComponents == 4 else {
                 return self
         }
-        return Color(red: Double(cps[0]), green: Double(cps[1]), blue: Double(cps[2]),
-                     alpha: Double(cps[3]), colorSpace: colorSpace)
+        return Color(red: CGFloat(cps[0]), green: CGFloat(cps[1]), blue: CGFloat(cps[2]),
+                     alpha: CGFloat(cps[3]), colorSpace: colorSpace)
     }
     
-    var cgColor: CGColor {
+    var cg: CGColor {
         return CGColor.with(rgb: rgb, alpha: alpha, colorSpace: CGColorSpace.with(colorSpace))
     }
 }
 extension Color: DeepCopiable {
 }
 extension Color: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         let view = View(isForm: true)
         view.bounds = bounds
         view.fillColor = self
@@ -493,7 +493,7 @@ extension Color: ObjectViewExpression {
 }
 
 extension CGColor {
-    static func with(rgb: RGB, alpha a: Double = 1, colorSpace: CGColorSpace? = nil) -> CGColor {
+    static func with(rgb: RGB, alpha a: CGFloat = 1, colorSpace: CGColorSpace? = nil) -> CGColor {
         let cs = colorSpace ?? CGColorSpaceCreateDeviceRGB()
         let cps = [CGFloat(rgb.r), CGFloat(rgb.g), CGFloat(rgb.b), CGFloat(a)]
         return CGColor(colorSpace: cs, components: cps)
@@ -519,30 +519,30 @@ extension CGColorSpace {
 
 struct HueCircle {
     var lineWidth: CGFloat, colorSpace: ColorSpace
-    var bounds: CGRect {
+    var bounds: Rect {
         didSet {
             radius = min(bounds.width, bounds.height) / 2
         }
     }
     private(set) var radius: CGFloat
     
-    init(lineWidth: CGFloat = 2, bounds: CGRect = CGRect(), colorSpace: ColorSpace = .sRGB) {
+    init(lineWidth: CGFloat = 2, bounds: Rect = Rect(), colorSpace: ColorSpace = .sRGB) {
         self.lineWidth = lineWidth
         self.bounds = bounds
         self.radius = min(bounds.width, bounds.height) / 2
         self.colorSpace = colorSpace
     }
     
-    func hue(withAngle angle: Double) -> Double {
+    func hue(withAngle angle: CGFloat) -> CGFloat {
         let a = (angle < -.pi + .pi / 6 ? 2 * (.pi) : 0) +  angle - .pi / 6
         return hue(withRevisionHue: (a < 0 ? 1 : 0) + a / (2 * (.pi)))
     }
-    func angle(withHue hue: Double) -> Double {
+    func angle(withHue hue: CGFloat) -> CGFloat {
         return revisionHue(withHue: hue) * 2 * (.pi) + .pi / 6
     }
     
-    private let split = 1.0 / 12.0, slow = 0.5, fast = 1.5
-    private func revisionHue(withHue hue: Double) -> Double {
+    private let split = 1.0.cg / 12.0.cg, slow = 0.5.cg, fast = 1.5.cg
+    private func revisionHue(withHue hue: CGFloat) -> CGFloat {
         if hue < split {
             return hue * fast
         } else if hue < split * 2 {
@@ -569,7 +569,7 @@ struct HueCircle {
             return (hue - split * 11) * fast + split * (fast * 5 + slow * 6)
         }
     }
-    private func hue(withRevisionHue revisionHue: Double) -> Double {
+    private func hue(withRevisionHue revisionHue: CGFloat) -> CGFloat {
         if revisionHue < split * fast {
             return revisionHue / fast
         } else if revisionHue < split * (fast + slow) {
@@ -601,20 +601,20 @@ struct HueCircle {
         let outR = radius
         let inR = outR - lineWidth, deltaAngle = 1 / outR
         let splitCount = Int(ceil(2 * (.pi) * outR))
-        let inChord = 2 + inR / outR, outChord = 2.0.cf
+        let inChord = 2 + inR / outR, outChord = 2.0.cg
         let points = [
-            CGPoint(x: inR, y: inChord / 2), CGPoint(x: outR, y: outChord / 2),
-            CGPoint(x: outR, y: -outChord / 2), CGPoint(x: inR, y: -inChord / 2)
+            Point(x: inR, y: inChord / 2), Point(x: outR, y: outChord / 2),
+            Point(x: outR, y: -outChord / 2), Point(x: inR, y: -inChord / 2)
         ]
         ctx.saveGState()
         ctx.translateBy(x: bounds.midX, y: bounds.midY)
         ctx.rotate(by: .pi / 6 - deltaAngle / 2)
         for i in 0 ..< splitCount {
-            let color = Color(hue: revisionHue(withHue: Double(i) / Double(splitCount)),
+            let color = Color(hue: revisionHue(withHue: CGFloat(i) / CGFloat(splitCount)),
                               saturation: 1,
                               brightness: 1,
                               colorSpace: colorSpace)
-            ctx.setFillColor(color.cgColor)
+            ctx.setFillColor(color.cg)
             ctx.addLines(between: points)
             ctx.fillPath()
             ctx.rotate(by: deltaAngle)
@@ -647,24 +647,24 @@ final class ColorView: View, Assignable {
             formHueDrawView.draw()
         }
     }
-    var formSLRatio = 0.82.cf {
+    var formSLRatio = 0.82.cg {
         didSet {
             updateLayout()
         }
     }
     let formSLColorGradientView = View(gradient: Gradient(colors: [], locations: [],
-                                                          startPoint: CGPoint(x: 0, y: 0),
-                                                          endPoint: CGPoint(x: 1, y: 0)))
+                                                          startPoint: Point(x: 0, y: 0),
+                                                          endPoint: Point(x: 1, y: 0)))
     let formSLBlackWhiteGradientView = View(gradient: Gradient(colors: [Color(white: 0, alpha: 1),
                                                                         Color(white: 0, alpha: 0),
                                                                         Color(white: 1, alpha: 0),
                                                                         Color(white: 1, alpha: 1)],
                                                                locations: [],
-                                                               startPoint: CGPoint(x: 0, y: 0),
-                                                               endPoint: CGPoint(x: 0, y: 1)))
+                                                               startPoint: Point(x: 0, y: 0),
+                                                               endPoint: Point(x: 0, y: 1)))
     
-    init(frame: CGRect = CGRect(),
-         hLineWidth: CGFloat = 2.5, hWidth: CGFloat = 16.0.cf, slPadding: CGFloat? = nil,
+    init(frame: Rect = Rect(),
+         hLineWidth: CGFloat = 2.5, hWidth: CGFloat = 16, slPadding: CGFloat? = nil,
          sizeType: SizeType = .regular) {
         
         hueView = CircularNumberView(width: hWidth)
@@ -694,7 +694,7 @@ final class ColorView: View, Assignable {
         slView.binding = { [unowned self] in self.setColor(with: $0) }
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -705,11 +705,11 @@ final class ColorView: View, Assignable {
         }
         let padding = Layout.smallPadding
         let r = floor(min(bounds.size.width, bounds.size.height) / 2) - padding
-        hueView.frame = CGRect(x: padding, y: padding, width: r * 2, height: r * 2)
+        hueView.frame = Rect(x: padding, y: padding, width: r * 2, height: r * 2)
         let sr = r - hueView.width
         let b2 = floor(sr * formSLRatio)
         let a2 = floor(sqrt(sr * sr - b2 * b2))
-        slView.frame = CGRect(x: bounds.size.width / 2 - a2,
+        slView.frame = Rect(x: bounds.size.width / 2 - a2,
                               y: bounds.size.height / 2 - b2,
                               width: a2 * 2,
                               height: b2 * 2)
@@ -728,8 +728,8 @@ final class ColorView: View, Assignable {
         formSLColorGradientView.gradient?.colors = [Color(hue: color.hue, saturation: 0, brightness: y),
                                              Color(hue: color.hue, saturation: 1, brightness: 1)]
         formSLBlackWhiteGradientView.gradient?.locations = [0, y, y, 1]
-        hueView.number = formHueCircle.angle(withHue: color.hue).cf
-        slView.point = CGPoint(x: color.saturation, y: color.lightness)
+        hueView.number = formHueCircle.angle(withHue: color.hue)
+        slView.point = Point(x: color.saturation, y: color.lightness)
     }
     private func updateWithColorSpace() {
         let colors = [Color(white: 0, alpha: 1, colorSpace: color.colorSpace),
@@ -749,7 +749,7 @@ final class ColorView: View, Assignable {
     
     var disabledRegisterUndo = false
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let color = Color(), oldColor = self.color
         guard color != oldColor else {
             return
@@ -760,10 +760,10 @@ final class ColorView: View, Assignable {
         setColorClosure?(Binding(colorView: self,
                                  color: color, oldColor: oldColor, phase: .ended))
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [color]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let color = object as? Color {
                 if color != self.color {
@@ -793,7 +793,7 @@ final class ColorView: View, Assignable {
             setColorClosure?(Binding(colorView: self,
                                      color: oldColor, oldColor: oldColor, phase: .began))
         } else {
-            color.hue = formHueCircle.hue(withAngle: obj.number.d)
+            color.hue = formHueCircle.hue(withAngle: obj.number)
             setColorClosure?(Binding(colorView: self,
                                      color: color, oldColor: oldColor, phase: obj.phase))
         }
@@ -808,7 +808,7 @@ final class ColorView: View, Assignable {
                                  color: color, oldColor: oldColor, phase: .ended))
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         var reference = Color.reference
         reference.viewDescription = Localization(english: "Ring: Hue, Width: Saturation, Height: Luminance",
                                                  japanese: "輪: 色相, 横: 彩度, 縦: 輝度")

@@ -66,26 +66,26 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         }
     }
     
-    static let defautBaseWidth = 6.0.cf, defaultTimeHeight = Layout.basicHeight
-    static let defaultSumKeyTimesHeight = 18.0.cf
+    static let defautBaseWidth = 6.0.cg, defaultTimeHeight = Layout.basicHeight
+    static let defaultSumKeyTimesHeight = 18.0.cg
     var baseWidth = defautBaseWidth {
         didSet {
             sumKeyTimesView.baseWidth = baseWidth
             tempoAnimationView.baseWidth = baseWidth
             soundWaveformView.baseWidth = baseWidth
             cutViews.forEach { $0.baseWidth = baseWidth }
-            updateWith(time: time, scrollPoint: CGPoint(x: x(withTime: time), y: _scrollPoint.y))
+            updateWith(time: time, scrollPoint: Point(x: x(withTime: time), y: _scrollPoint.y))
         }
     }
     private let timeHeight = defaultTimeHeight
     private let timeRulerHeight = Layout.smallHeight
     private let tempoHeight = defaultSumKeyTimesHeight
-    private let subtitleHeight = 24.0.cf, soundHeight = 20.0.cf
+    private let subtitleHeight = 24.0.cg, soundHeight = 20.0.cg
     private let sumKeyTimesHeight = defaultSumKeyTimesHeight
-    private let knobHalfHeight = 8.0.cf, subKnobHalfHeight = 4.0.cf, maxLineHeight = 3.0.cf
-    private(set) var maxScrollX = 0.0.cf, cutHeight = 0.0.cf
+    private let knobHalfHeight = 8.0.cg, subKnobHalfHeight = 4.0.cg, maxLineHeight = 3.0.cg
+    private(set) var maxScrollX = 0.0.cg, cutHeight = 0.0.cg
     
-    static let leftWidth = 80.0.cf
+    static let leftWidth = 80.0.cg
 //    let curretEditKeyframeTimeExpressionView = ExpressionView(sizeType: .small)
     
     let baseTimeIntervalView = DiscreteRationalNumberView(model: Q(1, 16),
@@ -98,7 +98,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
                                                                     minModel: 1, maxModel: 10000,
                                                                     modelInterval: 1, exp: 1,
                                                                     numberOfDigits: 0, unit: " bpm"),
-                                           frame: CGRect(x: 0, y: 0,
+                                           frame: Rect(x: 0, y: 0,
                                                          width: leftWidth, height: Layout.basicHeight))
     let tempoAnimationClipView = View(isForm: true)
     let tempoAnimationView = AnimationView(height: defaultSumKeyTimesHeight)
@@ -134,7 +134,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
     let tempoKeyframeView = KeyframeView(sizeType: .small)
     let keyframeView = KeyframeView(), nodeView = NodeView(sizeType: .small)
     
-    init(frame: CGRect = CGRect()) {
+    init(frame: Rect = Rect()) {
         tempoAnimationClipView.children = [tempoAnimationView]
         tempoAnimationClipView.isClipped = true
         tempoAnimationView.isEdit = true
@@ -192,7 +192,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
             case .changed, .ended:
                 self.baseTimeInterval = $0.model
                 self.updateWith(time: self.time,
-                                scrollPoint: CGPoint(x: self.x(withTime: self.time), y: 0),
+                                scrollPoint: Point(x: self.x(withTime: self.time), y: 0),
                                 isIntervalScroll: false)
                 self.updateWithTime()
             }
@@ -251,7 +251,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         }
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -262,38 +262,38 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         cutHeight = mainHeight - tempoHeight - subtitleHeight - soundHeight
         let midX = bounds.midX, leftWidth = TimelineView.leftWidth
         let rightX = leftWidth
-        formTimeRulerView.frame = CGRect(x: rightX, y: bounds.height - timeRulerHeight - sp,
+        formTimeRulerView.frame = Rect(x: rightX, y: bounds.height - timeRulerHeight - sp,
                                  width: bounds.width - rightX - sp, height: timeRulerHeight)
-//        curretEditKeyframeTimeView.frame.origin = CGPoint(x: rightX - curretEditKeyframeTimeView.frame.width - Layout.smallPadding,
+//        curretEditKeyframeTimeView.frame.origin = Point(x: rightX - curretEditKeyframeTimeView.frame.width - Layout.smallPadding,
 //                                         y: bounds.height - timeRulerHeight
 //                                            - Layout.basicPadding + Layout.smallPadding)
-        tempoAnimationClipView.frame = CGRect(x: rightX,
+        tempoAnimationClipView.frame = Rect(x: rightX,
                                          y: bounds.height - timeRulerHeight - tempoHeight - sp,
                                          width: bounds.width - rightX - sp, height: tempoHeight)
-        let tracksHeight = 30.0.cf
-        tracksManager.tracksView.frame = CGRect(x: sp, y: sumKeyTimesHeight + sp,
+        let tracksHeight = 30.0.cg
+        tracksManager.tracksView.frame = Rect(x: sp, y: sumKeyTimesHeight + sp,
                                                 width: leftWidth - sp,
                                                 height: tracksHeight)
-        nodeTreeView.nodesView.frame = CGRect(x: sp, y: sumKeyTimesHeight + sp + tracksHeight,
+        nodeTreeView.nodesView.frame = Rect(x: sp, y: sumKeyTimesHeight + sp + tracksHeight,
                                               width: leftWidth - sp,
                                               height: cutHeight - tracksHeight)
-        cutViewsView.frame = CGRect(x: rightX, y: sumKeyTimesHeight + sp,
+        cutViewsView.frame = Rect(x: rightX, y: sumKeyTimesHeight + sp,
                                    width: bounds.width - rightX - sp,
                                    height: mainHeight - tempoHeight)
-        classSumAnimationNameView.frame.origin = CGPoint(x: rightX - classSumAnimationNameView.frame.width,
+        classSumAnimationNameView.frame.origin = Point(x: rightX - classSumAnimationNameView.frame.width,
                                         y: sp + (sumKeyTimesHeight - classSumAnimationNameView.frame.height) / 2)
-        sumKeyTimesClipView.frame = CGRect(x: rightX, y: sp,
+        sumKeyTimesClipView.frame = Rect(x: rightX, y: sp,
                                       width: bounds.width - rightX - sp, height: sumKeyTimesHeight)
-        timeView.frame = CGRect(x: midX - baseWidth / 2, y: sp,
+        timeView.frame = Rect(x: midX - baseWidth / 2, y: sp,
                                  width: baseWidth, height: bounds.height - sp * 2)
-        beatsView.frame = CGRect(x: rightX, y: 0,
+        beatsView.frame = Rect(x: rightX, y: 0,
                                   width: bounds.width - rightX, height: bounds.height)
         let bx = sp + (sumKeyTimesHeight - baseTimeIntervalView.frame.height) / 2
-        baseTimeIntervalView.frame.origin = CGPoint(x: sp, y: bx)
+        baseTimeIntervalView.frame.origin = Point(x: sp, y: bx)
     }
     
-    private var _scrollPoint = CGPoint(), _intervalScrollPoint = CGPoint()
-    var scrollPoint: CGPoint {
+    private var _scrollPoint = Point(), _intervalScrollPoint = Point()
+    var scrollPoint: Point {
         get {
             return _scrollPoint
         }
@@ -312,7 +312,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         }
         set {
             if newValue != scene.time {
-                updateWith(time: newValue, scrollPoint: CGPoint(x: x(withTime: newValue), y: 0))
+                updateWith(time: newValue, scrollPoint: Point(x: x(withTime: newValue), y: 0))
             }
         }
     }
@@ -321,11 +321,11 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
     }
     private func updateNoIntervalWith(time: Beat) {
         if time != scene.time {
-            updateWith(time: time, scrollPoint: CGPoint(x: x(withTime: time), y: 0),
+            updateWith(time: time, scrollPoint: Point(x: x(withTime: time), y: 0),
                        isIntervalScroll: false)
         }
     }
-    private func updateWith(time: Beat, scrollPoint: CGPoint,
+    private func updateWith(time: Beat, scrollPoint: Point,
                             isIntervalScroll: Bool = true, alwaysUpdateCutIndex: Bool = false) {
         _scrollPoint = scrollPoint
         _intervalScrollPoint = isIntervalScroll ? intervalScrollPoint(with: _scrollPoint) : scrollPoint
@@ -368,8 +368,8 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         _scrollPoint.x = x(withTime: time)
         self.time = time
     }
-    private func intervalScrollPoint(with scrollPoint: CGPoint) -> CGPoint {
-        return CGPoint(x: x(withTime: time(withLocalX: scrollPoint.x)), y: 0)
+    private func intervalScrollPoint(with scrollPoint: Point) -> Point {
+        return Point(x: x(withTime: time(withLocalX: scrollPoint.x)), y: 0)
     }
     
     var editCutView: CutView {
@@ -388,12 +388,12 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
     private func updateWithScrollPosition() {
         let minX = localDeltaX
         _ = cutViews.reduce(minX) { x, cutView in
-            cutView.frame.origin = CGPoint(x: x, y: 0)
+            cutView.frame.origin = Point(x: x, y: 0)
             
-            cutView.subtitleAnimationView.frame.origin = CGPoint(x: x, y: cutView.frame.height)
+            cutView.subtitleAnimationView.frame.origin = Point(x: x, y: cutView.frame.height)
             _ = cutView.subtitleTextViews.reduce(x) {
-                $1.frame.size = CGSize(width: 100, height: Layout.basicHeight)
-                $1.frame.origin = CGPoint(x: $0, y: cutView.frame.height + cutView.subtitleAnimationView.frame.height)
+                $1.frame.size = Size(width: 100, height: Layout.basicHeight)
+                $1.frame.origin = Point(x: $0, y: cutView.frame.height + cutView.subtitleAnimationView.frame.height)
                 return $0 + $1.frame.width
             }
             
@@ -413,8 +413,8 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
             
             return x + cutView.frame.width
         }
-        soundWaveformView.frame.origin = CGPoint(x: minX, y: cutViewsView.frame.height - soundWaveformView.frame.height)
-        tempoAnimationView.frame.origin = CGPoint(x: minX, y: 0)
+        soundWaveformView.frame.origin = Point(x: minX, y: cutViewsView.frame.height - soundWaveformView.frame.height)
+        tempoAnimationView.frame.origin = Point(x: minX, y: 0)
         sumKeyTimesView.frame.origin.x = minX
         updateBeats()
         updateTimeRuler()
@@ -423,21 +423,21 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         maxScrollX = x(withTime: scene.duration)
         let minX = localDeltaX
         _ = cutViews.reduce(minX) { x, cutView in
-            cutView.frame.origin = CGPoint(x: x, y: 0)
-            cutView.subtitleAnimationView.frame.origin = CGPoint(x: x, y: cutView.frame.height)
+            cutView.frame.origin = Point(x: x, y: 0)
+            cutView.subtitleAnimationView.frame.origin = Point(x: x, y: cutView.frame.height)
             _ = cutView.subtitleTextViews.reduce(x) {
-                $1.frame.size = CGSize(width: 100, height: Layout.basicHeight)
-                $1.frame.origin = CGPoint(x: $0, y: cutView.frame.height + cutView.subtitleAnimationView.frame.height)
+                $1.frame.size = Size(width: 100, height: Layout.basicHeight)
+                $1.frame.origin = Point(x: $0, y: cutView.frame.height + cutView.subtitleAnimationView.frame.height)
                 return $0 + $1.frame.width
             }
             return x + cutView.frame.width
         }
-        tempoAnimationView.frame.origin = CGPoint(x: minX, y: 0)
+        tempoAnimationView.frame.origin = Point(x: minX, y: 0)
         updateBeats()
         updateTimeRuler()
         updateSumKeyTimesView()
     }
-    var mainHeight = 0.0.cf
+    var mainHeight = 0.0.cg
     func cutViews(with scene: Scene) -> [CutView] {
         return scene.cuts.enumerated().map {
             self.bindedCutView(with: $0.element,
@@ -547,7 +547,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
             let timeView = TimelineView.timeView(withSecound: $0)
             timeView.fillColor = nil
             let secondX = x(withTime: scene.basedBeatTime(withSecondTime: Second($0)))
-            timeView.frame.origin = CGPoint(x: secondX - timeView.frame.width / 2,
+            timeView.frame.origin = Point(x: secondX - timeView.frame.width / 2,
                                              y: Layout.smallPadding)
             return timeView
         }
@@ -606,7 +606,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         sumKeyTimesView.frame.size.width = maxScrollX
     }
     
-    let beatsLineWidth = 1.0.cf, barLineWidth = 3.0.cf, beatsPerBar = 0
+    let beatsLineWidth = 1.0.cg, barLineWidth = 3.0.cg, beatsPerBar = 0
     func updateBeats() {
         guard baseTimeInterval < 1 else {
             beatsView.path = nil
@@ -622,17 +622,17 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         }
         let padding = Layout.basicPadding
         let path = CGMutablePath()
-        let rects: [CGRect] = (intMinTime ... intMaxTime).map {
+        let rects: [Rect] = (intMinTime ... intMaxTime).map {
             let i0x = x(withDoubleBeatTime: DoubleBeat($0)) + minX
             let w = beatsPerBar != 0 && $0 % beatsPerBar == 0 ? barLineWidth : beatsLineWidth
-            return CGRect(x: i0x - w / 2, y: padding, width: w, height: bounds.height - padding * 2)
+            return Rect(x: i0x - w / 2, y: padding, width: w, height: bounds.height - padding * 2)
         }
         path.addRects(rects)
         beatsView.path = path
     }
     
-    var contentFrame: CGRect {
-        return CGRect(x: _scrollPoint.x, y: 0, width: x(withTime: scene.duration), height: 0)
+    var contentFrame: Rect {
+        return Rect(x: _scrollPoint.x, y: 0, width: x(withTime: scene.duration), height: 0)
     }
     
     func time(withLocalX x: CGFloat, isBased: Bool = true) -> Beat {
@@ -642,7 +642,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
                 DoubleBeat(x / baseWidth) * DoubleBeat(scene.baseTimeInterval))
     }
     func x(withTime time: Beat) -> CGFloat {
-        return scene.doubleBeatTime(withBeatTime: time / scene.baseTimeInterval).cf * baseWidth
+        return scene.doubleBeatTime(withBeatTime: time / scene.baseTimeInterval) * baseWidth
     }
     func doubleBeatTime(withLocalX x: CGFloat, isBased: Bool = true) -> DoubleBeat {
         return DoubleBeat(isBased ? round(x / baseWidth) : x / baseWidth)
@@ -706,13 +706,13 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
     func convertFromLocalX(_ x: CGFloat) -> CGFloat {
         return x - TimelineView.leftWidth + localDeltaX
     }
-    func convertToLocal(_ p: CGPoint) -> CGPoint {
-        return CGPoint(x: convertToLocalX(p.x), y: p.y)
+    func convertToLocal(_ p: Point) -> Point {
+        return Point(x: convertToLocalX(p.x), y: p.y)
     }
-    func convertFromLocal(_ p: CGPoint) -> CGPoint {
-        return CGPoint(x: convertFromLocalX(p.x), y: p.y)
+    func convertFromLocal(_ p: Point) -> Point {
+        return Point(x: convertFromLocalX(p.x), y: p.y)
     }
-    func nearestKeyframeIndexTuple(at p: CGPoint) -> (cutIndex: Int, keyframeIndex: Int?) {
+    func nearestKeyframeIndexTuple(at p: Point) -> (cutIndex: Int, keyframeIndex: Int?) {
         let ci = cutIndex(withLocalX: p.x)
         let cut = scene.cuts[ci], ct = scene.cuts[ci].currentTime
         guard cut.editNode.editTrack.animation.keyframes.count > 0 else {
@@ -737,7 +737,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
             return (ci, minI)
         }
     }
-    func trackIndexTuple(at p: CGPoint) -> (cutIndex: Int, trackIndex: Int, keyframeIndex: Int?) {
+    func trackIndexTuple(at p: Point) -> (cutIndex: Int, trackIndex: Int, keyframeIndex: Int?) {
         let ci = cutIndex(withLocalX: p.x)
         let cut = scene.cuts[ci], ct = scene.cutTrack.animation.keyframes[ci].time
         var minD = CGFloat.infinity, minKeyframeIndex = 0, minTrackIndex = 0
@@ -811,21 +811,21 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
             $0.set(time: oldTime, oldTime: time, alwaysUpdateCutIndex: alwaysUpdateCutIndex)
         }
         updateWith(time: time,
-                   scrollPoint: CGPoint(x: x(withTime: time), y: 0),
+                   scrollPoint: Point(x: x(withTime: time), y: 0),
                    alwaysUpdateCutIndex: alwaysUpdateCutIndex)
         differentialSceneDataModel?.isWrite = true
         updateView(isCut: true, isTransform: false, isKeyframe: false)
     }
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let localX = convertToLocalX(p.x)
         let cutIndex = self.cutIndex(withLocalX: localX)
         removeCut(at: cutIndex)
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return []
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let cut = object as? Cut {
                 let localX = convertToLocalX(p.x)
@@ -840,7 +840,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         set(time: scene.cutTrack.time(at: index), oldTime: time)
     }
     
-    func new(for p: CGPoint) {
+    func new(for p: Point) {
         let localX = convertToLocalX(p.x)
         let cutIndex = self.cutIndex(withLocalX: localX)
         let cut = Cut()
@@ -921,7 +921,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         node.editTrack.name = Localization(english: "Track 0", japanese: "トラック0").currentString
         append(node, in: editCutView)
     }
-    func pasteFromNodesView(_ objects: [Any], for p: CGPoint) {
+    func pasteFromNodesView(_ objects: [Any], for p: Point) {
         for object in objects {
             if let node = object as? Node {
                 append(node.copied, in: editCutView)
@@ -1017,7 +1017,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         set(editTrackIndex: trackIndex, oldEditTrackIndex: node.editTrackIndex,
             in: node, in: cutView, time: time)
     }
-    func pasteFromTracksView(_ objects: [Any], for p: CGPoint) {
+    func pasteFromTracksView(_ objects: [Any], for p: Point) {
         for object in objects {
             if let track = object as? NodeTrack {
                 append(track.copied, in: editCutView)
@@ -1230,7 +1230,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         track.replace(keyframe, at: index)
         tempoAnimationView.animation = track.animation
         sceneDataModel?.isWrite = true
-        updateWith(time: time, scrollPoint: CGPoint(x: x(withTime: time), y: 0))
+        updateWith(time: time, scrollPoint: Point(x: x(withTime: time), y: 0))
         updateWithTime()
         updateTimeRuler()
         soundWaveformView.updateWaveform()
@@ -1245,7 +1245,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         track.insert(keyframe, keyframeValue, at: index)
         tempoAnimationView.animation = track.animation
         sceneDataModel?.isWrite = true
-        updateWith(time: time, scrollPoint: CGPoint(x: x(withTime: time), y: 0))
+        updateWith(time: time, scrollPoint: Point(x: x(withTime: time), y: 0))
         updateView(isCut: false, isTransform: false, isKeyframe: true)
         updateSumKeyTimesView()
         updateTimeRuler()
@@ -1262,7 +1262,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         track.removeKeyframe(at: index)
         tempoAnimationView.animation = track.animation
         sceneDataModel?.isWrite = true
-        updateWith(time: time, scrollPoint: CGPoint(x: x(withTime: time), y: 0))
+        updateWith(time: time, scrollPoint: Point(x: x(withTime: time), y: 0))
         updateWithTime()
         updateSumKeyTimesView()
         updateTimeRuler()
@@ -1337,7 +1337,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
             $0.replace(ok, at: index, in: track, in: animationView, in: cutView, time: $1)
         }
         track.replace(keyframe, at: index)
-        updateWith(time: time, scrollPoint: CGPoint(x: x(withTime: time), y: 0))
+        updateWith(time: time, scrollPoint: Point(x: x(withTime: time), y: 0))
         differentialSceneDataModel?.isWrite = true
         animationView.animation = track.animation
         updateView(isCut: true, isTransform: false, isKeyframe: false)
@@ -1353,7 +1353,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         node.differentialDataModel.isWrite = true
         differentialSceneDataModel?.isWrite = true
         animationView.animation = track.animation
-        updateWith(time: time, scrollPoint: CGPoint(x: x(withTime: time), y: 0))
+        updateWith(time: time, scrollPoint: Point(x: x(withTime: time), y: 0))
         updateView(isCut: true, isTransform: false, isKeyframe: false)
         updateSumKeyTimesView()
     }
@@ -1369,7 +1369,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
                       in: animationView, in: cutView, time: $1)
         }
         track.removeKeyframe(at: index)
-        updateWith(time: time, scrollPoint: CGPoint(x: x(withTime: time), y: 0))
+        updateWith(time: time, scrollPoint: Point(x: x(withTime: time), y: 0))
         node.differentialDataModel.isWrite = true
         differentialSceneDataModel?.isWrite = true
         animationView.animation = track.animation
@@ -1517,7 +1517,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
     
     private var isScrollTrack = false
     private weak var scrollCutView: CutView?
-    func scroll(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+    func scroll(for p: Point, time: Second, scrollDeltaPoint: Point,
                 phase: Phase, momentumPhase: Phase?) {
         if phase == .began {
             isScrollTrack = abs(scrollDeltaPoint.x) < abs(scrollDeltaPoint.y)
@@ -1534,16 +1534,16 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         }
     }
     
-    private var indexScrollDeltaPosition = CGPoint(), indexScrollBeginX = 0.0.cf
-    private var indexScrollIndex = 0, indexScrollWidth = 14.0.cf
-    func indexScroll(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+    private var indexScrollDeltaPosition = Point(), indexScrollBeginX = 0.0.cg
+    private var indexScrollIndex = 0, indexScrollWidth = 14.0.cg
+    func indexScroll(for p: Point, time: Second, scrollDeltaPoint: Point,
                      phase: Phase, momentumPhase: Phase?) {
         guard momentumPhase == nil else {
             return
         }
         switch phase {
         case .began:
-            indexScrollDeltaPosition = CGPoint()
+            indexScrollDeltaPosition = Point()
             indexScrollIndex = currentAllKeyframeIndex
         case .changed, .ended:
             indexScrollDeltaPosition += scrollDeltaPoint
@@ -1586,17 +1586,17 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
         return scene.cuts.reduce(0) { $0 + $1.editNode.editTrack.animation.loopFrames.count }
     }
     
-    func scrollTime(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+    func scrollTime(for p: Point, time: Second, scrollDeltaPoint: Point,
                     phase: Phase, momentumPhase: Phase?) {
         let maxX = self.x(withTime: scene.duration)
         let x = (scrollPoint.x - scrollDeltaPoint.x).clip(min: 0, max: maxX)
-        scrollPoint = CGPoint(x: phase == .began ?
+        scrollPoint = Point(x: phase == .began ?
             self.x(withTime: self.time(withLocalX: x)) : x, y: 0)
     }
     
     private var baseTimeIntervalOldTime = Second(0)
-    private var floatBaseTimeInterval = 0.0.cf, beginBaseTimeInterval = Beat(1)
-    func zoom(for p: CGPoint, time: Second, magnification: CGFloat, _ phase: Phase) {
+    private var floatBaseTimeInterval = 0.0.cg, beginBaseTimeInterval = Beat(1)
+    func zoom(for p: Point, time: Second, magnification: CGFloat, _ phase: Phase) {
         switch phase {
         case .began:
             baseTimeIntervalOldTime = scene.secondTime(withBeatTime: scene.time)
@@ -1611,7 +1611,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
                 let q = beginBaseTimeInterval.q + Int(floatBaseTimeInterval)
                 baseTimeInterval = q < 1 ? Beat(2 - q) : Beat(1, q)
             }
-            updateWith(time: self.time, scrollPoint: CGPoint(x: x(withTime: self.time), y: 0),
+            updateWith(time: self.time, scrollPoint: Point(x: x(withTime: self.time), y: 0),
                        isIntervalScroll: false)
             updateWithTime()
         }
@@ -1620,7 +1620,7 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
 //                .clip(min: 1, max: Timeline.defautBaseWidth)
 //        }
     }
-    func resetView(for p: CGPoint) {
+    func resetView(for p: Point) {
 //        guard baseWidth != Timeline.defautBaseWidth else {
 //            return
 //        }
@@ -1628,14 +1628,14 @@ final class TimelineView: View, Assignable, Newable, Scrollable, Zoomable {
 //            baseWidth = Timeline.defautBaseWidth
 //        }
     }
-    func zoom(at p: CGPoint, closure: () -> ()) {
+    func zoom(at p: Point, closure: () -> ()) {
         closure()
         _scrollPoint.x = x(withTime: time)
         _intervalScrollPoint.x = scrollPoint.x
         updateView(isCut: false, isTransform: false, isKeyframe: false)
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Reference(name: Localization(english: "Timeline", japanese: "タイムライン"),
                          viewDescription: Localization(english: "Select time: Left and right scroll\nSelect track: Up and down scroll",
                                                        japanese: "時間選択: 左右スクロール\nトラック選択: 上下スクロール"))
@@ -1654,7 +1654,7 @@ final class RulerView: View {
         append(child: scrollView)
     }
     
-    var scrollPosition: CGPoint {
+    var scrollPosition: Point {
         get  {
             return scrollView.frame.origin
         }
@@ -1662,7 +1662,7 @@ final class RulerView: View {
             scrollView.frame.origin = newValue
         }
     }
-    var scrollFrame = CGRect()
+    var scrollFrame = Rect()
     
     var scaleTextViews = [TextView]() {
         didSet {

@@ -41,7 +41,7 @@ extension Quasimode: Referenceable {
     static let name = Text(english: "Quasimode", japanese: "擬似モード")
 }
 extension Quasimode: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return displayText.thumbnail(withBounds: bounds, sizeType)
     }
 }
@@ -51,7 +51,7 @@ enum Phase {
 }
 
 protocol Eventable {
-    var rootLocation: CGPoint { get }
+    var rootLocation: Point { get }
     var time: Second { get }
     var phase: Phase { get }
 }
@@ -107,7 +107,7 @@ struct Inputter: Editor {
         var name: Text
     }
     struct Event: Eventable {
-        let rootLocation: CGPoint, time: Second, pressure: CGFloat, phase: Phase
+        let rootLocation: Point, time: Second, pressure: CGFloat, phase: Phase
     }
 }
 struct Dragger: Editor {
@@ -126,7 +126,7 @@ struct Dragger: Editor {
         var name: Text
     }
     struct Event: Eventable {
-        var rootLocation: CGPoint, time: Second, pressure: CGFloat, phase: Phase
+        var rootLocation: Point, time: Second, pressure: CGFloat, phase: Phase
     }
 }
 struct Scroller: Editor {
@@ -145,7 +145,7 @@ struct Scroller: Editor {
         var name: Text
     }
     struct Event: Eventable {
-        var rootLocation: CGPoint, time: Second, scrollDeltaPoint: CGPoint
+        var rootLocation: Point, time: Second, scrollDeltaPoint: Point
         var phase: Phase, momentumPhase: Phase?
     }
 }
@@ -163,7 +163,7 @@ struct Pincher: Editor {
         var name: Text
     }
     struct Event: Eventable {
-        var rootLocation: CGPoint, time: Second, magnification: CGFloat, phase: Phase
+        var rootLocation: Point, time: Second, magnification: CGFloat, phase: Phase
     }
 }
 struct Rotater: Editor {
@@ -180,7 +180,7 @@ struct Rotater: Editor {
         var name: Text
     }
     struct Event: Eventable {
-        var rootLocation: CGPoint, time: Second, rotationQuantity: CGFloat, phase: Phase
+        var rootLocation: Point, time: Second, rotationQuantity: CGFloat, phase: Phase
     }
 }
 
@@ -213,7 +213,7 @@ extension Action: Referenceable {
     static let name = Text(english: "Action", japanese: "アクション")
 }
 extension Action: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return name.thumbnail(withBounds: bounds, sizeType)
     }
 }
@@ -522,7 +522,7 @@ enum ViewQuasimode {
 }
 
 protocol Indicatable {
-    func indicate(at p: CGPoint)
+    func indicate(at p: Point)
 }
 final class IndicatableActionManager: ActionManagable {
     typealias Receiver = View & Indicatable
@@ -533,7 +533,7 @@ final class IndicatableActionManager: ActionManagable {
         return [indicateAction]
     }
     
-    func updateIndicatedView(with frame: CGRect, in rootView: View) {
+    func updateIndicatedView(with frame: Rect, in rootView: View) {
         if frame.contains(self.currentRootLocation) {
             self.indicatedView = rootView.at(self.currentRootLocation)
             if let receiver = self.indicatedView?.withSelfAndAllParents(with: Receiver.self) {
@@ -543,7 +543,7 @@ final class IndicatableActionManager: ActionManagable {
         }
     }
     
-    var currentRootLocation = CGPoint()
+    var currentRootLocation = Point()
     var indicatedViewBinding: (((indicatedView: View?, oldIndicatedView: View?)) -> ())?
     var indicatedView: View? {
         didSet {
@@ -581,8 +581,8 @@ final class IndicatableActionManager: ActionManagable {
 }
 
 protocol Selectable {
-    func select(from rect: CGRect, _ phase: Phase)
-    func deselect(from rect: CGRect, _ phase: Phase)
+    func select(from rect: Rect, _ phase: Phase)
+    func deselect(from rect: Rect, _ phase: Phase)
     func selectAll()
     func deselectAll()
 }
@@ -610,20 +610,20 @@ final class SelectableActionManager: ActionManagable {
     private final class Selector {
         var selectionView: View?
         weak var receiver: Receiver?
-        private var startPoint = CGPoint(), startRootPoint = CGPoint(), oldIsDeselect = false
+        private var startPoint = Point(), startRootPoint = Point(), oldIsDeselect = false
         func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View, isDeselect: Bool) {
             switch phase {
             case .began:
                 let selectionView = isDeselect ? View.deselection : View.selection
                 rootView.append(child: selectionView)
-                selectionView.frame = CGRect(origin: event.rootLocation, size: CGSize())
+                selectionView.frame = Rect(origin: event.rootLocation, size: Size())
                 self.selectionView = selectionView
                 if let receiver = rootView.at(event.rootLocation, Receiver.self) {
                     startRootPoint = event.rootLocation
                     startPoint = receiver.convertFromRoot(event.rootLocation)
                     self.receiver = receiver
                     
-                    let rect = CGRect(origin: startPoint, size: CGSize())
+                    let rect = Rect(origin: startPoint, size: Size())
                     if isDeselect {
                         receiver.deselect(from: rect, phase)
                     } else {
@@ -641,8 +641,8 @@ final class SelectableActionManager: ActionManagable {
                     oldIsDeselect = isDeselect
                 }
                 let lp = event.rootLocation
-                selectionView?.frame = CGRect(origin: startRootPoint,
-                                              size: CGSize(width: lp.x - startRootPoint.x,
+                selectionView?.frame = Rect(origin: startRootPoint,
+                                              size: Size(width: lp.x - startRootPoint.x,
                                                            height: lp.y - startRootPoint.y))
                 let p = receiver.convertFromRoot(event.rootLocation)
                 let aabb = AABB(minX: min(startPoint.x, p.x), maxX: max(startPoint.x, p.x),
@@ -683,7 +683,7 @@ final class SelectableActionManager: ActionManagable {
 }
 
 protocol Bindable {
-    func bind(for p: CGPoint)
+    func bind(for p: Point)
 }
 final class BindableActionManager: ActionManagable {
     typealias Receiver = View & Bindable
@@ -705,7 +705,7 @@ final class BindableActionManager: ActionManagable {
 }
 
 protocol Scrollable {
-    func scroll(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+    func scroll(for p: Point, time: Second, scrollDeltaPoint: Point,
                 phase: Phase, momentumPhase: Phase?)
 }
 final class ScrollableActionManager: ActionManagable {
@@ -743,8 +743,8 @@ final class ScrollableActionManager: ActionManagable {
 }
 
 protocol Zoomable {
-    func zoom(for p: CGPoint, time: Second, magnification: CGFloat, _ phase: Phase)
-    func resetView(for p: CGPoint)
+    func zoom(for p: Point, time: Second, magnification: CGFloat, _ phase: Phase)
+    func resetView(for p: Point)
 }
 final class ZoomableActionManager: ActionManagable {
     typealias Receiver = View & Zoomable
@@ -792,7 +792,7 @@ final class ZoomableActionManager: ActionManagable {
 }
 
 protocol Rotatable {
-    func rotate(for p: CGPoint, time: Second, rotationQuantity: CGFloat, _ phase: Phase)
+    func rotate(for p: Point, time: Second, rotationQuantity: CGFloat, _ phase: Phase)
 }
 final class RotatableActionManager: ActionManagable {
     typealias Receiver = View & Rotatable
@@ -831,11 +831,11 @@ final class RotatableActionManager: ActionManagable {
 }
 
 protocol Queryable {
-    func reference(at p: CGPoint) -> Reference
+    func reference(at p: Point) -> Reference
     func sendToTop(_ reference: Reference)
 }
 extension Queryable {
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Reference(name: Text(english: "None", japanese: "なし"))
     }
 }
@@ -911,12 +911,12 @@ final class UndoableActionManager: ActionManagable {
 }
 
 protocol Copiable {
-    func copiedViewables(at p: CGPoint) -> [Viewable]
+    func copiedViewables(at p: Point) -> [Viewable]
     var topCopiedViewables: [Viewable] { get }
 }
 protocol Assignable: Copiable {
-    func delete(for p: CGPoint)
-    func paste(_ objects: [Any], for p: CGPoint)
+    func delete(for p: Point)
+    func paste(_ objects: [Any], for p: Point)
 }
 final class AssignableActionManager: ActionManagable {
     typealias Receiver = View & Assignable
@@ -964,7 +964,7 @@ final class AssignableActionManager: ActionManagable {
 }
 
 protocol Newable {
-    func new(for p: CGPoint)
+    func new(for p: Point)
 }
 final class NewableActionManager: ActionManagable {
     typealias Receiver = View & Newable
@@ -987,7 +987,7 @@ final class NewableActionManager: ActionManagable {
 }
 
 protocol Runnable {
-    func run(for p: CGPoint)
+    func run(for p: Point)
 }
 final class RunnableActionManager: ActionManagable {
     typealias Receiver = View & Runnable
@@ -1009,11 +1009,11 @@ final class RunnableActionManager: ActionManagable {
 }
 
 protocol KeyInputtable {
-    func insert(_ string: String, for p: CGPoint)
+    func insert(_ string: String, for p: Point)
 }
 
 protocol Movable {
-    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase)
+    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase)
 }
 final class MovableActionManager: ActionManagable {
     typealias Receiver = View & Movable
@@ -1054,9 +1054,9 @@ final class MovableActionManager: ActionManagable {
 
 protocol Transformable: Movable {
     var viewQuasimode: ViewQuasimode { get set }
-    func transform(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase)
-    func warp(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase)
-    func moveZ(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase)
+    func transform(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase)
+    func warp(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase)
+    func moveZ(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase)
 }
 final class TransformableActionManager: ActionManagable {
     typealias Receiver = View & Transformable
@@ -1163,8 +1163,8 @@ final class TransformableActionManager: ActionManagable {
 }
 
 protocol Strokable {
-    func stroke(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase)
-    func lassoErase(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase)
+    func stroke(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase)
+    func lassoErase(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase)
 }
 final class StrokableActionManager: ActionManagable {
     typealias Receiver = View & Strokable
@@ -1230,10 +1230,10 @@ final class StrokableActionManager: ActionManagable {
 
 protocol PointEditable: class {
     var viewQuasimode: ViewQuasimode { get set }
-    func insert(_ p: CGPoint)
-    func removeNearestPoint(for p: CGPoint)
-    func movePoint(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase)
-    func moveVertex(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase)
+    func insert(_ p: Point)
+    func removeNearestPoint(for p: Point)
+    func movePoint(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase)
+    func moveVertex(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase)
 }
 final class PointEditableActionManager: ActionManagable {
     typealias Receiver = View & PointEditable
@@ -1569,23 +1569,23 @@ final class QuasimodeView: View, Copiable {
         }
     }
     
-    override var defaultBounds: CGRect {
-        return CGRect(x: 0, y: 0, width: formTextView.bounds.width, height: formTextView.bounds.height)
+    override var defaultBounds: Rect {
+        return Rect(x: 0, y: 0, width: formTextView.bounds.width, height: formTextView.bounds.height)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     func updateLayout() {
-        formTextView.frame.origin = CGPoint(x: 0, y: bounds.height - formTextView.frame.height)
+        formTextView.frame.origin = Point(x: 0, y: bounds.height - formTextView.frame.height)
     }
     
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [quasimode]
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Quasimode.reference
     }
 }
@@ -1600,7 +1600,7 @@ final class ActionView: View, Copiable {
     
     var nameView: TextView, quasimodeView: QuasimodeView
     
-    init(action: Action, frame: CGRect) {
+    init(action: Action, frame: Rect) {
         self.action = action
         nameView = TextView(text: action.name)
         quasimodeView = QuasimodeView(quasimode: action.quasimode)
@@ -1610,30 +1610,30 @@ final class ActionView: View, Copiable {
         children = [nameView, quasimodeView]
     }
     
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [action]
     }
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let padding = Layout.basicPadding
         let width = nameView.bounds.width + padding + quasimodeView.bounds.width
         let height = nameView.frame.height + Layout.smallPadding * 2
-        return CGRect(x: 0, y: 0, width: width, height: height)
+        return Rect(x: 0, y: 0, width: width, height: height)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     func updateLayout() {
         let padding = Layout.smallPadding
-        nameView.frame.origin = CGPoint(x: padding,
+        nameView.frame.origin = Point(x: padding,
                                         y: bounds.height - nameView.frame.height - padding)
-        quasimodeView.frame.origin = CGPoint(x: bounds.width - quasimodeView.frame.width - padding,
+        quasimodeView.frame.origin = Point(x: bounds.width - quasimodeView.frame.width - padding,
                                              y: bounds.height - nameView.frame.height - padding)
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Action.reference
     }
 }
@@ -1649,13 +1649,13 @@ final class ActionManagableView: View {
     
     static let defaultWidth = 220 + Layout.basicPadding * 2
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let padding = Layout.basicPadding
         let actionHeight = Layout.basicTextHeight + Layout.smallPadding * 2
-        let height = actionHeight * actionMangable.actions.count.cf + padding * 2
-        return CGRect(x: 0, y: 0, width: ActionManagableView.defaultWidth, height: height)
+        let height = actionHeight * CGFloat(actionMangable.actions.count) + padding * 2
+        return Rect(x: 0, y: 0, width: ActionManagableView.defaultWidth, height: height)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -1668,13 +1668,13 @@ final class ActionManagableView: View {
         children = actionMangable.actions.map {
             y -= actionHeight
             let actionView = ActionView(action: $0,
-                                        frame: CGRect(x: padding, y: y,
+                                        frame: Rect(x: padding, y: y,
                                                       width: aw, height: actionHeight))
             return actionView
         }
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Reference()
     }
 }
@@ -1703,15 +1703,15 @@ final class SenderView: View {
         }
     }
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let padding = Layout.basicPadding
-        let ah = actionManagableViews.reduce(0.0.cf) { $0 + $1.bounds.height }
+        let ah = actionManagableViews.reduce(0.0.cg) { $0 + $1.bounds.height }
         let height = formClassNameView.frame.height + padding * 3 + ah
-        return CGRect(x: 0, y: 0,
+        return Rect(x: 0, y: 0,
                       width: ActionManagableView.defaultWidth + padding * 2,
                       height: height)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -1720,16 +1720,16 @@ final class SenderView: View {
         let padding = Layout.basicPadding
         let w = bounds.width - padding * 2
         var y = bounds.height - formClassNameView.frame.height - padding
-        formClassNameView.frame.origin = CGPoint(x: padding, y: y)
+        formClassNameView.frame.origin = Point(x: padding, y: y)
         y -= padding
         _ = actionManagableViews.reduce(y) {
             let ny = $0 - $1.frame.height
-            $1.frame = CGRect(x: padding, y: ny, width: w, height: $1.frame.height)
+            $1.frame = Rect(x: padding, y: ny, width: w, height: $1.frame.height)
             return ny
         }
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Sender.reference
     }
 }

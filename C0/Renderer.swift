@@ -22,18 +22,18 @@ import AVFoundation
 
 final class SceneImageRendedrer {
     private let drawView = View(drawClosure: { _, _ in })
-    let scene: Scene, renderSize: CGSize, cut: Cut
+    let scene: Scene, renderSize: Size, cut: Cut
     let fileType: String
-    init(scene: Scene, renderSize: CGSize, cut: Cut, fileType: String = kUTTypePNG as String) {
+    init(scene: Scene, renderSize: Size, cut: Cut, fileType: String = kUTTypePNG as String) {
         self.scene = scene
         self.renderSize = renderSize
         self.cut = cut
         self.fileType = fileType
         
         let scale = renderSize.width / scene.frame.size.width
-        scene.viewTransform = Transform(translation: CGPoint(x: renderSize.width / 2,
+        scene.viewTransform = Transform(translation: Point(x: renderSize.width / 2,
                                                              y: renderSize.height / 2),
-                                        scale: CGPoint(x: scale, y: scale),
+                                        scale: Point(x: scale, y: scale),
                                         rotation: 0)
         drawView.bounds.size = renderSize
         drawView.drawClosure = { [unowned self] ctx, _ in
@@ -69,8 +69,8 @@ final class SceneMovieRenderer {
         }
     }
     
-    let scene: Scene, renderSize: CGSize, fileType: AVFileType, codec: String
-    init(scene: Scene, renderSize: CGSize,
+    let scene: Scene, renderSize: Size, fileType: AVFileType, codec: String
+    init(scene: Scene, renderSize: Size,
          fileType: AVFileType = .mp4, codec: String = AVVideoCodecH264) {
         
         self.scene = scene
@@ -79,9 +79,9 @@ final class SceneMovieRenderer {
         self.codec = codec
         
         let scale = renderSize.width / scene.frame.size.width
-        self.screenTransform = Transform(translation: CGPoint(x: renderSize.width / 2,
+        self.screenTransform = Transform(translation: Point(x: renderSize.width / 2,
                                                               y: renderSize.height / 2),
-                                         scale: CGPoint(x: scale, y: scale),
+                                         scale: Point(x: scale, y: scale),
                                          rotation: 0)
         drawView.bounds.size = renderSize
         drawView.drawClosure = { [unowned self] ctx, _ in
@@ -139,7 +139,7 @@ final class SceneMovieRenderer {
         for i in 0 ..< allFrameCount {
             autoreleasepool {
                 while !writerInput.isReadyForMoreMediaData {
-                    progressClosure(i.cf / (allFrameCount - 1).cf, &stop)
+                    progressClosure(CGFloat(i) / CGFloat(allFrameCount - 1), &stop)
                     if stop {
                         append = false
                         return
@@ -178,7 +178,7 @@ final class SceneMovieRenderer {
             if !append {
                 break
             }
-            progressClosure(i.cf / (allFrameCount - 1).cf, &stop)
+            progressClosure(CGFloat(i) / CGFloat(allFrameCount - 1), &stop)
             if stop {
                 break
             }
@@ -265,7 +265,7 @@ final class SceneMovieRenderer {
 final class RendererManager {
     weak var progressesEdgeView: View?
     lazy var scene = Scene()
-    var rendingContentScale = 1.0.cf
+    var rendingContentScale = 1.0.cg
     
     var renderQueue = OperationQueue()
     
@@ -290,18 +290,18 @@ final class RendererManager {
             updateProgresssPosition()
         }
     }
-    private let progressWidth = 200.0.cf
+    private let progressWidth = 200.0.cg
     func updateProgresssPosition() {
         guard let view = progressesEdgeView else {
             return
         }
-        _ = bars.reduce(CGPoint(x: view.frame.origin.x, y: view.frame.maxY)) {
+        _ = bars.reduce(Point(x: view.frame.origin.x, y: view.frame.maxY)) {
             $1.frame.origin = $0
-            return CGPoint(x: $0.x + progressWidth, y: $0.y)
+            return Point(x: $0.x + progressWidth, y: $0.y)
         }
     }
     
-    func exportMovie(message: String?, name: String? = nil, size: CGSize,
+    func exportMovie(message: String?, name: String? = nil, size: Size,
                      fileType: AVFileType = .mp4, codec: String = AVVideoCodecH264,
                      isSelectedCutOnly: Bool = false) -> Bool {
         guard let utType = SceneMovieRenderer.UTTypeWithAVFileType(fileType) else {
@@ -311,7 +311,7 @@ final class RendererManager {
             let renderer = SceneMovieRenderer(scene: self.scene.copied,
                                               renderSize: size, fileType: fileType, codec: codec)
             
-            let progressBar = ProgressNumberView(frame: CGRect(x: 0, y: 0,
+            let progressBar = ProgressNumberView(frame: Rect(x: 0, y: 0,
                                                                width: self.progressWidth,
                                                                height: Layout.basicHeight),
                                                  name: e.url.deletingPathExtension().lastPathComponent,
@@ -370,7 +370,7 @@ final class RendererManager {
         return true
     }
     
-    func exportImage(message: String?, size: CGSize) -> Bool {
+    func exportImage(message: String?, size: Size) -> Bool {
         URL.file(message: message, name: nil, fileTypes: [kUTTypePNG as String]) {
             [unowned self] exportURL in
             

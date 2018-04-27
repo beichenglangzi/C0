@@ -65,7 +65,7 @@ final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
          cationEnumeratedType: T? = nil,
          indexClosure: @escaping ((T.RawValue) -> (Int)) = { $0 as? Int ?? 0 },
          rawValueClosure: @escaping ((Int) -> (T.RawValue?)) = { $0 as? T.RawValue },
-         frame: CGRect = CGRect(),
+         frame: Rect = Rect(),
          names: [Localization] = [], sizeType: SizeType = .regular) {
         
         classNameView = TextView(text: T.uninheritanceName, font: Font.bold(with: sizeType))
@@ -81,8 +81,8 @@ final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
         
         nameViews = names.map { TextView(text: $0, font: Font.default(with: sizeType)) }
         self.knobView = sizeType == .small ?
-            DiscreteKnobView(CGSize(square: 6), lineWidth: 1) :
-            DiscreteKnobView(CGSize(square: 8), lineWidth: 1)
+            DiscreteKnobView(Size(square: 6), lineWidth: 1) :
+            DiscreteKnobView(Size(square: 8), lineWidth: 1)
         self.sizeType = sizeType
         
         super.init()
@@ -98,19 +98,19 @@ final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
         }
     }
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
-        let nw = nameViews.reduce(0.0.cf) { $0 + $1.frame.width } + (nameViews.count - 1).cf * padding
-        return CGRect(x: 0, y: 0, width: classNameView.frame.width + nw + padding * 2, height: height)
+        let nw = nameViews.reduce(0.0.cg) { $0 + $1.frame.width } + CGFloat(nameViews.count - 1) * padding
+        return Rect(x: 0, y: 0, width: classNameView.frame.width + nw + padding * 2, height: height)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     private func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        classNameView.frame.origin = CGPoint(x: padding,
+        classNameView.frame.origin = Point(x: padding,
                                              y: bounds.height - classNameView.frame.height - padding)
         let path = CGMutablePath()
         let h = Layout.height(with: sizeType) - padding * 2
@@ -123,7 +123,7 @@ final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
             } else {
                 x = $0
             }
-            $1.frame.origin = CGPoint(x: x, y: y)
+            $1.frame.origin = Point(x: x, y: y)
             path.addRect($1.frame)
             return x + $1.frame.width + padding
         }
@@ -151,7 +151,7 @@ final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
             return defaultEnumeratedType
         }
     }
-    func enumeratedType(at p: CGPoint) -> T {
+    func enumeratedType(at p: Point) -> T {
         var minI = 0, minD = CGFloat.infinity
         for (i, view) in nameViews.enumerated() {
             let d = view.frame.distance²(p)
@@ -170,16 +170,16 @@ final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
     
     var disabledRegisterUndo = false
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let enumeratedType = defaultEnumeratedType
         if enumeratedType != self.enumeratedType {
             push(enumeratedType, old: self.enumeratedType)
         }
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [enumeratedType]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let enumeratedType = object as? T {
                 if enumeratedType != self.enumeratedType {
@@ -206,15 +206,15 @@ final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
                          oldEnumeratedType: oldEnumeratedType, phase: .ended))
     }
     
-    func run(for p: CGPoint) {
+    func run(for p: Point) {
         let enumeratedType = self.enumeratedType(at: p)
         if enumeratedType != self.enumeratedType {
             push(enumeratedType, old: self.enumeratedType)
         }
     }
     
-    private var oldEnumeratedType: T?, oldPoint = CGPoint()
-    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    private var oldEnumeratedType: T?, oldPoint = Point()
+    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         switch phase {
         case .began:
             knobView.fillColor = .editing
@@ -251,7 +251,7 @@ final class EnumView<T: EnumType>: View, Assignable, Runnable, Movable {
         }
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return T.reference
     }
 }

@@ -96,14 +96,14 @@ final class Cell: NSObject, NSCoding {
     var isEmptyGeometry: Bool {
         return geometry.isEmpty
     }
-    var allImageBounds: CGRect {
-        var imageBounds = CGRect()
+    var allImageBounds: Rect {
+        var imageBounds = Rect()
         allCells { (cell, stop) in imageBounds = imageBounds.unionNoEmpty(cell.imageBounds) }
         return imageBounds
     }
-    var imageBounds: CGRect {
+    var imageBounds: Rect {
         return geometry.path.isEmpty ?
-            CGRect() : Line.visibleImageBoundsWith(imageBounds: geometry.path.boundingBoxOfPath,
+            Rect() : Line.visibleImageBoundsWith(imageBounds: geometry.path.boundingBoxOfPath,
                                                    lineWidth: material.lineWidth * 2)
     }
     var isEditable: Bool {
@@ -198,14 +198,14 @@ final class Cell: NSObject, NSCoding {
         return parents
     }
     
-    func at(_ p: CGPoint, reciprocalScale: CGFloat,
+    func at(_ p: Point, reciprocalScale: CGFloat,
             maxArea: CGFloat = 200.0, maxDistance: CGFloat = 5.0) -> Cell? {
         
         let scaleMaxArea = reciprocalScale * reciprocalScale * maxArea
         let scaleMaxDistance = reciprocalScale * maxDistance
         var minD² = CGFloat.infinity, minCell: Cell? = nil
         var scaleMaxDistance² = scaleMaxDistance * scaleMaxDistance
-        func at(_ point: CGPoint, with cell: Cell) -> Cell? {
+        func at(_ point: Point, with cell: Cell) -> Cell? {
             if cell.contains(point) || cell.geometry.isEmpty {
                 for child in cell.children.reversed() {
                     if let hitCell = at(point, with: child) {
@@ -243,7 +243,7 @@ final class Cell: NSObject, NSCoding {
             return cell
         }
     }
-    func at(_ p: CGPoint) -> Cell? {
+    func at(_ p: Point) -> Cell? {
         let contains = self.contains(p)
         if contains || geometry.isEmpty {
             for child in children.reversed() {
@@ -257,12 +257,12 @@ final class Cell: NSObject, NSCoding {
         }
     }
     
-    func cells(at point: CGPoint, usingLock: Bool = true) -> [Cell] {
+    func cells(at point: Point, usingLock: Bool = true) -> [Cell] {
         var cells = [Cell]()
         cellsRecursion(at: point, cells: &cells, usingLock: usingLock)
         return cells
     }
-    private func cellsRecursion(at point: CGPoint, cells: inout [Cell], usingLock: Bool = true) {
+    private func cellsRecursion(at point: Point, cells: inout [Cell], usingLock: Bool = true) {
         if contains(point) || geometry.isEmpty {
             for child in children.reversed() {
                 child.cellsRecursion(at: point, cells: &cells, usingLock: usingLock)
@@ -313,11 +313,11 @@ final class Cell: NSObject, NSCoding {
         return false
     }
     
-    func maxDistance²(at p: CGPoint) -> CGFloat {
+    func maxDistance²(at p: Point) -> CGFloat {
         return Line.maxDistance²(at: p, with: geometry.lines)
     }
     
-    func contains(_ p: CGPoint) -> Bool {
+    func contains(_ p: Point) -> Bool {
         return isEditable && (imageBounds.contains(p) ? geometry.path.contains(p) : false)
     }
     func contains(_ cell: Cell) -> Bool {
@@ -341,12 +341,12 @@ final class Cell: NSObject, NSCoding {
             return false
         }
     }
-    func contains(_ bounds: CGRect) -> Bool {
+    func contains(_ bounds: Rect) -> Bool {
         if isEditable && imageBounds.intersects(bounds) {
             let x0y0 = bounds.origin
-            let x1y0 = CGPoint(x: bounds.maxX, y: bounds.minY)
-            let x0y1 = CGPoint(x: bounds.minX, y: bounds.maxY)
-            let x1y1 = CGPoint(x: bounds.maxX, y: bounds.maxY)
+            let x1y0 = Point(x: bounds.maxX, y: bounds.minY)
+            let x0y1 = Point(x: bounds.minX, y: bounds.maxY)
+            let x1y1 = Point(x: bounds.maxX, y: bounds.maxY)
             if contains(x0y0) || contains(x1y0) || contains(x0y1) || contains(x1y1) {
                 return true
             }
@@ -398,14 +398,14 @@ final class Cell: NSObject, NSCoding {
         }
         return false
     }
-    func intersects(_ bounds: CGRect) -> Bool {
+    func intersects(_ bounds: Rect) -> Bool {
         if imageBounds.intersects(bounds) {
             let path = geometry.path
             if !path.isEmpty {
                 if path.contains(bounds.origin) ||
-                    path.contains(CGPoint(x: bounds.maxX, y: bounds.minY)) ||
-                    path.contains(CGPoint(x: bounds.minX, y: bounds.maxY)) ||
-                    path.contains(CGPoint(x: bounds.maxX, y: bounds.maxY)) {
+                    path.contains(Point(x: bounds.maxX, y: bounds.minY)) ||
+                    path.contains(Point(x: bounds.minX, y: bounds.maxY)) ||
+                    path.contains(Point(x: bounds.maxX, y: bounds.maxY)) {
                     return true
                 }
             }
@@ -417,7 +417,7 @@ final class Cell: NSObject, NSCoding {
         }
         return false
     }
-    func intersectsLines(_ bounds: CGRect) -> Bool {
+    func intersectsLines(_ bounds: Rect) -> Bool {
         if imageBounds.intersects(bounds) {
             for line in geometry.lines {
                 if line.intersects(bounds) {
@@ -430,17 +430,17 @@ final class Cell: NSObject, NSCoding {
         }
         return false
     }
-    func intersectsClosePathLines(_ bounds: CGRect) -> Bool {
+    func intersectsClosePathLines(_ bounds: Rect) -> Bool {
         if var lp = geometry.lines.last?.lastPoint {
             for line in geometry.lines {
                 let fp = line.firstPoint
-                let x0y0 = bounds.origin, x1y0 = CGPoint(x: bounds.maxX, y: bounds.minY)
-                let x0y1 = CGPoint(x: bounds.minX, y: bounds.maxY)
-                let x1y1 = CGPoint(x: bounds.maxX, y: bounds.maxY)
-                if CGPoint.intersection(p0: lp, p1: fp, q0: x0y0, q1: x1y0)
-                    || CGPoint.intersection(p0: lp, p1: fp, q0: x1y0, q1: x1y1)
-                    || CGPoint.intersection(p0: lp, p1: fp, q0: x1y1, q1: x0y1)
-                    || CGPoint.intersection(p0: lp, p1: fp, q0: x0y1, q1: x0y0) {
+                let x0y0 = bounds.origin, x1y0 = Point(x: bounds.maxX, y: bounds.minY)
+                let x0y1 = Point(x: bounds.minX, y: bounds.maxY)
+                let x1y1 = Point(x: bounds.maxX, y: bounds.maxY)
+                if Point.intersection(p0: lp, p1: fp, q0: x0y0, q1: x1y0)
+                    || Point.intersection(p0: lp, p1: fp, q0: x1y0, q1: x1y1)
+                    || Point.intersection(p0: lp, p1: fp, q0: x1y1, q1: x0y1)
+                    || Point.intersection(p0: lp, p1: fp, q0: x0y1, q1: x0y0) {
                     
                     return true
                 }
@@ -449,12 +449,12 @@ final class Cell: NSObject, NSCoding {
         }
         return false
     }
-    func intersectsCells(with bounds: CGRect) -> [Cell] {
+    func intersectsCells(with bounds: Rect) -> [Cell] {
         var cells = [Cell]()
         intersectsCellsRecursion(with: bounds, cells: &cells)
         return cells
     }
-    private func intersectsCellsRecursion(with bounds: CGRect, cells: inout [Cell]) {
+    private func intersectsCellsRecursion(with bounds: Rect, cells: inout [Cell]) {
         if contains(bounds) {
             for child in children.reversed() {
                 child.intersectsCellsRecursion(with: bounds, cells: &cells)
@@ -547,7 +547,7 @@ final class Cell: NSObject, NSCoding {
                     ctx.clip()
                     let b = ctx.boundingBoxOfClipPath.intersection(imageBounds)
                     ctx.beginTransparencyLayer(in: b, auxiliaryInfo: nil)
-                    ctx.setFillColor(color.cgColor)
+                    ctx.setFillColor(color.cg)
                     ctx.fill(imageBounds)
                     clipping()
                     ctx.endTransparencyLayer()
@@ -564,12 +564,12 @@ final class Cell: NSObject, NSCoding {
                 }
             }
             if material.type == .normal {
-                ctx.setFillColor(lineColor.cgColor)
+                ctx.setFillColor(lineColor.cg)
                 geometry.draw(withLineWidth: material.lineWidth * reciprocalScale, in: ctx)
             } else if material.lineWidth > Material.defaultLineWidth {
                 func drawStrokePath(path: CGPath, lineWidth: CGFloat, color: Color) {
                     ctx.setLineWidth(lineWidth)
-                    ctx.setStrokeColor(color.cgColor)
+                    ctx.setStrokeColor(color.cg)
                     ctx.setLineJoin(.round)
                     ctx.addPath(path)
                     ctx.strokePath()
@@ -597,7 +597,7 @@ final class Cell: NSObject, NSCoding {
             ctx.restoreGState()
         }
         if isEditUnlocked {
-            ctx.setFillColor(Color.getSetBorder.cgColor)
+            ctx.setFillColor(Color.getSetBorder.cg)
             if material.type != .normal {
                 geometry.draw(withLineWidth: 0.5 * reciprocalScale, in: ctx)
             }
@@ -612,7 +612,7 @@ final class Cell: NSObject, NSCoding {
                               alpha: CGFloat = 0.3, in ctx: CGContext) {
         ctx.setAlpha(alpha)
         ctx.beginTransparencyLayer(auxiliaryInfo: nil)
-        ctx.setFillColor(color.cgColor)
+        ctx.setFillColor(color.cg)
         cells.forEach {
             if !$0.isHidden {
                 $0.geometry.fillPath(in: ctx)
@@ -645,19 +645,19 @@ extension Cell: Referenceable {
     static let name = Localization(english: "Cell", japanese: "セル")
 }
 extension Cell: Viewable {
-    func view(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         let thumbnailView = View(drawClosure: { [unowned self] in self.draw(with: $1.bounds, in: $0) })
         thumbnailView.bounds = bounds
         return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds, sizeType)
     }
-    func draw(with bounds: CGRect, in ctx: CGContext) {
-        var imageBounds = CGRect()
+    func draw(with bounds: Rect, in ctx: CGContext) {
+        var imageBounds = Rect()
         allCells { cell, stop in
             imageBounds = imageBounds.unionNoEmpty(cell.imageBounds)
         }
         let c = CGAffineTransform.centering(from: imageBounds, to: bounds.inset(by: 3))
         ctx.concatenate(c.affine)
-        let scale = 3 * c.scale, rotation = 0.0.cf
+        let scale = 3 * c.scale, rotation = 0.0.cg
         if geometry.isEmpty {
             children.forEach {
                 $0.draw(reciprocalScale: 1 / scale, reciprocalAllScale: 1 / scale,
@@ -696,7 +696,7 @@ extension JoiningCell: Referenceable {
 extension JoiningCell: ClassDeepCopiable {
 }
 extension JoiningCell: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         let thumbnailView = View(drawClosure: { [unowned cell] in cell.draw(with: $1.bounds, in: $0) })
         thumbnailView.bounds = bounds
         return thumbnailView
@@ -732,12 +732,12 @@ final class CellView: View, Copiable {
         }
     }
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
         let tlw = classNameView.frame.width + isLockedView.frame.width + padding * 3
-        return CGRect(x: 0, y: 0, width: tlw, height: h + padding * 2)
+        return Rect(x: 0, y: 0, width: tlw, height: h + padding * 2)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -745,9 +745,9 @@ final class CellView: View, Copiable {
     private func updateLayout() {
         let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
         let tlw = bounds.width - classNameView.frame.width - padding * 3
-        classNameView.frame.origin = CGPoint(x: padding,
+        classNameView.frame.origin = Point(x: padding,
                                               y: bounds.height - classNameView.frame.height - padding)
-        isLockedView.frame = CGRect(x: classNameView.frame.maxX + padding, y: padding,
+        isLockedView.frame = Rect(x: classNameView.frame.maxX + padding, y: padding,
                                     width: tlw, height: h)
     }
     func updateWithCell() {
@@ -778,8 +778,8 @@ final class CellView: View, Copiable {
                                     phase: binding.phase))
     }
     
-    var copiedViewablesClosure: ((CellView, CGPoint) -> [Viewable])?
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    var copiedViewablesClosure: ((CellView, Point) -> [Viewable])?
+    func copiedViewables(at p: Point) -> [Viewable] {
         if let copiedViewablesClosure = copiedViewablesClosure {
             return copiedViewablesClosure(self, p)
         } else {
@@ -787,7 +787,7 @@ final class CellView: View, Copiable {
         }
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Cell.reference
     }
 }

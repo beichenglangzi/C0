@@ -102,17 +102,17 @@ struct Cursor {
     
     static func circleCursor(size s: CGFloat, color: Color = .black,
                              outlineColor: Color = .white) -> Cursor {
-        let lineWidth = 2.0.cf, subLineWidth = 1.0.cf
+        let lineWidth = 2.0.cg, subLineWidth = 1.0.cg
         let d = subLineWidth + lineWidth / 2
-        let b = CGRect(x: d, y: d, width: d * 2 + s, height: d * 2 + s)
-        let image = NSImage(size: CGSize(width: s + d * 2 * 2,  height: s + d * 2 * 2)) { ctx in
+        let b = Rect(x: d, y: d, width: d * 2 + s, height: d * 2 + s)
+        let image = NSImage(size: Size(width: s + d * 2 * 2,  height: s + d * 2 * 2)) { ctx in
             ctx.setLineWidth(lineWidth + subLineWidth * 2)
-            ctx.setFillColor(outlineColor.with(alpha: 0.35).cgColor)
-            ctx.setStrokeColor(outlineColor.with(alpha: 0.8).cgColor)
+            ctx.setFillColor(outlineColor.with(alpha: 0.35).cg)
+            ctx.setStrokeColor(outlineColor.with(alpha: 0.8).cg)
             ctx.addEllipse(in: b)
             ctx.drawPath(using: .fillStroke)
             ctx.setLineWidth(lineWidth)
-            ctx.setStrokeColor(color.cgColor)
+            ctx.setStrokeColor(color.cg)
             ctx.strokeEllipse(in: b)
         }
         let hotSpot = NSPoint(x: d * 2 + s / 2, y: -d * 2 - s / 2)
@@ -120,36 +120,36 @@ struct Cursor {
     }
     static func slideCursor(color: Color = .black, outlineColor: Color = .white,
                             isVertical: Bool) -> Cursor {
-        let lineWidth = 1.0.cf, lineHalfWidth = 4.0.cf, halfHeight = 4.0.cf, halfLineHeight = 1.5.cf
+        let lineWidth = 1.0.cg, lineHalfWidth = 4.0.cg, halfHeight = 4.0.cg, halfLineHeight = 1.5.cg
         let aw = floor(halfHeight * sqrt(3)), d = lineWidth / 2
         let w = ceil(aw * 2 + lineHalfWidth * 2 + d), h =  ceil(halfHeight * 2 + d)
-        let size = isVertical ? CGSize(width: h,  height: w) : CGSize(width: w,  height: h)
+        let size = isVertical ? Size(width: h,  height: w) : Size(width: w,  height: h)
         let image = NSImage(size: size) { ctx in
             if isVertical {
                 ctx.translateBy(x: h / 2, y: w / 2)
                 ctx.rotate(by: .pi / 2)
                 ctx.translateBy(x: -w / 2, y: -h / 2)
             }
-            ctx.addLines(between: [CGPoint(x: d, y: d + halfHeight),
-                                   CGPoint(x: d + aw, y: d + halfHeight * 2),
-                                   CGPoint(x: d + aw, y: d + halfHeight + halfLineHeight),
-                                   CGPoint(x: d + aw + lineHalfWidth * 2,
+            ctx.addLines(between: [Point(x: d, y: d + halfHeight),
+                                   Point(x: d + aw, y: d + halfHeight * 2),
+                                   Point(x: d + aw, y: d + halfHeight + halfLineHeight),
+                                   Point(x: d + aw + lineHalfWidth * 2,
                                            y: d + halfHeight + halfLineHeight),
-                                   CGPoint(x: d + aw + lineHalfWidth * 2, y: d + halfHeight * 2),
-                                   CGPoint(x: d + aw * 2 + lineHalfWidth * 2, y: d + halfHeight),
-                                   CGPoint(x: d + aw + lineHalfWidth * 2, y: d),
-                                   CGPoint(x: d + aw + lineHalfWidth * 2,
+                                   Point(x: d + aw + lineHalfWidth * 2, y: d + halfHeight * 2),
+                                   Point(x: d + aw * 2 + lineHalfWidth * 2, y: d + halfHeight),
+                                   Point(x: d + aw + lineHalfWidth * 2, y: d),
+                                   Point(x: d + aw + lineHalfWidth * 2,
                                            y: d + halfHeight - halfLineHeight),
-                                   CGPoint(x: d + aw, y: d + halfHeight - halfLineHeight),
-                                   CGPoint(x: d + aw, y: d)])
+                                   Point(x: d + aw, y: d + halfHeight - halfLineHeight),
+                                   Point(x: d + aw, y: d)])
             ctx.closePath()
             ctx.setLineJoin(.miter)
             ctx.setLineWidth(lineWidth)
-            ctx.setFillColor(color.cgColor)
-            ctx.setStrokeColor(outlineColor.cgColor)
+            ctx.setFillColor(color.cg)
+            ctx.setStrokeColor(outlineColor.cg)
             ctx.drawPath(using: .fillStroke)
         }
-        let hotSpot = isVertical ? CGPoint(x: h / 2, y: -w / 2) : CGPoint(x: w / 2, y: -h / 2)
+        let hotSpot = isVertical ? Point(x: h / 2, y: -w / 2) : Point(x: w / 2, y: -h / 2)
         return Cursor(NSCursor(image: image, hotSpot: hotSpot))
     }
     
@@ -158,7 +158,7 @@ struct Cursor {
             nsCursor = NSCursor(image: NSImage(cgImage: image, size: NSSize()), hotSpot: hotSpot)
         }
     }
-    var hotSpot: CGPoint {
+    var hotSpot: Point {
         didSet {
             nsCursor = NSCursor(image: NSImage(cgImage: image, size: NSSize()), hotSpot: hotSpot)
         }
@@ -170,7 +170,7 @@ struct Cursor {
         self.hotSpot = nsCursor.hotSpot
         self.nsCursor = nsCursor
     }
-    init(image: CGImage, hotSpot: CGPoint) {
+    init(image: CGImage, hotSpot: Point) {
         self.image = image
         self.hotSpot = hotSpot
         nsCursor = NSCursor(image: NSImage(cgImage: image, size: NSSize()), hotSpot: hotSpot)
@@ -183,7 +183,7 @@ extension Cursor: Equatable {
 }
 
 extension NSImage {
-    convenience init(size: CGSize, closure: (CGContext) -> Void) {
+    convenience init(size: Size, closure: (CGContext) -> Void) {
         self.init(size: size)
         lockFocus()
         if let ctx = NSGraphicsContext.current?.cgContext {
@@ -267,9 +267,9 @@ fileprivate struct C0Coder {
             return try? decoder.decode(URL.self, from: data)
         case typeKey(from: CGFloat.self):
             return try? decoder.decode(URL.self, from: data)
-        case typeKey(from: CGSize.self):
+        case typeKey(from: Size.self):
             return try? decoder.decode(URL.self, from: data)
-        case typeKey(from: CGPoint.self):
+        case typeKey(from: Point.self):
             return try? decoder.decode(URL.self, from: data)
         case typeKey(from: Bool.self):
             return try? decoder.decode(URL.self, from: data)
@@ -714,10 +714,10 @@ final class C0View: NSView, NSTextInputClient {
         desktopView.frame.size = bounds.size
     }
 
-    func screenPoint(with event: NSEvent) -> CGPoint {
+    func screenPoint(with event: NSEvent) -> Point {
         return convertToLayer(convert(event.locationInWindow, from: nil))
     }
-    var cursorPoint: CGPoint {
+    var cursorPoint: Point {
         guard let window = window else {
             return NSPoint()
         }
@@ -731,7 +731,7 @@ final class C0View: NSView, NSTextInputClient {
         let windowPoint = window.convertFromScreen(NSRect(origin: p, size: NSSize())).origin
         return convertToLayer(convert(windowPoint, from: nil))
     }
-    func convertToTopScreen(_ r: CGRect) -> NSRect {
+    func convertToTopScreen(_ r: Rect) -> NSRect {
         guard let window = window else {
             return NSRect()
         }
@@ -739,12 +739,12 @@ final class C0View: NSView, NSTextInputClient {
     }
     
     func draggerEventWith(pointing nsEvent: NSEvent, _ phase: Phase) -> Dragger.Event {
-        return Dragger.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp,
+        return Dragger.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
                              pressure: 1, phase: phase)
     }
     func draggerEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Dragger.Event {
-        return Dragger.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp,
-                             pressure: nsEvent.pressure.cf, phase: phase)
+        return Dragger.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
+                             pressure: CGFloat(nsEvent.pressure), phase: phase)
     }
     func scrollerEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Scroller.Event {
         var scrollMomentumPhase: Phase? {
@@ -759,22 +759,22 @@ final class C0View: NSView, NSTextInputClient {
             }
         }
         return Scroller.Event(rootLocation: screenPoint(with: nsEvent),
-                              time: nsEvent.timestamp,
-                              scrollDeltaPoint: CGPoint(x: nsEvent.scrollingDeltaX,
+                              time: nsEvent.timestamp.cg,
+                              scrollDeltaPoint: Point(x: nsEvent.scrollingDeltaX,
                                                         y: -nsEvent.scrollingDeltaY),
                               phase: phase,
                               momentumPhase: scrollMomentumPhase)
     }
     func pincherEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Pincher.Event {
-        return Pincher.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp,
+        return Pincher.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
                              magnification: nsEvent.magnification, phase: phase)
     }
     func rotaterEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Rotater.Event {
-        return Rotater.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp,
-                             rotationQuantity: nsEvent.rotation.cf, phase: phase)
+        return Rotater.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
+                             rotationQuantity: CGFloat(nsEvent.rotation), phase: phase)
     }
     func inputterEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Inputter.Event {
-        return Inputter.Event(rootLocation: cursorPoint, time: nsEvent.timestamp,
+        return Inputter.Event(rootLocation: cursorPoint, time: nsEvent.timestamp.cg,
                               pressure: 1, phase: phase)
     }
     
@@ -883,16 +883,16 @@ final class C0View: NSView, NSTextInputClient {
         }
     }
     
-    private var beginTouchesNormalizedPosition = CGPoint()
+    private var beginTouchesNormalizedPosition = Point()
     override func touchesBegan(with nsEvent: NSEvent) {
         let touches = nsEvent.touches(matching: .began, in: self)
-        beginTouchesNormalizedPosition = touches.reduce(CGPoint()) {
-            return CGPoint(x: max($0.x, $1.normalizedPosition.x),
+        beginTouchesNormalizedPosition = touches.reduce(Point()) {
+            return Point(x: max($0.x, $1.normalizedPosition.x),
                            y: max($0.y, $1.normalizedPosition.y))
         }
     }
     override func touchesEnded(with event: NSEvent) {
-        beginTouchesNormalizedPosition = CGPoint()
+        beginTouchesNormalizedPosition = Point()
     }
 
     override func scrollWheel(with nsEvent: NSEvent) {

@@ -50,7 +50,7 @@ final class TempoTrack: NSObject, Track, NSCoding {
     }
     func doubleBeatTime(withSecondTime second: Second) -> DoubleBeat {
         guard animation.loopFrames.count >= 2 else {
-            return DoubleBeat(second.cf * tempoItem.tempo / 60)
+            return DoubleBeat(second * tempoItem.tempo / 60)
         }
         let tempos = tempoItem.keyTempos
         for (li, keySecond) in keySeconds.enumerated().reversed() {
@@ -58,7 +58,7 @@ final class TempoTrack: NSObject, Track, NSCoding {
                 let loopFrame = animation.loopFrames[li]
                 if li == animation.loopFrames.count - 1 {
                     let tempo = tempos[loopFrame.index]
-                    let lastTime = DoubleBeat((second - keySecond).cf * (tempo / 60))
+                    let lastTime = DoubleBeat((second - keySecond) * (tempo / 60))
                     return DoubleBeat(loopFrame.time) + lastTime
                 } else {
                     let i2t = animation.loopFrames[li + 1].time
@@ -89,7 +89,7 @@ final class TempoTrack: NSObject, Track, NSCoding {
                     if d == 0 {
                         return keySeconds[li]
                     } else {
-                        let t = Double((time - loopFrame.time) / d).cf
+                        let t = CGFloat((time - loopFrame.time) / d)
                         return keySeconds[li] + integralSecondDuration(at: li, maxT: t)
                     }
                 }
@@ -98,21 +98,21 @@ final class TempoTrack: NSObject, Track, NSCoding {
         return 0
     }
     
-    func timeWithIntegralSecond(at li: Int, _ second: Second, minT: CGFloat = 0.0.cf,
+    func timeWithIntegralSecond(at li: Int, _ second: Second, minT: CGFloat = 0,
                                 splitSecondCount: Int = 10) -> DoubleBeat {
         let lf1 = animation.loopFrames[li], lf2 = animation.loopFrames[li + 1]
         let tempos = tempoItem.keyTempos
         let te1 = tempos[lf1.index], te2 = tempos[lf2.index]
-        let d = Double(lf2.time - lf1.time).cf
+        let d = CGFloat(lf2.time - lf1.time)
         func shc() -> Int {
             return max(2, Int(max(te1, te2) / d) * splitSecondCount / 2)
         }
         var doubleTime = DoubleBeat(0)
         func step(_ lf1: Animation.LoopFrame) {
-            doubleTime = DoubleBeat((second.cf * te1) / 60)
+            doubleTime = DoubleBeat((second * te1) / 60)
         }
         func simpsonInteglalB(_ f: (CGFloat) -> (CGFloat)) {
-            let ns = second.cf / (d * 60)
+            let ns = second / (d * 60)
             let b = CGFloat.simpsonIntegralB(splitHalfCount: shc(), a: minT, maxB: 1, s: ns, f: f)
             doubleTime = DoubleBeat(d * b)
         }
@@ -120,7 +120,7 @@ final class TempoTrack: NSObject, Track, NSCoding {
             let easing = animation.keyframes[lf1.index].easing
             if easing.isLinear {
                 let m = te2 - te1, n = te1
-                let l = log(te1) + (m * second.cf) / (d * 60)
+                let l = log(te1) + (m * second) / (d * 60)
                 let b = (exp(l) - n) / m
                 doubleTime = DoubleBeat(d * b)
             } else {
@@ -133,8 +133,8 @@ final class TempoTrack: NSObject, Track, NSCoding {
         func monospline(_ lf0: Animation.LoopFrame, _ lf1: Animation.LoopFrame,
                         _ lf2: Animation.LoopFrame, _ lf3: Animation.LoopFrame) {
             let te0 = tempos[lf0.index], te3 = tempos[lf3.index]
-            var ms = Monospline(x0: Double(lf0.time).cf, x1: Double(lf1.time).cf,
-                                x2: Double(lf2.time).cf, x3: Double(lf3.time).cf, t: 0)
+            var ms = Monospline(x0: CGFloat(lf0.time), x1: CGFloat(lf1.time),
+                                x2: CGFloat(lf2.time), x3: CGFloat(lf3.time), t: 0)
             let easing = animation.keyframes[lf1.index].easing
             simpsonInteglalB {
                 ms.t = easing.convertT($0)
@@ -144,8 +144,8 @@ final class TempoTrack: NSObject, Track, NSCoding {
         func firstMonospline(_ lf1: Animation.LoopFrame, _ lf2: Animation.LoopFrame,
                              _ lf3: Animation.LoopFrame) {
             let te3 = tempos[lf3.index]
-            var ms = Monospline(x1: Double(lf1.time).cf, x2: Double(lf2.time).cf,
-                                x3: Double(lf3.time).cf, t: 0)
+            var ms = Monospline(x1: CGFloat(lf1.time), x2: CGFloat(lf2.time),
+                                x3: CGFloat(lf3.time), t: 0)
             let easing = animation.keyframes[lf1.index].easing
             simpsonInteglalB {
                 ms.t = easing.convertT($0)
@@ -155,8 +155,8 @@ final class TempoTrack: NSObject, Track, NSCoding {
         func lastMonospline(_ lf0: Animation.LoopFrame, _ lf1: Animation.LoopFrame,
                             _ lf2: Animation.LoopFrame) {
             let te0 = tempos[lf0.index]
-            var ms = Monospline(x0: Double(lf0.time).cf, x1: Double(lf1.time).cf,
-                                x2: Double(lf2.time).cf, t: 0)
+            var ms = Monospline(x0: CGFloat(lf0.time), x1: CGFloat(lf1.time),
+                                x2: CGFloat(lf2.time), t: 0)
             let easing = animation.keyframes[lf1.index].easing
             simpsonInteglalB {
                 ms.t = easing.convertT($0)
@@ -178,12 +178,12 @@ final class TempoTrack: NSObject, Track, NSCoding {
         let lf1 = animation.loopFrames[li], lf2 = animation.loopFrames[li + 1]
         let tempos = tempoItem.keyTempos
         let te1 = tempos[lf1.index], te2 = tempos[lf2.index]
-        let d = Double(lf2.time - lf1.time).cf
+        let d = CGFloat(lf2.time - lf1.time)
         func shc() -> Int {
             return max(2, Int(max(te1, te2) / d) * splitSecondCount / 2)
         }
         
-        var rTempo = 0.0.cf
+        var rTempo = 0.0.cg
         func step(_ lf1: Animation.LoopFrame) {
             rTempo = (maxT - minT) / te1
         }
@@ -205,8 +205,8 @@ final class TempoTrack: NSObject, Track, NSCoding {
         func monospline(_ lf0: Animation.LoopFrame, _ lf1: Animation.LoopFrame,
                         _ lf2: Animation.LoopFrame, _ lf3: Animation.LoopFrame) {
             let te0 = tempos[lf0.index], te3 = tempos[lf3.index]
-            var ms = Monospline(x0: Double(lf0.time).cf, x1: Double(lf1.time).cf,
-                                x2: Double(lf2.time).cf, x3: Double(lf3.time).cf, t: 0)
+            var ms = Monospline(x0: CGFloat(lf0.time), x1: CGFloat(lf1.time),
+                                x2: CGFloat(lf2.time), x3: CGFloat(lf3.time), t: 0)
             let easing = animation.keyframes[lf1.index].easing
             rTempo = CGFloat.simpsonIntegral(splitHalfCount: shc(), a: minT, b: maxT) {
                 ms.t = easing.convertT($0)
@@ -216,8 +216,8 @@ final class TempoTrack: NSObject, Track, NSCoding {
         func firstMonospline(_ lf1: Animation.LoopFrame, _ lf2: Animation.LoopFrame,
                              _ lf3: Animation.LoopFrame) {
             let te3 = tempos[lf3.index]
-            var ms = Monospline(x1: Double(lf1.time).cf, x2: Double(lf2.time).cf,
-                                x3: Double(lf3.time).cf, t: 0)
+            var ms = Monospline(x1: CGFloat(lf1.time), x2: CGFloat(lf2.time),
+                                x3: CGFloat(lf3.time), t: 0)
             let easing = animation.keyframes[lf1.index].easing
             rTempo = CGFloat.simpsonIntegral(splitHalfCount: shc(), a: minT, b: maxT) {
                 ms.t = easing.convertT($0)
@@ -227,8 +227,8 @@ final class TempoTrack: NSObject, Track, NSCoding {
         func lastMonospline(_ lf0: Animation.LoopFrame, _ lf1: Animation.LoopFrame,
                             _ lf2: Animation.LoopFrame) {
             let te0 = tempos[lf0.index]
-            var ms = Monospline(x0: Double(lf0.time).cf, x1: Double(lf1.time).cf,
-                                x2: Double(lf2.time).cf, t: 0)
+            var ms = Monospline(x0: CGFloat(lf0.time), x1: CGFloat(lf1.time),
+                                x2: CGFloat(lf2.time), t: 0)
             let easing = animation.keyframes[lf1.index].easing
             rTempo = CGFloat.simpsonIntegral(splitHalfCount: shc(), a: minT, b: maxT) {
                 ms.t = easing.convertT($0)
@@ -523,7 +523,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
             keyPhases = []
             return
         }
-        var phase = 0.0.cf
+        var phase = 0.0.cg
         keyPhases = (0..<animation.loopFrames.count).map { li in
             if li == animation.loopFrames.count - 1 {
                 return phase
@@ -540,21 +540,21 @@ final class NodeTrack: NSObject, Track, NSCoding {
             return 0
         }
         guard animation.loopFrames.count >= 2 else {
-            return wiggleItem.wiggle.frequency * Double(time).cf
+            return wiggleItem.wiggle.frequency * CGFloat(time)
         }
         let wiggles = wiggleItem.keyWiggles
         for (li, loopFrame) in animation.loopFrames.enumerated().reversed() {
             if loopFrame.time <= time {
                 if li == animation.loopFrames.count - 1 {
                     let wiggle = wiggles[loopFrame.index]
-                    return keyPhases[li] + wiggle.frequency * Double(time - loopFrame.time).cf
+                    return keyPhases[li] + wiggle.frequency * CGFloat(time - loopFrame.time)
                 } else {
                     let i2t = animation.loopFrames[li + 1].time
                     let d = i2t - loopFrame.time
                     if d == 0 {
                         return keyPhases[li]
                     } else {
-                        let t = Double((time - loopFrame.time) / d).cf
+                        let t = CGFloat((time - loopFrame.time) / d)
                         return keyPhases[li] + integralPhaseDifference(at: li, maxT: t)
                     }
                 }
@@ -570,14 +570,14 @@ final class NodeTrack: NSObject, Track, NSCoding {
         let lf1 = animation.loopFrames[li], lf2 = animation.loopFrames[li + 1]
         let wiggles = wiggleItem.keyWiggles
         let f1 = wiggles[lf1.index].frequency, f2 = wiggles[lf2.index].frequency
-        let d = Double(lf2.time - lf1.time).cf
+        let d = CGFloat(lf2.time - lf1.time)
         func shc() -> Int {
             return max(2, Int(d) * splitSecondCount / 2)
         }
         
-        var df = 0.0.cf
+        var df = 0.0.cg
         func step(_ lf1: Animation.LoopFrame) {
-            df = f1 * Double(maxT - minT).cf
+            df = f1 * CGFloat(maxT - minT)
         }
         func linear(_ lf1: Animation.LoopFrame, _ lf2: Animation.LoopFrame) {
             let easing = animation.keyframes[lf1.index].easing
@@ -593,8 +593,8 @@ final class NodeTrack: NSObject, Track, NSCoding {
         func monospline(_ lf0: Animation.LoopFrame, _ lf1: Animation.LoopFrame,
                         _ lf2: Animation.LoopFrame, _ lf3: Animation.LoopFrame) {
             let f0 = wiggles[lf0.index].frequency, f3 = wiggles[lf3.index].frequency
-            var ms = Monospline(x0: Double(lf0.time).cf, x1: Double(lf1.time).cf,
-                                x2: Double(lf2.time).cf, x3: Double(lf3.time).cf, t: 0)
+            var ms = Monospline(x0: CGFloat(lf0.time), x1: CGFloat(lf1.time),
+                                x2: CGFloat(lf2.time), x3: CGFloat(lf3.time), t: 0)
             let easing = animation.keyframes[lf1.index].easing
             if easing.isLinear {
                 df = ms.integralInterpolatedValue(f0, f1, f2, f3, a: minT, b: maxT)
@@ -608,8 +608,8 @@ final class NodeTrack: NSObject, Track, NSCoding {
         func firstMonospline(_ lf1: Animation.LoopFrame, _ lf2: Animation.LoopFrame,
                              _ lf3: Animation.LoopFrame) {
             let f3 = wiggles[lf3.index].frequency
-            var ms = Monospline(x1: Double(lf1.time).cf, x2: Double(lf2.time).cf,
-                                x3: Double(lf3.time).cf, t: 0)
+            var ms = Monospline(x1: CGFloat(lf1.time), x2: CGFloat(lf2.time),
+                                x3: CGFloat(lf3.time), t: 0)
             let easing = animation.keyframes[lf1.index].easing
             if easing.isLinear {
                 df = ms.integralFirstInterpolatedValue(f1, f2, f3, a: minT, b: maxT)
@@ -623,8 +623,8 @@ final class NodeTrack: NSObject, Track, NSCoding {
         func lastMonospline(_ lf0: Animation.LoopFrame, _ lf1: Animation.LoopFrame,
                             _ lf2: Animation.LoopFrame) {
             let f0 = wiggles[lf0.index].frequency
-            var ms = Monospline(x0: Double(lf0.time).cf, x1: Double(lf1.time).cf,
-                                x2: Double(lf2.time).cf, t: 0)
+            var ms = Monospline(x0: CGFloat(lf0.time), x1: CGFloat(lf1.time),
+                                x2: CGFloat(lf2.time), t: 0)
             let easing = animation.keyframes[lf1.index].easing
             if easing.isLinear {
                 df = ms.integralLastInterpolatedValue(f0, f1, f2, a: minT, b: maxT)
@@ -965,7 +965,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
     var selectedCellItemsWithNoEmptyGeometry: [CellItem] {
         return selectedCellItems.filter { !$0.cell.geometry.isEmpty }
     }
-    func selectedCellItemsWithNoEmptyGeometry(at point: CGPoint) -> [CellItem] {
+    func selectedCellItemsWithNoEmptyGeometry(at point: Point) -> [CellItem] {
         for cellItem in selectedCellItems {
             if cellItem.cell.contains(point) {
                 return selectedCellItems.filter { !$0.cell.geometry.isEmpty }
@@ -1010,8 +1010,8 @@ final class NodeTrack: NSObject, Track, NSCoding {
         return cell.material
     }
     
-    var imageBounds: CGRect {
-        return cellItems.reduce(CGRect()) { $0.unionNoEmpty($1.cell.imageBounds) }
+    var imageBounds: Rect {
+        return cellItems.reduce(Rect()) { $0.unionNoEmpty($1.cell.imageBounds) }
             .unionNoEmpty(drawingItem.imageBounds)
     }
     
@@ -1037,17 +1037,17 @@ final class NodeTrack: NSObject, Track, NSCoding {
         return snapedCells
     }
     
-    func snapPoint(_ point: CGPoint, with n: Node.Nearest.BezierSortedResult,
-                   snapDistance: CGFloat, grid: CGFloat?) -> CGPoint {
+    func snapPoint(_ point: Point, with n: Node.Nearest.BezierSortedResult,
+                   snapDistance: CGFloat, grid: CGFloat?) -> Point {
         
-        let p: CGPoint
+        let p: Point
         if let grid = grid {
-            p = CGPoint(x: point.x.interval(scale: grid), y: point.y.interval(scale: grid))
+            p = Point(x: point.x.interval(scale: grid), y: point.y.interval(scale: grid))
         } else {
             p = point
         }
         var minD = CGFloat.infinity, minP = p
-        func updateMin(with ap: CGPoint) {
+        func updateMin(with ap: Point) {
             let d0 = p.distance(ap)
             if d0 < snapDistance && d0 < minD {
                 minD = d0
@@ -1082,10 +1082,10 @@ final class NodeTrack: NSObject, Track, NSCoding {
         return minP
     }
     
-    func snapPoint(_ sp: CGPoint, editLine: Line, editPointIndex: Int,
-                   snapDistance: CGFloat) -> CGPoint {
+    func snapPoint(_ sp: Point, editLine: Line, editPointIndex: Int,
+                   snapDistance: CGFloat) -> Point {
         
-        let p: CGPoint, isFirst = editPointIndex == 1 || editPointIndex == editLine.controls.count - 1
+        let p: Point, isFirst = editPointIndex == 1 || editPointIndex == editLine.controls.count - 1
         if isFirst {
             p = editLine.firstPoint
         } else if editPointIndex == editLine.controls.count - 2 || editPointIndex == 0 {
@@ -1093,7 +1093,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         } else {
             fatalError()
         }
-        var snapLines = [(ap: CGPoint, bp: CGPoint)](), lastSnapLines = [(ap: CGPoint, bp: CGPoint)]()
+        var snapLines = [(ap: Point, bp: Point)](), lastSnapLines = [(ap: Point, bp: Point)]()
         func snap(with lines: [Line]) {
             for line in lines {
                 if editLine.controls.count == 3 {
@@ -1125,11 +1125,11 @@ final class NodeTrack: NSObject, Track, NSCoding {
             snap(with: cellItem.cell.geometry.lines)
         }
         
-        var minD = CGFloat.infinity, minIntersectionPoint: CGPoint?, minPoint = sp
+        var minD = CGFloat.infinity, minIntersectionPoint: Point?, minPoint = sp
         if !snapLines.isEmpty && !lastSnapLines.isEmpty {
             for sl in snapLines {
                 for lsl in lastSnapLines {
-                    if let ip = CGPoint.intersectionLine(sl.ap, sl.bp, lsl.ap, lsl.bp) {
+                    if let ip = Point.intersectionLine(sl.ap, sl.bp, lsl.ap, lsl.bp) {
                         let d = ip.distance(sp)
                         if d < snapDistance && d < minD {
                             minD = d
@@ -1173,7 +1173,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         ctx.setAlpha(opacity)
         ctx.beginTransparencyLayer(auxiliaryInfo: nil)
         var geometrys = [Geometry]()
-        ctx.setFillColor(subColor.with(alpha: 1).cgColor)
+        ctx.setFillColor(subColor.with(alpha: 1).cg)
         func setPaths(with cellItem: CellItem) {
             let cell = cellItem.cell
             if !cell.geometry.isEmpty {
@@ -1186,7 +1186,7 @@ final class NodeTrack: NSObject, Track, NSCoding {
         ctx.endTransparencyLayer()
         ctx.setAlpha(1)
         
-        ctx.setFillColor(color.with(alpha: 1).cgColor)
+        ctx.setFillColor(color.with(alpha: 1).cg)
         geometrys.forEach { $0.draw(withLineWidth: 1.5 * reciprocalScale, in: ctx) }
     }
     func drawTransparentCellLines(withReciprocalScale reciprocalScale: CGFloat, in ctx: CGContext) {
@@ -1223,7 +1223,7 @@ extension NodeTrack: Referenceable {
     static let name = Localization(english: "Node Track", japanese: "ノードトラック")
 }
 extension NodeTrack: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return name.view(withBounds: bounds, sizeType)
     }
 }
@@ -1265,7 +1265,7 @@ final class DrawingItem: NSObject, TrackItem, NSCoding {
         drawing = keyDrawings[f1]
     }
     
-    static let defaultLineWidth = 1.0.cf
+    static let defaultLineWidth = 1.0.cg
     
     init(drawing: Drawing = Drawing(), keyDrawings: [Drawing] = [],
          color: Color = .strokeLine, lineWidth: CGFloat = defaultLineWidth) {
@@ -1283,7 +1283,7 @@ final class DrawingItem: NSObject, TrackItem, NSCoding {
     init(coder: NSCoder) {
         drawing = coder.decodeObject(forKey: CodingKeys.drawing.rawValue) as? Drawing ?? Drawing()
         keyDrawings = coder.decodeObject(forKey: CodingKeys.keyDrawings.rawValue) as? [Drawing] ?? []
-        lineWidth = coder.decodeDouble(forKey: CodingKeys.lineWidth.rawValue).cf
+        lineWidth = coder.decodeDouble(forKey: CodingKeys.lineWidth.rawValue).cg
         color = .strokeLine
         super.init()
     }
@@ -1293,10 +1293,10 @@ final class DrawingItem: NSObject, TrackItem, NSCoding {
             coder.encode(drawing, forKey: CodingKeys.drawing.rawValue)
             coder.encode(keyDrawings, forKey: CodingKeys.keyDrawings.rawValue)
         }
-        coder.encode(lineWidth.d, forKey: CodingKeys.lineWidth.rawValue)
+        coder.encode(Double(lineWidth), forKey: CodingKeys.lineWidth.rawValue)
     }
     
-    var imageBounds: CGRect {
+    var imageBounds: Rect {
         return drawing.imageBounds(withLineWidth: lineWidth)
     }
     
@@ -1404,11 +1404,11 @@ final class CellItem: NSObject, TrackItem, NSCoding {
     func drawPreviousNext(lineWidth: CGFloat,
                           isHiddenPrevious: Bool, isHiddenNext: Bool, index: Int, in ctx: CGContext) {
         if !isHiddenPrevious && index - 1 >= 0 {
-            ctx.setFillColor(Color.previous.cgColor)
+            ctx.setFillColor(Color.previous.cg)
             keyGeometries[index - 1].draw(withLineWidth: lineWidth, in: ctx)
         }
         if !isHiddenNext && index + 1 <= keyGeometries.count - 1 {
-            ctx.setFillColor(Color.next.cgColor)
+            ctx.setFillColor(Color.next.cg)
             keyGeometries[index + 1].draw(withLineWidth: lineWidth, in: ctx)
         }
     }
@@ -1784,11 +1784,11 @@ final class TracksManager {
     }
     var setTracksClosure: ((NodeTracksBinding) -> ())?
     
-    var moveHeight = 8.0.cf
-    private var oldIndex = 0, beginIndex = 0, oldP = CGPoint()
+    var moveHeight = 8.0.cg
+    private var oldIndex = 0, beginIndex = 0, oldP = Point()
     private weak var editTrack: NodeTrack?
     private var oldInNode = Node(), oldTracks = [NodeTrack]()
-    func moveTrack(for p: CGPoint, _ phase: Phase) {
+    func moveTrack(for p: Point, _ phase: Phase) {
         switch phase {
         case .began:
             oldInNode = node

@@ -29,7 +29,7 @@ final class Geometry: NSObject, NSCoding {
         super.init()
     }
     
-    private static let distance = 6.0.cf, vertexLineLength = 10.0.cf, minSnapRatio = 0.0625.cf
+    private static let distance = 6.0.cg, vertexLineLength = 10.0.cg, minSnapRatio = 0.0625.cg
     init(lines: [Line], scale: CGFloat) {
         guard let firstLine = lines.first else {
             self.lines = []
@@ -120,10 +120,10 @@ final class Geometry: NSObject, NSCoding {
             let d = lp.distance²(fp)
             let controls: [Line.Control]
             if d < vd * (line.pointsLength / vertexLineLength).clip(min: 0.1, max: 1) {
-                let dp = CGPoint(x: fp.x - lp.x, y: fp.y - lp.y)
-                var cs = line.controls, dd = 1.0.cf
+                let dp = Point(x: fp.x - lp.x, y: fp.y - lp.y)
+                var cs = line.controls, dd = 1.0.cg
                 for (i, fp) in line.controls.enumerated() {
-                    cs[i].point = CGPoint(x: fp.point.x - dp.x * dd, y: fp.point.y - dp.y * dd)
+                    cs[i].point = Point(x: fp.point.x - dp.x * dd, y: fp.point.y - dp.y * dd)
                     dd *= 0.5
                     if dd <= minSnapRatio || i >= line.controls.count - 2 {
                         break
@@ -153,12 +153,12 @@ final class Geometry: NSObject, NSCoding {
     func applying(_ affine: CGAffineTransform) -> Geometry {
         return Geometry(lines: lines.map { $0.applying(affine) })
     }
-    func warpedWith(deltaPoint dp: CGPoint, editPoint: CGPoint,
+    func warpedWith(deltaPoint dp: Point, editPoint: Point,
                     minDistance: CGFloat, maxDistance: CGFloat) -> Geometry {
-        func warped(p: CGPoint) -> CGPoint {
+        func warped(p: Point) -> Point {
             let d =  hypot²(p.x - editPoint.x, p.y - editPoint.y)
             let ds = d > maxDistance ? 0 : (1 - (d - minDistance) / (maxDistance - minDistance))
-            return CGPoint(x: p.x + dp.x * ds, y: p.y + dp.y * ds)
+            return Point(x: p.x + dp.x * ds, y: p.y + dp.y * ds)
         }
         let newLines = lines.map { $0.warpedWith(deltaPoint: dp, editPoint: editPoint,
                                                  minDistance: minDistance, maxDistance: maxDistance) }
@@ -239,11 +239,11 @@ final class Geometry: NSObject, NSCoding {
     struct NearestBezier {
         let lineIndex: Int, bezierIndex: Int, t: CGFloat, minDistance²: CGFloat
     }
-    func nearestBezier(with point: CGPoint)-> NearestBezier? {
+    func nearestBezier(with point: Point)-> NearestBezier? {
         guard !lines.isEmpty else {
             return nil
         }
-        var minD² = CGFloat.infinity, minT = 0.0.cf, minLineIndex = 0, minBezierIndex = 0
+        var minD² = CGFloat.infinity, minT = 0.0.cg, minLineIndex = 0, minBezierIndex = 0
         for (li, line) in lines.enumerated() {
             line.allBeziers() { bezier, i, stop in
                 let nearest = bezier.nearest(at: point)
@@ -258,7 +258,7 @@ final class Geometry: NSObject, NSCoding {
         return NearestBezier(lineIndex: minLineIndex, bezierIndex: minBezierIndex,
                              t: minT, minDistance²: minD²)
     }
-    func nearestPathLineIndex(at p: CGPoint) -> Int {
+    func nearestPathLineIndex(at p: Point) -> Int {
         var minD = CGFloat.infinity, minIndex = 0
         for (i, line) in lines.enumerated() {
             let nextLine = lines[i + 1 < lines.count ? i + 1 : 0]
@@ -302,18 +302,18 @@ final class Geometry: NSObject, NSCoding {
         ctx.fillPath()
     }
     func fillPath(with color: Color, _ path: CGPath, in ctx: CGContext) {
-        ctx.setFillColor(color.cgColor)
+        ctx.setFillColor(color.cg)
         ctx.addPath(path)
         ctx.fillPath()
     }
     
     func drawLines(withColor color: Color, reciprocalScale: CGFloat, in ctx: CGContext) {
-        ctx.setFillColor(color.cgColor)
+        ctx.setFillColor(color.cg)
         draw(withLineWidth: 0.5 * reciprocalScale, in: ctx)
     }
     func drawPathLine(withReciprocalScale reciprocalScale: CGFloat, in ctx: CGContext) {
         ctx.setLineWidth(0.5 * reciprocalScale)
-        ctx.setStrokeColor(Color.getSetBorder.cgColor)
+        ctx.setStrokeColor(Color.getSetBorder.cg)
         for (i, line) in lines.enumerated() {
             let nextLine = lines[i + 1 < lines.count ? i + 1 : 0]
             if line.lastPoint != nextLine.firstPoint {
@@ -327,9 +327,9 @@ final class Geometry: NSObject, NSCoding {
                   skinLineWidth: CGFloat = 1,
                   reciprocalScale: CGFloat, reciprocalAllScale: CGFloat, in ctx: CGContext) {
         fillPath(with: subColor, path, in: ctx)
-        ctx.setFillColor(backColor.cgColor)
+        ctx.setFillColor(backColor.cg)
         draw(withLineWidth: 1 * reciprocalAllScale, in: ctx)
-        ctx.setFillColor(lineColor.cgColor)
+        ctx.setFillColor(lineColor.cg)
         draw(withLineWidth: skinLineWidth * reciprocalScale, in: ctx)
     }
     func draw(withLineWidth lineWidth: CGFloat, in ctx: CGContext) {

@@ -29,7 +29,7 @@ final class ClosureView: View, Runnable {
     
     init(closure: @escaping Closure = {},
          name: Localization = Localization(),
-         frame: CGRect = CGRect(), sizeType: SizeType = .regular) {
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
         self.closure = closure
         self.nameView = TextView(text: name, font: Font.default(with: sizeType), color: .locked)
@@ -40,29 +40,29 @@ final class ClosureView: View, Runnable {
         children = [nameView]
     }
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let fitSize = nameView.fitSize, padding = Layout.padding(with: sizeType)
-        return CGRect(x: 0,
+        return Rect(x: 0,
                       y: 0,
                       width: fitSize.width + padding * 2,
                       height: fitSize.height + padding * 2)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        nameView.frame.origin = CGPoint(x: padding,
+        nameView.frame.origin = Point(x: padding,
                                         y: bounds.height - nameView.frame.height - padding)
     }
     
-    func run(for p: CGPoint) {
+    func run(for p: Point) {
         closure()
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Reference(name: Localization(english: "Closure", japanese: "クロージャ"))
     }
 }

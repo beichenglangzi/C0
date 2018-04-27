@@ -56,7 +56,7 @@ final class Material: NSObject, NSCoding {
     let lineWidth: CGFloat, opacity: CGFloat
     let id: UUID
     
-    static let defaultLineWidth = 1.0.cf
+    static let defaultLineWidth = 1.0.cg
     init(type: MaterialType = .normal,
          color: Color = Color(), lineColor: Color = .black,
          lineWidth: CGFloat = defaultLineWidth, opacity: CGFloat = 1) {
@@ -79,8 +79,8 @@ final class Material: NSObject, NSCoding {
         color = coder.decodeDecodable(Color.self, forKey: CodingKeys.color.rawValue) ?? Color()
         lineColor = coder.decodeDecodable(
             Color.self, forKey: CodingKeys.lineColor.rawValue) ?? Color()
-        lineWidth = coder.decodeDouble(forKey: CodingKeys.lineWidth.rawValue).cf
-        opacity = coder.decodeDouble(forKey: CodingKeys.opacity.rawValue).cf
+        lineWidth = coder.decodeDouble(forKey: CodingKeys.lineWidth.rawValue).cg
+        opacity = coder.decodeDouble(forKey: CodingKeys.opacity.rawValue).cg
         id = coder.decodeObject(forKey: CodingKeys.id.rawValue) as? UUID ?? UUID()
         super.init()
     }
@@ -88,8 +88,8 @@ final class Material: NSObject, NSCoding {
         coder.encode(Int32(type.rawValue), forKey: CodingKeys.type.rawValue)
         coder.encodeEncodable(color, forKey: CodingKeys.color.rawValue)
         coder.encodeEncodable(lineColor, forKey: CodingKeys.lineColor.rawValue)
-        coder.encode(lineWidth.d, forKey: CodingKeys.lineWidth.rawValue)
-        coder.encode(opacity.d, forKey: CodingKeys.opacity.rawValue)
+        coder.encode(Double(lineWidth), forKey: CodingKeys.lineWidth.rawValue)
+        coder.encode(Double(opacity), forKey: CodingKeys.opacity.rawValue)
         coder.encode(id, forKey: CodingKeys.id.rawValue)
     }
     
@@ -190,7 +190,7 @@ extension Material: Interpolatable {
 extension Material: ClassDeepCopiable {
 }
 extension Material: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         let view = View(isForm: true)
         view.bounds = bounds
         view.fillColor = color
@@ -220,24 +220,24 @@ extension SlidableNumberView {
     static func opacityView(_ sizeType: SizeType = .regular) -> SlidableNumberView {
         return SlidableNumberView(number: 1, defaultNumber: 1, min: 0, max: 1, sizeType: sizeType)
     }
-    private static func opacityViewViews(with bounds: CGRect,
+    private static func opacityViewViews(with bounds: Rect,
                                          checkerWidth: CGFloat, padding: CGFloat) -> [View] {
-        let frame = CGRect(x: padding, y: bounds.height / 2 - checkerWidth,
+        let frame = Rect(x: padding, y: bounds.height / 2 - checkerWidth,
                            width: bounds.width - padding * 2, height: checkerWidth * 2)
         
         let backgroundView = View(gradient: Gradient(colors: [.subContent, .content],
                                                      locations: [0, 1],
-                                                     startPoint: CGPoint(x: 0, y: 0),
-                                                     endPoint: CGPoint(x: 1, y: 0)))
+                                                     startPoint: Point(x: 0, y: 0),
+                                                     endPoint: Point(x: 1, y: 0)))
         backgroundView.frame = frame
         
-        let checkerboardView = View(path: CGPath.checkerboard(with: CGSize(square: checkerWidth),
+        let checkerboardView = View(path: CGPath.checkerboard(with: Size(square: checkerWidth),
                                                               in: frame))
         checkerboardView.fillColor = .content
         
         return [backgroundView, checkerboardView]
     }
-    func updateOpacityViews(withFrame frame: CGRect) {
+    func updateOpacityViews(withFrame frame: Rect) {
         if self.frame != frame {
             self.frame = frame
             backgroundViews = SlidableNumberView.opacityViewViews(with: frame,
@@ -251,19 +251,19 @@ extension SlidableNumberView {
                               _ sizeType: SizeType = .regular) -> SlidableNumberView {
         return SlidableNumberView(min: min, max: max, exp: exp, sizeType: sizeType)
     }
-    private static func widthView(with bounds: CGRect,
+    private static func widthView(with bounds: Rect,
                                    halfWidth: CGFloat, padding: CGFloat) -> View {
         let path = CGMutablePath()
-        path.addLines(between: [CGPoint(x: padding,y: bounds.height / 2),
-                                CGPoint(x: bounds.width - padding,
+        path.addLines(between: [Point(x: padding,y: bounds.height / 2),
+                                Point(x: bounds.width - padding,
                                         y: bounds.height / 2 - halfWidth),
-                                CGPoint(x: bounds.width - padding,
+                                Point(x: bounds.width - padding,
                                         y: bounds.height / 2 + halfWidth)])
         let shapeView = View(path: path)
         shapeView.fillColor = .content
         return shapeView
     }
-    func updateLineWidthViews(withFrame frame: CGRect) {
+    func updateLineWidthViews(withFrame frame: Rect) {
         if self.frame != frame {
             self.frame = frame
             backgroundViews = [SlidableNumberView.widthView(with: frame,
@@ -291,7 +291,7 @@ final class MaterialView: View, Assignable {
     }
     var defaultMaterial = Material()
     
-    static let defaultWidth = 200.0.cf, defaultRightWidth = 60.0.cf
+    static let defaultWidth = 200.0.cg, defaultRightWidth = 60.0.cg
     
     private let classNameView = TextView(text: Material.name, font: .bold)
     private let typeView =
@@ -331,20 +331,20 @@ final class MaterialView: View, Assignable {
         }
     }
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let padding = Layout.basicPadding, h = Layout.basicHeight, cw = MaterialView.defaultWidth
-        return CGRect(x: 0, y: 0,
+        return Rect(x: 0, y: 0,
                       width: cw + MaterialView.defaultRightWidth + padding * 2,
                       height: cw + classNameView.frame.height + h + padding * 2)
     }
-    func defaultBounds(withWidth width: CGFloat) -> CGRect {
+    func defaultBounds(withWidth width: CGFloat) -> Rect {
         let padding = Layout.basicPadding, h = Layout.basicHeight
         let cw = width - MaterialView.defaultRightWidth + padding * 2
-        return CGRect(x: 0, y: 0,
+        return Rect(x: 0, y: 0,
                       width: cw + MaterialView.defaultRightWidth + padding * 2,
                       height: cw + classNameView.frame.height + h + padding * 2)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -352,21 +352,21 @@ final class MaterialView: View, Assignable {
     private func updateLayout() {
         let padding = Layout.basicPadding, h = Layout.basicHeight, rw = MaterialView.defaultRightWidth
         let cw = bounds.width - rw - padding * 2
-        classNameView.frame.origin = CGPoint(x: padding,
+        classNameView.frame.origin = Point(x: padding,
                                              y: bounds.height - classNameView.frame.height - padding)
         let tx = classNameView.frame.maxX + padding
-        typeView.frame = CGRect(x: tx,
+        typeView.frame = Rect(x: tx,
                                 y: bounds.height - h * 2 - padding,
                                 width: bounds.width - tx - padding, height: h * 2)
-        colorView.frame = CGRect(x: padding, y: padding, width: cw, height: cw)
-        classLineColorNameView.frame.origin = CGPoint(x: padding + cw,
+        colorView.frame = Rect(x: padding, y: padding, width: cw, height: cw)
+        classLineColorNameView.frame.origin = Point(x: padding + cw,
                                                       y: padding + cw - classLineColorNameView.frame.height)
-        lineColorView.frame = CGRect(x: padding + cw, y: classLineColorNameView.frame.minY - rw,
+        lineColorView.frame = Rect(x: padding + cw, y: classLineColorNameView.frame.minY - rw,
                                      width: rw, height: rw)
-        let lineWidthFrame = CGRect(x: padding + cw, y: lineColorView.frame.minY - h,
+        let lineWidthFrame = Rect(x: padding + cw, y: lineColorView.frame.minY - h,
                                     width: rw, height: h)
         lineWidthView.updateLineWidthViews(withFrame: lineWidthFrame)
-        let opacityFrame = CGRect(x: padding + cw, y: lineColorView.frame.minY - h * 2,
+        let opacityFrame = Rect(x: padding + cw, y: lineColorView.frame.minY - h * 2,
                                   width: rw, height: h)
         opacityView.updateOpacityViews(withFrame: opacityFrame)
     }
@@ -536,14 +536,14 @@ final class MaterialView: View, Assignable {
         }
     }
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let material = Material()
         set(material, old: self.material)
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [material]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let material = object as? Material {
                 if material.id != self.material.id {
@@ -563,7 +563,7 @@ final class MaterialView: View, Assignable {
                          material: material, oldMaterial: oldMaterial, phase: .ended))
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Material.reference
     }
 }

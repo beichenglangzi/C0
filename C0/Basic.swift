@@ -19,6 +19,12 @@
 
 import Foundation
 
+extension Double {
+    var cg: CGFloat {
+        return CGFloat(self)
+    }
+}
+
 protocol DeepCopiable {
     var copied: Self { get }
     func copied(from deepCopier: DeepCopier) -> Self
@@ -88,7 +94,8 @@ final class LockTimer {
         workItem.notify(queue: .main) { [unowned self] in
             self.workItem = nil
         }
-        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + endDuration, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + Double(endDuration),
+                                      execute: workItem)
         self.workItem = workItem
     }
     var isWait: Bool {
@@ -109,14 +116,14 @@ final class LockTimer {
     private weak var timer: Timer?
     func begin(interval: Second, repeats: Bool = true,
                tolerance: Second = 0.0, closure: @escaping () -> ()) {
-        let time = interval + CFAbsoluteTimeGetCurrent()
-        let rInterval = repeats ? interval : 0
+        let time = Double(interval) + CFAbsoluteTimeGetCurrent()
+        let rInterval = repeats ? Double(interval) : 0
         let timer = CFRunLoopTimerCreateWithHandler(kCFAllocatorDefault,
                                                     time, rInterval, 0, 0) { _ in closure() }
         CFRunLoopAddTimer(CFRunLoopGetCurrent(), timer, .commonModes)
         self.timer = timer
         inUse = true
-        self.timer?.tolerance = tolerance
+        self.timer?.tolerance = Double(tolerance)
     }
     func stop() {
         inUse = false

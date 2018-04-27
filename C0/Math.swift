@@ -30,7 +30,7 @@ extension Variable: Referenceable {
     static let name = Text(english: "Variable", japanese: "変数")
 }
 extension Variable: Viewable {
-    func view(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return rawValue.view(withBounds: bounds, sizeType)
     }
 }
@@ -60,7 +60,7 @@ struct Expression {
     }
 }
 extension Expression: Viewable {
-    func view(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return ExpressionView(expression: self, bounds: bounds, sizeType: sizeType)
     }
 }
@@ -71,25 +71,25 @@ extension Expression: Referenceable {
 final class ExpressionView: View {
     var expression: Expression
     
-    init(expression: Expression = Expression(0), bounds: CGRect = CGRect(),
+    init(expression: Expression = Expression(0), bounds: Rect = Rect(),
          sizeType: SizeType = .regular) {
         self.expression = expression
         
         super.init()
         var views = [View]()
         var ex = expression
-        views.append(ex.value.view(withBounds: CGRect(), sizeType))
+        views.append(ex.value.view(withBounds: Rect(), sizeType))
         while let next = ex.next, let nextOperator = ex.nextOperator {
             if !(nextOperator == .multiplication && next.value is Variable) {
-                views.append(nextOperator.rawValue.view(withBounds: CGRect(), sizeType))
+                views.append(nextOperator.rawValue.view(withBounds: Rect(), sizeType))
             }
-            views.append(next.value.view(withBounds: CGRect(), sizeType))
+            views.append(next.value.view(withBounds: Rect(), sizeType))
             ex = next
         }
         children = views
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Expression.reference
     }
 }
@@ -262,18 +262,25 @@ extension Comparable {
     }
 }
 
-protocol OneDimensionalOption {
+protocol NumberGetterOption {
+    associatedtype Model
+    func string(with model: Model) -> String
+    func text(with model: Model) -> Text
+}
+protocol OneDimensionalOption: NumberGetterOption {
     associatedtype Model
     var defaultModel: Model { get }
     var minModel: Model { get }
     var maxModel: Model { get }
     func model(with string: String) -> Model?
-    func string(with model: Model) -> String
-    func text(with model: Model) -> Text
     func ratio(with model: Model) -> CGFloat
     func ratioFromDefaultModel(with model: Model) -> CGFloat
     func model(withDelta delta: CGFloat, oldModel: Model) -> Model
     func model(withRatio ratio: CGFloat) -> Model
+}
+
+enum Orientation {
+    case leftHanded, rightHanded
 }
 
 /**
@@ -288,18 +295,15 @@ final class DiscreteOneDimensionalView
     }
     var option: U
     
-    enum Orientation {
-        case leftHanded, rightHanded
-    }
     enum LayoutOrientation {
         case horizontal, vertical
     }
     var sizeType: SizeType
-    var interval = 1.5.cf
+    var interval = 1.5.cg
     var orientation: Orientation, layoutOrientation: LayoutOrientation
-    private var knobLineFrame = CGRect()
+    private var knobLineFrame = Rect()
     private let labelPaddingX: CGFloat, knobPadding: CGFloat
-    private let knobView = DiscreteKnobView(CGSize(width: 6, height: 4), lineWidth: 1)
+    private let knobView = DiscreteKnobView(Size(width: 6, height: 4), lineWidth: 1)
     private let linePathView: View = {
         let linePathView = View(isForm: true)
         linePathView.lineColor = .content
@@ -310,14 +314,14 @@ final class DiscreteOneDimensionalView
     init(model: T, option: U,
          orientation: Orientation = .rightHanded,
          layoutOrientation: LayoutOrientation = .horizontal,
-         frame: CGRect = CGRect(),
+         frame: Rect = Rect(),
          sizeType: SizeType = .regular) {
         
         self.model = model.clip(min: option.minModel, max: option.maxModel)
         self.option = option
         self.orientation = orientation
         self.layoutOrientation = layoutOrientation
-        self.knobPadding = sizeType == .small ? 2.0.cf : 3.0.cf
+        self.knobPadding = sizeType == .small ? 2 : 3
         labelPaddingX = Layout.padding(with: sizeType)
         formStringView = TextView(font: Font.default(with: sizeType),
                                   frameAlignment: .right, alignment: .right)
@@ -330,19 +334,18 @@ final class DiscreteOneDimensionalView
         self.frame = frame
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     private func updateLayout() {
-        let paddingX = sizeType == .small ? 3.0.cf : 5.0.cf
-        knobLineFrame = CGRect(x: paddingX, y: sizeType == .small ? 1 : 2,
+        let paddingX = sizeType == .small ? 3.0.cg : 5.0.cg
+        knobLineFrame = Rect(x: paddingX, y: sizeType == .small ? 1 : 2,
                                width: bounds.width - paddingX * 2, height: 1)
         linePathView.frame = knobLineFrame
-        formStringView.frame.origin = CGPoint(x: bounds.width - formStringView.frame.width - labelPaddingX,
+        formStringView.frame.origin = Point(x: bounds.width - formStringView.frame.width - labelPaddingX,
                                           y: round((bounds.height - formStringView.frame.height) / 2))
-        
     }
     func updateWithModel() {
         updateString()
@@ -353,10 +356,10 @@ final class DiscreteOneDimensionalView
     }
     func updateknob() {
         let x = knobLineFrame.width * option.ratioFromDefaultModel(with: model) + knobLineFrame.minX
-        knobView.position = CGPoint(x: round(x), y: knobPadding)
+        knobView.position = Point(x: round(x), y: knobPadding)
     }
     
-    private func model(at p: CGPoint, old oldModel: T) -> T {
+    private func model(at p: Point, old oldModel: T) -> T {
         let d = layoutOrientation == .vertical ? p.y - oldPoint.y : p.x - oldPoint.x
         let delta = orientation == .rightHanded ? d : -d
         return option.model(withDelta: delta / interval, oldModel: oldModel)
@@ -369,16 +372,16 @@ final class DiscreteOneDimensionalView
     }
     var binding: ((Binding<T>) -> ())?
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let model = option.defaultModel.clip(min: option.minModel, max: option.maxModel)
         if model != self.model {
             set(model, old: self.model)
         }
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [model]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let model = (object as? T)?.clip(min: option.minModel, max: option.maxModel) {
                 if model != self.model {
@@ -397,15 +400,15 @@ final class DiscreteOneDimensionalView
         }
     }
     
-    func run(for p: CGPoint) {
+    func run(for p: Point) {
         let model = self.model(at: p, old: self.model)
         if model != self.model {
             set(model, old: self.model)
         }
     }
     
-    private var oldModel: T?, oldPoint = CGPoint()
-    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    private var oldModel: T?, oldPoint = Point()
+    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         switch phase {
         case .began:
             knobView.fillColor = .editing
@@ -443,37 +446,73 @@ final class DiscreteOneDimensionalView
         binding?(Binding(view: self, model: model, oldModel: oldModel, phase: .ended))
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         var reference = T.reference
         reference.viewDescription = Localization(english: "Discrete Slider", japanese: "離散スライダー")
         return reference
     }
 }
 
-extension Int {
-    var cf: CGFloat {
-        return CGFloat(self)
+final class NumberGetterView<T: Comparable & Viewable & Referenceable, U: NumberGetterOption>: View, Copiable where U.Model == T {
+    var model: T {
+        didSet {
+            updateWithModel()
+        }
     }
-    var d: Double {
-        return Double(self)
+    var option: U
+    
+    var sizeType: SizeType
+    var formPropertyNameView: TextView?
+    let formStringView: TextView
+    var orientation: Orientation
+    private let labelPaddingX: CGFloat
+    
+    init(model: T, option: U,
+         orientation: Orientation = .rightHanded,
+         frame: Rect = Rect(),
+         sizeType: SizeType = .regular) {
+        
+        self.model = model
+        self.option = option
+        self.orientation = orientation
+        labelPaddingX = Layout.padding(with: sizeType)
+        formStringView = TextView(font: Font.default(with: sizeType),
+                                  frameAlignment: .right, alignment: .right)
+        self.sizeType = sizeType
+        
+        super.init()
+        noIndicatedLineColor = .getBorder
+        indicatedLineColor = .indicated
+        isClipped = true
+        children = [formStringView]
+        self.frame = frame
     }
-}
-extension Float {
-    var cf: CGFloat {
-        return CGFloat(self)
+    
+    override var defaultBounds: Rect {
+        return formStringView.defaultBounds
     }
-    var d: Double {
-        return Double(self)
+    override var bounds: Rect {
+        didSet {
+            updateLayout()
+        }
     }
-}
-extension Double {
-    var cf: CGFloat {
-        return CGFloat(self)
+    private func updateLayout() {
+        formStringView.frame.origin = Point(x: bounds.width - formStringView.frame.width - labelPaddingX,
+                                            y: round((bounds.height - formStringView.frame.height) / 2))
     }
-}
-extension CGFloat {
-    var d: Double {
-        return Double(self)
+    func updateWithModel() {
+        updateString()
+    }
+    func updateString() {
+        formStringView.text = option.text(with: model)
+    }
+    
+    func copiedViewables(at p: Point) -> [Viewable] {
+        return [model]
+    }
+    
+    func reference(at p: Point) -> Reference {
+        return T.reference
     }
 }
 
@@ -511,7 +550,7 @@ extension Int: Referenceable {
     static let name = Localization(english: "Integer", japanese: "整数")
 }
 extension Int: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return String(self).view(withBounds: bounds, sizeType)
     }
 }
@@ -531,11 +570,6 @@ struct Hash {
     }
 }
 
-extension Double {
-    static func random(min: Double, max: Double) -> Double {
-        return (max - min) * (Double(arc4random_uniform(UInt32.max)) / Double(UInt32.max)) + min
-    }
-}
 extension CGFloat {
     func interval(scale: CGFloat) -> CGFloat {
         if scale == 0 {
@@ -585,8 +619,8 @@ extension CGFloat {
         func x(at i: Int) -> CGFloat {
             return a + CGFloat(i) * h
         }
-        let s0 = 2 * (1..<m - 1).reduce(0.0.cf) { $0 + f(x(at: 2 * $1)) }
-        let s1 = 4 * (1..<m).reduce(0.0.cf) { $0 + f(x(at: 2 * $1 - 1)) }
+        let s0 = 2 * (1..<m - 1).reduce(0.0.cg) { $0 + f(x(at: 2 * $1)) }
+        let s1 = 4 * (1..<m).reduce(0.0.cg) { $0 + f(x(at: 2 * $1 - 1)) }
         return (h / 3) * (f(a) + s0 + s1 + f(b))
     }
     static func simpsonIntegralB(splitHalfCount m: Int, a: CGFloat, maxB: CGFloat,
@@ -599,7 +633,7 @@ extension CGFloat {
         }
         let h3 = h / 3
         var a = a
-        var fa = f(a), allS = 0.0.cf
+        var fa = f(a), allS = 0.0.cg
         for i in (0..<m) {
             let ab = x(at: i * 2 + 1), b = x(at: i * 2 + 2)
             let fab = f(ab), fb = f(b)
@@ -655,8 +689,8 @@ extension CGFloat: Interpolatable {
 }
 
 extension CGAffineTransform {
-    static func centering(from fromFrame: CGRect,
-                          to toFrame: CGRect) -> (scale: CGFloat, affine: CGAffineTransform) {
+    static func centering(from fromFrame: Rect,
+                          to toFrame: Rect) -> (scale: CGFloat, affine: CGAffineTransform) {
         guard !fromFrame.isEmpty && !toFrame.isEmpty else {
             return (1, CGAffineTransform.identity)
         }

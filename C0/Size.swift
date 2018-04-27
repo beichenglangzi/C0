@@ -23,13 +23,13 @@ import Foundation
  Issue: Core Graphicsとの置き換え
  */
 struct _Size: Equatable {
-    var width = 0.0, height = 0.0
+    var width = 0.0.cg, height = 0.0.cg
     
     var isEmpty: Bool {
         return width == 0 && height == 0
     }
     
-    static func *(lhs: _Size, rhs: Double) -> _Size {
+    static func *(lhs: _Size, rhs: CGFloat) -> _Size {
         return _Size(width: lhs.width * rhs, height: lhs.height * rhs)
     }
 }
@@ -41,8 +41,8 @@ extension _Size: Hashable {
 extension _Size: Codable {
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
-        let width = try container.decode(Double.self)
-        let height = try container.decode(Double.self)
+        let width = try container.decode(CGFloat.self)
+        let height = try container.decode(CGFloat.self)
         self.init(width: width, height: height)
     }
     func encode(to encoder: Encoder) throws {
@@ -56,7 +56,7 @@ extension _Size: Referenceable {
 }
 
 typealias Size = CGSize
-extension CGSize {
+extension Size {
     init(square: CGFloat) {
         self.init(width: square, height: square)
     }
@@ -64,29 +64,29 @@ extension CGSize {
         self = NSSizeToCGSize(NSSizeFromString(string))
     }
     
-    static func *(lhs: CGSize, rhs: CGFloat) -> CGSize {
-        return CGSize(width: lhs.width * rhs, height: lhs.height * rhs)
+    static func *(lhs: Size, rhs: CGFloat) -> Size {
+        return Size(width: lhs.width * rhs, height: lhs.height * rhs)
     }
     
     var string: String {
         return String(NSStringFromSize(NSSizeFromCGSize(self)))
     }
     
-    static let effectiveFieldSizeOfView = CGSize(width: tan(.pi * (30.0 / 2) / 180),
+    static let effectiveFieldSizeOfView = Size(width: tan(.pi * (30.0 / 2) / 180),
                                                  height: tan(.pi * (20.0 / 2) / 180))
     
 }
-extension CGSize: Referenceable {
+extension Size: Referenceable {
     static let name = Localization(english: "Size", japanese: "サイズ")
 }
-extension CGSize: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+extension Size: ObjectViewExpression {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return string.view(withBounds: bounds, sizeType)
     }
 }
 
 final class DiscreteSizeView: View, Assignable {
-    var size = CGSize() {
+    var size = Size() {
         didSet {
             if size != oldValue {
                 widthView.model = size.width
@@ -94,20 +94,20 @@ final class DiscreteSizeView: View, Assignable {
             }
         }
     }
-    var defaultSize = CGSize()
+    var defaultSize = Size()
     
     var sizeType: SizeType
     let classWidthNameView: TextView
     let widthView: DiscreteRealNumberView
     let classHeightNameView: TextView
     let heightView: DiscreteRealNumberView
-    init(size: CGSize = CGSize(), defaultSize: CGSize = CGSize(),
-         minSize: CGSize = CGSize(width: 0, height: 0),
-         maxSize: CGSize = CGSize(width: 10000, height: 10000),
+    init(size: Size = Size(), defaultSize: Size = Size(),
+         minSize: Size = Size(width: 0, height: 0),
+         maxSize: Size = Size(width: 10000, height: 10000),
          widthEXP: RealNumber = 1, heightEXP: RealNumber = 1,
          widthInterval: RealNumber = 1, widthNumberOfDigits: Int = 0, widthUnit: String = "",
          heightInterval: RealNumber = 1, heightNumberOfDigits: Int = 0, heightUnit: String = "",
-         frame: CGRect = CGRect(),
+         frame: Rect = Rect(),
          sizeType: SizeType) {
         
         self.sizeType = sizeType
@@ -143,13 +143,13 @@ final class DiscreteSizeView: View, Assignable {
         updateLayout()
     }
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
-        return CGRect(x: 0, y: 0,
+        return Rect(x: 0, y: 0,
                       width: classWidthNameView.frame.width + widthView.frame.width + classHeightNameView.frame.width + heightView.frame.width + padding * 3,
                       height: height + padding * 2)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -157,25 +157,25 @@ final class DiscreteSizeView: View, Assignable {
     func updateLayout() {
         let padding = Layout.padding(with: sizeType)
         var x = padding
-        classWidthNameView.frame.origin = CGPoint(x: x, y: padding * 2)
+        classWidthNameView.frame.origin = Point(x: x, y: padding * 2)
         x += classWidthNameView.frame.width
-        widthView.frame.origin = CGPoint(x: x, y: padding)
+        widthView.frame.origin = Point(x: x, y: padding)
         x += widthView.frame.width + padding
-        classHeightNameView.frame.origin = CGPoint(x: x, y: padding * 2)
+        classHeightNameView.frame.origin = Point(x: x, y: padding * 2)
         x += classHeightNameView.frame.width
-        heightView.frame.origin = CGPoint(x: x, y: padding)
+        heightView.frame.origin = Point(x: x, y: padding)
         x += heightView.frame.width + padding
     }
     
     struct Binding {
         let view: DiscreteSizeView
-        let size: CGSize, oldSize: CGSize, phase: Phase
+        let size: Size, oldSize: Size, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
     var disabledRegisterUndo = false
     
-    private var oldSize = CGSize()
+    private var oldSize = Size()
     private func setSize(with obj: DiscreteRealNumberView.Binding<RealNumber>) {
         if obj.phase == .began {
             oldSize = size
@@ -190,24 +190,24 @@ final class DiscreteSizeView: View, Assignable {
         }
     }
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let size = defaultSize
         if size != self.size {
             push(size, old: self.size)
         }
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [size]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
-            if let size = object as? CGSize {
+            if let size = object as? Size {
                 if size != self.size {
                     push(size, old: self.size)
                     return
                 }
             } else if let string = object as? String {
-                let size = CGSize(string)
+                let size = Size(string)
                 if size != self.size {
                     push(size, old: self.size)
                     return
@@ -216,14 +216,14 @@ final class DiscreteSizeView: View, Assignable {
         }
     }
     
-    func push(_ size: CGSize, old oldSize: CGSize) {
+    func push(_ size: Size, old oldSize: Size) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.push(oldSize, old: size) }
         binding?(Binding(view: self, size: size, oldSize: oldSize, phase: .began))
         self.size = size
         binding?(Binding(view: self, size: size, oldSize: oldSize, phase: .ended))
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return _Size.reference
     }
 }

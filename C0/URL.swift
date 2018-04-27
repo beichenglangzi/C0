@@ -53,7 +53,7 @@ extension URL: Referenceable {
 extension URL: DeepCopiable {
 }
 extension URL: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return lastPathComponent.view(withBounds: bounds, sizeType)
     }
 }

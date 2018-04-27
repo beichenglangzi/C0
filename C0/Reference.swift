@@ -54,7 +54,7 @@ extension Reference: Referenceable {
     static let name = Localization(english: "Reference", japanese: "情報")
 }
 extension Reference: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return name.view(withBounds: bounds, sizeType)
     }
 }
@@ -87,32 +87,32 @@ final class ReferenceView: View {
         updateWithReference()
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     private func updateLayout() {
         let padding = Layout.basicPadding
-        classNameView.frame.origin = CGPoint(x: padding,
+        classNameView.frame.origin = Point(x: padding,
                                              y: bounds.height - classNameView.frame.height - padding)
         
-        let frameWidth = (bounds.width - padding * 2).d
+        let frameWidth = bounds.width - padding * 2
         classDescriptionView.textFrame.frameWidth = frameWidth
         viewDescriptionView.textFrame.frameWidth = frameWidth
         
         var y = bounds.height - nameView.frame.height - padding
-        nameView.frame.origin = CGPoint(x: classNameView.frame.maxX + padding,
+        nameView.frame.origin = Point(x: classNameView.frame.maxX + padding,
                                          y: y)
         y = bounds.height - classNameView.frame.height - padding
         y -= classClassDescriptionView.frame.height
-        classClassDescriptionView.frame.origin = CGPoint(x: padding, y: y)
+        classClassDescriptionView.frame.origin = Point(x: padding, y: y)
         y -= classDescriptionView.frame.height
-        classDescriptionView.frame.origin = CGPoint(x: padding, y: y)
+        classDescriptionView.frame.origin = Point(x: padding, y: y)
         y -= padding + classViewDescriptionView.frame.height
-        classViewDescriptionView.frame.origin = CGPoint(x: padding, y: y)
+        classViewDescriptionView.frame.origin = Point(x: padding, y: y)
         y -= viewDescriptionView.frame.height
-        viewDescriptionView.frame.origin = CGPoint(x: padding, y: y)
+        viewDescriptionView.frame.origin = Point(x: padding, y: y)
     }
     private func updateWithReference() {
         nameView.text = reference.name
@@ -121,7 +121,7 @@ final class ReferenceView: View {
         updateLayout()
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Reference.reference
     }
 }

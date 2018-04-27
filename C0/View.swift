@@ -22,13 +22,13 @@ import QuartzCore
 
 final class Screen {
     static let shared = Screen()
-    var backingScaleFactor = 1.0.cf
+    var backingScaleFactor = 1.0.cg
 }
 
 struct Gradient {
     var colors = [Color]()
-    var locations = [Double]()
-    var startPoint = CGPoint(), endPoint = CGPoint(x: 1, y: 0)
+    var locations = [CGFloat]()
+    var startPoint = Point(), endPoint = Point(x: 1, y: 0)
 }
 
 /**
@@ -81,9 +81,9 @@ class View: Undoable, Queryable {
         }
     }
     private static func update(with gradient: Gradient, in caGradientLayer: CAGradientLayer) {
-        caGradientLayer.colors = gradient.colors.isEmpty ? nil : gradient.colors.map { $0.cgColor }
+        caGradientLayer.colors = gradient.colors.isEmpty ? nil : gradient.colors.map { $0.cg }
         caGradientLayer.locations = gradient.locations.isEmpty ?
-            nil : gradient.locations.map { NSNumber(value: $0) }
+            nil : gradient.locations.map { NSNumber(value: Double($0)) }
         caGradientLayer.startPoint = gradient.startPoint
         caGradientLayer.endPoint = gradient.endPoint
     }
@@ -97,7 +97,7 @@ class View: Undoable, Queryable {
         caShapeLayer.actions = actions
         caShapeLayer.fillColor = nil
         caShapeLayer.lineWidth = 0
-        caShapeLayer.strokeColor = lineColor?.cgColor
+        caShapeLayer.strokeColor = lineColor?.cg
         caShapeLayer.path = path
         caLayer = caShapeLayer
     }
@@ -126,8 +126,8 @@ class View: Undoable, Queryable {
         self.fillColor = fillColor
         self.lineColor = lineColor
         self.drawClosure = drawClosure
-        caDrawLayer.backgroundColor = fillColor?.cgColor
-        caDrawLayer.borderColor = lineColor?.cgColor
+        caDrawLayer.backgroundColor = fillColor?.cg
+        caDrawLayer.borderColor = lineColor?.cg
         caDrawLayer.borderWidth = lineColor == nil ? 0 : lineWidth
         caDrawLayer.drawClosure = { [unowned self] ctx in self.drawClosure?(ctx, self) }
     }
@@ -141,7 +141,7 @@ class View: Undoable, Queryable {
     func draw() {
         caLayer.setNeedsDisplay()
     }
-    func draw(_ rect: CGRect) {
+    func draw(_ rect: Rect) {
         caLayer.setNeedsDisplay(rect)
     }
     func draw(in ctx: CGContext) {
@@ -216,11 +216,11 @@ class View: Undoable, Queryable {
         return parent?.root ?? self
     }
     
-    var defaultBounds: CGRect {
-        return CGRect()
+    var defaultBounds: Rect {
+        return Rect()
     }
     private var isUseDidSetBounds = true, isUseDidSetFrame = true
-    var bounds = CGRect() {
+    var bounds = Rect() {
         didSet {
             guard isUseDidSetBounds && bounds != oldValue else {
                 return
@@ -233,7 +233,7 @@ class View: Undoable, Queryable {
             caLayer.bounds = bounds
         }
     }
-    var frame = CGRect() {
+    var frame = Rect() {
         didSet {
             guard isUseDidSetFrame && frame != oldValue else {
                 return
@@ -247,7 +247,7 @@ class View: Undoable, Queryable {
             changed(frame)
         }
     }
-    var position: CGPoint {
+    var position: Point {
         get {
             return caLayer.position
         }
@@ -256,8 +256,8 @@ class View: Undoable, Queryable {
         }
     }
     
-    var changedFrame: ((CGRect) -> ())?
-    func changed(_ frame: CGRect) {
+    var changedFrame: ((Rect) -> ())?
+    func changed(_ frame: Rect) {
         guard !isForm else {
             return
         }
@@ -278,7 +278,7 @@ class View: Undoable, Queryable {
     }
     var opacity: CGFloat {
         get {
-            return caLayer.opacity.cf
+            return CGFloat(caLayer.opacity)
         }
         set {
             caLayer.opacity = Float(newValue)
@@ -325,7 +325,7 @@ class View: Undoable, Queryable {
             guard fillColor != oldValue else {
                 return
             }
-            set(fillColor: fillColor?.cgColor)
+            set(fillColor: fillColor?.cg)
         }
     }
     fileprivate func set(fillColor: CGColor?) {
@@ -353,10 +353,10 @@ class View: Undoable, Queryable {
                 return
             }
             set(lineWidth: lineColor != nil ? lineWidth : 0)
-            set(lineColor: lineColor?.cgColor)
+            set(lineColor: lineColor?.cg)
         }
     }
-    var lineWidth = 0.5.cf {
+    var lineWidth = 0.5.cg {
         didSet {
             set(lineWidth: lineColor != nil ? lineWidth : 0)
         }
@@ -376,17 +376,17 @@ class View: Undoable, Queryable {
         }
     }
     
-    func containsPath(_ p: CGPoint) -> Bool {
+    func containsPath(_ p: Point) -> Bool {
         if let path = path {
             return path.contains(p)
         } else {
             return bounds.contains(p)
         }
     }
-    func contains(_ p: CGPoint) -> Bool {
+    func contains(_ p: Point) -> Bool {
         return !isForm && !isHidden && containsPath(p)
     }
-    func at(_ p: CGPoint) -> View? {
+    func at(_ p: Point) -> View? {
         guard !(isForm && _children.isEmpty) else {
             return nil
         }
@@ -402,30 +402,30 @@ class View: Undoable, Queryable {
         return isForm ? nil : self
     }
     
-    func convertFromRoot(_ point: CGPoint) -> CGPoint {
-        return point - convertToRoot(CGPoint(), stop: nil).point
+    func convertFromRoot(_ point: Point) -> Point {
+        return point - convertToRoot(Point(), stop: nil).point
     }
-    func convert(_ point: CGPoint, from view: View) -> CGPoint {
+    func convert(_ point: Point, from view: View) -> Point {
         guard self !== view else {
             return point
         }
         let result = view.convertToRoot(point, stop: self)
         return !result.isRoot ?
-            result.point : result.point - convertToRoot(CGPoint(), stop: nil).point
+            result.point : result.point - convertToRoot(Point(), stop: nil).point
     }
-    func convertToRoot(_ point: CGPoint) -> CGPoint {
+    func convertToRoot(_ point: Point) -> Point {
         return convertToRoot(point, stop: nil).point
     }
-    func convert(_ point: CGPoint, to view: View) -> CGPoint {
+    func convert(_ point: Point, to view: View) -> Point {
         guard self !== view else {
             return point
         }
         let result = convertToRoot(point, stop: view)
         return !result.isRoot ?
-            result.point : result.point - view.convertToRoot(CGPoint(), stop: nil).point
+            result.point : result.point - view.convertToRoot(Point(), stop: nil).point
     }
-    private func convertToRoot(_ point: CGPoint,
-                               stop view: View?) -> (point: CGPoint, isRoot: Bool) {
+    private func convertToRoot(_ point: Point,
+                               stop view: View?) -> (point: Point, isRoot: Bool) {
         if let parent = parent {
             let parentPoint = point - bounds.origin + frame.origin
             return parent === view ?
@@ -435,17 +435,17 @@ class View: Undoable, Queryable {
         }
     }
     
-    func convertFromRoot(_ rect: CGRect) -> CGRect {
-        return CGRect(origin: convertFromRoot(rect.origin), size: rect.size)
+    func convertFromRoot(_ rect: Rect) -> Rect {
+        return Rect(origin: convertFromRoot(rect.origin), size: rect.size)
     }
-    func convert(_ rect: CGRect, from view: View) -> CGRect {
-        return CGRect(origin: convert(rect.origin, from: view), size: rect.size)
+    func convert(_ rect: Rect, from view: View) -> Rect {
+        return Rect(origin: convert(rect.origin, from: view), size: rect.size)
     }
-    func convertToRoot(_ rect: CGRect) -> CGRect {
-        return CGRect(origin: convertToRoot(rect.origin), size: rect.size)
+    func convertToRoot(_ rect: Rect) -> Rect {
+        return Rect(origin: convertToRoot(rect.origin), size: rect.size)
     }
-    func convert(_ rect: CGRect, to view: View) -> CGRect {
-        return CGRect(origin: convert(rect.origin, to: view), size: rect.size)
+    func convert(_ rect: Rect, to view: View) -> Rect {
+        return Rect(origin: convert(rect.origin, to: view), size: rect.size)
     }
     
     var isIndicated = false {
@@ -502,7 +502,7 @@ class View: Undoable, Queryable {
         }
     }
     
-    func at<T>(_ p: CGPoint, _ type: T.Type) -> T? {
+    func at<T>(_ p: Point, _ type: T.Type) -> T? {
         return at(p)?.withSelfAndAllParents(with: type)
     }
     func withSelfAndAllParents<T>(with type: T.Type) -> T? {
@@ -529,11 +529,11 @@ private final class C0DrawLayer: CALayer {
         super.init()
         self.needsDisplayOnBoundsChange = true
         self.drawsAsynchronously = true
-        self.anchorPoint = CGPoint()
+        self.anchorPoint = Point()
         self.isOpaque = backgroundColor != nil
         self.borderWidth = borderColor == nil ? 0.0 : 0.5
-        self.backgroundColor = backgroundColor?.cgColor
-        self.borderColor = borderColor?.cgColor
+        self.backgroundColor = backgroundColor?.cg
+        self.borderColor = borderColor?.cg
     }
     override init(layer: Any) {
         super.init(layer: layer)
@@ -594,8 +594,8 @@ extension CALayer {
         layer.isOpaque = true
         layer.actions = disabledAnimationActions
         layer.borderWidth = borderColor == nil ? 0.0 : 0.5
-        layer.backgroundColor = backgroundColor?.cgColor
-        layer.borderColor = borderColor?.cgColor
+        layer.backgroundColor = backgroundColor?.cg
+        layer.borderColor = borderColor?.cg
         return layer
     }
     func safetyRender(in ctx: CGContext) {
@@ -617,16 +617,16 @@ extension CATransaction {
 }
 
 extension CGPath {
-    static func checkerboard(with size: CGSize, in frame: CGRect) -> CGPath {
+    static func checkerboard(with size: Size, in frame: Rect) -> CGPath {
         let path = CGMutablePath()
         let xCount = Int(frame.width / size.width)
         let yCount = Int(frame.height / (size.height * 2))
         for xi in 0 ..< xCount {
-            let x = frame.minX + xi.cf * size.width
+            let x = frame.minX + CGFloat(xi) * size.width
             let fy = xi % 2 == 0 ? size.height : 0
             for yi in 0 ..< yCount {
-                let y = frame.minY + yi.cf * size.height * 2 + fy
-                path.addRect(CGRect(x: x, y: y, width: size.width, height: size.height))
+                let y = frame.minY + CGFloat(yi) * size.height * 2 + fy
+                path.addRect(Rect(x: x, y: y, width: size.width, height: size.height))
             }
         }
         return path
@@ -634,7 +634,7 @@ extension CGPath {
 }
 
 extension CGContext {
-    static func bitmap(with size: CGSize,
+    static func bitmap(with size: Size,
                        _ cs: CGColorSpace? = CGColorSpace(name: CGColorSpace.sRGB)) -> CGContext? {
         guard let colorSpace = cs else {
             return nil
@@ -657,25 +657,25 @@ extension CGContext {
             nFillColor = fillColor
         }
         let pathBounds = path.boundingBoxOfPath.insetBy(dx: -width, dy: -width)
-        let lineColor = strength == 1 ? nFillColor : nFillColor.multiply(alpha: Double(strength))
+        let lineColor = strength == 1 ? nFillColor : nFillColor.multiply(alpha: strength)
         beginTransparencyLayer(in: boundingBoxOfClipPath.intersection(pathBounds),
                                auxiliaryInfo: nil)
         if isLuster {
-            setShadow(offset: CGSize(), blur: width * scale, color: lineColor.cgColor)
+            setShadow(offset: Size(), blur: width * scale, color: lineColor.cg)
         } else {
             let shadowY = hypot(pathBounds.size.width, pathBounds.size.height)
             translateBy(x: 0, y: shadowY)
-            let shadowOffset = CGSize(width: shadowY * scale * sin(rotation),
+            let shadowOffset = Size(width: shadowY * scale * sin(rotation),
                                       height: -shadowY * scale * cos(rotation))
-            setShadow(offset: shadowOffset, blur: width * scale / 2, color: lineColor.cgColor)
+            setShadow(offset: shadowOffset, blur: width * scale / 2, color: lineColor.cg)
             setLineWidth(width)
             setLineJoin(.round)
-            setStrokeColor(lineColor.cgColor)
+            setStrokeColor(lineColor.cg)
             addPath(path)
             strokePath()
             translateBy(x: 0, y: -shadowY)
         }
-        setFillColor(nFillColor.cgColor)
+        setFillColor(nFillColor.cg)
         addPath(path)
         fillPath()
         endTransparencyLayer()
@@ -695,7 +695,7 @@ extension CGContext {
         if let outputImage = filter?.outputImage {
             cictx.draw(outputImage,
                        in: ctx.boundingBoxOfClipPath,
-                       from: CGRect(origin: CGPoint(), size: image.size))
+                       from: Rect(origin: Point(), size: image.size))
         }
     }
 }
@@ -715,15 +715,15 @@ enum SizeType {
 }
 
 protocol Viewable: Referenceable {
-    func view(withBounds bounds: CGRect, _ sizeType: SizeType) -> View
+    func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View
 }
 protocol Thumbnailable {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View
 }
 protocol ObjectViewExpression: Viewable, Thumbnailable, DeepCopiable {
 }
 extension ObjectViewExpression {
-    func view(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return ObjectView(object: self,
                           thumbnailView: thumbnail(withBounds: bounds, sizeType),
                           minFrame: bounds, sizeType)
@@ -733,7 +733,7 @@ protocol ObjectViewExpressionWithDisplayText: ObjectViewExpression {
     var displayText: Localization { get }
 }
 extension ObjectViewExpressionWithDisplayText {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return displayText.thumbnail(withBounds: bounds, sizeType)
     }
 }
@@ -751,14 +751,14 @@ final class KnobView: View {
             return min(bounds.width, bounds.height) / 2
         }
         set {
-            frame = CGRect(x: position.x - newValue, y: position.y - newValue,
+            frame = Rect(x: position.x - newValue, y: position.y - newValue,
                            width: newValue * 2, height: newValue * 2)
             cornerRadius = newValue
         }
     }
 }
 final class DiscreteKnobView: View {
-    init(_ size: CGSize = CGSize(width: 5, height: 10), lineWidth: CGFloat = 1) {
+    init(_ size: Size = Size(width: 5, height: 10), lineWidth: CGFloat = 1) {
         super.init(isForm: true)
         fillColor = .knob
         lineColor = .getSetBorder
@@ -779,23 +779,23 @@ final class GetterView<T: Viewable>: View, Copiable {
         super.init()
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        classNameView.frame.origin = CGPoint(x: padding,
+        classNameView.frame.origin = Point(x: padding,
                                              y: bounds.height - classNameView.frame.height - padding)
     }
     
     var copiedViewablesClosure: () -> (T)
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [copiedViewablesClosure()]
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return T.reference
     }
 }
@@ -805,7 +805,7 @@ final class ObjectView<T: DeepCopiable & Viewable & Referenceable>: View, Copiab
     
     var sizeType: SizeType
     let classNameView: TextView, thumbnailView: View
-    init(object: T, thumbnailView: View?, minFrame: CGRect, thumbnailWidth: CGFloat = 40.0,
+    init(object: T, thumbnailView: View?, minFrame: Rect, thumbnailWidth: CGFloat = 40.0,
          _ sizeType: SizeType = .regular) {
         self.object = object
         classNameView = TextView(text: T.name, font: Font.bold(with: sizeType))
@@ -814,8 +814,8 @@ final class ObjectView<T: DeepCopiable & Viewable & Referenceable>: View, Copiab
         
         super.init()
         let width = max(minFrame.width, classNameView.frame.width + thumbnailWidth)
-        self.frame = CGRect(origin: minFrame.origin,
-                            size: CGSize(width: width, height: minFrame.height))
+        self.frame = Rect(origin: minFrame.origin,
+                            size: Size(width: width, height: minFrame.height))
         children = [classNameView, self.thumbnailView]
         updateLayout()
     }
@@ -826,26 +826,26 @@ final class ObjectView<T: DeepCopiable & Viewable & Referenceable>: View, Copiab
         }
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        classNameView.frame.origin = CGPoint(x: padding,
+        classNameView.frame.origin = Point(x: padding,
                                              y: bounds.height - classNameView.frame.height - padding)
-        thumbnailView.frame = CGRect(x: classNameView.frame.maxX + padding,
+        thumbnailView.frame = Rect(x: classNameView.frame.maxX + padding,
                                      y: padding,
                                      width: bounds.width - classNameView.frame.width - padding * 3,
                                      height: bounds.height - padding * 2)
     }
     
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return  [object.copied]
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return T.reference
     }
 }

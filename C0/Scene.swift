@@ -24,9 +24,9 @@ typealias FPS = CGFloat
 typealias FrameTime = Int
 typealias BaseTime = Q
 typealias Beat = Q
-typealias DoubleBeat = Double
-typealias DoubleBaseTime = Double
-typealias Second = Double
+typealias DoubleBeat = CGFloat
+typealias DoubleBaseTime = CGFloat
+typealias Second = CGFloat
 
 /**
  Issue: 複数のサウンド
@@ -35,7 +35,7 @@ typealias Second = Double
 final class Scene: NSObject, NSCoding {
     var version = Version()
     var name: String
-    var frame: CGRect
+    var frame: Rect
     var editMaterial: Material
     var isHiddenPrevious: Bool, isHiddenNext: Bool
     var isHiddenSubtitles: Bool
@@ -110,7 +110,7 @@ final class Scene: NSObject, NSCoding {
                                                          isInfinitesimal: true, unit: " b")
     
     init(name: String = Localization(english: "Untitled", japanese: "名称未設定").currentString,
-         frame: CGRect = CGRect(x: -288, y: -162, width: 576, height: 324),
+         frame: Rect = Rect(x: -288, y: -162, width: 576, height: 324),
          frameRate: FPS = 24,
          baseTimeInterval: Beat = Beat(1, 24),
          editMaterial: Material = Material(),
@@ -152,7 +152,7 @@ final class Scene: NSObject, NSCoding {
     init?(coder: NSCoder) {
         name = coder.decodeObject(forKey: CodingKeys.name.rawValue) as? String ?? ""
         frame = coder.decodeRect(forKey: CodingKeys.frame.rawValue)
-        frameRate = coder.decodeDouble(forKey: CodingKeys.frameRate.rawValue).cf
+        frameRate = coder.decodeDouble(forKey: CodingKeys.frameRate.rawValue).cg
         baseTimeInterval = coder.decodeDecodable(
             Beat.self, forKey: CodingKeys.baseTimeInterval.rawValue) ?? Beat(1, 16)
         editMaterial = coder.decodeObject(
@@ -176,7 +176,7 @@ final class Scene: NSObject, NSCoding {
     func encode(with coder: NSCoder) {
         coder.encode(name, forKey: CodingKeys.name.rawValue)
         coder.encode(frame, forKey: CodingKeys.frame.rawValue)
-        coder.encode(frameRate.d, forKey: CodingKeys.frameRate.rawValue)
+        coder.encode(Double(frameRate), forKey: CodingKeys.frameRate.rawValue)
         coder.encodeEncodable(baseTimeInterval, forKey: CodingKeys.baseTimeInterval.rawValue)
         coder.encode(editMaterial, forKey: CodingKeys.editMaterial.rawValue)
         coder.encode(isHiddenPrevious, forKey: CodingKeys.isHiddenPrevious.rawValue)
@@ -250,10 +250,10 @@ final class Scene: NSObject, NSCoding {
     var secondTime: (second: Int, frame: Int) {
         let second = secondTime(withBeatTime: time)
         let frameTime = FrameTime(second * Second(frameRate))
-        return (Int(second), frameTime - Int(second.cf * frameRate))
+        return (Int(second), frameTime - Int(second * frameRate))
     }
     func secondTime(with frameTime: FrameTime) -> (second: Int, frame: Int) {
-        let second = Int(frameTime.cf / frameRate)
+        let second = Int(CGFloat(frameTime) / frameRate)
         return (second, frameTime - second)
     }
     
@@ -330,8 +330,8 @@ final class SceneView: View, Scrollable {
         }
     }
     
-    static let versionWidth = 120.0.cf, propertyWidth = 200.0.cf
-    static let canvasSize = CGSize(width: 730, height: 480), timelineHeight = 190.0.cf
+    static let versionWidth = 120.0.cg, propertyWidth = 200.0.cg
+    static let canvasSize = Size(width: 730, height: 480), timelineHeight = 190.0.cg
     
     let classNameView = TextView(text: Scene.name, font: .bold)
     let versionView = VersionView()
@@ -431,10 +431,10 @@ final class SceneView: View, Scrollable {
         
         rendererManager.progressesEdgeView = self
         sizeView.binding = { [unowned self] in
-            self.scene.frame = CGRect(origin: CGPoint(x: -$0.size.width / 2,
+            self.scene.frame = Rect(origin: Point(x: -$0.size.width / 2,
                                                       y: -$0.size.height / 2), size: $0.size)
             self.canvas.setNeedsDisplay()
-            let sp = CGPoint(x: $0.size.width, y: $0.size.height)
+            let sp = Point(x: $0.size.width, y: $0.size.height)
             self.transformView.standardTranslation = sp
             self.wiggleXView.standardAmplitude = $0.size.width
             self.wiggleYView.standardAmplitude = $0.size.height
@@ -579,7 +579,7 @@ final class SceneView: View, Scrollable {
         exportSubtitlesView.closure = { [unowned self] in _ = self.rendererManager.exportSubtitles() }
         exportImageView.closure = { [unowned self] in
             let size = self.scene.frame.size, p = self.scene.renderingVerticalResolution
-            let newSize = CGSize(width: floor((size.width * p.cf) / size.height), height: p.cf)
+            let newSize = Size(width: floor((size.width * CGFloat(p)) / size.height), height: CGFloat(p))
             let sizeString = "w: \(Int(newSize.width)) px, h: \(Int(newSize.height)) px"
             let message = Localization(english: "Export Image(\(sizeString))",
                                        japanese: "画像として書き出す(\(sizeString))").currentString
@@ -587,7 +587,7 @@ final class SceneView: View, Scrollable {
         }
         exportMovieView.closure = { [unowned self] in
             let size = self.scene.frame.size, p = self.scene.renderingVerticalResolution
-            let newSize = CGSize(width: floor((size.width * p.cf) / size.height), height: p.cf)
+            let newSize = Size(width: floor((size.width * CGFloat(p)) / size.height), height: CGFloat(p))
             let sizeString = "w: \(Int(newSize.width)) px, h: \(Int(newSize.height)) px"
             let message = Localization(english: "Export Movie(\(sizeString))",
                                        japanese: "動画として書き出す(\(sizeString))").currentString
@@ -664,16 +664,16 @@ final class SceneView: View, Scrollable {
         }
     }
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let padding = Layout.basicPadding, buttonH = Layout.basicHeight
         let h = buttonH + padding * 2
         let cs = SceneView.canvasSize, th = SceneView.timelineHeight
         let inWidth = cs.width + padding + SceneView.propertyWidth
         let width = inWidth + padding * 2
         let height = th + cs.height + h + buttonH + padding * 2
-        return CGRect(x: 0, y: 0, width: width, height: height)
+        return Rect(x: 0, y: 0, width: width, height: height)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -685,92 +685,92 @@ final class SceneView: View, Scrollable {
         let pw = SceneView.propertyWidth
         let y = bounds.height - buttonH - padding
         
-        let kh = 120.0.cf
+        let kh = 120.0.cg
         
-        classNameView.frame.origin = CGPoint(x: padding,
+        classNameView.frame.origin = Point(x: padding,
                                              y: bounds.height - classNameView.frame.height - padding)
         
         var topX = bounds.width - padding
         let topY = bounds.height - buttonH - padding
         let esw = exportSubtitlesView.defaultBounds.width
         topX -= esw
-        exportSubtitlesView.frame = CGRect(x: topX, y: y, width: esw, height: buttonH)
+        exportSubtitlesView.frame = Rect(x: topX, y: y, width: esw, height: buttonH)
         topX -= esw
-        exportImageView.frame = CGRect(x: topX, y: y, width: esw, height: buttonH)
+        exportImageView.frame = Rect(x: topX, y: y, width: esw, height: buttonH)
         topX -= esw
-        exportMovieView.frame = CGRect(x: topX, y: y, width: esw, height: buttonH)
+        exportMovieView.frame = Rect(x: topX, y: y, width: esw, height: buttonH)
         let ihnw = isHiddenNextView.defaultBounds.width
         topX -= ihnw + padding
-        isHiddenNextView.frame = CGRect(x: topX, y: topY, width: ihnw, height: buttonH)
+        isHiddenNextView.frame = Rect(x: topX, y: topY, width: ihnw, height: buttonH)
         let ihpw = isHiddenPreviousView.defaultBounds.width
         topX -= ihpw
-        isHiddenPreviousView.frame = CGRect(x: topX, y: topY, width: ihpw, height: buttonH)
+        isHiddenPreviousView.frame = Rect(x: topX, y: topY, width: ihpw, height: buttonH)
         let tiw = Layout.valueWidth(with: .regular)
         topX -= tiw
-        timelineView.baseTimeIntervalView.frame = CGRect(x: topX, y: topY,
+        timelineView.baseTimeIntervalView.frame = Rect(x: topX, y: topY,
                                                          width: tiw, height: buttonH)
         topX = classNameView.frame.maxX + padding
-        versionView.frame = CGRect(x: topX, y: y, width: SceneView.versionWidth, height: buttonH)
+        versionView.frame = Rect(x: topX, y: y, width: SceneView.versionWidth, height: buttonH)
         
         var ty = y
         ty -= th
-        timelineView.frame = CGRect(x: padding, y: ty, width: cs.width, height: th)
+        timelineView.frame = Rect(x: padding, y: ty, width: cs.width, height: th)
         ty -= cs.height
-        canvas.frame = CGRect(x: padding, y: ty, width: cs.width, height: cs.height)
+        canvas.frame = Rect(x: padding, y: ty, width: cs.width, height: cs.height)
         ty -= h
-        seekBar.frame = CGRect(x: padding, y: ty, width: cs.width, height: h)
+        seekBar.frame = Rect(x: padding, y: ty, width: cs.width, height: h)
         
         let px = padding * 2 + cs.width, propertyMaxY = y
         var py = propertyMaxY
         let sh = Layout.smallHeight
         let sph = sh + Layout.smallPadding * 2
         py -= sph
-        sizeView.frame = CGRect(x: px, y: py, width: sizeView.defaultBounds.width, height: sph)
-        frameRateView.frame = CGRect(x: sizeView.frame.maxX, y: py,
+        sizeView.frame = Rect(x: px, y: py, width: sizeView.defaultBounds.width, height: sph)
+        frameRateView.frame = Rect(x: sizeView.frame.maxX, y: py,
                                      width: Layout.valueWidth(with: .small), height: sph)
-        renderingVerticalResolutionView.frame = CGRect(x: frameRateView.frame.maxX,
+        renderingVerticalResolutionView.frame = Rect(x: frameRateView.frame.maxX,
                                                        y: py,
                                                        width: bounds.width - frameRateView.frame.maxX - padding,
                                                        height: sph)
         py -= sh
-        isHiddenSubtitlesView.frame = CGRect(x: px, y: py, width: pw / 2, height: sh)
-        soundView.frame = CGRect(x: px + pw / 2, y: py, width: pw / 2, height: sh)
+        isHiddenSubtitlesView.frame = Rect(x: px, y: py, width: pw / 2, height: sh)
+        soundView.frame = Rect(x: px + pw / 2, y: py, width: pw / 2, height: sh)
         
         py -= sPadding
         py -= sph
-        timelineView.tempoView.frame = CGRect(x: px, y: py, width: pw, height: sph)
+        timelineView.tempoView.frame = Rect(x: px, y: py, width: pw, height: sph)
 //        let tkh = ceil(kh * 0.6)
 //        py -= tkh
-//        timelineView.tempoKeyframeView.frame = CGRect(x: px, y: py, width: pw, height: tkh)
+//        timelineView.tempoKeyframeView.frame = Rect(x: px, y: py, width: pw, height: tkh)
         py -= padding
         py -= kh
-        timelineView.keyframeView.frame = CGRect(x: px, y: py, width: pw, height: kh)
+        timelineView.keyframeView.frame = Rect(x: px, y: py, width: pw, height: kh)
         py -= sPadding
         let eh = effectView.defaultBounds.height
         py -= eh
-        effectView.frame = CGRect(x: px, y: py, width: pw, height: eh)
+        effectView.frame = Rect(x: px, y: py, width: pw, height: eh)
         py -= padding
         let dh = drawingView.defaultBounds.height
         py -= dh
-        drawingView.frame = CGRect(x: px, y: py, width:pw, height: dh)
+        drawingView.frame = Rect(x: px, y: py, width:pw, height: dh)
         py -= padding
         let mh = canvas.materialView.defaultBounds(withWidth: pw).height
         py -= mh
-        canvas.materialView.frame = CGRect(x: px, y: py, width: pw, height: mh)
+        canvas.materialView.frame = Rect(x: px, y: py, width: pw, height: mh)
         py -= padding
         let trb = transformView.defaultBounds
         py -= trb.height
-        transformView.frame = CGRect(x: px, y: py, width: pw, height: trb.height)
+        transformView.frame = Rect(x: px, y: py, width: pw, height: trb.height)
         py -= padding
         let wb = wiggleXView.defaultBounds
         py -= wb.height
-        wiggleXView.frame = CGRect(x: px, y: py, width: pw / 2, height: wb.height)
+        wiggleXView.frame = Rect(x: px, y: py, width: pw / 2, height: wb.height)
         
-//        subtitleView.frame = CGRect(x: px, y: padding + sph, width: pw, height: sph)
-        timelineView.nodeView.frame = CGRect(x: px + 100, y: padding, width: pw, height: sph)
+//        subtitleView.frame = Rect(x: px, y: padding + sph, width: pw, height: sph)
+        timelineView.nodeView.frame = Rect(x: px + 100, y: padding, width: pw, height: sph)
         let ch = canvas.cellView.defaultBounds.height
         py -= ch
-        canvas.cellView.frame = CGRect(x: px, y: padding, width: pw, height: ch)
+        canvas.cellView.frame = Rect(x: px, y: padding, width: pw, height: ch)
     }
     private func updateWithScene() {
         scene.timeBinding = { [unowned self] (_, time) in self.update(withTime: time) }
@@ -789,7 +789,7 @@ final class SceneView: View, Scrollable {
         isHiddenSubtitlesView.bool = scene.isHiddenSubtitles
         soundView.sound = scene.sound
         renderingVerticalResolutionView.model = scene.renderingVerticalResolution
-        let sp = CGPoint(x: scene.frame.width, y: scene.frame.height)
+        let sp = Point(x: scene.frame.width, y: scene.frame.height)
         transformView.standardTranslation = sp
         wiggleXView.standardAmplitude = scene.frame.width
         wiggleYView.standardAmplitude = scene.frame.height
@@ -1236,7 +1236,7 @@ final class SceneView: View, Scrollable {
         differentialSceneDataModel.isWrite = true
     }
     
-    func scroll(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+    func scroll(for p: Point, time: Second, scrollDeltaPoint: Point,
                 phase: Phase, momentumPhase: Phase?) {
         timelineView.scroll(for: p, time: time, scrollDeltaPoint: scrollDeltaPoint,
                             phase: phase, momentumPhase: momentumPhase)
@@ -1358,7 +1358,7 @@ final class SceneView: View, Scrollable {
         differentialSceneDataModel.isWrite = true
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Scene.reference
     }
 }
@@ -1674,7 +1674,7 @@ final class SceneMaterialManager {
         }
     }
     
-    func paste(_ objects: [Any], for p: CGPoint) -> Bool {
+    func paste(_ objects: [Any], for p: Point) -> Bool {
         for object in objects {
             if let material = object as? Material {
                 paste(material, withSelected: self.material, useSelected: false)

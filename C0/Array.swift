@@ -225,7 +225,7 @@ extension Array: Referenceable where Element: Referenceable {
     }
 }
 extension Array: Viewable & DeepCopiable where Element: Viewable & DeepCopiable {
-    func view(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return ObjectView(object: self, thumbnailView: nil, minFrame: bounds, sizeType)
     }
 }
@@ -233,18 +233,18 @@ extension Array: Viewable & DeepCopiable where Element: Viewable & DeepCopiable 
 final class AnyArrayView: View, Copiable {
     var array = [Viewable]()
     
-    init(children: [View] = [], frame: CGRect = CGRect()) {
+    init(children: [View] = [], frame: Rect = Rect()) {
         super.init()
         isClipped = true
         self.frame = frame
         self.children = children
     }
     
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return array
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Reference(name: Localization(english: "Array", japanese: "配列"))
     }
 }
@@ -252,18 +252,18 @@ final class AnyArrayView: View, Copiable {
 final class ArrayView<T: Viewable & DeepCopiable>: View, Copiable {
     var array = [T]()
     
-    init(children: [View] = [], frame: CGRect = CGRect()) {
+    init(children: [View] = [], frame: Rect = Rect()) {
         super.init()
         isClipped = true
         self.frame = frame
         self.children = children
     }
     
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [array.copied]
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return T.reference
     }
 }
@@ -271,23 +271,23 @@ final class ArrayView<T: Viewable & DeepCopiable>: View, Copiable {
 final class ArrayCountView<T: Viewable & DeepCopiable>: View {
     var array = [T]() {
         didSet {
-            countView.number = RealNumber(array.count)
+            countView.model = array.count
         }
     }
     
     var sizeType: SizeType
     let classNameView: TextView
     let classCountNameView: TextView
-    let countView: RealNumberView
+    let countView: IntView
     
-    init(array: [T] = [], frame: CGRect = CGRect(),
+    init(array: [T] = [], frame: Rect = Rect(),
          sizeType: SizeType = .regular) {
         self.array = array
         classNameView = TextView(text: [T].name, font: Font.bold(with: sizeType))
         classCountNameView = TextView(text: Localization(english: "Count:", japanese: "個数:"),
                                       font: Font.default(with: sizeType))
-        countView = RealNumberView(number: RealNumber(array.count), numberOfDigits: 0,
-                                   sizeType: sizeType)
+        countView = IntView(model: array.count, option: IntGetterOption(unit: ""), sizeType: sizeType)
+        
         self.sizeType = sizeType
         
         super.init()
@@ -302,31 +302,31 @@ final class ArrayCountView<T: Viewable & DeepCopiable>: View {
         }
     }
     
-    var width = 40.0.cf
-    override var defaultBounds: CGRect {
+    var width = 40.0.cg
+    override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
-        return CGRect(x: 0, y: 0, width: classNameView.frame.width + classCountNameView.frame.width + width + padding * 3, height: h)
+        return Rect(x: 0, y: 0, width: classNameView.frame.width + classCountNameView.frame.width + width + padding * 3, height: h)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     func updateLayout() {
         let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
-        classNameView.frame.origin = CGPoint(x: padding,
+        classNameView.frame.origin = Point(x: padding,
                                              y: bounds.height - classNameView.frame.height - padding)
-        classCountNameView.frame.origin = CGPoint(x: classNameView.frame.maxX + padding,
+        classCountNameView.frame.origin = Point(x: classNameView.frame.maxX + padding,
                                                   y: padding)
-        countView.frame = CGRect(x: classCountNameView.frame.maxX, y: padding,
+        countView.frame = Rect(x: classCountNameView.frame.maxX, y: padding,
                                  width: width, height: h - padding * 2)
     }
     
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [array.copied]
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return T.reference
     }
 }
@@ -345,7 +345,7 @@ final class ListArrayView: View, Assignable, Newable, Movable {
         lineView.fillColor = .content
         return lineView
     } ()
-    private let knobView = DiscreteKnobView(CGSize(width: 8, height: 8), lineWidth: 1)
+    private let knobView = DiscreteKnobView(Size(width: 8, height: 8), lineWidth: 1)
     private var nameViews = [TextView](), treeLevelTextViews = [TextView]()
     func set(selectedIndex: Int, count: Int) {
         let isUpdate = self.selectedIndex != selectedIndex || self.count != count
@@ -364,7 +364,7 @@ final class ListArrayView: View, Assignable, Newable, Movable {
         }
     }
     var treeLevelClosure: ((Int) -> (Int))?
-    private let knobPaddingWidth = 16.0.cf
+    private let knobPaddingWidth = 16.0.cg
     
     override init() {
         super.init()
@@ -376,7 +376,7 @@ final class ListArrayView: View, Assignable, Newable, Movable {
     
     func flootIndex(atY y: CGFloat) -> CGFloat {
         let selectedY = bounds.midY - indexHeight / 2
-        return (y - selectedY) / indexHeight + selectedIndex.cf
+        return (y - selectedY) / indexHeight + CGFloat(selectedIndex)
     }
     func index(atY y: CGFloat) -> Int {
         return Int(flootIndex(atY: y))
@@ -386,7 +386,7 @@ final class ListArrayView: View, Assignable, Newable, Movable {
         return CGFloat(index - selectedIndex) * indexHeight + selectedY
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -402,35 +402,35 @@ final class ListArrayView: View, Assignable, Newable, Movable {
         let maxIndex = min(maxI, count - 1)
         let knobLineX = knobPaddingWidth / 2
         
-        let nameLinePath = CGMutablePath(), llh = 1.0.cf
+        let nameLinePath = CGMutablePath(), llh = 1.0.cg
         (minIndex - 1...maxIndex + 1).forEach {
-            nameLinePath.addRect(CGRect(x: 0, y: y(at: $0) - llh / 2,
+            nameLinePath.addRect(Rect(x: 0, y: y(at: $0) - llh / 2,
                                         width: bounds.width, height: llh))
         }
         
-        let knobLinePath = CGMutablePath(), lw = 2.0.cf
+        let knobLinePath = CGMutablePath(), lw = 2.0.cg
         let knobLineMinY = max(y(at: 0) + (selectedIndex > 0 ? -indexHeight : indexHeight / 2),
                                bounds.minY)
         let knobLineMaxY = min(y(at: maxIndex)
             + (selectedIndex < count - 1 ? indexHeight : indexHeight / 2),
                                bounds.maxY)
-        knobLinePath.addRect(CGRect(x: knobLineX - lw / 2, y: knobLineMinY,
+        knobLinePath.addRect(Rect(x: knobLineX - lw / 2, y: knobLineMinY,
                                     width: lw, height: knobLineMaxY - knobLineMinY))
         let linePointMinIndex = minI < 0 ? minIndex + 1 : minIndex
         if linePointMinIndex <= maxIndex {
             (linePointMinIndex...maxIndex).forEach {
-                knobLinePath.addRect(CGRect(x: knobPaddingWidth / 2 - 2,
+                knobLinePath.addRect(Rect(x: knobPaddingWidth / 2 - 2,
                                             y: y(at: $0) - 2,
                                             width: 4,
                                             height: 4))
             }
         }
         
-        let padding = treeLevelClosure != nil ? 12.0.cf : 0.0.cf
+        let padding = treeLevelClosure != nil ? 12.0.cg : 0.0.cg
         nameViews = (minIndex...maxIndex).map {
             let nameView = TextView(text: nameClosure($0))
             nameView.fillColor = nil
-            nameView.frame.origin = CGPoint(x: knobPaddingWidth + padding, y: y(at: $0))
+            nameView.frame.origin = Point(x: knobPaddingWidth + padding, y: y(at: $0))
             return nameView
         }
         
@@ -438,8 +438,8 @@ final class ListArrayView: View, Assignable, Newable, Movable {
             treeLevelTextViews = (minIndex...maxIndex).map {
                 let treeLevelTextView = TextView(text: Localization("\(treeLevelClosure($0))"))
                 treeLevelTextView.fillColor = nil
-                treeLevelTextView.frame.origin = CGPoint(x: knobPaddingWidth, y: y(at: $0))
-                knobLinePath.addRect(CGRect(x: knobPaddingWidth / 2 - 2,
+                treeLevelTextView.frame.origin = Point(x: knobPaddingWidth, y: y(at: $0))
+                knobLinePath.addRect(Rect(x: knobPaddingWidth / 2 - 2,
                                             y: treeLevelTextView.frame.midY - 2,
                                             width: 4,
                                             height: 4))
@@ -452,35 +452,35 @@ final class ListArrayView: View, Assignable, Newable, Movable {
         nameLineView.path = nameLinePath
         knobLineView.path = knobLinePath
         
-        knobView.position = CGPoint(x: knobLineX, y: bounds.midY)
+        knobView.position = Point(x: knobLineX, y: bounds.midY)
         
         children = [nameLineView, knobLineView, knobView]
             + treeLevelTextViews as [View] + nameViews as [View]
     }
     
-    var deleteClosure: ((ListArrayView, CGPoint) -> ())?
-    func delete(for p: CGPoint) {
+    var deleteClosure: ((ListArrayView, Point) -> ())?
+    func delete(for p: Point) {
         deleteClosure?(self, p)
     }
-    var copiedViewablesClosure: ((ListArrayView, CGPoint) -> ([Viewable]))?
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    var copiedViewablesClosure: ((ListArrayView, Point) -> ([Viewable]))?
+    func copiedViewables(at p: Point) -> [Viewable] {
         return copiedViewablesClosure?(self, p) ?? []
     }
-    var pasteClosure: ((ListArrayView, [Any], CGPoint) -> ())?
-    func paste(_ objects: [Any], for p: CGPoint) {
+    var pasteClosure: ((ListArrayView, [Any], Point) -> ())?
+    func paste(_ objects: [Any], for p: Point) {
         pasteClosure?(self, objects, p)
     }
-    var newClosure: ((ListArrayView, CGPoint) -> ())?
-    func new(for p: CGPoint) {
+    var newClosure: ((ListArrayView, Point) -> ())?
+    func new(for p: Point) {
         newClosure?(self, p)
     }
     
-    var moveClosure: ((ListArrayView, CGPoint, Phase) -> ())?
-    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    var moveClosure: ((ListArrayView, Point, Phase) -> ())?
+    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         moveClosure?(self, p, phase)
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Reference()
     }
 }

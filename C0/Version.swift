@@ -76,8 +76,8 @@ final class VersionView: View {
         return version
     }
     
-    let allCountView = RealNumberView()
-    let differentialCountView = RealNumberView()
+    let allCountView = IntView(model: 0, option: IntGetterOption(unit: ""))
+    let differentialCountView = IntView(model: 0, option: IntGetterOption(unit: ""))
     
     var sizeType: SizeType
     let formClassNameView = TextView(text: Version.name, font: .bold)
@@ -113,17 +113,17 @@ final class VersionView: View {
         }
     }
     
-    override var defaultBounds: CGRect {
-        return CGRect(x: 0, y: 0, width: 120, height: Layout.height(with: sizeType))
+    override var defaultBounds: Rect {
+        return Rect(x: 0, y: 0, width: 120, height: Layout.height(with: sizeType))
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     func updateLayout() {
         let padding = Layout.basicPadding
-        formClassNameView.frame.origin = CGPoint(x: padding,
+        formClassNameView.frame.origin = Point(x: padding,
                                              y: bounds.height - formClassNameView.frame.height - padding)
         if undoCount < allCount {
             _ = Layout.leftAlignment([allCountView, Padding(), differentialCountView],
@@ -137,10 +137,10 @@ final class VersionView: View {
     }
     func updateWithVersion() {
         if undoCount < allCount {
-            allCountView.number = allCount.cf
-            differentialCountView.number = differentialCount.cf
-            allCountView.bounds = CGRect(origin: CGPoint(), size: allCountView.formStringView.fitSize)
-            differentialCountView.bounds = CGRect(origin: CGPoint(),
+            allCountView.model = allCount
+            differentialCountView.model = differentialCount
+            allCountView.bounds = Rect(origin: Point(), size: allCountView.formStringView.fitSize)
+            differentialCountView.bounds = Rect(origin: Point(),
                                                   size: differentialCountView.formStringView.fitSize)
             differentialCountView.formStringView.textFrame.color = .warning
             if differentialCountView.parent == nil {
@@ -148,9 +148,9 @@ final class VersionView: View {
                 updateLayout()
             }
         } else {
-            allCountView.number = allCount.cf
-            allCountView.bounds = CGRect(origin: CGPoint(), size: allCountView.formStringView.fitSize)
-            differentialCountView.bounds = CGRect(origin: CGPoint(),
+            allCountView.model = allCount
+            allCountView.bounds = Rect(origin: Point(), size: allCountView.formStringView.fitSize)
+            differentialCountView.bounds = Rect(origin: Point(),
                                                   size: differentialCountView.formStringView.fitSize)
             differentialCountView.formStringView.textFrame.color = .warning
             if differentialCountView.parent != nil {
@@ -160,7 +160,7 @@ final class VersionView: View {
         }
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         var reference = Version.reference
         reference.classDescription  = Localization(english: "Show undoable count and undoed count in parent view",
                                                    japanese: "親表示での取り消し可能回数、取り消し済み回数を表示")

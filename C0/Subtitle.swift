@@ -266,7 +266,7 @@ struct Subtitle: Codable, Equatable {
     var isEmpty: Bool {
         return string.isEmpty
     }
-    func draw(bounds: CGRect, with option: Option = Option(), in ctx: CGContext) {
+    func draw(bounds: Rect, with option: Option = Option(), in ctx: CGContext) {
         guard !string.isEmpty else {
             return
         }
@@ -278,9 +278,9 @@ struct Subtitle: Codable, Equatable {
         let framesetter = CTFramesetterCreateWithAttributedString(attString)
         let range = CFRange(location: 0, length: attString.length), ratio = bounds.size.width/640
         let size = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, range, nil,
-                                                                CGSize(width: CGFloat.infinity,
+                                                                Size(width: CGFloat.infinity,
                                                                        height: CGFloat.infinity), nil)
-        let lineBounds = CGRect(origin: CGPoint(), size: size)
+        let lineBounds = Rect(origin: Point(), size: size)
         let ctFrame = CTFramesetterCreateFrame(framesetter, range,
                                                CGPath(rect: lineBounds, transform: nil), nil)
         ctx.saveGState()
@@ -288,10 +288,10 @@ struct Subtitle: Codable, Equatable {
         ctx.translateBy(x: round(bounds.midX - lineBounds.midX),  y: round(bounds.minY + 20 * ratio))
         ctx.setTextDrawingMode(.stroke)
         ctx.setLineWidth(ceil(3 * ratio))
-        ctx.setStrokeColor(option.borderColor.cgColor)
+        ctx.setStrokeColor(option.borderColor.cg)
         CTFrameDraw(ctFrame, ctx)
         ctx.setTextDrawingMode(.fill)
-        ctx.setFillColor(option.fillColor.cgColor)
+        ctx.setFillColor(option.fillColor.cg)
         CTFrameDraw(ctFrame, ctx)
         ctx.restoreGState()
     }
@@ -303,7 +303,7 @@ struct Subtitle: Codable, Equatable {
                 return
             }
             let beginTime = timeClosure($1.time), endTime = timeClosure($1.time + $1.duration)
-            func timeString(withSecond second: Double) -> String {
+            func timeString(withSecond second: Second) -> String {
                 let s = Int(second)
                 let mm = s / 60
                 let ss = second - Second(mm * 60)
@@ -330,7 +330,7 @@ extension Subtitle: Referenceable {
     static let name = Localization(english: "Subtitle", japanese: "字幕")
 }
 extension Subtitle: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return string.view(withBounds: bounds, sizeType)
     }
 }
@@ -366,18 +366,18 @@ final class SubtitleView: View, Copiable {
         }
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     private func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        classNameView.frame.origin = CGPoint(x: padding,
+        classNameView.frame.origin = Point(x: padding,
                                               y: bounds.height - classNameView.frame.height - padding)
         let icpw = bounds.width - classNameView.frame.width - padding * 3
         let icph = Layout.height(with: sizeType)
-        isConnectedWithPreviousView.frame = CGRect(x: classNameView.frame.maxX + padding, y: padding,
+        isConnectedWithPreviousView.frame = Rect(x: classNameView.frame.maxX + padding, y: padding,
                                                    width: icpw, height: icph)
     }
     func updateWithSubtitle() {
@@ -407,11 +407,11 @@ final class SubtitleView: View, Copiable {
                               phase: binding.phase))
     }
     
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [subtitle]
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Subtitle.reference
     }
 }

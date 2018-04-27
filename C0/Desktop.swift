@@ -99,7 +99,7 @@ final class DesktopView: View {
     let objectsDataModelKey = "objects"
     var objectsDataModel: DataModel
     
-    var versionWidth = 120.0.cf
+    var versionWidth = 120.0.cg
     var actionWidth = ActionManagableView.defaultWidth {
         didSet {
             updateLayout()
@@ -161,8 +161,8 @@ final class DesktopView: View {
         return desktop.version
     }
     
-//    var rootCursorPoint = CGPoint()
-//    override var cursorPoint: CGPoint {
+//    var rootCursorPoint = Point()
+//    override var cursorPoint: Point {
 //        return rootCursorPoint
 //    }
     
@@ -181,43 +181,43 @@ final class DesktopView: View {
         }
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     private func updateLayout() {
         let padding = Layout.basicPadding
-        let referenceHeight = 150.0.cf
+        let referenceHeight = 150.0.cg
         let isrw = isSimpleReferenceView.defaultBounds.width
         let ihamvw = isHiddenActionManagerView.defaultBounds.width
         let headerY = bounds.height - topViewsHeight - padding
-        versionView.frame = CGRect(x: padding,
+        versionView.frame = Rect(x: padding,
                                    y: headerY,
                                    width: versionWidth, height: topViewsHeight)
-        classCopiedViewablesNameView.frame.origin = CGPoint(x: versionView.frame.maxX + padding, y: headerY + padding)
+        classCopiedViewablesNameView.frame.origin = Point(x: versionView.frame.maxX + padding, y: headerY + padding)
         let cw = max(bounds.width - actionWidth - versionWidth - isrw - ihamvw - classCopiedViewablesNameView.frame.width - padding * 3, 0)
-        copiedViewablesView.frame = CGRect(x: classCopiedViewablesNameView.frame.maxX,
+        copiedViewablesView.frame = Rect(x: classCopiedViewablesNameView.frame.maxX,
                                          y: headerY,
                                          width: cw,
                                          height: topViewsHeight)
         updateCopiedObjectViewPositions()
-        isSimpleReferenceView.frame = CGRect(x: copiedViewablesView.frame.maxX,
+        isSimpleReferenceView.frame = Rect(x: copiedViewablesView.frame.maxX,
                                              y: headerY,
                                              width: isrw,
                                              height: topViewsHeight)
-        isHiddenActionManagerView.frame = CGRect(x: isSimpleReferenceView.frame.maxX,
+        isHiddenActionManagerView.frame = Rect(x: isSimpleReferenceView.frame.maxX,
                                                  y: headerY,
                                                  width: ihamvw,
                                                  height: topViewsHeight)
         if desktop.isSimpleReference {
-            referenceView.frame = CGRect(x: isHiddenActionManagerView.frame.maxX,
+            referenceView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
                                          y: headerY,
                                          width: actionWidth,
                                          height: topViewsHeight)
         } else {
             let h = desktop.isHiddenActionManager ? bounds.height - padding * 2 : referenceHeight
-            referenceView.frame = CGRect(x: isHiddenActionManagerView.frame.maxX,
+            referenceView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
                                          y: bounds.height - h - padding,
                                          width: actionWidth,
                                          height: h)
@@ -226,24 +226,24 @@ final class DesktopView: View {
             let h = desktop.isSimpleReference ?
                 bounds.height - isSimpleReferenceView.frame.height - padding * 2 :
                 bounds.height - referenceHeight - padding * 2
-            actionManagerView.frame = CGRect(x: isHiddenActionManagerView.frame.maxX, y: padding,
+            actionManagerView.frame = Rect(x: isHiddenActionManagerView.frame.maxX, y: padding,
                                              width: actionWidth, height: h)
         }
         
         if desktop.isHiddenActionManager && desktop.isSimpleReference {
-            objectsView.frame = CGRect(x: padding,
+            objectsView.frame = Rect(x: padding,
                                        y: padding,
                                        width: bounds.width - padding * 2,
                                        height: bounds.height - topViewsHeight - padding * 2)
         } else {
-            objectsView.frame = CGRect(x: padding,
+            objectsView.frame = Rect(x: padding,
                                        y: padding,
                                        width: bounds.width - (padding * 2 + actionWidth),
                                        height: bounds.height - topViewsHeight - padding * 2)
         }
-        objectsView.bounds.origin = CGPoint(x: -round((objectsView.frame.width / 2)),
+        objectsView.bounds.origin = Point(x: -round((objectsView.frame.width / 2)),
                                             y: -round((objectsView.frame.height / 2)))
-        sceneView.frame.origin = CGPoint(x: -round(sceneView.frame.width / 2),
+        sceneView.frame.origin = Point(x: -round(sceneView.frame.width / 2),
                                          y: -round(sceneView.frame.height / 2))
     }
     func update(withIsHiddenActionManager isHiddenActionManager: Bool) {
@@ -257,11 +257,11 @@ final class DesktopView: View {
         updateLayout()
         differentialDesktopDataModel.isWrite = true
     }
-    var objectViewWidth = 80.0.cf
+    var objectViewWidth = 80.0.cg
     private func updateCopiedObjectViews() {
         copiedViewablesView.array = desktop.copiedViewables
         let padding = Layout.smallPadding
-        let bounds = CGRect(x: 0,
+        let bounds = Rect(x: 0,
                             y: 0,
                             width: objectViewWidth,
                             height: copiedViewablesView.bounds.height - padding * 2)
@@ -301,7 +301,7 @@ final class DesktopView: View {
         }
         referenceView.reference = reference
     }
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Desktop.reference
     }
 }

@@ -100,7 +100,7 @@ extension Keyframe: Referenceable {
     static let name = Localization(english: "Keyframe", japanese: "キーフレーム")
 }
 extension Keyframe: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return interpolation.displayText.thumbnail(withBounds: bounds, sizeType)
     }
 }
@@ -170,7 +170,7 @@ final class KeyframeView: View, Assignable {
         easingView.binding = { [unowned self] in self.setKeyframe(with: $0) }
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -179,14 +179,14 @@ final class KeyframeView: View, Assignable {
         let padding = Layout.padding(with: sizeType)
         let w = bounds.width - padding * 2, h = Layout.height(with: sizeType)
         var y = bounds.height - classNameView.frame.height - padding
-        classNameView.frame.origin = CGPoint(x: padding, y: y)
-        labelView.frame = CGRect(x: classNameView.frame.maxX + padding, y: y - padding * 2,
+        classNameView.frame.origin = Point(x: padding, y: y)
+        labelView.frame = Rect(x: classNameView.frame.maxX + padding, y: y - padding * 2,
                                  width: w - classNameView.frame.width - padding, height: h)
         y -= h + padding * 2
-        interpolationView.frame = CGRect(x: padding, y: y, width: w, height: h)
+        interpolationView.frame = Rect(x: padding, y: y, width: w, height: h)
         y -= h
-        loopView.frame = CGRect(x: padding, y: y, width: w, height: h)
-        easingView.frame = CGRect(x: padding, y: padding, width: w, height: y - padding)
+        loopView.frame = Rect(x: padding, y: y, width: w, height: h)
+        easingView.frame = Rect(x: padding, y: padding, width: w, height: y - padding)
     }
     private func updateWithKeyframeOption() {
         labelView.enumeratedType = keyframe.label
@@ -234,7 +234,7 @@ final class KeyframeView: View, Assignable {
         }
     }
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let keyframe: Keyframe = {
             var keyframe = Keyframe()
             keyframe.time = self.keyframe.time
@@ -245,10 +245,10 @@ final class KeyframeView: View, Assignable {
         }
         set(keyframe, old: self.keyframe)
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [keyframe]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let keyframe = object as? Keyframe {
                 if keyframe.equalOption(other: self.keyframe) {
@@ -268,7 +268,7 @@ final class KeyframeView: View, Assignable {
                          keyframe: keyframe, oldKeyframe: oldKeyframe, phase: .ended))
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Keyframe.reference
     }
 }

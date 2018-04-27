@@ -306,7 +306,7 @@ final class Cut: NSObject, NSCoding {
         rootNode.allChildren { $0.read() }
     }
     
-    var imageBounds: CGRect {
+    var imageBounds: Rect {
         return rootNode.imageBounds
     }
     var allCells: [Cell] {
@@ -338,25 +338,25 @@ final class Cut: NSObject, NSCoding {
         }
     }
     
-    func drawCautionBorder(scene: Scene, bounds: CGRect, in ctx: CGContext) {
-        func drawBorderWith(bounds: CGRect, width: CGFloat, color: Color, in ctx: CGContext) {
-            ctx.setFillColor(color.cgColor)
-            ctx.fill([CGRect(x: bounds.minX, y: bounds.minY,
+    func drawCautionBorder(scene: Scene, bounds: Rect, in ctx: CGContext) {
+        func drawBorderWith(bounds: Rect, width: CGFloat, color: Color, in ctx: CGContext) {
+            ctx.setFillColor(color.cg)
+            ctx.fill([Rect(x: bounds.minX, y: bounds.minY,
                              width: width, height: bounds.height),
-                      CGRect(x: bounds.minX + width, y: bounds.minY,
+                      Rect(x: bounds.minX + width, y: bounds.minY,
                              width: bounds.width - width * 2, height: width),
-                      CGRect(x: bounds.minX + width, y: bounds.maxY - width,
+                      Rect(x: bounds.minX + width, y: bounds.maxY - width,
                              width: bounds.width - width * 2, height: width),
-                      CGRect(x: bounds.maxX - width, y: bounds.minY,
+                      Rect(x: bounds.maxX - width, y: bounds.minY,
                              width: width, height: bounds.height)])
         }
         if scene.viewTransform.rotation > .pi / 2 || scene.viewTransform.rotation < -.pi / 2 {
-            let borderWidth = 2.0.cf
+            let borderWidth = 2.0.cg
             drawBorderWith(bounds: bounds, width: borderWidth * 2, color: .warning, in: ctx)
             let textLine = TextFrame(string: "\(Int(scene.viewTransform.rotation * 180 / (.pi)))°",
                 font: .bold, color: .warning)
             let sb = textLine.typographicBounds.insetBy(dx: -10, dy: -2).integral
-            textLine.draw(in: CGRect(x: bounds.minX + (bounds.width - sb.width) / 2,
+            textLine.draw(in: Rect(x: bounds.minX + (bounds.width - sb.width) / 2,
                                      y: bounds.minY + bounds.height - sb.height - borderWidth,
                                      width: sb.width, height: sb.height), baseFont: .bold,
                           in: ctx)
@@ -496,7 +496,7 @@ extension Cut: ClassDeepCopiable {
     }
 }
 extension Cut: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return duration.thumbnail(withBounds: bounds, sizeType)
     }
 }
@@ -765,7 +765,7 @@ final class CutView: View, Assignable, Scrollable {
     let maxLineWidth: CGFloat
     
     func x(withTime time: Beat) -> CGFloat {
-        return DoubleBeat(time / baseTimeInterval).cf * baseWidth
+        return DoubleBeat(time / baseTimeInterval) * baseWidth
     }
     
     override var locale: Locale {
@@ -774,7 +774,7 @@ final class CutView: View, Assignable, Scrollable {
         }
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -782,7 +782,7 @@ final class CutView: View, Assignable, Scrollable {
     
     func updateLayout() {
         let sp = Layout.smallPadding
-        clipView.frame = CGRect(x: 0, y: 0, width: frame.width, height: classNameView.frame.minY - sp)
+        clipView.frame = Rect(x: 0, y: 0, width: frame.width, height: classNameView.frame.minY - sp)
         updateWithNamePosition()
         updateChildren()
     }
@@ -793,7 +793,7 @@ final class CutView: View, Assignable, Scrollable {
     }
     func updateWithNamePosition() {
         let padding = Layout.smallPadding
-        classNameView.frame.origin = CGPoint(x: nameX,
+        classNameView.frame.origin = Point(x: nameX,
                                              y: bounds.height - classNameView.frame.height - padding)
     }
     func updateChildren() {
@@ -802,16 +802,16 @@ final class CutView: View, Assignable, Scrollable {
         }
         let midY = clipView.frame.height / 2
         var y = midY - editAnimationView.frame.height / 2
-        editAnimationView.frame.origin = CGPoint(x: 0, y: y)
+        editAnimationView.frame.origin = Point(x: 0, y: y)
         for i in (0 ..< index).reversed() {
             let animationView = animationViews[i]
             y -= animationView.frame.height
-            animationView.frame.origin = CGPoint(x: 0, y: y)
+            animationView.frame.origin = Point(x: 0, y: y)
         }
         y = midY + editAnimationView.frame.height / 2
         for i in (index + 1 ..< animationViews.count) {
             let animationView = animationViews[i]
-            animationView.frame.origin = CGPoint(x: 0, y: y)
+            animationView.frame.origin = Point(x: 0, y: y)
             y += animationView.frame.height
         }
     }
@@ -931,19 +931,19 @@ final class CutView: View, Assignable, Scrollable {
     }
     
     var deleteClosure: ((CutView) -> ())?
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         deleteClosure?(self)
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [cut.copied]
     }
     var pasteClosure: ((CutView, [Any]) -> ())?
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         pasteClosure?(self, objects)
     }
     
     private var isScrollTrack = false
-    func scroll(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+    func scroll(for p: Point, time: Second, scrollDeltaPoint: Point,
                 phase: Phase, momentumPhase: Phase?) {
         if phase  == .began {
             isScrollTrack = abs(scrollDeltaPoint.x) < abs(scrollDeltaPoint.y)
@@ -963,12 +963,12 @@ final class CutView: View, Assignable, Scrollable {
     var scrollClosure: ((ScrollBinding) -> ())?
     
     private struct ScrollObject {
-        var oldP = CGPoint(), deltaScrollY = 0.0.cf
+        var oldP = Point(), deltaScrollY = 0.0.cg
         var nodeAndTrackIndex = 0, oldNodeAndTrackIndex = 0
         var oldNodeAndTrack: Cut.NodeAndTrack?
     }
     private var scrollObject = ScrollObject()
-    func scrollTrack(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+    func scrollTrack(for p: Point, time: Second, scrollDeltaPoint: Point,
                      phase: Phase, momentumPhase: Phase?) {
         guard momentumPhase == nil else {
             return
@@ -1043,7 +1043,7 @@ final class CutView: View, Assignable, Scrollable {
         isUseUpdateChildren = true
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Cut.reference
     }
 }

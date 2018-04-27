@@ -63,7 +63,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     
     var cursor = Cursor.arrow
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             player.frame = bounds
             updateScreenTransform()
@@ -126,7 +126,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             }
         }
     }
-    func updateEditView(with p: CGPoint) {
+    func updateEditView(with p: Point) {
         switch viewType {
         case .edit, .editMaterial, .changingMaterial,
              .preview, .editSelected, .editDeselected:
@@ -170,7 +170,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             }
         }
     }
-    func updateEditPoint(with point: CGPoint) {
+    func updateEditPoint(with point: Point) {
         if let n = cut.editNode.nearest(at: point, isVertex: viewType == .editVertex) {
             if let e = n.drawingEdit {
                 editPoint = Node.EditPoint(nearestLine: e.line, nearestPointIndex: e.pointIndex,
@@ -219,7 +219,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             }
         }
     }
-    func updateEditZ(with point: CGPoint) {
+    func updateEditZ(with point: Point) {
         let ict = cut.editNode.indicatedCellsTuple(with: point,
                                                    reciprocalScale: scene.reciprocalScale)
         if ict.type == .none {
@@ -239,15 +239,15 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             }
         }
     }
-    private func editTransform(with lines: [Line], at p: CGPoint) -> Node.EditTransform {
-        var ps = [CGPoint]()
+    private func editTransform(with lines: [Line], at p: Point) -> Node.EditTransform {
+        var ps = [Point]()
         for line in lines {
             line.allEditPoints { (ep, i) in ps.append(ep) }
         }
-        let rb = RotatedRect(convexHullPoints: CGPoint.convexHullPoints(with: ps))
+        let rb = RotatedRect(convexHullPoints: Point.convexHullPoints(with: ps))
         let w = rb.size.width * Node.EditTransform.centerRatio
         let h = rb.size.height * Node.EditTransform.centerRatio
-        let centerBounds = CGRect(x: (rb.size.width - w) / 2,
+        let centerBounds = Rect(x: (rb.size.width - w) / 2,
                                   y: (rb.size.height - h) / 2, width: w, height: h)
         let np = rb.convertToLocal(p: p)
         let isCenter = centerBounds.contains(np)
@@ -278,7 +278,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             }
         }
     }
-    func editTransform(at p: CGPoint) -> Node.EditTransform? {
+    func editTransform(at p: Point) -> Node.EditTransform? {
         let selection = cut.editNode.selection(with: p, reciprocalScale: scene.reciprocalScale)
         if selection.cellTuples.isEmpty {
             if let drawingTuple = selection.drawingTuple {
@@ -298,11 +298,11 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             return editTransform(with: lines, at: p)
         }
     }
-    func updateEditTransform(with p: CGPoint) {
+    func updateEditTransform(with p: Point) {
         self.editTransform = editTransform(at: p)
     }
     
-    var cameraFrame: CGRect {
+    var cameraFrame: Rect {
         get {
             return scene.frame
         }
@@ -363,19 +363,19 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         affine = affine.concatenating(screenTransform)
         return affine
     }
-    func convertToCurrentLocal(_ r: CGRect) -> CGRect {
+    func convertToCurrentLocal(_ r: Rect) -> Rect {
         let transform = currentTransform
         return transform.isIdentity ? r : r.applying(transform.inverted())
     }
-    func convertFromCurrentLocal(_ r: CGRect) -> CGRect {
+    func convertFromCurrentLocal(_ r: Rect) -> Rect {
         let transform = currentTransform
         return transform.isIdentity ? r : r.applying(transform)
     }
-    func convertToCurrentLocal(_ p: CGPoint) -> CGPoint {
+    func convertToCurrentLocal(_ p: Point) -> Point {
         let transform = currentTransform
         return transform.isIdentity ? p : p.applying(transform.inverted())
     }
-    func convertFromCurrentLocal(_ p: CGPoint) -> CGPoint {
+    func convertFromCurrentLocal(_ p: Point) -> Point {
         let transform = currentTransform
         return transform.isIdentity ? p : p.applying(transform)
     }
@@ -387,7 +387,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             }
         }
     }
-    var indicatedPoint: CGPoint?
+    var indicatedPoint: Point?
     var indicatedCellItem: CellItem? {
         didSet {
             if indicatedCellItem != oldValue {
@@ -401,7 +401,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     func setNeedsDisplay() {
         draw()
     }
-    func setNeedsDisplay(inCurrentLocalBounds rect: CGRect) {
+    func setNeedsDisplay(inCurrentLocalBounds rect: Rect) {
         draw(convertFromCurrentLocal(rect))
     }
     
@@ -438,17 +438,17 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     }
     
     
-    func indicate(at point: CGPoint) {
+    func indicate(at point: Point) {
         updateEditView(with: convertToCurrentLocal(point))
     }
     
-    func select(from rect: CGRect, _ phase: Phase) {
+    func select(from rect: Rect, _ phase: Phase) {
         select(from: rect, phase, isDeselect: false)
     }
     func selectAll() {
         selectAll(isDeselect: false)
     }
-    func deselect(from rect: CGRect, _ phase: Phase) {
+    func deselect(from rect: Rect, _ phase: Phase) {
         select(from: rect, phase, isDeselect: true)
     }
     func deselectAll() {
@@ -459,7 +459,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         var node: Node?, drawing: Drawing?, track: NodeTrack?
     }
     private var selectOption = SelectOption()
-    func select(from rect: CGRect, _ phase: Phase, isDeselect: Bool) {
+    func select(from rect: Rect, _ phase: Phase, isDeselect: Bool) {
         func unionWithStrokeLine(with drawing: Drawing,
                                  _ track: NodeTrack) -> (lineIndexes: [Int], cellItems: [CellItem]) {
             func selected() -> (lineIndexes: [Int], cellItems: [CellItem]) {
@@ -531,7 +531,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         }
     }
     
-    func delete(for point: CGPoint) {
+    func delete(for point: Point) {
         let p = convertToCurrentLocal(point)
         if deleteCells(for: p) {
             return
@@ -543,7 +543,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             return
         }
     }
-    func deleteSelectedDrawingLines(for p: CGPoint) -> Bool {
+    func deleteSelectedDrawingLines(for p: Point) -> Bool {
         let inNode = cut.editNode
         let drawingItem = inNode.editTrack.drawingItem
         guard drawingItem.drawing.isNearestSelectedLineIndexes(at: p) else {
@@ -556,7 +556,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             in: drawingItem.drawing, inNode, time: time)
         return true
     }
-    func deleteDrawingLines(for p: CGPoint) -> Bool {
+    func deleteDrawingLines(for p: Point) -> Bool {
         let inNode = cut.editNode
         let drawingItem = inNode.editTrack.drawingItem
         guard !drawingItem.drawing.lines.isEmpty else {
@@ -567,7 +567,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         set([], old: drawingItem.drawing.lines, in: drawingItem.drawing, inNode, time: time)
         return true
     }
-    func deleteCells(for point: CGPoint) -> Bool {
+    func deleteCells(for point: Point) -> Bool {
         let inNode = cut.editNode
         let ict = inNode.indicatedCellsTuple(with: point, reciprocalScale: scene.reciprocalScale)
         switch ict.type {
@@ -613,7 +613,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         return false
     }
     
-    func copiedViewables(at point: CGPoint) -> [Viewable] {
+    func copiedViewables(at point: Point) -> [Viewable] {
         let p = convertToCurrentLocal(point)
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         switch ict.type {
@@ -645,7 +645,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         let cell = cut.editNode.rootCell.intersection(cells, isNewID: true)
         return [cell]
     }
-    func paste(_ objects: [Any], for point: CGPoint) {
+    func paste(_ objects: [Any], for point: Point) {
         for object in objects {
             if let color = object as? Color, paste(color, for: point) {
                 return
@@ -665,7 +665,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         }
     }
     var pasteColorBinding: ((Canvas, Color, [Cell]) -> ())?
-    func paste(_ color: Color, for point: CGPoint) -> Bool {
+    func paste(_ color: Color, for point: Point) -> Bool {
         let p = convertToCurrentLocal(point)
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         guard !ict.cellItems.isEmpty else {
@@ -684,7 +684,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         return true
     }
     var pasteMaterialBinding: ((Canvas, Material, [Cell]) -> ())?
-    func paste(_ material: Material, for point: CGPoint) -> Bool {
+    func paste(_ material: Material, for point: Point) -> Bool {
         let p = convertToCurrentLocal(point)
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         guard !ict.cellItems.isEmpty else {
@@ -702,7 +702,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         }
         return isPaste
     }
-    func paste(_ copyJoiningCell: JoiningCell, for point: CGPoint) -> Bool {
+    func paste(_ copyJoiningCell: JoiningCell, for point: Point) -> Bool {
         let inNode = cut.editNode
         let isEmptyCellsInEditTrack: Bool = {
             for copyCell in copyJoiningCell.cell.allCells {
@@ -734,7 +734,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         }
     }
     func paste(_ copyJoiningCell: JoiningCell, in track: NodeTrack, _ node: Node,
-               for point: CGPoint) -> Bool {
+               for point: Point) -> Bool {
         node.tracks.forEach { fromTrack in
             guard fromTrack != track else {
                 return
@@ -789,7 +789,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         sceneDataModel?.isWrite = true
         setNeedsDisplay()
     }
-    func paste(_ copyRootCell: Cell, for point: CGPoint) -> Bool {
+    func paste(_ copyRootCell: Cell, for point: Point) -> Bool {
         let inNode = cut.editNode
         let lki = inNode.editTrack.animation.loopedKeyframeIndex(withTime: cut.currentTime)
         var newCellItems = [CellItem]()
@@ -808,10 +808,10 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
                               in: inNode.editTrack, time: time)
         return true
     }
-    func paste(_ copyDrawing: Drawing, for point: CGPoint) -> Bool {
+    func paste(_ copyDrawing: Drawing, for point: Point) -> Bool {
         return paste(copyDrawing.lines, for: point)
     }
-    func paste(_ copyLines: [Line], for point: CGPoint) -> Bool {
+    func paste(_ copyLines: [Line], for point: Point) -> Bool {
         let p = convertToCurrentLocal(point)
         let inNode = cut.editNode
         let ict = inNode.indicatedCellsTuple(with : p, reciprocalScale: scene.reciprocalScale)
@@ -914,7 +914,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         player.play()
     }
     
-    func new(for p: CGPoint) {
+    func new(for p: Point) {
         let inNode = cut.editNode
         let track = inNode.editTrack
         let drawingItem = track.drawingItem, rootCell = inNode.rootCell
@@ -1047,7 +1047,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         setNeedsDisplay()
     }
     
-    func translucentLockCell(at point: CGPoint) {
+    func translucentLockCell(at point: Point) {
         let seletionCells = cut.editNode.indicatedCellsTuple(with: convertToCurrentLocal(point),
                                                              reciprocalScale: scene.reciprocalScale)
         for cellItem in seletionCells.cellItems {
@@ -1141,17 +1141,17 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         setNeedsDisplay()
     }
     
-    private let polygonRadius = 50.0.cf
+    private let polygonRadius = 50.0.cg
     func appendTriangleLines() {
-        let lines = regularPolygonLinesWith(centerPosition: CGPoint(x: bounds.midX, y: bounds.midY),
+        let lines = regularPolygonLinesWith(centerPosition: Point(x: bounds.midX, y: bounds.midY),
                                             radius: polygonRadius, count: 3)
-        append(lines, duplicatedTranslation: CGPoint(x: polygonRadius * 2 + Layout.basicPadding, y: 0))
+        append(lines, duplicatedTranslation: Point(x: polygonRadius * 2 + Layout.basicPadding, y: 0))
     }
     func appendSquareLines() -> Bool {
         let r = polygonRadius
-        let cp = CGPoint(x: bounds.midX, y: bounds.midY)
-        let p0 = CGPoint(x: cp.x - r, y: cp.y - r), p1 = CGPoint(x: cp.x + r, y: cp.y - r)
-        let p2 = CGPoint(x: cp.x - r, y: cp.y + r), p3 = CGPoint(x: cp.x + r, y: cp.y + r)
+        let cp = Point(x: bounds.midX, y: bounds.midY)
+        let p0 = Point(x: cp.x - r, y: cp.y - r), p1 = Point(x: cp.x + r, y: cp.y - r)
+        let p2 = Point(x: cp.x - r, y: cp.y + r), p3 = Point(x: cp.x + r, y: cp.y + r)
         let l0 = Line(controls: [Line.Control(point: p0, pressure: 1),
                                  Line.Control(point: p1, pressure: 1)])
         let l1 = Line(controls: [Line.Control(point: p1, pressure: 1),
@@ -1160,26 +1160,26 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
                                  Line.Control(point: p2, pressure: 1)])
         let l3 = Line(controls: [Line.Control(point: p2, pressure: 1),
                                  Line.Control(point: p0, pressure: 1)])
-        append([l0, l1, l2, l3], duplicatedTranslation: CGPoint(x: r * 2 + Layout.basicPadding, y: 0))
+        append([l0, l1, l2, l3], duplicatedTranslation: Point(x: r * 2 + Layout.basicPadding, y: 0))
         return true
     }
     func appendPentagonLines() -> Bool {
-        let lines = regularPolygonLinesWith(centerPosition: CGPoint(x: bounds.midX, y: bounds.midY),
+        let lines = regularPolygonLinesWith(centerPosition: Point(x: bounds.midX, y: bounds.midY),
                                             radius: polygonRadius, count: 5)
-        append(lines, duplicatedTranslation: CGPoint(x: polygonRadius * 2 + Layout.basicPadding, y: 0))
+        append(lines, duplicatedTranslation: Point(x: polygonRadius * 2 + Layout.basicPadding, y: 0))
         return true
     }
     func appendHexagonLines() -> Bool {
-        let lines = regularPolygonLinesWith(centerPosition: CGPoint(x: bounds.midX, y: bounds.midY),
+        let lines = regularPolygonLinesWith(centerPosition: Point(x: bounds.midX, y: bounds.midY),
                                             radius: polygonRadius, count: 6)
-        append(lines, duplicatedTranslation: CGPoint(x: polygonRadius * 2 + Layout.basicPadding, y: 0))
+        append(lines, duplicatedTranslation: Point(x: polygonRadius * 2 + Layout.basicPadding, y: 0))
         return true
     }
     func appendCircleLines() -> Bool {
         let count = 8, r = polygonRadius
-        let theta = .pi / count.cf
-        let cp = CGPoint(x: bounds.midX, y: bounds.midY)
-        let fp = CGPoint(x: cp.x, y: cp.y + polygonRadius)
+        let theta = .pi / CGFloat(count)
+        let cp = Point(x: bounds.midX, y: bounds.midY)
+        let fp = Point(x: cp.x, y: cp.y + polygonRadius)
         let points = circlePointsWith(centerPosition: cp,
                                       radius: r / cos(theta),
                                       firstAngle: .pi / 2 + theta,
@@ -1187,10 +1187,10 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         let newPoints = [fp] + points + [fp]
         let line = Line(controls: newPoints.map { Line.Control(point: $0, pressure: 1) })
         append([line],
-               duplicatedTranslation: CGPoint(x: polygonRadius * 2 + Layout.basicPadding, y: 0))
+               duplicatedTranslation: Point(x: polygonRadius * 2 + Layout.basicPadding, y: 0))
         return true
     }
-    func regularPolygonLinesWith(centerPosition cp: CGPoint, radius r: CGFloat,
+    func regularPolygonLinesWith(centerPosition cp: Point, radius r: CGFloat,
                                  firstAngle: CGFloat = .pi / 2, count: Int) -> [Line] {
         let points = circlePointsWith(centerPosition: cp, radius: r,
                                       firstAngle: firstAngle, count: count)
@@ -1201,16 +1201,16 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
                                    Line.Control(point: p1, pressure: 1)])
         }
     }
-    func circlePointsWith(centerPosition cp: CGPoint, radius r: CGFloat,
-                          firstAngle: CGFloat = .pi / 2, count: Int) -> [CGPoint] {
-        var angle = firstAngle, theta = (2 * .pi) / count.cf
+    func circlePointsWith(centerPosition cp: Point, radius r: CGFloat,
+                          firstAngle: CGFloat = .pi / 2, count: Int) -> [Point] {
+        var angle = firstAngle, theta = (2 * .pi) / CGFloat(count)
         return (0 ..< count).map { _ in
-            let p = CGPoint(x: cp.x + r * cos(angle), y: cp.y + r * sin(angle))
+            let p = Point(x: cp.x + r * cos(angle), y: cp.y + r * sin(angle))
             angle += theta
             return p
         }
     }
-    func append(_ lines: [Line], duplicatedTranslation dtp: CGPoint) {
+    func append(_ lines: [Line], duplicatedTranslation dtp: Point) {
         let inNode = cut.editNode
         let affineTransform = currentTransform.inverted()
         let transformedLines = affineTransform.isIdentity ?
@@ -1243,7 +1243,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         view.append(child: subview)
         return (view, subview)
     } ()
-    private let bindingLineHeight = 5.0.cf
+    private let bindingLineHeight = 5.0.cg
     let editCellBindingLinePathView: View = {
         let view = View(path: CGMutablePath())
         view.fillColor = .bindingBorder
@@ -1255,7 +1255,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     }
     
     let materialView = MaterialView(), cellView = CellView(sizeType: .small)
-    func bind(for point: CGPoint) {
+    func bind(for point: Point) {
         let p = convertToCurrentLocal(point)
         let ict = cut.editNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         if let cell = ict.cellItems.first?.cell {
@@ -1279,14 +1279,14 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         let maxX = materialView.frame.minX
         let width = maxX - frame.maxX, midY = frame.midY
         if let editCell = editCell, !editCell.isEmpty && isVisible(editCell) {
-            let path = CGPath(rect: CGRect(x: frame.maxX,
+            let path = CGPath(rect: Rect(x: frame.maxX,
                                            y: midY - bindingLineHeight / 2,
                                            width: width,
                                            height: bindingLineHeight), transform: nil)
             editCellBindingLinePathView.fillColor = .bindingBorder
             editCellBindingLinePathView.path = path
             
-            let fp = CGPoint(x: bounds.maxX, y: bounds.midY)
+            let fp = Point(x: bounds.maxX, y: bounds.midY)
             if let n = editCell.geometry.nearestBezier(with: fp) {
                 let np = editCell.geometry.lines[n.lineIndex]
                     .bezier(at: n.bezierIndex).position(withT: n.t)
@@ -1297,7 +1297,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
                     }
                     let path = CGMutablePath()
                     path.move(to: fp)
-                    path.addLine(to: CGPoint(x: p.x, y: bounds.midY))
+                    path.addLine(to: Point(x: p.x, y: bounds.midY))
                     path.addLine(to: p)
                     editCellLinePathView.path = path
                     subEditCellLinePathView.path = path
@@ -1308,9 +1308,9 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         } else {
             editCellBindingLinePathView.fillColor = .warning
             let path = CGMutablePath()
-            path.move(to: CGPoint(x: frame.maxX, y: midY))
-            path.addLine(to: CGPoint(x: maxX, y: midY - bindingLineHeight / 2))
-            path.addLine(to: CGPoint(x: maxX, y: midY + bindingLineHeight / 2))
+            path.move(to: Point(x: frame.maxX, y: midY))
+            path.addLine(to: Point(x: maxX, y: midY - bindingLineHeight / 2))
+            path.addLine(to: Point(x: maxX, y: midY + bindingLineHeight / 2))
             path.closeSubpath()
             editCellBindingLinePathView.path = path
             
@@ -1326,12 +1326,12 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             var control: Line.Control, speed: CGFloat
         }
         var temps: [Temp] = []
-        var oldPoint = CGPoint(), tempDistance = 0.0.cf, oldLastBounds = CGRect()
-        var beginTime = 0.0, oldTime = 0.0, oldTempTime = 0.0
+        var oldPoint = Point(), tempDistance = 0.0.cg, oldLastBounds = Rect()
+        var beginTime = Second(0.0), oldTime = Second(0.0), oldTempTime = Second(0.0)
         
         var join = Join()
         struct Join {
-            var lowAngle = 0.8 * (.pi / 2.0).cf, angle = 1.5 * (.pi / 2.0).cf
+            var lowAngle = 0.8.cg * (.pi / 2), angle = 1.5.cg * (.pi / 2)
             func joinControlWith(_ line: Line, lastControl lc: Line.Control) -> Line.Control? {
                 guard line.controls.count >= 4 else {
                     return nil
@@ -1341,12 +1341,12 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
                 guard c0.point != c1.point && c1.point != c2.point else {
                     return nil
                 }
-                let dr = abs(CGPoint.differenceAngle(p0: c0.point, p1: c1.point, p2: c2.point))
+                let dr = abs(Point.differenceAngle(p0: c0.point, p1: c1.point, p2: c2.point))
                 if dr > angle {
                     return c1
                 } else if dr > lowAngle {
                     let t = 1 - (dr - lowAngle) / (angle - lowAngle)
-                    return Line.Control(point: CGPoint.linear(c1.point, c2.point, t: t),
+                    return Line.Control(point: Point.linear(c1.point, c2.point, t: t),
                                         pressure: CGFloat.linear(c1.pressure, c2.pressure, t: t))
                 } else {
                     return nil
@@ -1356,19 +1356,20 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         
         var interval = Interval()
         struct Interval {
-            var minSpeed = 100.0.cf, maxSpeed = 1500.0.cf, exp = 2.0.cf, minTime = 0.1, maxTime = 0.03
-            var minDistance = 1.45.cf, maxDistance = 1.5.cf
-            func speedTWith(distance: CGFloat, deltaTime: Double, scale: CGFloat) -> CGFloat {
-                let speed = ((distance / scale) / deltaTime.cf).clip(min: minSpeed, max: maxSpeed)
+            var minSpeed = 100.0.cg, maxSpeed = 1500.0.cg, exp = 2.0.cg
+            var minTime = Second(0.1), maxTime = Second(0.03)
+            var minDistance = 1.45.cg, maxDistance = 1.5.cg
+            func speedTWith(distance: CGFloat, deltaTime: Second, scale: CGFloat) -> CGFloat {
+                let speed = ((distance / scale) / deltaTime).clip(min: minSpeed, max: maxSpeed)
                 return pow((speed - minSpeed) / (maxSpeed - minSpeed), 1 / exp)
             }
-            func isAppendPointWith(distance: CGFloat, deltaTime: Double,
+            func isAppendPointWith(distance: CGFloat, deltaTime: Second,
                                    _ temps: [Temp], scale: CGFloat) -> Bool {
                 guard deltaTime > 0 else {
                     return false
                 }
                 let t = speedTWith(distance: distance, deltaTime: deltaTime, scale: scale)
-                let time = minTime + (maxTime - minTime) * t.d
+                let time = minTime + (maxTime - minTime) * t
                 return deltaTime > time || isAppendPointWith(temps, scale: scale)
             }
             private func isAppendPointWith(_ temps: [Temp], scale: CGFloat) -> Bool {
@@ -1387,13 +1388,13 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         
         var short = Short()
         struct Short {
-            var minTime = 0.1, linearMaxDistance = 1.5.cf
-            func shortedLineWith(_ line: Line, deltaTime: Double, scale: CGFloat) -> Line {
+            var minTime = Second(0.1), linearMaxDistance = 1.5.cg
+            func shortedLineWith(_ line: Line, deltaTime: Second, scale: CGFloat) -> Line {
                 guard deltaTime < minTime && line.controls.count > 3 else {
                     return line
                 }
                 
-                var maxD = 0.0.cf, maxControl = line.controls[0]
+                var maxD = 0.0.cg, maxControl = line.controls[0]
                 line.controls.forEach { control in
                     let d = control.point.distanceWithLine(ap: line.firstPoint, bp: line.lastPoint)
                     if d > maxD {
@@ -1422,10 +1423,10 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         }
     }
     private var stroker = Stroker()
-    func stroke(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func stroke(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: true)
     }
-    func stroke(for point: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase,
+    func stroke(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase,
                 isAppendLine: Bool) {
         let p = convertToCurrentLocal(point), scale = scene.scale
         switch phase {
@@ -1451,11 +1452,11 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             line = line.withReplaced(rc, at: line.controls.count - 3)
             set(line)
             
-            let speed = d / (time - stroker.oldTime).cf
+            let speed = d / (time - stroker.oldTime)
             stroker.temps.append(Stroker.Temp(control: Line.Control(point: p, pressure: pressure),
                                               speed: speed))
-            let lPressure = stroker.temps.reduce(0.0.cf) { $0 + $1.control.pressure }
-                / stroker.temps.count.cf
+            let lPressure = stroker.temps.reduce(0.0.cg) { $0 + $1.control.pressure }
+                / CGFloat(stroker.temps.count)
             let lc = Line.Control(point: p, pressure: lPressure)
             
             let mlc = lc.mid(stroker.temps[stroker.temps.count - 2].control)
@@ -1513,7 +1514,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         setNeedsDisplay(inCurrentLocalBounds: b)
         stroker.oldLastBounds = lastBounds
     }
-    private func set(_ line: Line, updateBounds lastBounds: CGRect) {
+    private func set(_ line: Line, updateBounds lastBounds: Rect) {
         stroker.line = line
         let ub = lastBounds.union(stroker.oldLastBounds)
         let b = Line.visibleImageBoundsWith(imageBounds: ub, lineWidth: stroker.lineWidth)
@@ -1521,7 +1522,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         stroker.oldLastBounds = lastBounds
     }
     
-    func lassoErase(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func lassoErase(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         _ = stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: false)
         switch phase {
         case .began:
@@ -1636,7 +1637,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         setNeedsDisplay()
     }
     
-    func selectCell(at point: CGPoint) {
+    func selectCell(at point: Point) {
         let p = convertToCurrentLocal(point)
         let selectedCell = cut.editNode.rootCell.at(p, reciprocalScale: scene.reciprocalScale)
         if let selectedCell = selectedCell {
@@ -1666,7 +1667,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         setNeedsDisplay()
     }
     
-    func insert(_ point: CGPoint) {
+    func insert(_ point: Point) {
         let p = convertToCurrentLocal(point), inNode = cut.editNode
         guard let nearest = inNode.nearestLine(at: p) else {
             return
@@ -1686,7 +1687,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             updateEditView(with: p)
         }
     }
-    func removeNearestPoint(for point: CGPoint) {
+    func removeNearestPoint(for point: Point) {
         let p = convertToCurrentLocal(point), inNode = cut.editNode
         guard let nearest = inNode.nearestLine(at: p) else {
             return
@@ -1734,17 +1735,17 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         setNeedsDisplay()
     }
     
-    private var movePointNearest: Node.Nearest?, movePointOldPoint = CGPoint(), movePointIsSnap = false
+    private var movePointNearest: Node.Nearest?, movePointOldPoint = Point(), movePointIsSnap = false
     private weak var movePointNode: Node?
-    private let snapPointSnapDistance = 8.0.cf
+    private let snapPointSnapDistance = 8.0.cg
     private var bezierSortedResult: Node.Nearest.BezierSortedResult?
-    func movePoint(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func movePoint(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         movePoint(for: p, pressure: pressure, time: time, phase, isVertex: false)
     }
-    func moveVertex(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func moveVertex(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         movePoint(for: p, pressure: pressure, time: time, phase, isVertex: true)
     }
-    func movePoint(for point: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase,
+    func movePoint(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase,
                    isVertex: Bool) {
         let p = convertToCurrentLocal(point)
         switch phase {
@@ -1798,7 +1799,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         }
         setNeedsDisplay()
     }
-    private func movingPoint(with nearest: Node.Nearest, dp: CGPoint, in track: NodeTrack) {
+    private func movingPoint(with nearest: Node.Nearest, dp: Point, in track: NodeTrack) {
         let snapD = snapPointSnapDistance / scene.scale
         if let e = nearest.drawingEdit {
             var control = e.line.controls[e.pointIndex]
@@ -1842,7 +1843,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             
         }
     }
-    private func movedPoint(with nearest: Node.Nearest, dp: CGPoint,
+    private func movedPoint(with nearest: Node.Nearest, dp: Point,
                             in track: NodeTrack, _ node: Node) {
         let snapD = snapPointSnapDistance / scene.scale
         if let e = nearest.drawingEdit {
@@ -1879,7 +1880,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     
     private func movingPoint(with nearest: Node.Nearest,
                              bezierSortedResult b: Node.Nearest.BezierSortedResult,
-                             dp: CGPoint, isVertex: Bool, in track: NodeTrack) {
+                             dp: Point, isVertex: Bool, in track: NodeTrack) {
         let snapD = snapPointSnapDistance * scene.reciprocalScale
         let grid = 5 * scene.reciprocalScale
         var np = track.snapPoint(nearest.point + dp, with: b, snapDistance: snapD, grid: grid)
@@ -1962,7 +1963,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     }
     private func movedPoint(with nearest: Node.Nearest,
                             bezierSortedResult b: Node.Nearest.BezierSortedResult,
-                            dp: CGPoint, isVertex: Bool, in track: NodeTrack, _ node: Node) {
+                            dp: Point, isVertex: Bool, in track: NodeTrack, _ node: Node) {
         let snapD = snapPointSnapDistance * scene.reciprocalScale
         let grid = 5 * scene.reciprocalScale
         let np = track.snapPoint(nearest.point + dp, with: b, snapDistance: snapD, grid: grid)
@@ -2033,7 +2034,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         bezierSortedResult = nil
     }
     
-    func movingLineCap(with nearest: Node.Nearest, dp: CGPoint,
+    func movingLineCap(with nearest: Node.Nearest, dp: Point,
                        isVertex: Bool, in track: NodeTrack) {
         let np = nearest.point + dp
         var editPointLines = [Line]()
@@ -2099,7 +2100,7 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             }
         }
     }
-    func movedLineCap(with nearest: Node.Nearest, dp: CGPoint, isVertex: Bool,
+    func movedLineCap(with nearest: Node.Nearest, dp: Point, isVertex: Bool,
                       in track: NodeTrack, _ node: Node) {
         let np = nearest.point + dp
         if let e = nearest.drawingEditLineCap {
@@ -2192,11 +2193,11 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         }
     }
     
-    private var moveZOldPoint = CGPoint()
+    private var moveZOldPoint = Point()
     private var moveZCellTuple: (indexes: [Int], parent: Cell, oldChildren: [Cell])?
     private var moveZMinDeltaIndex = 0, moveZMaxDeltaIndex = 0
     private weak var moveZOldCell: Cell?, moveZNode: Node?
-    func moveZ(for point: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func moveZ(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         let p = convertToCurrentLocal(point)
         switch phase {
         case .began:
@@ -2295,25 +2296,25 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
     }
     
     private var moveSelected = Node.Selection()
-    private var transformBounds = CGRect(), moveOldPoint = CGPoint(), moveTransformOldPoint = CGPoint()
+    private var transformBounds = Rect(), moveOldPoint = Point(), moveTransformOldPoint = Point()
     enum TransformEditType {
         case move, warp, transform
     }
-    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         move(for: p, pressure: pressure, time: time, phase, type: .move)
     }
-    func transform(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func transform(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         move(for: p, pressure: pressure, time: time, phase, type: .transform)
     }
-    func warp(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    func warp(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         move(for: p, pressure: pressure, time: time, phase, type: .warp)
     }
-    let moveTransformAngleTime = 0.1
-    var moveEditTransform: Node.EditTransform?, moveTransformAngleOldTime = 0.0
-    var moveTransformAnglePoint = CGPoint(), moveTransformAngleOldPoint = CGPoint()
+    let moveTransformAngleTime = Second(0.1)
+    var moveEditTransform: Node.EditTransform?, moveTransformAngleOldTime = Second(0.0)
+    var moveTransformAnglePoint = Point(), moveTransformAngleOldPoint = Point()
     var isMoveTransformAngle = false
     private weak var moveNode: Node?
-    func move(for point: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase,
+    func move(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase,
               type: TransformEditType) {
         let p = convertToCurrentLocal(point)
         func affineTransform(with node: Node) -> CGAffineTransform {
@@ -2358,14 +2359,14 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
                 if var editTransform = moveEditTransform {
                     
                     func newEditTransform(with lines: [Line]) -> Node.EditTransform {
-                        var ps = [CGPoint]()
+                        var ps = [Point]()
                         for line in lines {
                             line.allEditPoints({ (p, _) in
                                 ps.append(p)
                             })
                             line.allEditPoints { (p, i) in ps.append(p) }
                         }
-                        let rb = RotatedRect(convexHullPoints: CGPoint.convexHullPoints(with: ps))
+                        let rb = RotatedRect(convexHullPoints: Point.convexHullPoints(with: ps))
                         let np = rb.convertToLocal(p: p)
                         let tx = np.x / rb.size.width, ty = np.y / rb.size.height
                         if ty < tx {
@@ -2489,8 +2490,8 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         setNeedsDisplay()
     }
     
-    private var minWarpDistance = 0.0.cf, maxWarpDistance = 0.0.cf
-    func distanceWarp(for point: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    private var minWarpDistance = 0.0.cg, maxWarpDistance = 0.0.cg
+    func distanceWarp(for point: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         let p = convertToCurrentLocal(point)
         switch phase {
         case .began:
@@ -2547,11 +2548,11 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         }
         setNeedsDisplay()
     }
-    func minMaxPointFrom(_ p: CGPoint
-        ) -> (minDistance: CGFloat, maxDistance: CGFloat, minPoint: CGPoint, maxPoint: CGPoint) {
+    func minMaxPointFrom(_ p: Point
+        ) -> (minDistance: CGFloat, maxDistance: CGFloat, minPoint: Point, maxPoint: Point) {
         
-        var minDistance = CGFloat.infinity, maxDistance = 0.0.cf
-        var minPoint = CGPoint(), maxPoint = CGPoint()
+        var minDistance = CGFloat.infinity, maxDistance = 0.0.cg
+        var minPoint = Point(), maxPoint = Point()
         func minMaxPointFrom(_ line: Line) {
             for control in line.controls {
                 let d = hypot²(p.x - control.point.x, p.y - control.point.y)
@@ -2578,16 +2579,16 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
         return (sqrt(minDistance), sqrt(maxDistance), minPoint, maxPoint)
     }
     
-//    func scroll(for p: CGPoint, time: Second, scrollDeltaPoint: CGPoint,
+//    func scroll(for p: Point, time: Second, scrollDeltaPoint: Point,
 //                phase: Phase, momentumPhase: Phase?) {
 //        viewTransform.translation += scrollDeltaPoint
 //        updateEditView(with: convertToCurrentLocal(p))
 //    }
     
-    var minScale = 0.00001.cf, blockScale = 1.0.cf, maxScale = 64.0.cf
-    var correctionScale = 1.28.cf, correctionRotation = 1.0.cf / (4.2 * (.pi))
-    private var isBlockScale = false, oldScale = 0.0.cf
-    func zoom(for p: CGPoint, time: Second, magnification: CGFloat, _ phase: Phase) {
+    var minScale = 0.00001.cg, blockScale = 1.0.cg, maxScale = 64.0.cg
+    var correctionScale = 1.28.cg, correctionRotation = 1.0.cg / (4.2 * .pi)
+    private var isBlockScale = false, oldScale = 0.0.cg
+    func zoom(for p: Point, time: Second, magnification: CGFloat, _ phase: Phase) {
         let scale = viewTransform.scale.x
         switch phase {
         case .began:
@@ -2601,20 +2602,20 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
                     if blockScale.isOver(old: scale, new: newScale) {
                         isBlockScale = true
                     }
-                    viewTransform.scale = CGPoint(x: newScale, y: newScale)
+                    viewTransform.scale = Point(x: newScale, y: newScale)
                 }
             }
         case .ended:
             if isBlockScale {
                 zoom(at: p) {
-                    viewTransform.scale = CGPoint(x: blockScale, y: blockScale)
+                    viewTransform.scale = Point(x: blockScale, y: blockScale)
                 }
             }
         }
     }
     var blockRotations: [CGFloat] = [-.pi, 0.0, .pi]
-    private var isBlockRotation = false, blockRotation = 0.0.cf, oldRotation = 0.0.cf
-    func rotate(for p: CGPoint, time: Second, rotationQuantity: CGFloat, _ phase: Phase) {
+    private var isBlockRotation = false, blockRotation = 0.0.cg, oldRotation = 0.0.cg
+    func rotate(for p: Point, time: Second, rotationQuantity: CGFloat, _ phase: Phase) {
         let rotation = viewTransform.rotation
         switch phase {
         case .began:
@@ -2643,21 +2644,21 @@ Zoomable, Rotatable, Strokable, Transformable, PointEditable, Bindable {
             }
         }
     }
-    func resetView(for p: CGPoint) {
+    func resetView(for p: Point) {
         guard !viewTransform.isIdentity else {
             return
         }
         viewTransform = Transform()
         updateEditView(with: convertToCurrentLocal(p))
     }
-    func zoom(at p: CGPoint, closure: () -> ()) {
+    func zoom(at p: Point, closure: () -> ()) {
         let point = convertToCurrentLocal(p)
         closure()
         let newPoint = convertFromCurrentLocal(point)
         viewTransform.translation -= (newPoint - p)
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         let ict = cut.editNode.indicatedCellsTuple(with: convertToCurrentLocal(p),
                                                    reciprocalScale: scene.reciprocalScale)
         if ict.cellItems.first != nil {

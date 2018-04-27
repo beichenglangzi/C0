@@ -20,7 +20,7 @@
 import Foundation
 
 struct Easing: Codable, Equatable, Hashable, DeepCopiable {
-    var cp0 = CGPoint(), cp1 = CGPoint(x: 1, y: 1)
+    var cp0 = Point(), cp1 = Point(x: 1, y: 1)
     
     func split(with t: CGFloat) -> (b0: Easing, b1: Easing) {
         guard !isDefault else {
@@ -39,21 +39,21 @@ struct Easing: Codable, Equatable, Hashable, DeepCopiable {
         return isLinear ? t : bezier.y(withX: t)
     }
     var bezier: Bezier3 {
-        return Bezier3(p0: CGPoint(), cp0: cp0, cp1: cp1, p1: CGPoint(x: 1, y: 1))
+        return Bezier3(p0: Point(), cp0: cp0, cp1: cp1, p1: Point(x: 1, y: 1))
     }
     var isDefault: Bool {
-        return cp0 == CGPoint() && cp1 == CGPoint(x: 1, y: 1)
+        return cp0 == Point() && cp1 == Point(x: 1, y: 1)
     }
     var isLinear: Bool {
         return cp0.x == cp0.y && cp1.x == cp1.y
     }
-    func path(in pb: CGRect) -> CGPath {
+    func path(in pb: Rect) -> CGPath {
         let b = bezier
-        let cp0 = CGPoint(x: pb.minX + b.cp0.x * pb.width, y: pb.minY + b.cp0.y * pb.height)
-        let cp1 = CGPoint(x: pb.minX + b.cp1.x * pb.width, y: pb.minY + b.cp1.y * pb.height)
+        let cp0 = Point(x: pb.minX + b.cp0.x * pb.width, y: pb.minY + b.cp0.y * pb.height)
+        let cp1 = Point(x: pb.minX + b.cp1.x * pb.width, y: pb.minY + b.cp1.y * pb.height)
         let path = CGMutablePath()
-        path.move(to: CGPoint(x: pb.minX, y: pb.minY))
-        path.addCurve(to: CGPoint(x: pb.maxX, y: pb.maxY), control1: cp0, control2: cp1)
+        path.move(to: Point(x: pb.minX, y: pb.minY))
+        path.addCurve(to: Point(x: pb.maxX, y: pb.maxY), control1: cp0, control2: cp1)
         return path
     }
 }
@@ -61,15 +61,15 @@ extension Easing: Referenceable {
     static let name = Localization(english: "Easing", japanese: "イージング")
 }
 extension Easing: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
         thumbnailView.bounds = bounds
         return thumbnailView
     }
-    func draw(with bounds: CGRect, in ctx: CGContext) {
+    func draw(with bounds: Rect, in ctx: CGContext) {
         let path = self.path(in: bounds.inset(by: 5))
         ctx.addPath(path)
-        ctx.setStrokeColor(Color.font.cgColor)
+        ctx.setStrokeColor(Color.font.cg)
         ctx.setLineWidth(1)
         ctx.strokePath()
     }
@@ -113,7 +113,7 @@ final class EasingView: View, Assignable {
         }
     }
     
-    init(frame: CGRect = CGRect(), sizeType: SizeType = .regular) {
+    init(frame: Rect = Rect(), sizeType: SizeType = .regular) {
         classXNameView = TextView(text: Localization("t"), font: Font.italic(with: sizeType))
         classYNameView = TextView(text: Localization("t'"), font: Font.italic(with: sizeType))
         super.init()
@@ -125,32 +125,32 @@ final class EasingView: View, Assignable {
         cp1View.binding = { [unowned self] in self.setEasing(with: $0) }
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     private func updateLayout() {
-        cp0View.frame = CGRect(x: padding,
+        cp0View.frame = Rect(x: padding,
                                y: padding,
                                width: (bounds.width - padding * 2) / 2,
                                height: (bounds.height - padding * 2) / 2)
-        cp1View.frame = CGRect(x: bounds.width / 2,
+        cp1View.frame = Rect(x: bounds.width / 2,
                                y: padding + (bounds.height - padding * 2) / 2,
                                width: (bounds.width - padding * 2) / 2,
                                height: (bounds.height - padding * 2) / 2)
         let path = CGMutablePath()
         let sp = Layout.smallPadding
-        path.addLines(between: [CGPoint(x: padding + cp0View.padding,
+        path.addLines(between: [Point(x: padding + cp0View.padding,
                                         y: bounds.height - padding - classYNameView.frame.height - sp),
-                                CGPoint(x: padding + cp0View.padding,
+                                Point(x: padding + cp0View.padding,
                                         y: padding + cp0View.padding),
-                                CGPoint(x: bounds.width - padding - classXNameView.frame.width - sp,
+                                Point(x: bounds.width - padding - classXNameView.frame.width - sp,
                                         y: padding + cp0View.padding)])
         axisPathVIew.path = path
-        classXNameView.frame.origin = CGPoint(x: bounds.width - padding - classXNameView.frame.width,
+        classXNameView.frame.origin = Point(x: bounds.width - padding - classXNameView.frame.width,
                                       y: padding)
-        classYNameView.frame.origin = CGPoint(x: padding,
+        classYNameView.frame.origin = Point(x: padding,
                                       y: bounds.height - padding - classYNameView.frame.height)
         updateWithEasing()
     }
@@ -163,10 +163,10 @@ final class EasingView: View, Assignable {
         easingLinePathVIew.path = easing.path(in: bounds.insetBy(dx: padding + cp0View.padding,
                                                          dy: padding + cp0View.padding))
         let knobLinePath = CGMutablePath()
-        knobLinePath.addLines(between: [CGPoint(x: cp0View.frame.minX + cp0View.padding,
+        knobLinePath.addLines(between: [Point(x: cp0View.frame.minX + cp0View.padding,
                                                 y: cp0View.frame.minY + cp0View.padding),
                                         cp0View.formKnobView.position + cp0View.frame.origin])
-        knobLinePath.addLines(between: [CGPoint(x: cp1View.frame.maxX - cp1View.padding,
+        knobLinePath.addLines(between: [Point(x: cp1View.frame.maxX - cp1View.padding,
                                                 y: cp1View.frame.maxY - cp1View.padding),
                                         cp1View.formKnobView.position + cp1View.frame.origin])
         controlLinePathView.path = knobLinePath
@@ -195,17 +195,17 @@ final class EasingView: View, Assignable {
         }
     }
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let easing = Easing()
         guard easing != self.easing else {
             return
         }
         set(easing, old: self.easing)
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [easing]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let easing = object as? Easing {
                 if easing != self.easing {
@@ -223,7 +223,7 @@ final class EasingView: View, Assignable {
         binding?(Binding(view: self, easing: easing, oldEasing: oldEasing, phase: .ended))
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         var reference = Easing.reference
         reference.viewDescription = Localization(english: "Horizontal axis t: Time\nVertical axis t': Correction time",
                                                  japanese: "横軸t: 時間\n縦軸t': 補正後の時間")

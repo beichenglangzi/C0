@@ -38,15 +38,15 @@ final class Player: View {
     
     var playCut = Cut()
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateChildren()
         }
     }
     func updateChildren() {
-        let paddingOrigin = CGPoint(x: (bounds.width - scene.frame.size.width) / 2,
+        let paddingOrigin = Point(x: (bounds.width - scene.frame.size.width) / 2,
                                     y: (bounds.height - scene.frame.size.height) / 2)
-        drawView.frame = CGRect(origin: paddingOrigin, size: scene.frame.size)
+        drawView.frame = Rect(origin: paddingOrigin, size: scene.frame.size)
         screenTransform = CGAffineTransform(translationX: drawView.bounds.midX,
                                             y: drawView.bounds.midY)
     }
@@ -91,7 +91,7 @@ final class Player: View {
                     } catch {
                     }
                 }
-                audioPlayer?.currentTime = scene.secondTime(withBeatTime: t)
+                audioPlayer?.currentTime = Double(scene.secondTime(withBeatTime: t))
                 audioPlayer?.play()
                 timer.begin(interval: 1 / Second(scene.frameRate),
                             tolerance: 0.1 / Second(scene.frameRate),
@@ -149,10 +149,10 @@ final class Player: View {
         if isPlaying && !isPause {
             playDrawCount += 1
             let newTimestamp = CFAbsoluteTimeGetCurrent()
-            let deltaTime = newTimestamp - oldTimestamp
+            let deltaTime = Second(newTimestamp - oldTimestamp)
             if deltaTime >= 1 {
                 let newPlayFrameRate = min(scene.frameRate,
-                                           FPS(round(Double(playDrawCount) / deltaTime)))
+                                           FPS(round(Second(playDrawCount) / deltaTime)))
                 if newPlayFrameRate != playFrameRate {
                     playFrameRate = newPlayFrameRate
                     didSetPlayFrameRateClosure?(playFrameRate)
@@ -190,7 +190,7 @@ final class Player: View {
         set {
             update(withTime: scene.basedBeatTime(withSecondTime: newValue))
             playFrameTime = scene.frameTime(withSecondTime: newValue)
-            audioPlayer?.currentTime = newValue
+            audioPlayer?.currentTime = Double(newValue)
         }
     }
     var currentPlayTime: Beat {
@@ -209,7 +209,7 @@ final class Player: View {
         set {
             update(withTime: newValue)
             playFrameTime = scene.frameTime(withBeatTime: newValue)
-            audioPlayer?.currentTime = scene.secondTime(withFrameTime: playFrameTime)
+            audioPlayer?.currentTime = Double(scene.secondTime(withFrameTime: playFrameTime))
         }
     }
     
@@ -230,14 +230,15 @@ final class Player: View {
         endPlayClosure?(self)
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Reference(name: Localization(english: "Player", japanese: "プレイヤー"))
     }
 }
 
 final class SeekBar: View {
     let timeTextView = TextView(text: Text("00:00"), color: .locked)
-    let frameRateView = RealNumberView(unit: " fps")
+    let frameRateView = RealNumberView(model: 0, option: RealNumberGetterOption(numberOfDigits: 1,
+                                                                                unit: " fps"))
     let timeView = SlidableNumberView(min: 0, max: 1)
     
     override init() {
@@ -259,7 +260,7 @@ final class SeekBar: View {
         }
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -270,18 +271,18 @@ final class SeekBar: View {
         let labelHeight = Layout.basicHeight - padding * 2
         let labelY = round((frame.height - labelHeight) / 2)
         
-        timeTextView.frame.origin = CGPoint(x: padding, y: labelY)
+        timeTextView.frame.origin = Point(x: padding, y: labelY)
         let frw = Layout.valueWidth(with: .regular)
-        frameRateView.frame = CGRect(x: bounds.width - frw - padding,
+        frameRateView.frame = Rect(x: bounds.width - frw - padding,
                                      y: padding * 2, width: frw, height: height - padding * 2)
         let sliderWidth = frameRateView.frame.minX - timeTextView.frame.maxX - padding * 2
-        timeView.frame = CGRect(x: timeTextView.frame.maxX + padding,
+        timeView.frame = Rect(x: timeTextView.frame.maxX + padding,
                               y: sliderY, width: sliderWidth, height: height)
         timeView.backgroundViews = [SeekBar.sliderView(with: timeView.bounds,
                                                        padding: timeView.padding)]
     }
-    static func sliderView(with bounds: CGRect, padding: CGFloat) -> View {
-        let shapeRect = CGRect(x: padding, y: bounds.midY - 1,
+    static func sliderView(with bounds: Rect, padding: CGFloat) -> View {
+        let shapeRect = Rect(x: padding, y: bounds.midY - 1,
                                width: bounds.width - padding * 2, height: 2)
         let view = View(path: CGPath(rect: shapeRect, transform: nil))
         view.fillColor = .content
@@ -299,13 +300,13 @@ final class SeekBar: View {
     
     var time = Second(0.0) {
         didSet {
-            timeView.number = CGFloat(time)
+            timeView.number = time
             second = Int(time)
         }
     }
     var maxTime = Second(1.0) {
         didSet {
-            timeView.maxNumber = Double(maxTime).cf
+            timeView.maxNumber = maxTime
         }
     }
     private(set) var second = 0 {
@@ -342,14 +343,14 @@ final class SeekBar: View {
     }
     private func updateWithFrameRate() {
         let oldBounds = frameRateView.bounds
-        frameRateView.number = playFrameRate
+        frameRateView.model = playFrameRate
         frameRateView.formStringView.textFrame.color = playFrameRate < frameRate ? .warning : .locked
         if oldBounds.size != frameRateView.bounds.size {
             updateLayout()
         }
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Reference(name: Text(english: "Seek Bar", japanese: "シークバー"))
     }
 }

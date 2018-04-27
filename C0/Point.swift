@@ -23,7 +23,7 @@ import Foundation
  Issue: Core Graphicsとの置き換え
  */
 struct _Point: Equatable {
-    var x = 0.0, y = 0.0
+    var x = 0.0.cg, y = 0.0.cg
     
     var isEmpty: Bool {
         return x == 0 && y == 0
@@ -37,8 +37,8 @@ extension _Point: Hashable {
 extension _Point: Codable {
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
-        let x = try container.decode(Double.self)
-        let y = try container.decode(Double.self)
+        let x = try container.decode(CGFloat.self)
+        let y = try container.decode(CGFloat.self)
         self.init(x: x, y: y)
     }
     func encode(to encoder: Encoder) throws {
@@ -52,12 +52,12 @@ extension _Point: Referenceable {
 }
 
 typealias Point = CGPoint
-extension CGPoint {
-    func mid(_ other: CGPoint) -> CGPoint {
-        return CGPoint(x: (x + other.x) / 2, y: (y + other.y) / 2)
+extension Point {
+    func mid(_ other: Point) -> Point {
+        return Point(x: (x + other.x) / 2, y: (y + other.y) / 2)
     }
     
-    static func intersection(p0: CGPoint, p1: CGPoint, q0: CGPoint, q1: CGPoint) -> Bool {
+    static func intersection(p0: Point, p1: Point, q0: Point, q1: Point) -> Bool {
         let a0 = (p0.x - p1.x) * (q0.y - p0.y) + (p0.y - p1.y) * (p0.x - q0.x)
         let b0 = (p0.x - p1.x) * (q1.y - p0.y) + (p0.y - p1.y) * (p0.x - q1.x)
         if a0 * b0 < 0 {
@@ -69,47 +69,47 @@ extension CGPoint {
         }
         return false
     }
-    static func intersectionLineSegment(_ p1: CGPoint, _ p2: CGPoint,
-                                        _ p3: CGPoint, _ p4: CGPoint,
-                                        isSegmentP3P4: Bool = true) -> CGPoint? {
+    static func intersectionLineSegment(_ p1: Point, _ p2: Point,
+                                        _ p3: Point, _ p4: Point,
+                                        isSegmentP3P4: Bool = true) -> Point? {
         let delta = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x)
         if delta != 0 {
             let u = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / delta
             if u >= 0 && u <= 1 {
                 let v = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / delta
                 if v >= 0 && v <= 1 || !isSegmentP3P4 {
-                    return CGPoint(x: p1.x + u * (p2.x - p1.x), y: p1.y + u * (p2.y - p1.y))
+                    return Point(x: p1.x + u * (p2.x - p1.x), y: p1.y + u * (p2.y - p1.y))
                 }
             }
         }
         return nil
     }
-    static func intersectionLine(_ p1: CGPoint, _ p2: CGPoint,
-                                 _ p3: CGPoint, _ p4: CGPoint) -> CGPoint? {
+    static func intersectionLine(_ p1: Point, _ p2: Point,
+                                 _ p3: Point, _ p4: Point) -> Point? {
         let d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x)
         if d == 0 {
             return nil
         }
         let u = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d
-        return CGPoint(x: p1.x + u * (p2.x - p1.x), y: p1.y + u * (p2.y - p1.y))
+        return Point(x: p1.x + u * (p2.x - p1.x), y: p1.y + u * (p2.y - p1.y))
     }
-    func isApproximatelyEqual(other: CGPoint, roundingError: CGFloat = 0.0000000001.cf) -> Bool {
+    func isApproximatelyEqual(other: Point, roundingError: CGFloat = 0.0000000001) -> Bool {
         return x.isApproximatelyEqual(other: other.x, roundingError: roundingError)
             && y.isApproximatelyEqual(other: other.y, roundingError: roundingError)
     }
-    func tangential(_ other: CGPoint) -> CGFloat {
+    func tangential(_ other: Point) -> CGFloat {
         return atan2(other.y - y, other.x - x)
     }
-    func crossVector(_ other: CGPoint) -> CGFloat {
+    func crossVector(_ other: Point) -> CGFloat {
         return x * other.y - y * other.x
     }
-    func distance(_ other: CGPoint) -> CGFloat {
+    func distance(_ other: Point) -> CGFloat {
         return hypot(other.x - x, other.y - y)
     }
-    func distanceWithLine(ap: CGPoint, bp: CGPoint) -> CGFloat {
+    func distanceWithLine(ap: Point, bp: Point) -> CGFloat {
         return ap == bp ? distance(ap) : abs((bp - ap).crossVector(self - ap)) / ap.distance(bp)
     }
-    func normalLinearInequality(ap: CGPoint, bp: CGPoint) -> Bool {
+    func normalLinearInequality(ap: Point, bp: Point) -> Bool {
         if bp.y - ap.y == 0 {
             return bp.x > ap.x ? x <= ap.x : x >= ap.x
         } else {
@@ -118,7 +118,7 @@ extension CGPoint {
             return bp.y > ap.y ? y <= ny : y >= ny
         }
     }
-    func tWithLineSegment(ap: CGPoint, bp: CGPoint) -> CGFloat {
+    func tWithLineSegment(ap: Point, bp: Point) -> CGFloat {
         if ap == bp {
             return 0.5
         } else {
@@ -127,19 +127,19 @@ extension CGPoint {
                 .clip(min: 0, max: 1)
         }
     }
-    static func boundsPointWithLine(ap: CGPoint, bp: CGPoint,
-                                    bounds: CGRect) -> (p0: CGPoint, p1: CGPoint)? {
-        let p0 = CGPoint.intersectionLineSegment(CGPoint(x: bounds.minX, y: bounds.minY),
-                                                 CGPoint(x: bounds.minX, y: bounds.maxY),
+    static func boundsPointWithLine(ap: Point, bp: Point,
+                                    bounds: Rect) -> (p0: Point, p1: Point)? {
+        let p0 = Point.intersectionLineSegment(Point(x: bounds.minX, y: bounds.minY),
+                                                 Point(x: bounds.minX, y: bounds.maxY),
                                                  ap, bp, isSegmentP3P4: false)
-        let p1 = CGPoint.intersectionLineSegment(CGPoint(x: bounds.maxX, y: bounds.minY),
-                                                 CGPoint(x: bounds.maxX, y: bounds.maxY),
+        let p1 = Point.intersectionLineSegment(Point(x: bounds.maxX, y: bounds.minY),
+                                                 Point(x: bounds.maxX, y: bounds.maxY),
                                                  ap, bp, isSegmentP3P4: false)
-        let p2 = CGPoint.intersectionLineSegment(CGPoint(x: bounds.minX, y: bounds.minY),
-                                                 CGPoint(x: bounds.maxX, y: bounds.minY),
+        let p2 = Point.intersectionLineSegment(Point(x: bounds.minX, y: bounds.minY),
+                                                 Point(x: bounds.maxX, y: bounds.minY),
                                                  ap, bp, isSegmentP3P4: false)
-        let p3 = CGPoint.intersectionLineSegment(CGPoint(x: bounds.minX, y: bounds.maxY),
-                                                 CGPoint(x: bounds.maxX, y: bounds.maxY),
+        let p3 = Point.intersectionLineSegment(Point(x: bounds.minX, y: bounds.maxY),
+                                                 Point(x: bounds.maxX, y: bounds.maxY),
                                                  ap, bp, isSegmentP3P4: false)
         if let p0 = p0 {
             if let p1 = p1, p0 != p1 {
@@ -160,7 +160,7 @@ extension CGPoint {
         }
         return nil
     }
-    func distanceWithLineSegment(ap: CGPoint, bp: CGPoint) -> CGFloat {
+    func distanceWithLineSegment(ap: Point, bp: Point) -> CGFloat {
         if ap == bp {
             return distance(ap)
         } else {
@@ -175,68 +175,68 @@ extension CGPoint {
             }
         }
     }
-    func nearestWithLine(ap: CGPoint, bp: CGPoint) -> CGPoint {
+    func nearestWithLine(ap: Point, bp: Point) -> Point {
         if ap == bp {
             return ap
         } else {
             let av = bp - ap, bv = self - ap
             let r = (av.x * bv.x + av.y * bv.y) / (av.x * av.x + av.y * av.y)
-            return CGPoint(x: ap.x + r * av.x, y: ap.y + r * av.y)
+            return Point(x: ap.x + r * av.x, y: ap.y + r * av.y)
         }
     }
-    var integral: CGPoint {
-        return CGPoint(x: round(x), y: round(y))
+    var integral: Point {
+        return Point(x: round(x), y: round(y))
     }
-    func perpendicularDeltaPoint(withDistance distance: CGFloat) -> CGPoint {
-        if self == CGPoint() {
-            return CGPoint(x: distance, y: 0)
+    func perpendicularDeltaPoint(withDistance distance: CGFloat) -> Point {
+        if self == Point() {
+            return Point(x: distance, y: 0)
         } else {
             let r = distance / hypot(x, y)
-            return CGPoint(x: -r * y, y: r * x)
+            return Point(x: -r * y, y: r * x)
         }
     }
-    func distance²(_ other: CGPoint) -> CGFloat {
+    func distance²(_ other: Point) -> CGFloat {
         let nx = x - other.x, ny = y - other.y
         return nx * nx + ny * ny
     }
-    static func differenceAngle(_ p0: CGPoint, p1: CGPoint, p2: CGPoint) -> CGFloat {
+    static func differenceAngle(_ p0: Point, p1: Point, p2: Point) -> CGFloat {
         let pa = p1 - p0
         let pb = p2 - pa
         let ab = hypot(pa.x, pa.y) * hypot(pb.x, pb.y)
         return ab == 0 ? 0 :
             (pa.x * pb.y - pa.y * pb.x > 0 ? 1 : -1) * acos((pa.x * pb.x + pa.y * pb.y) / ab)
     }
-    static func differenceAngle(p0: CGPoint, p1: CGPoint, p2: CGPoint) -> CGFloat {
+    static func differenceAngle(p0: Point, p1: Point, p2: Point) -> CGFloat {
         return differenceAngle(a: p1 - p0, b: p2 - p1)
     }
-    static func differenceAngle(a: CGPoint, b: CGPoint) -> CGFloat {
+    static func differenceAngle(a: Point, b: Point) -> CGFloat {
         return atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y)
     }
-    static func +(lhs: CGPoint, rha: CGPoint) -> CGPoint {
-        return CGPoint(x: lhs.x + rha.x, y: lhs.y + rha.y)
+    static func +(lhs: Point, rha: Point) -> Point {
+        return Point(x: lhs.x + rha.x, y: lhs.y + rha.y)
     }
-    static func +=(lhs: inout CGPoint, rhs: CGPoint) {
+    static func +=(lhs: inout Point, rhs: Point) {
         lhs.x += rhs.x
         lhs.y += rhs.y
     }
-    static func -=(lhs: inout CGPoint, rhs: CGPoint) {
+    static func -=(lhs: inout Point, rhs: Point) {
         lhs.x -= rhs.x
         lhs.y -= rhs.y
     }
-    static func -(lhs: CGPoint, rhs: CGPoint) -> CGPoint {
-        return CGPoint(x: lhs.x - rhs.x, y: lhs.y - rhs.y)
+    static func -(lhs: Point, rhs: Point) -> Point {
+        return Point(x: lhs.x - rhs.x, y: lhs.y - rhs.y)
     }
-    prefix static func -(p: CGPoint) -> CGPoint {
-        return CGPoint(x: -p.x, y: -p.y)
+    prefix static func -(p: Point) -> Point {
+        return Point(x: -p.x, y: -p.y)
     }
-    static func *(lhs: CGFloat, rhs: CGPoint) -> CGPoint {
-        return CGPoint(x: rhs.x * lhs, y: rhs.y * lhs)
+    static func *(lhs: CGFloat, rhs: Point) -> Point {
+        return Point(x: rhs.x * lhs, y: rhs.y * lhs)
     }
-    static func *(lhs: CGPoint, rhs: CGFloat) -> CGPoint {
-        return CGPoint(x: lhs.x * rhs, y: lhs.y * rhs)
+    static func *(lhs: Point, rhs: CGFloat) -> Point {
+        return Point(x: lhs.x * rhs, y: lhs.y * rhs)
     }
-    static func /(lhs: CGPoint, rhs: CGFloat) -> CGPoint {
-        return CGPoint(x: lhs.x / rhs, y: lhs.y / rhs)
+    static func /(lhs: Point, rhs: CGFloat) -> Point {
+        return Point(x: lhs.x / rhs, y: lhs.y / rhs)
     }
     
     init(_ string: String) {
@@ -248,58 +248,58 @@ extension CGPoint {
     
     func draw(radius r: CGFloat, lineWidth: CGFloat = 1,
               inColor: Color = .knob, outColor: Color = .getSetBorder, in ctx: CGContext) {
-        let rect = CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)
-        ctx.setFillColor(outColor.cgColor)
+        let rect = Rect(x: x - r, y: y - r, width: r * 2, height: r * 2)
+        ctx.setFillColor(outColor.cg)
         ctx.fillEllipse(in: rect.insetBy(dx: -lineWidth, dy: -lineWidth))
-        ctx.setFillColor(inColor.cgColor)
+        ctx.setFillColor(inColor.cg)
         ctx.fillEllipse(in: rect)
     }
 }
-extension CGPoint: Hashable {
+extension Point: Hashable {
     public var hashValue: Int {
         return Hash.uniformityHashValue(with: [x.hashValue, y.hashValue])
     }
 }
-extension CGPoint: Interpolatable {
-    static func linear(_ f0: CGPoint, _ f1: CGPoint, t: CGFloat) -> CGPoint {
-        return CGPoint(x: CGFloat.linear(f0.x, f1.x, t: t), y: CGFloat.linear(f0.y, f1.y, t: t))
+extension Point: Interpolatable {
+    static func linear(_ f0: Point, _ f1: Point, t: CGFloat) -> Point {
+        return Point(x: CGFloat.linear(f0.x, f1.x, t: t), y: CGFloat.linear(f0.y, f1.y, t: t))
     }
-    static func firstMonospline(_ f1: CGPoint, _ f2: CGPoint, _ f3: CGPoint,
-                                with ms: Monospline) -> CGPoint {
-        return CGPoint(x: CGFloat.firstMonospline(f1.x, f2.x, f3.x, with: ms),
+    static func firstMonospline(_ f1: Point, _ f2: Point, _ f3: Point,
+                                with ms: Monospline) -> Point {
+        return Point(x: CGFloat.firstMonospline(f1.x, f2.x, f3.x, with: ms),
                        y: CGFloat.firstMonospline(f1.y, f2.y, f3.y, with: ms))
     }
-    static func monospline(_ f0: CGPoint, _ f1: CGPoint, _ f2: CGPoint, _ f3: CGPoint,
-                           with ms: Monospline) -> CGPoint {
-        return CGPoint(x: CGFloat.monospline(f0.x, f1.x, f2.x, f3.x, with: ms),
+    static func monospline(_ f0: Point, _ f1: Point, _ f2: Point, _ f3: Point,
+                           with ms: Monospline) -> Point {
+        return Point(x: CGFloat.monospline(f0.x, f1.x, f2.x, f3.x, with: ms),
                        y: CGFloat.monospline(f0.y, f1.y, f2.y, f3.y, with: ms))
     }
-    static func lastMonospline(_ f0: CGPoint, _ f1: CGPoint, _ f2: CGPoint,
-                               with ms: Monospline) -> CGPoint {
-        return CGPoint(x: CGFloat.lastMonospline(f0.x, f1.x, f2.x, with: ms),
+    static func lastMonospline(_ f0: Point, _ f1: Point, _ f2: Point,
+                               with ms: Monospline) -> Point {
+        return Point(x: CGFloat.lastMonospline(f0.x, f1.x, f2.x, with: ms),
                        y: CGFloat.lastMonospline(f0.y, f1.y, f2.y, with: ms))
     }
 }
-extension CGPoint: Referenceable {
+extension Point: Referenceable {
     static let name = Localization(english: "Point", japanese: "ポイント")
 }
-extension CGPoint: DeepCopiable {
+extension Point: DeepCopiable {
 }
-extension CGPoint: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+extension Point: ObjectViewExpression {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return string.view(withBounds: bounds, sizeType)
     }
 }
 
 final class PointView: View, Assignable, Movable, Runnable {
-    var point = CGPoint() {
+    var point = Point() {
         didSet {
             if point != oldValue {
                 formKnobView.position = position(from: point)
             }
         }
     }
-    var defaultPoint = CGPoint()
+    var defaultPoint = Point()
     var pointAABB = AABB(minX: 0, maxX: 1, minY: 0, maxY: 1) {
         didSet {
             guard pointAABB.maxX - pointAABB.minX > 0 && pointAABB.maxY - pointAABB.minY > 0 else {
@@ -315,62 +315,62 @@ final class PointView: View, Assignable, Movable, Runnable {
     }
     let formKnobView = KnobView()
     
-    var padding = 5.0.cf
+    var padding = 5.0.cg
     
-    init(frame: CGRect = CGRect()) {
+    init(frame: Rect = Rect()) {
         super.init()
         self.frame = frame
         append(child: formKnobView)
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             formKnobView.position = position(from: point)
         }
     }
     
-    func clippedPoint(with point: CGPoint) -> CGPoint {
+    func clippedPoint(with point: Point) -> Point {
         return pointAABB.clippedPoint(with: point)
     }
-    func point(withPosition position: CGPoint) -> CGPoint {
+    func point(withPosition position: Point) -> Point {
         let inB = bounds.inset(by: padding)
         let x = pointAABB.width * (position.x - inB.origin.x) / inB.width + pointAABB.minX
         let y = pointAABB.height * (position.y - inB.origin.y) / inB.height + pointAABB.minY
-        return CGPoint(x: x, y: y)
+        return Point(x: x, y: y)
     }
-    func position(from point: CGPoint) -> CGPoint {
+    func position(from point: Point) -> Point {
         let inB = bounds.inset(by: padding)
         let x = inB.width * (point.x - pointAABB.minX) / pointAABB.width + inB.origin.x
         let y = inB.height * (point.y - pointAABB.minY) / pointAABB.height + inB.origin.y
-        return CGPoint(x: x, y: y)
+        return Point(x: x, y: y)
     }
     
     struct Binding {
-        let view: PointView, point: CGPoint, oldPoint: CGPoint, phase: Phase
+        let view: PointView, point: Point, oldPoint: Point, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
     var disabledRegisterUndo = false
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let point = defaultPoint
         if point != self.point {
             push(point, old: self.point)
         }
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [point]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
-            if let unclippedPoint = object as? CGPoint {
+            if let unclippedPoint = object as? Point {
                 let point = clippedPoint(with: unclippedPoint)
                 if point != self.point {
                     push(point, old: self.point)
                     return
                 }
             } else if let string = object as? String {
-                let point = clippedPoint(with: CGPoint(string))
+                let point = clippedPoint(with: Point(string))
                 if point != self.point {
                     push(point, old: self.point)
                     return
@@ -379,15 +379,15 @@ final class PointView: View, Assignable, Movable, Runnable {
         }
     }
     
-    func run(for p: CGPoint) {
+    func run(for p: Point) {
         let point = clippedPoint(with: self.point(withPosition: p))
         if point != self.point {
             push(point, old: self.point)
         }
     }
     
-    private var oldPoint = CGPoint()
-    func move(for p: CGPoint, pressure: CGFloat, time: Second, _ phase: Phase) {
+    private var oldPoint = Point()
+    func move(for p: Point, pressure: CGFloat, time: Second, _ phase: Phase) {
         switch phase {
         case .began:
             formKnobView.fillColor = .editing
@@ -410,20 +410,20 @@ final class PointView: View, Assignable, Movable, Runnable {
         }
     }
     
-    func push(_ point: CGPoint, old oldPoint: CGPoint) {
+    func push(_ point: Point, old oldPoint: Point) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.push(oldPoint, old: point) }
         binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .began))
         self.point = point
         binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .ended))
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return _Point.reference
     }
 }
 
 final class DiscretePointView: View, Assignable {
-    var point = CGPoint() {
+    var point = Point() {
         didSet {
             if point != oldValue {
                 xView.model = point.x
@@ -431,20 +431,20 @@ final class DiscretePointView: View, Assignable {
             }
         }
     }
-    var defaultPoint = CGPoint()
+    var defaultPoint = Point()
     
     var sizeType: SizeType
     let classXNameView: TextView
     let xView: DiscreteRealNumberView
     let classYNameView: TextView
     let yView: DiscreteRealNumberView
-    init(point: CGPoint = CGPoint(), defaultPoint: CGPoint = CGPoint(),
-         minPoint: CGPoint = CGPoint(x: -10000, y: -10000),
-         maxPoint: CGPoint = CGPoint(x: 10000, y: 10000),
+    init(point: Point = Point(), defaultPoint: Point = Point(),
+         minPoint: Point = Point(x: -10000, y: -10000),
+         maxPoint: Point = Point(x: 10000, y: 10000),
          xEXP: RealNumber = 1, yEXP: RealNumber = 1,
          xInterval: RealNumber = 1, xNumberOfDigits: Int = 0, xUnit: String = "",
          yInterval: RealNumber = 1, yNumberOfDigits: Int = 0, yUnit: String = "",
-         frame: CGRect = CGRect(),
+         frame: Rect = Rect(),
          sizeType: SizeType = .regular) {
         self.sizeType = sizeType
         
@@ -478,17 +478,17 @@ final class DiscretePointView: View, Assignable {
         updateLayout()
     }
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType)
         let valueFrame = Layout.valueFrame(with: sizeType)
         let xWidth = classXNameView.frame.width + valueFrame.width
         let yWidth = classYNameView.frame.height + valueFrame.width
-        return CGRect(x: 0,
+        return Rect(x: 0,
                       y: 0,
                       width: max(xWidth, yWidth) + padding * 2,
                       height: valueFrame.height * 2 + padding * 2)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -499,24 +499,24 @@ final class DiscretePointView: View, Assignable {
         var x = bounds.width - padding, y = bounds.height - padding
         x -= valueFrame.width
         y -= valueFrame.height
-        xView.frame.origin = CGPoint(x: x, y: y)
+        xView.frame.origin = Point(x: x, y: y)
         x -= classXNameView.frame.width
-        classXNameView.frame.origin = CGPoint(x: x, y: y + padding)
+        classXNameView.frame.origin = Point(x: x, y: y + padding)
         y -= valueFrame.height
-        yView.frame.origin = CGPoint(x: x, y: y)
+        yView.frame.origin = Point(x: x, y: y)
         x -= classYNameView.frame.width
-        classYNameView.frame.origin = CGPoint(x: x, y: y + padding)
+        classYNameView.frame.origin = Point(x: x, y: y + padding)
     }
     
     struct Binding {
         let view: DiscretePointView
-        let point: CGPoint, oldPoint: CGPoint, phase: Phase
+        let point: Point, oldPoint: Point, phase: Phase
     }
     var binding: ((Binding) -> ())?
     
     var disabledRegisterUndo = false
     
-    private var oldPoint = CGPoint()
+    private var oldPoint = Point()
     private func setPoint(with obj: DiscreteRealNumberView.Binding<RealNumber>) {
         if obj.phase == .began {
             oldPoint = point
@@ -531,24 +531,24 @@ final class DiscretePointView: View, Assignable {
         }
     }
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let point = defaultPoint
         if point != self.point {
             push(point, old: self.point)
         }
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [point]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
-            if let point = object as? CGPoint {
+            if let point = object as? Point {
                 if point != self.point {
                     push(point, old: self.point)
                     return
                 }
             } else if let string = object as? String {
-                let point = CGPoint(string)
+                let point = Point(string)
                 if point != self.point {
                     push(point, old: self.point)
                     return
@@ -557,14 +557,14 @@ final class DiscretePointView: View, Assignable {
         }
     }
     
-    func push(_ point: CGPoint, old oldPoint: CGPoint) {
+    func push(_ point: Point, old oldPoint: Point) {
         registeringUndoManager?.registerUndo(withTarget: self) { $0.push(oldPoint, old: point) }
         binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .began))
         self.point = point
         binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .ended))
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return _Point.reference
     }
 }

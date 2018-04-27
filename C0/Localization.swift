@@ -100,7 +100,7 @@ extension Localization: Referenceable {
     static let name = Localization(english: "Text", japanese: "テキスト")
 }
 extension Localization: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return TextView(text: self, font: Font.default(with: sizeType),
                         frame: bounds, isSizeToFit: false)
     }

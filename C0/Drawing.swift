@@ -47,7 +47,7 @@ final class Drawing: NSObject, NSCoding {
         coder.encode(selectedLineIndexes, forKey: CodingKeys.selectedLineIndexes.rawValue)
     }
     
-    func imageBounds(withLineWidth lineWidth: CGFloat) -> CGRect {
+    func imageBounds(withLineWidth lineWidth: CGFloat) -> Rect {
         return Line.imageBounds(with: lines, lineWidth: lineWidth)
             .unionNoEmpty(Line.imageBounds(with: draftLines, lineWidth: lineWidth))
     }
@@ -55,7 +55,7 @@ final class Drawing: NSObject, NSCoding {
         return lines.isEmpty && draftLines.isEmpty
     }
     
-    func nearestLine(at p: CGPoint) -> Line? {
+    func nearestLine(at p: Point) -> Line? {
         var minD² = CGFloat.infinity, minLine: Line?
         lines.forEach {
             let d² = $0.minDistance²(at: p)
@@ -66,7 +66,7 @@ final class Drawing: NSObject, NSCoding {
         }
         return minLine
     }
-    func isNearestSelectedLineIndexes(at p: CGPoint) -> Bool {
+    func isNearestSelectedLineIndexes(at p: Point) -> Bool {
         guard !selectedLineIndexes.isEmpty else {
             return false
         }
@@ -107,15 +107,15 @@ final class Drawing: NSObject, NSCoding {
         drawSelectedLines(lineWidth: lineWidth + 1.5, lineColor: Color.selected, in: ctx)
     }
     func drawDraft(lineWidth: CGFloat, lineColor: Color, in ctx: CGContext) {
-        ctx.setFillColor(lineColor.cgColor)
+        ctx.setFillColor(lineColor.cg)
         draftLines.forEach { $0.draw(size: lineWidth, in: ctx) }
     }
     func draw(lineWidth: CGFloat, lineColor: Color, in ctx: CGContext) {
-        ctx.setFillColor(lineColor.cgColor)
+        ctx.setFillColor(lineColor.cg)
         lines.forEach { $0.draw(size: lineWidth, in: ctx) }
     }
     func drawSelectedLines(lineWidth: CGFloat, lineColor: Color, in ctx: CGContext) {
-        ctx.setFillColor(lineColor.cgColor)
+        ctx.setFillColor(lineColor.cg)
         selectedLineIndexes.forEach { lines[$0].draw(size: lineWidth, in: ctx) }
     }
 }
@@ -128,12 +128,12 @@ extension Drawing: ClassDeepCopiable {
     }
 }
 extension Drawing: Viewable {
-    func view(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
         thumbnailView.bounds = bounds
         return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds, sizeType)
     }
-    func draw(with bounds: CGRect, in ctx: CGContext) {
+    func draw(with bounds: Rect, in ctx: CGContext) {
         let imageBounds = self.imageBounds(withLineWidth: 1)
         let c = CGAffineTransform.centering(from: imageBounds, to: bounds.inset(by: 5))
         ctx.concatenate(c.affine)
@@ -177,12 +177,12 @@ final class DrawingView: View, Assignable {
                     changeToDraftView, exchangeWithDraftView]
     }
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType), buttonH = Layout.height(with: sizeType)
-        return CGRect(x: 0, y: 0, width: 100,
+        return Rect(x: 0, y: 0, width: 100,
                       height: buttonH * 4 + padding * 2)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -192,22 +192,22 @@ final class DrawingView: View, Assignable {
         let px = padding, pw = bounds.width - padding * 2
         var py = bounds.height - padding
         py -= formClassNameView.frame.height
-        formClassNameView.frame.origin = CGPoint(x: padding, y: py)
+        formClassNameView.frame.origin = Point(x: padding, y: py)
         let lsdb = linesView.defaultBounds
         py = bounds.height - padding
         py -= lsdb.height
-        linesView.frame = CGRect(x: bounds.maxX - lsdb.width - padding, y: py,
+        linesView.frame = Rect(x: bounds.maxX - lsdb.width - padding, y: py,
                                  width: lsdb.width, height: lsdb.height)
         py -= lsdb.height
-        draftLinesView.frame = CGRect(x: bounds.maxX - lsdb.width - padding, y: py,
+        draftLinesView.frame = Rect(x: bounds.maxX - lsdb.width - padding, y: py,
                                       width: lsdb.width, height: lsdb.height)
         let fcdlnvw = formClassDraftLinesNameView.frame.width
-        formClassDraftLinesNameView.frame.origin = CGPoint(x: draftLinesView.frame.minX - fcdlnvw,
+        formClassDraftLinesNameView.frame.origin = Point(x: draftLinesView.frame.minX - fcdlnvw,
                                                            y: py + padding)
         py -= buttonH
-        changeToDraftView.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
+        changeToDraftView.frame = Rect(x: px, y: py, width: pw, height: buttonH)
         py -= buttonH
-        exchangeWithDraftView.frame = CGRect(x: px, y: py, width: pw, height: buttonH)
+        exchangeWithDraftView.frame = Rect(x: px, y: py, width: pw, height: buttonH)
     }
     
     var disabledRegisterUndo = true
@@ -225,17 +225,17 @@ final class DrawingView: View, Assignable {
         
     }
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let drawing = Drawing()
         guard !self.drawing.isEmpty else {
             return
         }
         set(drawing, old: self.drawing)
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [drawing.copied]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let drawing = object as? Drawing {
                 if drawing != self.drawing {
@@ -255,7 +255,7 @@ final class DrawingView: View, Assignable {
         binding?(Binding(view: self, drawing: drawing, oldDrawing: oldDrawing, phase: .ended))
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Drawing.reference
     }
 }

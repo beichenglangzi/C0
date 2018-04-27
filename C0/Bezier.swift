@@ -20,25 +20,25 @@
 import Foundation
 
 struct BezierIntersection: Codable {
-    var t: CGFloat, isLeft: Bool, point: CGPoint
+    var t: CGFloat, isLeft: Bool, point: Point
 }
 struct Bezier2: Equatable, Codable {
-    var p0 = CGPoint(), cp = CGPoint(), p1 = CGPoint()
+    var p0 = Point(), cp = Point(), p1 = Point()
     
     static func ==(lhs: Bezier2, rhs: Bezier2) -> Bool {
         return lhs.p0 == rhs.p0 && lhs.cp == rhs.cp && lhs.p1 == rhs.p1
     }
     
-    static func linear(_ p0: CGPoint, _ p1: CGPoint) -> Bezier2 {
+    static func linear(_ p0: Point, _ p1: Point) -> Bezier2 {
         return Bezier2(p0: p0, cp: p0.mid(p1), p1: p1)
     }
-    static func firstSpline(_ p0: CGPoint, _ p1: CGPoint, _ p2: CGPoint) -> Bezier2 {
+    static func firstSpline(_ p0: Point, _ p1: Point, _ p2: Point) -> Bezier2 {
         return Bezier2(p0: p0, cp: p1, p1: p1.mid(p2))
     }
-    static func spline(_ p0: CGPoint, _ p1: CGPoint, _ p2: CGPoint) -> Bezier2 {
+    static func spline(_ p0: Point, _ p1: Point, _ p2: Point) -> Bezier2 {
         return Bezier2(p0: p0.mid(p1), cp: p1, p1: p1.mid(p2))
     }
-    static func endSpline(_ p0: CGPoint, _ p1: CGPoint, _ p2: CGPoint) -> Bezier2 {
+    static func endSpline(_ p0: Point, _ p1: Point, _ p2: Point) -> Bezier2 {
         return Bezier2(p0: p0.mid(p1), cp: p1, p1: p2)
     }
     
@@ -47,7 +47,7 @@ struct Bezier2: Equatable, Codable {
             (p0.x - 2 * cp.x + p1.x == 0 && p0.y - 2 * cp.y + p1.y == 0)
     }
     
-    var bounds: CGRect {
+    var bounds: Rect {
         var minX = min(p0.x, p1.x), maxX = max(p0.x, p1.x)
         var d = p1.x - 2 * cp.x + p0.x
         if d != 0 {
@@ -76,27 +76,27 @@ struct Bezier2: Equatable, Codable {
                 }
             }
         }
-        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        return Rect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
-    var boundingBox: CGRect {
+    var boundingBox: Rect {
         return AABB(self).rect
     }
     
     func length(withFlatness flatness: Int = 128) -> CGFloat {
-        var d = 0.0.cf, oldP = p0
-        let nd = 1 / flatness.cf
+        var d = 0.0.cg, oldP = p0
+        let nd = 1 / CGFloat(flatness)
         for i in 0 ..< flatness {
-            let newP = position(withT: (i + 1).cf * nd)
+            let newP = position(withT: CGFloat(i + 1) * nd)
             d += oldP.distance(newP)
             oldP = newP
         }
         return d
     }
     func t(withLength length: CGFloat, flatness: Int = 128) -> CGFloat {
-        var d = 0.0.cf, oldP = p0
-        let nd = 1 / flatness.cf
+        var d = 0.0.cg, oldP = p0
+        let nd = 1 / CGFloat(flatness)
         for i in 0 ..< flatness {
-            let t = (i + 1).cf * nd
+            let t = CGFloat(i + 1) * nd
             let newP = position(withT: t)
             d += oldP.distance(newP)
             if d > length {
@@ -106,17 +106,17 @@ struct Bezier2: Equatable, Codable {
         }
         return 1
     }
-    func difference(withT t: CGFloat) -> CGPoint {
-        return CGPoint(x: 2 * (cp.x - p0.x) + 2 * (p0.x - 2 * cp.x + p1.x) * t,
+    func difference(withT t: CGFloat) -> Point {
+        return Point(x: 2 * (cp.x - p0.x) + 2 * (p0.x - 2 * cp.x + p1.x) * t,
                        y: 2 * (cp.y - p0.y) + 2 * (p0.y - 2 * cp.y + p1.y) * t)
     }
     func tangential(withT t: CGFloat) -> CGFloat {
         return atan2(2 * (cp.y - p0.y) + 2 * (p0.y - 2 * cp.y + p1.y) * t,
                      2 * (cp.x - p0.x) + 2 * (p0.x - 2 * cp.x + p1.x) * t)
     }
-    func position(withT t: CGFloat) -> CGPoint {
+    func position(withT t: CGFloat) -> Point {
         let rt = 1 - t
-        return CGPoint(x: rt * rt * p0.x + 2 * t * rt * cp.x + t * t * p1.x,
+        return Point(x: rt * rt * p0.x + 2 * t * rt * cp.x + t * t * p1.x,
                        y: rt * rt * p0.y + 2 * t * rt * cp.y + t * t * p1.y)
     }
     func midSplit() -> (b0: Bezier2, b1: Bezier2) {
@@ -126,23 +126,23 @@ struct Bezier2: Equatable, Codable {
     }
     func clip(startT t0: CGFloat, endT t1: CGFloat) -> Bezier2 {
         let rt0 = 1 - t0, rt1 = 1 - t1
-        let t0p0cp = CGPoint(x: rt0 * p0.x + t0 * cp.x, y: rt0 * p0.y + t0 * cp.y)
-        let t0cpp1 = CGPoint(x: rt0 * cp.x + t0 * p1.x, y: rt0 * cp.y + t0 * p1.y)
-        let np0 = CGPoint(x: rt0 * t0p0cp.x + t0 * t0cpp1.x, y: rt0 * t0p0cp.y + t0 * t0cpp1.y)
-        let ncp = CGPoint(x: rt1 * t0p0cp.x + t1 * t0cpp1.x, y: rt1 * t0p0cp.y + t1 * t0cpp1.y)
-        let t1p0cp = CGPoint(x: rt1 * p0.x + t1 * cp.x, y: rt1 * p0.y + t1 * cp.y)
-        let t1cpp1 = CGPoint(x: rt1 * cp.x + t1 * p1.x, y: rt1 * cp.y + t1 * p1.y)
-        let np1 = CGPoint(x: rt1 * t1p0cp.x + t1 * t1cpp1.x, y: rt1 * t1p0cp.y + t1 * t1cpp1.y)
+        let t0p0cp = Point(x: rt0 * p0.x + t0 * cp.x, y: rt0 * p0.y + t0 * cp.y)
+        let t0cpp1 = Point(x: rt0 * cp.x + t0 * p1.x, y: rt0 * cp.y + t0 * p1.y)
+        let np0 = Point(x: rt0 * t0p0cp.x + t0 * t0cpp1.x, y: rt0 * t0p0cp.y + t0 * t0cpp1.y)
+        let ncp = Point(x: rt1 * t0p0cp.x + t1 * t0cpp1.x, y: rt1 * t0p0cp.y + t1 * t0cpp1.y)
+        let t1p0cp = Point(x: rt1 * p0.x + t1 * cp.x, y: rt1 * p0.y + t1 * cp.y)
+        let t1cpp1 = Point(x: rt1 * cp.x + t1 * p1.x, y: rt1 * cp.y + t1 * p1.y)
+        let np1 = Point(x: rt1 * t1p0cp.x + t1 * t1cpp1.x, y: rt1 * t1p0cp.y + t1 * t1cpp1.y)
         return Bezier2(p0: np0, cp: ncp, p1: np1)
     }
-    func intersects(_ bounds: CGRect) -> Bool {
+    func intersects(_ bounds: Rect) -> Bool {
         if boundingBox.intersects(bounds) {
             if bounds.contains(p0) {
                 return true
             }
-            let x0y0 = bounds.origin, x1y0 = CGPoint(x: bounds.maxX, y: bounds.minY)
-            let x0y1 = CGPoint(x: bounds.minX, y: bounds.maxY)
-            let x1y1 = CGPoint(x: bounds.maxX, y: bounds.maxY)
+            let x0y0 = bounds.origin, x1y0 = Point(x: bounds.maxX, y: bounds.minY)
+            let x0y1 = Point(x: bounds.minX, y: bounds.maxY)
+            let x1y1 = Point(x: bounds.maxX, y: bounds.maxY)
             if intersects(Bezier2.linear(x0y0, x1y0)) ||
                 intersects(Bezier2.linear(x1y0, x1y1)) ||
                 intersects(Bezier2.linear(x1y1, x0y1)) ||
@@ -158,7 +158,7 @@ struct Bezier2: Equatable, Codable {
         }
         return intersects(other, 0, 1, 0, 1, isFlipped: false)
     }
-    private static let intersectsMinRange = 0.000001.cf
+    private static let intersectsMinRange = 0.000001.cg
     private func intersects(_ other: Bezier2, _ min0: CGFloat, _ max0: CGFloat,
                             _ min1: CGFloat, _ max1: CGFloat, isFlipped: Bool) -> Bool {
         
@@ -205,7 +205,7 @@ struct Bezier2: Equatable, Codable {
             }
             return
         }
-        let newP = CGPoint(x: (aabb1.minX + aabb1.maxX) / 2, y: (aabb1.minY + aabb1.maxY) / 2)
+        let newP = Point(x: (aabb1.minX + aabb1.maxX) / 2, y: (aabb1.minY + aabb1.maxY) / 2)
         func isSolution() -> Bool {
             if !results.isEmpty {
                 let oldP = results[results.count - 1].point
@@ -238,12 +238,12 @@ struct Bezier2: Equatable, Codable {
         }
     }
     
-    func intersections(q0: CGPoint, q1: CGPoint) -> [CGPoint] {
+    func intersections(q0: Point, q1: Point) -> [Point] {
         guard q0 != q1 else {
             return []
         }
         if isLineaer {
-            if let p = CGPoint.intersectionLineSegment(p0, p1, q0, q1, isSegmentP3P4: false) {
+            if let p = Point.intersectionLineSegment(p0, p1, q0, q1, isSegmentP3P4: false) {
                 return [p]
             } else {
                 return []
@@ -273,7 +273,7 @@ struct Bezier2: Equatable, Codable {
         return []
     }
     
-    func nearest(at p: CGPoint) -> (t: CGFloat, distance²: CGFloat) {
+    func nearest(at p: Point) -> (t: CGFloat, distance²: CGFloat) {
         guard !isLineaer else {
             let d = p.distanceWithLineSegment(ap: p0, bp: p1)
             return (p.tWithLineSegment(ap: p0, bp: p1), d * d)
@@ -293,7 +293,7 @@ struct Bezier2: Equatable, Codable {
                 return [offset + u * (m + m), offset - u * (n + m), offset + u * (n - m)]
             }
         }
-        func dot(_ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        func dot(_ a: Point, _ b: Point) -> CGFloat {
             return a.x * b.x + a.y * b.y
         }
         let a = p0 - 2 * cp + p1, b = 2 * (cp - p0), c = p0
@@ -302,7 +302,7 @@ struct Bezier2: Equatable, Codable {
         let rK3 = 1 / k3
         let ts = solveCubic(k2 * rK3, k1 * rK3, k0 * rK3)
         let d0 = p0.distance²(p), d1 = p1.distance²(p)
-        var minT = 0.0.cf, minD = d0
+        var minT = 0.0.cg, minD = d0
         if d1 < minD {
             minD = d1
             minT = 1
@@ -319,11 +319,11 @@ struct Bezier2: Equatable, Codable {
         }
         return (minT, minD)
     }
-    func minDistance²(at p: CGPoint) -> CGFloat {
+    func minDistance²(at p: Point) -> CGFloat {
         return nearest(at: p).distance²
     }
-    private static let distanceMinRange = 0.0000001.cf
-    func maxDistance²(at p: CGPoint) -> CGFloat {
+    private static let distanceMinRange = 0.0000001.cg
+    func maxDistance²(at p: Point) -> CGFloat {
         let d = max(p0.distance²(p), p1.distance²(p)), dcp = cp.distance²(p)
         if d >= dcp {
             return d
@@ -337,11 +337,11 @@ struct Bezier2: Equatable, Codable {
 }
 
 struct Bezier3: Codable {
-    var p0 = CGPoint(), cp0 = CGPoint(), cp1 = CGPoint(), p1 = CGPoint()
-    static func linear(_ p0: CGPoint, _ p1: CGPoint) -> Bezier3 {
+    var p0 = Point(), cp0 = Point(), cp1 = Point(), p1 = Point()
+    static func linear(_ p0: Point, _ p1: Point) -> Bezier3 {
         return Bezier3(p0: p0, cp0: p0, cp1: p1, p1: p1)
     }
-    var bounds: CGRect {
+    var bounds: Rect {
         struct MinMax {
             var min: CGFloat, max: CGFloat
         }
@@ -368,24 +368,24 @@ struct Bezier3: Codable {
         }
         let minMaxX = minMaxWith(p0.x, cp0.x, cp1.x, p1.x)
         let minMaxY = minMaxWith(p0.y, cp0.y, cp1.y, p1.y)
-        return CGRect(x: minMaxX.min, y: minMaxY.min,
+        return Rect(x: minMaxX.min, y: minMaxY.min,
                       width: minMaxX.max - minMaxX.min, height: minMaxY.max - minMaxY.min)
     }
     func length(flatness: Int = 128) -> CGFloat {
-        var d = 0.0.cf, oldP = p0
-        let nd = 1 / flatness.cf
+        var d = 0.0.cg, oldP = p0
+        let nd = 1 / CGFloat(flatness)
         for i in 0 ..< flatness {
-            let newP = position(withT: (i + 1).cf * nd)
+            let newP = position(withT: CGFloat(i + 1) * nd)
             d += oldP.distance(newP)
             oldP = newP
         }
         return d
     }
     func tWith(length: CGFloat, flatness: Int = 128) -> CGFloat {
-        var d = 0.0.cf, oldP = p0
-        let nd = 1 / flatness.cf
+        var d = 0.0.cg, oldP = p0
+        let nd = 1 / CGFloat(flatness)
         for i in 0 ..< flatness {
-            let t = (i + 1).cf * nd
+            let t = CGFloat(i + 1) * nd
             let newP = position(withT: t)
             d += oldP.distance(newP)
             if d > length {
@@ -395,16 +395,16 @@ struct Bezier3: Codable {
         }
         return 1
     }
-    var boundingBox: CGRect {
+    var boundingBox: Rect {
         return AABB(self).rect
     }
     func split(withT t: CGFloat) -> (b0: Bezier3, b1: Bezier3) {
-        let b0cp0 = CGPoint.linear(p0, cp0, t: t)
-        let cp0cp1 = CGPoint.linear(cp0, cp1, t: t)
-        let b1cp1 = CGPoint.linear(cp1, p1, t: t)
-        let b0cp1 = CGPoint.linear(b0cp0, cp0cp1, t: t)
-        let b1cp0 = CGPoint.linear(cp0cp1, b1cp1, t: t)
-        let p = CGPoint.linear(b0cp1, b1cp0, t: t)
+        let b0cp0 = Point.linear(p0, cp0, t: t)
+        let cp0cp1 = Point.linear(cp0, cp1, t: t)
+        let b1cp1 = Point.linear(cp1, p1, t: t)
+        let b0cp1 = Point.linear(b0cp0, cp0cp1, t: t)
+        let b1cp0 = Point.linear(cp0cp1, b1cp1, t: t)
+        let p = Point.linear(b0cp1, b1cp0, t: t)
         return (Bezier3(p0: p0, cp0: b0cp0, cp1: b0cp1, p1: p),
                 Bezier3(p0: p, cp0: b1cp0, cp1: b1cp1, p1: p1))
     }
@@ -416,14 +416,14 @@ struct Bezier3: Codable {
                 Bezier3(p0: p, cp0: b1cp0, cp1: b1cp1, p1: p1))
     }
     func y(withX x: CGFloat) -> CGFloat {
-        var y = 0.0.cf
+        var y = 0.0.cg
         let sb = split(withT: 0.5)
         if !sb.b0.y(withX: x, y: &y) {
             _ = sb.b1.y(withX: x, y: &y)
         }
         return y
     }
-    static private let yMinRange = 0.000001.cf
+    static private let yMinRange = 0.000001.cg
     private func y(withX x: CGFloat, y: inout CGFloat) -> Bool {
         let aabb = AABB(self)
         if aabb.minX < x && aabb.maxX >= x {
@@ -442,30 +442,30 @@ struct Bezier3: Codable {
             return false
         }
     }
-    func position(withT t: CGFloat) -> CGPoint {
+    func position(withT t: CGFloat) -> Point {
         let dt = 1 - t, t³ = t * t * t, t² = t * t, dt³ = dt * dt * dt, dt² = dt * dt
         let x = t³ * p1.x + 3 * t² * dt * cp1.x + 3 * t * dt² * cp0.x + dt³ * p0.x
         let y = t³ * p1.y + 3 * t² * dt * cp1.y + 3 * t * dt² * cp0.y + dt³ * p0.y
-        return CGPoint(x: x, y: y)
+        return Point(x: x, y: y)
     }
-    func difference(withT t: CGFloat) -> CGPoint {
+    func difference(withT t: CGFloat) -> Point {
         let tp = 1 - t
         let dx = 3 * (t * t * (p1.x - cp1.x) + 2 * t * tp * (cp1.x - cp0.x) + tp * tp * (cp0.x - p0.x))
         let dy = 3 * (t * t * (p1.y - cp1.y) + 2 * t * tp * (cp1.y - cp0.y) + tp * tp * (cp0.y - p0.y))
-        return CGPoint(x: dx, y: dy)
+        return Point(x: dx, y: dy)
     }
     func tangential(withT t: CGFloat) -> CGFloat {
         let dp = difference(withT: t)
         return atan2(dp.y, dp.x)
     }
-    func intersects(_ bounds: CGRect) -> Bool {
+    func intersects(_ bounds: Rect) -> Bool {
         if boundingBox.intersects(bounds) {
             if bounds.contains(p0) {
                 return true
             }
-            let x0y0 = bounds.origin, x1y0 = CGPoint(x: bounds.maxX, y: bounds.minY)
-            let x0y1 = CGPoint(x: bounds.minX, y: bounds.maxY)
-            let x1y1 = CGPoint(x: bounds.maxX, y: bounds.maxY)
+            let x0y0 = bounds.origin, x1y0 = Point(x: bounds.maxX, y: bounds.minY)
+            let x0y1 = Point(x: bounds.minX, y: bounds.maxY)
+            let x1y1 = Point(x: bounds.maxX, y: bounds.maxY)
             if intersects(Bezier3.linear(x0y0, x1y0)) ||
                 intersects(Bezier3.linear(x1y0, x1y1)) ||
                 intersects(Bezier3.linear(x1y1, x0y1)) ||
@@ -478,7 +478,7 @@ struct Bezier3: Codable {
     func intersects(_ other: Bezier3) -> Bool {
         return intersects(other, 0, 1, 0, 1, false)
     }
-    private static let intersectsMinRange = 0.000001.cf
+    private static let intersectsMinRange = 0.000001.cg
     private func intersects(_ other: Bezier3,
                             _ min0: CGFloat, _ max0: CGFloat,
                             _ min1: CGFloat, _ max1: CGFloat, _ isFlipped: Bool) -> Bool {
@@ -519,7 +519,7 @@ struct Bezier3: Codable {
             
             let range1 = max1 - min1
             if max(aabb1.maxX - aabb1.minX, aabb1.maxY - aabb1.minY) < Bezier3.intersectsMinRange {
-                let i = results.count, newP = CGPoint(x: (aabb1.minX + aabb1.maxX) / 2,
+                let i = results.count, newP = Point(x: (aabb1.minX + aabb1.maxX) / 2,
                                                       y: (aabb1.minY + aabb1.maxY) / 2)
                 var isSolution = true
                 if i > 0 {

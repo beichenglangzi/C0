@@ -131,11 +131,11 @@ struct Sound {
     }
     func dBFSs(withSplitCount count: Int) -> [Float] {
         let samples = self.samples()
-        let rc = 1 / (count.cf - 1)
+        let rc = 1 / CGFloat(count - 1)
         var oldSampleIndex = 0
         return (1 ..< count).map { i in
-            let t = i.cf * rc
-            let sampleIndex = Int((samples.count.cf - 1) * t)
+            let t = CGFloat(i) * rc
+            let sampleIndex = Int(CGFloat(samples.count - 1) * t)
             let subSamples = samples[oldSampleIndex...sampleIndex]
             let p: Float
             if oldSampleIndex < sampleIndex {
@@ -176,11 +176,12 @@ extension Sound: Referenceable {
     static let name = Localization(english: "Sound", japanese: "サウンド")
 }
 extension Sound: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return name.view(withBounds: bounds, sizeType)
     }
 }
 
+typealias SoundSample = Float
 final class SoundWaveformView: View {
     var sampleRate = Sound.basicSampleRate
     var sound = Sound() {
@@ -189,7 +190,7 @@ final class SoundWaveformView: View {
         }
     }
     
-    private var cacheDBFSs = [Float]()
+    private var cacheDBFSs = [SoundSample]()
     
     enum WaveformType {
         case normal, dBFS
@@ -202,7 +203,7 @@ final class SoundWaveformView: View {
     
     var tempoTrack = TempoTrack()
     
-    static let defautBaseWidth = 6.0.cf
+    static let defautBaseWidth = 6.0.cg
     var baseWidth = defautBaseWidth {
         didSet {
             updateWaveform()
@@ -226,7 +227,7 @@ final class SoundWaveformView: View {
     }
     let waveformView = View(path: CGMutablePath())
     
-    init(height: CGFloat = 12.0) {
+    init(height: CGFloat = 12) {
         super.init()
         frame.size.height = height
         isClipped = true
@@ -248,22 +249,22 @@ final class SoundWaveformView: View {
             
             let path = CGMutablePath()
             let count = Int(frame.width / 5)
-            let rc = 1 / (count.cf - 1)
+            let rc = 1 / CGFloat(count - 1)
             
             let midY = bounds.midY, halfH = frame.height / 2
-            func y(withSample sample: Float) -> CGFloat {
-                return midY + halfH * sample.cf
+            func y(withSample sample: SoundSample) -> CGFloat {
+                return midY + halfH * CGFloat(sample)
             }
             path.addLines(between: (0..<count).map { i in
-                let xt = i.cf * rc
+                let xt = CGFloat(i) * rc
                 let si = Int(CGFloat(samples.count - 1) * xt)
-                return CGPoint(x: frame.width * xt, y: y(withSample: samples[si]))
+                return Point(x: frame.width * xt, y: y(withSample: samples[si]))
             })
             waveformView.lineColor = .content
             waveformView.lineWidth = 1
             waveformView.path = path
         case .dBFS:
-            let dBFSs: [Float]
+            let dBFSs: [SoundSample]
             if cacheDBFSs.isEmpty || isRefreshCache {
                 let samples = sound.samples(withSampleRate: sampleRate)
                 guard !samples.isEmpty else {
@@ -284,13 +285,13 @@ final class SoundWaveformView: View {
             }
             
             let path = CGMutablePath()
-            path.move(to: CGPoint(x: bounds.width, y: 0))
-            path.addLine(to: CGPoint(x: 0, y: 0))
-            let rc = 1 / (dBFSs.count.cf - 1)
+            path.move(to: Point(x: bounds.width, y: 0))
+            path.addLine(to: Point(x: 0, y: 0))
+            let rc = 1 / CGFloat(dBFSs.count - 1)
             dBFSs.enumerated().forEach { i, spl in
-                let xt = i.cf * rc
-                let yt = 1 + spl.cf.clip(min: -30, max: 0) / 30
-                path.addLine(to: CGPoint(x: frame.width * xt, y: frame.height * yt))
+                let xt = CGFloat(i) * rc
+                let yt = 1 + CGFloat(spl).clip(min: -30, max: 0) / 30
+                path.addLine(to: Point(x: frame.width * xt, y: frame.height * yt))
             }
             waveformView.fillColor = .content
             waveformView.path = path
@@ -331,7 +332,7 @@ final class SoundView: View, Assignable {
         }
     }
     
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
@@ -339,8 +340,8 @@ final class SoundView: View, Assignable {
     private func updateLayout() {
         let padding = Layout.padding(with: sizeType)
         let y = bounds.height - padding - formClassNameView.frame.height
-        formClassNameView.frame.origin = CGPoint(x: padding, y: y)
-        nameView.frame = CGRect(x: formClassNameView.frame.maxX + padding, y: padding,
+        formClassNameView.frame.origin = Point(x: padding, y: y)
+        nameView.frame = Rect(x: formClassNameView.frame.maxX + padding, y: padding,
                                 width: bounds.width - formClassNameView.frame.maxX - padding * 2,
                                 height: bounds.height - padding * 2)
     }
@@ -352,19 +353,19 @@ final class SoundView: View, Assignable {
     }
     var setSoundClosure: ((Binding) -> ())?
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         guard sound.url != nil else {
             return
         }
         set(Sound(), old: self.sound)
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         guard let url = sound.url else {
             return [sound]
         }
         return [sound, url]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let sound = object as? Sound {
                 set(sound, old: self.sound)
@@ -386,7 +387,7 @@ final class SoundView: View, Assignable {
                                  sound: sound, oldSound: oldSound, phase: .ended))
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Sound.reference
     }
 }

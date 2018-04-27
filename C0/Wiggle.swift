@@ -21,7 +21,7 @@ import Foundation
 
 typealias RPB = CGFloat
 struct Wiggle: Codable, Equatable, Hashable {
-    var amplitude = 0.0.cf, frequency = RPB(8)
+    var amplitude = 0.0.cg, frequency = RPB(8)
     
     static let amplitudeOption = RealNumberOption(defaultModel: 0, minModel: 0, maxModel: 10000,
                                               modelInterval: 0.01, exp: 1,
@@ -68,7 +68,7 @@ extension Wiggle: Referenceable {
     static let name = Localization(english: "Wiggle", japanese: "振動")
 }
 extension Wiggle: ObjectViewExpression {
-    func thumbnail(withBounds bounds: CGRect, _ sizeType: SizeType) -> View {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return View(isForm: true)
     }
 }
@@ -114,19 +114,19 @@ final class WiggleView: View, Assignable {
         }
     }
     
-    override var defaultBounds: CGRect {
+    override var defaultBounds: Rect {
         let w = MaterialView.defaultWidth + Layout.basicPadding * 2
         let h = Layout.basicHeight * 2 + Layout.basicPadding * 2
-        return CGRect(x: 0, y: 0, width: w, height: h)
+        return Rect(x: 0, y: 0, width: w, height: h)
     }
-    override var bounds: CGRect {
+    override var bounds: Rect {
         didSet {
             updateLayout()
         }
     }
     private func updateLayout() {
         var y = bounds.height - Layout.basicPadding - classNameView.frame.height
-        classNameView.frame.origin = CGPoint(x: Layout.basicPadding, y: y)
+        classNameView.frame.origin = Point(x: Layout.basicPadding, y: y)
         y = bounds.height - Layout.basicPadding - Layout.basicHeight
         _ = Layout.leftAlignment([classFrequencyNameView, frequencyView],
                                  y: y, height: Layout.basicHeight)
@@ -139,7 +139,7 @@ final class WiggleView: View, Assignable {
         frequencyView.model = wiggle.frequency
     }
     
-    var standardAmplitude = 1.0.cf
+    var standardAmplitude = 1.0.cg
     
     var disabledRegisterUndo = true
     
@@ -169,17 +169,17 @@ final class WiggleView: View, Assignable {
         }
     }
     
-    func delete(for p: CGPoint) {
+    func delete(for p: Point) {
         let wiggle = Wiggle()
         guard wiggle != self.wiggle else {
             return
         }
         set(wiggle, oldWiggle: self.wiggle)
     }
-    func copiedViewables(at p: CGPoint) -> [Viewable] {
+    func copiedViewables(at p: Point) -> [Viewable] {
         return [wiggle]
     }
-    func paste(_ objects: [Any], for p: CGPoint) {
+    func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let wiggle = object as? Wiggle {
                 if wiggle != self.wiggle {
@@ -199,7 +199,7 @@ final class WiggleView: View, Assignable {
         binding?(Binding(wiggleView: self, wiggle: wiggle, oldWiggle: oldWiggle, phase: .ended))
     }
     
-    func reference(at p: CGPoint) -> Reference {
+    func reference(at p: Point) -> Reference {
         return Wiggle.reference
     }
 }
