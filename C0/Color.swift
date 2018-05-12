@@ -41,6 +41,7 @@ struct Color: Codable {
     static let background = Color(white: 0.94)
     static let getSetBorder = Color(white: 0.7)
     static let getBorder = Color(red: 1.0, green: 0.5, blue: 0.5)
+    static let formBorder = Color(white: 0.84)
     static let bindingBorder = Color(red: 1.0, green: 0.0, blue: 1.0)
     static let content = Color(white: 0.35)
     static let subContent = Color(white: 0.88)
@@ -61,66 +62,19 @@ struct Color: Codable {
     static let subSelected = Color(red: 0.8, green: 0.95, blue: 1)
     static let warning = rgbRed
     
-    static let moveZ = Color(red: 1, green: 0, blue: 0)
-    
-    static let draft = Color(red: 0, green: 0.5, blue: 1, alpha: 0.15)
-    static let subDraft = Color(red: 0, green: 0.5, blue: 1, alpha: 0.1)
-    static let timelineDraft = Color(red: 1, green: 1, blue: 0.2)
-    
-    static let previous = Color(red: 1, green: 0, blue: 0, alpha: 0.1)
-    static let previousSkin = previous.with(alpha: 1)
-    static let subPrevious = Color(red: 1, green: 0.2, blue: 0.2, alpha: 0.025)
-    static let subPreviousSkin = subPrevious.with(alpha: 0.08)
-    
-    static let next = Color(red: 0.2, green: 0.8, blue: 0, alpha: 0.1)
-    static let nextSkin = next.with(alpha: 1)
-    static let subNext = Color(red: 0.4, green: 1, blue: 0, alpha: 0.025)
-    static let subNextSkin = subNext.with(alpha: 0.08)
-    
-    static let editMaterial = Color(red: 1, green: 0.5, blue: 0, alpha: 0.5)
-    static let editMaterialColorOnly = Color(red: 1, green: 0.75, blue: 0, alpha: 0.5)
-    
-    static let snap = Color(red: 0.5, green: 0, blue: 1)
-    static let controlEditPointIn = Color(red: 1, green: 1, blue: 0)
-    static let controlPointIn = knob
-    static let controlPointCapIn = knob
-    static let controlPointJointIn = Color(red: 1, green: 0, blue: 0)
-    static let controlPointOtherJointIn = Color(red: 1, green: 0.5, blue: 1)
-    static let controlPointUnionIn = Color(red: 0, green: 1, blue: 0.2)
-    static let controlPointPathIn = Color(red: 0, green: 1, blue: 1)
-    static let controlPointOut = getSetBorder
-    static let editControlPointIn = Color(red: 1, green: 0, blue: 0, alpha: 0.8)
-    static let editControlPointOut = Color(red: 1, green: 0.5, blue: 0.5, alpha: 0.3)
-    static let contolLineIn = Color(red: 1, green: 0.5, blue: 0.5, alpha: 0.3)
-    static let contolLineOut = Color(red: 1, green: 0, blue: 0, alpha: 0.3)
-    
-    static let camera = Color(red: 0.7, green: 0.6, blue: 0)
-    static let cameraBorder = Color(red: 1, green: 0, blue: 0, alpha: 0.5)
-    static let cutBorder = Color(red: 0.3, green: 0.46, blue: 0.7, alpha: 0.5)
-    static let cutSubBorder = background.multiply(alpha: 0.5)
-    
-    static let strokeLine = Color(white: 0)
-    
-    static let playBorder = Color(white: 0.4)
-    static let subtitleBorder = Color(white: 0)
-    static let subtitleFill = white
-    
     var hue: Real {
         didSet {
             rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
-            id = UUID()
         }
     }
     var saturation: Real {
         didSet {
             rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
-            id = UUID()
         }
     }
     var lightness: Real {
         didSet {
             rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
-            id = UUID()
         }
     }
     var sl: Point {
@@ -132,17 +86,9 @@ struct Color: Codable {
             self.lightness = newValue.y
         }
     }
-    var alpha: Real {
-        didSet {
-            id = UUID()
-        }
-    }
-    var colorSpace: ColorSpace {
-        didSet {
-            id = UUID()
-        }
-    }
-    private(set) var rgb: RGB, id: UUID
+    var alpha: Real
+    var colorSpace: ColorSpace
+    private(set) var rgb: RGB
     
     init(hue: Real = 0, saturation: Real = 0, lightness: Real = 0,
          alpha: Real = 1, colorSpace: ColorSpace = .sRGB) {
@@ -152,7 +98,6 @@ struct Color: Codable {
         rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
         self.alpha = alpha
         self.colorSpace = colorSpace
-        id = UUID()
     }
     init(hue: Real, saturation: Real, brightness: Real,
          alpha: Real = 1, colorSpace: ColorSpace = .sRGB) {
@@ -176,7 +121,6 @@ struct Color: Codable {
         self.rgb = rgb
         self.alpha = alpha
         self.colorSpace = colorSpace
-        id = UUID()
     }
     
     static func random(colorSpace: ColorSpace = .sRGB) -> Color {
@@ -247,12 +191,15 @@ struct Color: Codable {
 }
 extension Color: Equatable {
     static func ==(lhs: Color, rhs: Color) -> Bool {
-        return lhs.id == rhs.id
+        return lhs.hue == rhs.hue && lhs.saturation == lhs.saturation && lhs.lightness == rhs.lightness
+            && lhs.alpha == rhs.alpha && lhs.colorSpace == rhs.colorSpace
     }
 }
 extension Color: Hashable {
     var hashValue: Int {
-        return id.hashValue
+        return Hash.uniformityHashValue(with: [hue.hashValue, saturation.hashValue,
+                                               lightness.hashValue,
+                                               alpha.hashValue, colorSpace.hashValue])
     }
 }
 extension Color: Referenceable {
@@ -266,8 +213,8 @@ extension Color: Interpolatable {
         return color.saturation > 0 ?
             color :
             color.with(hue: Real.linear(f0.hue,
-                                           f1.hue.loopValue(other: f0.hue),
-                                           t: t).loopValue())
+                                        f1.hue.loopValue(other: f0.hue),
+                                        t: t).loopValue())
     }
     static func firstMonospline(_ f1: Color, _ f2: Color, _ f3: Color,
                                 with ms: Monospline) -> Color {
@@ -277,23 +224,22 @@ extension Color: Interpolatable {
         return color.saturation > 0 ?
             color :
             color.with(hue: Real.firstMonospline(f1.hue,
-                                                    f2.hue.loopValue(other: f1.hue),
-                                                    f3.hue.loopValue(other: f1.hue),
-                                                    with: ms).loopValue())
+                                                 f2.hue.loopValue(other: f1.hue),
+                                                 f3.hue.loopValue(other: f1.hue),
+                                                 with: ms).loopValue())
     }
     static func monospline(_ f0: Color, _ f1: Color, _ f2: Color, _ f3: Color,
                            with ms: Monospline) -> Color {
         let rgb = RGB.monospline(f0.rgb, f1.rgb, f2.rgb, f3.rgb, with: ms)
-        let alpha = Real.monospline(f0.alpha, f1.alpha, f2.alpha, f3.alpha,
-                                       with: ms)
+        let alpha = Real.monospline(f0.alpha, f1.alpha, f2.alpha, f3.alpha, with: ms)
         let color = Color(rgb: rgb, alpha: alpha)
         return color.saturation > 0 ?
             color :
             color.with(hue: Real.monospline(f0.hue,
-                                               f1.hue.loopValue(other: f0.hue),
-                                               f2.hue.loopValue(other: f0.hue),
-                                               f3.hue.loopValue(other: f0.hue),
-                                               with: ms).loopValue())
+                                            f1.hue.loopValue(other: f0.hue),
+                                            f2.hue.loopValue(other: f0.hue),
+                                            f3.hue.loopValue(other: f0.hue),
+                                            with: ms).loopValue())
     }
     static func lastMonospline(_ f0: Color, _ f1: Color, _ f2: Color,
                                with ms: Monospline) -> Color {
@@ -303,9 +249,9 @@ extension Color: Interpolatable {
         return color.saturation > 0 ?
             color :
             color.with(hue: Real.lastMonospline(f0.hue,
-                                                   f1.hue.loopValue(other: f0.hue),
-                                                   f2.hue.loopValue(other: f0.hue),
-                                                   with: ms).loopValue())
+                                                f1.hue.loopValue(other: f0.hue),
+                                                f2.hue.loopValue(other: f0.hue),
+                                                with: ms).loopValue())
     }
 }
 
@@ -416,7 +362,7 @@ extension HSV: Codable {
     }
 }
 
-enum ColorSpace: Int8, Codable {
+enum ColorSpace: Int8, Codable, Equatable, Hashable {
     case sRGB, displayP3
     
     var description: String {
@@ -437,8 +383,7 @@ enum ColorSpace: Int8, Codable {
 extension ColorSpace: Referenceable {
     static let name = Text(english: "Color space", japanese: "色空間")
 }
-extension ColorSpace: ObjectViewExpressionWithDisplayText {
-}
+extension ColorSpace: CompactViewableWithDisplayText {}
 
 extension Color {
     init(_ cgColor: CGColor) {
@@ -481,9 +426,7 @@ extension Color {
         return CGColor.with(rgb: rgb, alpha: alpha, colorSpace: CGColorSpace.with(colorSpace))
     }
 }
-extension Color: DeepCopiable {
-}
-extension Color: ObjectViewExpression {
+extension Color: CompactViewable {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         let view = View(isForm: true)
         view.bounds = bounds
@@ -609,7 +552,7 @@ struct HueCircle {
         ctx.saveGState()
         ctx.translateBy(x: bounds.midX, y: bounds.midY)
         ctx.rotate(by: .pi / 6 - deltaAngle / 2)
-        for i in 0 ..< splitCount {
+        for i in 0..<splitCount {
             let color = Color(hue: revisionHue(withHue: Real(i) / Real(splitCount)),
                               saturation: 1,
                               brightness: 1,
@@ -623,7 +566,7 @@ struct HueCircle {
     }
 }
 
-final class ColorView: View, Queryable, Assignable {    
+final class ColorView: View {
     var color = Color() {
         didSet {
             updateWithColor()
@@ -653,15 +596,15 @@ final class ColorView: View, Queryable, Assignable {
         }
     }
     let slColorGradientView = View(gradient: Gradient(colors: [], locations: [],
-                                                          startPoint: Point(x: 0, y: 0),
-                                                          endPoint: Point(x: 1, y: 0)))
+                                                      startPoint: Point(x: 0, y: 0),
+                                                      endPoint: Point(x: 1, y: 0)))
     let slBlackWhiteGradientView = View(gradient: Gradient(colors: [Color(white: 0, alpha: 1),
-                                                                        Color(white: 0, alpha: 0),
-                                                                        Color(white: 1, alpha: 0),
-                                                                        Color(white: 1, alpha: 1)],
-                                                               locations: [],
-                                                               startPoint: Point(x: 0, y: 0),
-                                                               endPoint: Point(x: 0, y: 1)))
+                                                                    Color(white: 0, alpha: 0),
+                                                                    Color(white: 1, alpha: 0),
+                                                                    Color(white: 1, alpha: 1)],
+                                                           locations: [],
+                                                           startPoint: Point(x: 0, y: 0),
+                                                           endPoint: Point(x: 0, y: 1)))
     
     init(frame: Rect = Rect(),
          hLineWidth: Real = 2.5, hWidth: Real = 16, slPadding: Real? = nil,
@@ -694,15 +637,8 @@ final class ColorView: View, Queryable, Assignable {
         slView.binding = { [unowned self] in self.setColor(with: $0) }
     }
     
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    private func updateLayout() {
-        guard !bounds.isEmpty else {
-            return
-        }
+    override func updateLayout() {
+        guard !bounds.isEmpty else { return }
         let padding = Layout.smallPadding
         let r = floor(min(bounds.size.width, bounds.size.height) / 2) - padding
         hueView.frame = Rect(x: padding, y: padding, width: r * 2, height: r * 2)
@@ -710,23 +646,23 @@ final class ColorView: View, Queryable, Assignable {
         let b2 = floor(sr * slRatio)
         let a2 = floor(sqrt(sr * sr - b2 * b2))
         slView.frame = Rect(x: bounds.size.width / 2 - a2,
-                              y: bounds.size.height / 2 - b2,
-                              width: a2 * 2,
-                              height: b2 * 2)
+                            y: bounds.size.height / 2 - b2,
+                            width: a2 * 2,
+                            height: b2 * 2)
         let slInFrame = slView.bounds.inset(by: slView.padding)
         slColorGradientView.frame = slInFrame
         slBlackWhiteGradientView.frame = slInFrame
         
         hueDrawView.frame = hueView.bounds.inset(by: ceil((hueView.width - hueLineWidth) / 2))
         hueCircle = HueCircle(lineWidth: hueLineWidth,
-                                  bounds: hueDrawView.bounds,
-                                  colorSpace: color.colorSpace)
+                              bounds: hueDrawView.bounds,
+                              colorSpace: color.colorSpace)
         updateWithColor()
     }
     private func updateWithColor() {
         let y = Color.y(withHue: color.hue)
         slColorGradientView.gradient?.colors = [Color(hue: color.hue, saturation: 0, brightness: y),
-                                             Color(hue: color.hue, saturation: 1, brightness: 1)]
+                                                Color(hue: color.hue, saturation: 1, brightness: 1)]
         slBlackWhiteGradientView.gradient?.locations = [0, y, y, 1]
         hueView.number = hueCircle.angle(withHue: color.hue)
         slView.point = Point(x: color.saturation, y: color.lightness)
@@ -738,41 +674,14 @@ final class ColorView: View, Queryable, Assignable {
                       Color(white: 1, alpha: 1, colorSpace: color.colorSpace)]
         slBlackWhiteGradientView.gradient?.colors = colors
         hueCircle = HueCircle(lineWidth: hueLineWidth,
-                                  bounds: hueDrawView.bounds,
-                                  colorSpace: color.colorSpace)
+                              bounds: hueDrawView.bounds,
+                              colorSpace: color.colorSpace)
     }
     
     struct Binding {
         let colorView: ColorView, color: Color, oldColor: Color, phase: Phase
     }
     var setColorClosure: ((Binding) -> ())?
-    
-    var disabledRegisterUndo = false
-    
-    func delete(for p: Point) {
-        let color = Color(), oldColor = self.color
-        guard color != oldColor else {
-            return
-        }
-        setColorClosure?(Binding(colorView: self,
-                                 color: oldColor, oldColor: oldColor, phase: .began))
-        set(color, old: oldColor)
-        setColorClosure?(Binding(colorView: self,
-                                 color: color, oldColor: oldColor, phase: .ended))
-    }
-    func copiedViewables(at p: Point) -> [Viewable] {
-        return [color]
-    }
-    func paste(_ objects: [Any], for p: Point) {
-        for object in objects {
-            if let color = object as? Color {
-                if color != self.color {
-                    set(color, old: self.color)
-                    return
-                }
-            }
-        }
-    }
     
     private var oldColor = Color()
     private func setColor(with obj: PointView.Binding) {
@@ -799,19 +708,29 @@ final class ColorView: View, Queryable, Assignable {
         }
     }
     
-    private func set(_ color: Color, old oldColor: Color) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldColor, old: color) }
-        setColorClosure?(Binding(colorView: self,
-                                 color: oldColor, oldColor: oldColor, phase: .began))
+    private func push(_ color: Color) {
+//        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldColor, old: color) }
         self.color = color
-        setColorClosure?(Binding(colorView: self,
-                                 color: color, oldColor: oldColor, phase: .ended))
     }
-    
-    func reference(at p: Point) -> Reference {
-        var reference = Color.reference
-        reference.viewDescription = Text(english: "Ring: Hue, Width: Saturation, Height: Luminance",
-                                                 japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
-        return reference
+}
+extension ColorView: ViewQueryable {
+    static let referenceableType: Referenceable.Type = Color.self
+    static let viewDescription = Text(english: "Ring: Hue, Width: Saturation, Height: Luminance",
+                                      japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
+}
+extension ColorView: Assignable {
+    func delete(for p: Point) {
+        push(Color())
+    }
+    func copiedViewables(at p: Point) -> [Viewable] {
+        return [color]
+    }
+    func paste(_ objects: [Any], for p: Point) {
+        for object in objects {
+            if let color = object as? Color {
+                push(color)
+                return
+            }
+        }
     }
 }

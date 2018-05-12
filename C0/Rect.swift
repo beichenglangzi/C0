@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import CoreGraphics
 
 /**
  Issue: Core Graphicsとの置き換え
@@ -74,9 +74,6 @@ struct _Rect: Equatable {
         let maxY = max(self.maxY, other.maxY)
         return _Rect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
-    func unionNoEmpty(_ other: _Rect) -> _Rect {
-        return other.isEmpty ? self : (isEmpty ? other : union(other))
-    }
     var circleBounds: _Rect {
         let r = hypot(width, height) / 2
         return _Rect(x: midX - r, y: midY - r, width: r * 2, height: r * 2)
@@ -103,14 +100,20 @@ extension _Rect: Codable {
 extension _Rect: Referenceable {
     static let name = Text(english: "Rect", japanese: "矩形")
 }
+extension CGRect {
+    init(_ rect: _Rect) {
+        if MemoryLayout<_Rect>.size == MemoryLayout<CGRect>.size {
+            self = unsafeBitCast(rect, to: CGRect.self)
+        } else {
+            self = CGRect(x: rect.origin.x, y: rect.origin.y, width: rect.width, height: rect.height)
+        }
+    }
+}
 
 typealias Rect = CGRect
 extension Rect {
     func distance²(_ point: Point) -> Real {
         return AABB(self).nearestDistance²(point)
-    }
-    func unionNoEmpty(_ other: Rect) -> Rect {
-        return other.isEmpty ? self : (isEmpty ? other : union(other))
     }
     var circleBounds: Rect {
         let r = hypot(width, height) / 2
@@ -121,6 +124,38 @@ extension Rect {
     }
     var centerPoint: Point {
         return Point(x: midX, y: midY)
+    }
+    mutating func formUnion(_ other: Rect) {
+        self = union(other)
+    }
+    
+    static func boundingBox(with points: [Point]) -> Rect {
+        guard !points.isEmpty else {
+            return Rect.null
+        }
+        guard points.count > 1 else {
+            return Rect(origin: points[0], size: Size())
+        }
+        let minX = points.min { $0.x < $1.x }!.x, maxX = points.max { $0.x < $1.x }!.x
+        let minY = points.min { $0.y < $1.y }!.y, maxY = points.max { $0.y < $1.y }!.y
+        return AABB(minX: minX, maxX: maxX, minY: minY, maxY: maxY).rect
+    }
+}
+extension Array where Element == Rect {
+    static func checkerboard(with size: Size, in frame: Rect) -> [Rect] {
+        let xCount = Int(frame.width / size.width)
+        let yCount = Int(frame.height / (size.height * 2))
+        var rects = [Rect]()
+        
+        for xi in 0..<xCount {
+            let x = frame.minX + Real(xi) * size.width
+            let fy = xi % 2 == 0 ? size.height : 0
+            for yi in 0..<yCount {
+                let y = frame.minY + Real(yi) * size.height * 2 + fy
+                rects.append(Rect(x: x, y: y, width: size.width, height: size.height))
+            }
+        }
+        return rects
     }
 }
 func round(_ rect: Rect) -> Rect {
@@ -212,22 +247,20 @@ struct RotatedRect: Codable, Equatable {
     var centerPoint: Point, size: Size, angle: Real
     
     init(convexHullPoints chps: [Point]) {
-        guard !chps.isEmpty else {
-            fatalError()
-        }
+        guard !chps.isEmpty else { fatalError() }
         guard chps.count > 1 else {
             self.centerPoint = chps[0]
             self.size = Size()
             self.angle = 0.0
             return
         }
-        var minArea = Real.infinity, minAngle = 0.0.cg, minBounds = Rect()
+        var minArea = Real.infinity, minAngle = 0.0.cg, minBounds = Rect.null
         for (i, p) in chps.enumerated() {
             let nextP = chps[i == chps.count - 1 ? 0 : i + 1]
             let angle = p.tangential(nextP)
             let affine = CGAffineTransform(rotationAngle: -angle)
             let ps = chps.map { $0.applying(affine) }
-            let bounds = Point.boundingBox(with: ps)
+            let bounds = Rect.boundingBox(with: ps)
             let area = bounds.width * bounds.height
             if area < minArea {
                 minArea = area
@@ -236,7 +269,7 @@ struct RotatedRect: Codable, Equatable {
             }
         }
         centerPoint = Point(x: minBounds.midX,
-                              y: minBounds.midY).applying(CGAffineTransform(rotationAngle: minAngle))
+                            y: minBounds.midY).applying(CGAffineTransform(rotationAngle: minAngle))
         size = minBounds.size
         angle = minAngle
     }
@@ -266,40 +299,5 @@ struct RotatedRect: Codable, Equatable {
     }
     var midXMidYPoint: Point {
         return Point(x: size.width / 2, y: size.height / 2).applying(affineTransform)
-    }
-}
-extension Point {
-    static func convexHullPoints(with points: [Point]) -> [Point] {
-        guard points.count > 3 else {
-            return points
-        }
-        let minY = (points.min { $0.y < $1.y })!.y
-        let firstP = points.filter { $0.y == minY }.min { $0.x < $1.x }!
-        var ap = firstP, chps = [Point]()
-        repeat {
-            chps.append(ap)
-            var bp = points[0]
-            for i in 1 ..< points.count {
-                let cp = points[i]
-                if bp == ap {
-                    bp = cp
-                } else {
-                    let v = (bp - ap).crossVector(cp - ap)
-                    if v > 0 || (v == 0 && ap.distance²(cp) > ap.distance²(bp)) {
-                        bp = cp
-                    }
-                }
-            }
-            ap = bp
-        } while ap != firstP
-        return chps
-    }
-    static func boundingBox(with points: [Point]) -> Rect {
-        guard points.count > 1 else {
-            return Rect()
-        }
-        let minX = points.min { $0.x < $1.x }!.x, maxX = points.max { $0.x < $1.x }!.x
-        let minY = points.min { $0.y < $1.y }!.y, maxY = points.max { $0.y < $1.y }!.y
-        return AABB(minX: minX, maxX: maxX, minY: minY, maxY: maxY).rect
     }
 }

@@ -19,7 +19,100 @@
 
 import Foundation
 
-typealias Text = Localization
+struct Text: Codable, Equatable {
+    var baseLanguageCode: String, base: String, values: [String: String]
+    
+    init() {
+        baseLanguageCode = "en"
+        base = ""
+    }
+    init(baseLanguageCode: String, base: String, values: [String: String]) {
+        self.baseLanguageCode = baseLanguageCode
+        self.base = base
+        self.values = values
+    }
+    init(_ noLocalizeString: String) {
+        baseLanguageCode = "en"
+        base = noLocalizeString
+        values = [:]
+    }
+    init(english: String, japanese: String) {
+        baseLanguageCode = "en"
+        base = english
+        values = ["ja": japanese]
+    }
+    var currentString: String {
+        return string(with: Locale.current)
+    }
+    func string(with locale: Locale) -> String {
+        if let languageCode = locale.languageCode, let value = values[languageCode] {
+            return value
+        }
+        return base
+    }
+    var isEmpty: Bool {
+        return base.isEmpty
+    }
+    func spacedUnion(_ other: Text) -> Text {
+        var values = self.values
+        if other.values.isEmpty {
+            self.values.forEach { values[$0.key] = (values[$0.key] ?? "") + other.base }
+        } else {
+            for v in other.values {
+                values[v.key] = (self.values[v.key] ?? self.base) + v.value
+            }
+        }
+        return Text(baseLanguageCode: baseLanguageCode,
+                            base: base + " " + other.base,
+                            values: values)
+    }
+    static func +(lhs: Text, rhs: Text) -> Text {
+        var values = lhs.values
+        if rhs.values.isEmpty {
+            lhs.values.forEach { values[$0.key] = (values[$0.key] ?? "") + rhs.base }
+        } else {
+            for v in rhs.values {
+                values[v.key] = (lhs.values[v.key] ?? lhs.base) + v.value
+            }
+        }
+        return Text(baseLanguageCode: lhs.baseLanguageCode,
+                            base: lhs.base + rhs.base,
+                            values: values)
+    }
+    static func +=(lhs: inout Text, rhs: Text) {
+        var values = lhs.values
+        if rhs.values.isEmpty {
+            lhs.values.forEach { values[$0.key] = (values[$0.key] ?? "") + rhs.base }
+        } else {
+            for v in rhs.values {
+                values[v.key] = (lhs.values[v.key] ?? lhs.base) + v.value
+            }
+        }
+        lhs.base = lhs.base + rhs.base
+        lhs.values = values
+    }
+}
+extension Text: ExpressibleByStringLiteral {
+    typealias StringLiteralType = String
+    init(stringLiteral value: String) {
+        self.init(value)
+    }
+}
+extension Text: Initializable {}
+extension Text: Referenceable {
+    static let name = Text(english: "Text", japanese: "テキスト")
+}
+extension Text: Thumbnailable {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
+        return TextView(text: self, font: Font.default(with: sizeType),
+                        frame: bounds, isSizeToFit: false)
+    }
+}
+extension Text: CompactViewable {}
+
+protocol Namable {
+    var name: Text { get }
+}
 
 extension String {
     var calculate: String {
@@ -48,26 +141,84 @@ extension String: Viewable {
                         frame: bounds, isSizeToFit: false, isForm: false)
     }
 }
+extension String: Interpolatable {
+    static func linear(_ f0: String, _ f1: String, t: Real) -> String {
+        return f0
+    }
+    static func firstMonospline(_ f1: String, _ f2: String,
+                                _ f3: String, with ms: Monospline) -> String {
+        return f1
+    }
+    static func monospline(_ f0: String, _ f1: String,
+                           _ f2: String, _ f3: String, with ms: Monospline) -> String {
+        return f1
+    }
+    static func lastMonospline(_ f0: String, _ f1: String,
+                               _ f2: String, with ms: Monospline) -> String {
+        return f1
+    }
+}
+
+typealias TextBinder = BasicBinder<Text>
+typealias TextFormView = TextView<TextBinder>
+
+struct TextOption {
+    var defaultModel = Text()
+    var font = Font.default, color = Color.locked
+    var frameAlignment = CTTextAlignment.left, alignment = CTTextAlignment.natural
+}
 
 /**
  Issue: モードレス文字入力
  */
-final class TextView: View, Indicatable, Queryable, Assignable, Runnable, KeyInputtable {
-    var text: Text {
-        didSet {
-            string = text.currentString
-        }
+final class TextView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = Text
+    typealias ModelOption = TextOption
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
     }
     
-    var isSizeToFit = false
-    
-    var backingStore = NSMutableAttributedString() {
+//    var text: Text {
+//        didSet {
+//            string = text.currentString
+//        }
+//    }
+//    var string: String {
+//        get {
+//            return backingStore.string
+//        }
+//        set {
+//            let range = NSRange(location: 0, length: backingStore.length)
+//            backingStore.replaceCharacters(in: range, with: newValue)
+//            backingStore.setAttributes(defaultAttributes, range: range)
+//            unmarkText()
+//            selectedRange = NSRange(location: (newValue as NSString).length, length: 0)
+//            TextInputContext.invalidateCharacterCoordinates()
+//            updateTextFrame()
+//        }
+//    }
+//    var backingStore = NSMutableAttributedString() {
+//        didSet {
+//            self.textFrame = TextFrame(attributedString: backingStore)
+//        }
+//    }
+    var textFrame: TextFrame {
         didSet {
-            self.textFrame = TextFrame(attributedString: backingStore)
+            if let firstLine = textFrame.lines.first, let lastLine = textFrame.lines.last {
+                baselineDelta = -lastLine.origin.y - baseFont.descent
+                height = firstLine.origin.y + baseFont.ascent
+            } else {
+                baselineDelta = -baseFont.descent
+                height = baseFont.ascent
+            }
+            if isSizeToFit { sizeToFit() }
+            draw()
         }
     }
-    var defaultAttributes = NSAttributedString.attributesWith(font: .default, color: .font)
-    var markedAttributes = NSAttributedString.attributesWith(font: .default, color: .gray)
     
     var markedRange = NSRange(location: NSNotFound, length: 0) {
         didSet{
@@ -84,34 +235,35 @@ final class TextView: View, Indicatable, Queryable, Assignable, Runnable, KeyInp
         }
     }
     
-    var textFrame: TextFrame {
-        didSet {
-            if let firstLine = textFrame.lines.first, let lastLine = textFrame.lines.last {
-                baselineDelta = -lastLine.origin.y - baseFont.descent
-                height = firstLine.origin.y + baseFont.ascent
-            } else {
-                baselineDelta = -baseFont.descent
-                height = baseFont.ascent
-            }
-            if isSizeToFit {
-                sizeToFit()
-            }
-            draw()
-        }
+    var option: ModelOption {
+        didSet { updateWithModel() }
     }
     
     var isReadOnly = true
+    var isSizeToFit = false
+//    var frameAlignment = CTTextAlignment.left
     var baseFont: Font, baselineDelta: Real, height: Real, padding: Real
+    var defaultAttributes = NSAttributedString.attributesWith(font: .default, color: .font)
+    var markedAttributes = NSAttributedString.attributesWith(font: .default, color: .gray)
     
     init(text: Text = "",
          font: Font = .default, color: Color = .locked,
          frameAlignment: CTTextAlignment = .left, alignment: CTTextAlignment = .natural,
-         frame: Rect = Rect(), padding: Real = 1,
-         isSizeToFit: Bool = true, isForm: Bool = true) {
+         frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
         
-        self.text = text
+        binder = Binder()
+        
+    }
+    
+    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
+         frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        self.option = option
+        
         self.padding = padding
-        self.baseFont = font
+        self.baseFont = option.font
         self.defaultAttributes = NSAttributedString.attributesWith(font: font, color: color,
                                                                    alignment: alignment)
         self.backingStore = NSMutableAttributedString(string: text.currentString,
@@ -147,8 +299,41 @@ final class TextView: View, Indicatable, Queryable, Assignable, Runnable, KeyInp
         indicatedLineColor = isForm ? .noBorderIndicated : (isReadOnly ? .indicated : .indicated)
     }
     
+    func sizeToFit() {
+        let size = defaultBounds.size
+        let y = frame.maxY - size.height
+        let origin = frameAlignment == .right ?
+            Point(x: frame.maxX - size.width, y: y) :
+            Point(x: frame.origin.x, y: y)
+        frame = Rect(origin: origin, size: size)
+    }
+    
+    override var defaultBounds: Rect {
+        let w = textFrame.frameWidth ?? ceil(textFrame.pathBounds.width)
+        return Rect(x: 0, y: 0,
+                    width: max(w + padding * 2, 5),
+                    height: ceil(height + baselineDelta) + padding * 2)
+    }
+    override func updateLayout() {
+        if textFrame.frameWidth != nil {
+            textFrame.frameWidth = frame.width - padding * 2
+        }
+    }
+    func updateWithModel() {
+        let string = text.currentString
+        let range = NSRange(location: 0, length: backingStore.length)
+        backingStore.replaceCharacters(in: range, with: string)
+        backingStore.setAttributes(defaultAttributes, range: range)
+        unmarkText()
+        selectedRange = NSRange(location: (string as NSString).length, length: 0)
+        TextInputContext.invalidateCharacterCoordinates()
+        self.textFrame = TextFrame(attributedString: backingStore)
+        updateTextFrame()
+    }
+    
     func word(for p: Point) -> String {
         let characterIndex = self.characterIndex(for: convertToLocal(p))
+        
         var range = NSRange()
         if characterIndex >= selectedRange.location
             && characterIndex < NSMaxRange(selectedRange) {
@@ -187,79 +372,43 @@ final class TextView: View, Indicatable, Queryable, Assignable, Runnable, KeyInp
         return point + Point(x: padding, y: bounds.height - height - padding)
     }
     
-    func updateTextFrame() {
-        textFrame.attributedString = backingStore
-    }
+//    func updateTextFrame() {
+//        textFrame.attributedString = backingStore
+//    }
     override func draw(in ctx: CGContext) {
         textFrame.draw(in: bounds.inset(by: padding), baseFont: baseFont, in: ctx)
     }
     
-    override var locale: Locale {
-        didSet {
-            string = text.string(with: locale)
-            if isSizeToFit {
-                sizeToFit()
-            }
+    private let timer = RunTimer()
+    private var oldModel = ""
+}
+extension TextView: Localizable {
+    func update(with locale: Locale) {
+        updateWithModel()
+//        string = text.string(with: locale)
+        if isSizeToFit {
+            sizeToFit()
         }
     }
-    
-    var frameAlignment = CTTextAlignment.left
-    
-    override var bounds: Rect {
-        didSet {
-            guard bounds.size != oldValue.size else {
-                return
-            }
-            if textFrame.frameWidth != nil {
-                textFrame.frameWidth = frame.width - padding * 2
-            }
+}
+extension TextView: ViewQueryable {
+    static let referenceableType: Referenceable.Type = Text.self
+    static let viewDescription = Text(english: "Run (Verb sentence only): Click",
+                                      japanese: "実行 (動詞文のみ): クリック")
+}
+extension TextView: Runnable {
+    func run(for p: Point) {
+        let word = self.word(for: p)
+        if word == "=" {
+            string += string.calculate
         }
     }
-    
-    func sizeToFit() {
-        let size = fitSize
-        let y = frame.maxY - size.height
-        let origin = frameAlignment == .right ?
-            Point(x: frame.maxX - size.width, y: y) :
-            Point(x: frame.origin.x, y: y)
-        frame = Rect(origin: origin, size: size)
-    }
-    var fitSize: Size {
-        let w = textFrame.frameWidth ?? ceil(textFrame.pathBounds.width)
-        return Size(width: max(w + padding * 2, 5),
-                      height: ceil(height + baselineDelta) + padding * 2)
-    }
-    
-    var string: String {
-        get {
-            return backingStore.string
-        }
-        set {
-            backingStore.replaceCharacters(in: NSRange(location: 0, length: backingStore.length),
-                                           with: newValue)
-            backingStore.setAttributes(defaultAttributes,
-                                       range: NSRange(location: 0, length: backingStore.length))
-            unmarkText()
-            
-            self.selectedRange = NSRange(location: (newValue as NSString).length, length: 0)
-            TextInputContext.invalidateCharacterCoordinates()
-            
-            updateTextFrame()
-        }
-    }
-    
-    struct Binding {
-        let view: TextView, text: String, oldText: String, phase: Phase
-    }
-    var binding: ((Binding) -> ())?
-    
+}
+extension TextView: Assignable {
     func delete(for p: Point) {
-        guard !isReadOnly else {
-            return
-        }
+        guard !isReadOnly else { return }
         deleteBackward()
     }
-    
     func copiedViewables(at p: Point) -> [Viewable] {
         guard let backingStore = backingStore.copy() as? NSAttributedString else {
             return []
@@ -267,34 +416,25 @@ final class TextView: View, Indicatable, Queryable, Assignable, Runnable, KeyInp
         return [backingStore.string]
     }
     func paste(_ objects: [Any], for p: Point) {
-        guard !isReadOnly else {
-            return
-        }
+        guard !isReadOnly else { return }
         for object in objects {
             if let string = object as? String {
-                let oldText = string
-                binding?(Binding(view: self, text: oldText, oldText: oldText, phase: .began))
                 self.string = string
-                binding?(Binding(view: self, text: string, oldText: oldText, phase: .ended))
-                
-                draw()
                 return
             }
         }
     }
-    
+}
+extension TextView: Indicatable {
     func indicate(at p: Point) {
         selectedRange = NSRange(location: editCharacterIndex(for: p), length: 0)
     }
-    
-    private let timer = LockTimer()
-    private var oldText = ""
+}
+extension TextView: KeyInputtable {
     func insert(_ string: String, for p: Point) {
-        guard !isReadOnly else {
-            return
-        }
+        guard !isReadOnly else { return }
         let beginClosure: () -> () = { [unowned self] in
-            self.oldText = self.string
+            self.oldModel = self.string
             self.binding?(Binding(view: self,
                                   text: self.oldText, oldText: self.oldText, phase: .began))
         }
@@ -306,594 +446,163 @@ final class TextView: View, Indicatable, Queryable, Assignable, Runnable, KeyInp
             self.binding?(Binding(view: self,
                                   text: self.string, oldText: self.oldText, phase: .ended))
         }
-        timer.begin(endDuration: 1,
-                    beginClosure: beginClosure,
-                    waitClosure: waitClosure,
-                    endClosure: endClosure)
-    }
-    
-    func run(for p: Point) {
-        let word = self.word(for: p)
-        if word == "=" {
-            string += string.calculate
-        }
-    }
-    
-    func insertNewline() {
-        insertText("\n", replacementRange: NSRange(location: NSNotFound, length: 0))
-    }
-    func insertTab() {
-        insertText("\t", replacementRange: NSRange(location: NSNotFound, length: 0))
-    }
-    func deleteBackward() {
-        var deleteRange = selectedRange
-        if deleteRange.length == 0 {
-            if deleteRange.location == 0 {
-                return
-            } else {
-                deleteRange.location -= 1
-                deleteRange.length = 1
-                deleteRange = (backingStore.string as NSString)
-                    .rangeOfComposedCharacterSequences(for: deleteRange)
-            }
-        }
-        deleteCharacters(in: deleteRange)
-    }
-    func deleteForward() {
-        var deleteRange = selectedRange
-        if deleteRange.length == 0 {
-            if deleteRange.location == backingStore.length {
-                return
-            } else {
-                deleteRange.length = 1
-                deleteRange = (backingStore.string as NSString)
-                    .rangeOfComposedCharacterSequences(for: deleteRange)
-            }
-        }
-        deleteCharacters(in: deleteRange)
-    }
-    func moveLeft() {
-        if selectedRange.length > 0 {
-            selectedRange.length = 0
-        } else if selectedRange.location > 0 {
-            selectedRange.location -= 1
-        }
-    }
-    func moveRight() {
-        if selectedRange.length > 0 {
-            selectedRange = NSRange(location: NSMaxRange(selectedRange), length: 0)
-        } else if selectedRange.location > 0 {
-            selectedRange.location += 1
-        }
-    }
-    
-    func deleteCharacters(in range: NSRange) {
-        if NSLocationInRange(NSMaxRange(range), markedRange) {
-            self.markedRange = NSRange(location: range.location,
-                                       length: markedRange.length
-                                        - (NSMaxRange(range) - markedRange.location))
-        } else {
-            markedRange.location -= range.length
-        }
-        if markedRange.length == 0 {
-            unmarkText()
-        }
-        
-        let oldText = string
-        binding?(Binding(view: self, text: oldText, oldText: oldText, phase: .began))
-        backingStore.deleteCharacters(in: range)
-        binding?(Binding(view: self, text: string, oldText: oldText, phase: .ended))
-        
-        self.selectedRange = NSRange(location: range.location, length: 0)
-        TextInputContext.invalidateCharacterCoordinates()
-        
-        updateTextFrame()
-    }
-    
-    var hasMarkedText: Bool {
-        return markedRange.location != NSNotFound
-    }
-    
-    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
-        let aReplacementRange = markedRange.location != NSNotFound ? markedRange : selectedRange
-        if let attString = string as? NSAttributedString {
-            if attString.length == 0 {
-                backingStore.deleteCharacters(in: aReplacementRange)
-                unmarkText()
-            } else {
-                self.markedRange = NSRange(location: aReplacementRange.location,
-                                           length: attString.length)
-                backingStore.replaceCharacters(in: aReplacementRange, with: attString)
-                backingStore.addAttributes(markedAttributes, range: markedRange)
-            }
-        } else if let string = string as? String {
-            if (string as NSString).length == 0 {
-                backingStore.deleteCharacters(in: aReplacementRange)
-                unmarkText()
-            } else {
-                self.markedRange = NSRange(location: aReplacementRange.location,
-                                           length: (string as NSString).length)
-                backingStore.replaceCharacters(in: aReplacementRange, with: string)
-                backingStore.addAttributes(markedAttributes, range: markedRange)
-            }
-        }
-        
-        self.selectedRange = NSRange(location: aReplacementRange.location + selectedRange.location,
-                                     length: selectedRange.length)
-        TextInputContext.invalidateCharacterCoordinates()
-        
-        updateTextFrame()
-    }
-    func unmarkText() {
-        if markedRange.location != NSNotFound {
-            markedRange = NSRange(location: NSNotFound, length: 0)
-            TextInputContext.discardMarkedText()
-        }
-    }
-    
-    func attributedSubstring(forProposedRange range: NSRange,
-                             actualRange: NSRangePointer?) -> NSAttributedString? {
-        actualRange?.pointee = range
-        return backingStore.attributedSubstring(from: range)
-    }
-    func insertText(_ string: Any, replacementRange: NSRange) {
-        let replaceRange = replacementRange.location != NSNotFound ?
-            replacementRange : (markedRange.location != NSNotFound ? markedRange : selectedRange)
-        if let attString = string as? NSAttributedString {
-            let range = NSRange(location: replaceRange.location, length: attString.length)
-            backingStore.replaceCharacters(in: replaceRange, with: attString)
-            backingStore.setAttributes(defaultAttributes, range: range)
-            selectedRange = NSRange(location: selectedRange.location + range.length, length: 0)
-        } else if let string = string as? String {
-            let range = NSRange(location: replaceRange.location, length: (string as NSString).length)
-            backingStore.replaceCharacters(in: replaceRange, with: string)
-            backingStore.setAttributes(defaultAttributes, range: range)
-            selectedRange = NSRange(location: selectedRange.location + range.length, length: 0)
-        }
-        
-        unmarkText()
-        TextInputContext.invalidateCharacterCoordinates()
-        
-        updateTextFrame()
-    }
-    
-    var attributedString: NSAttributedString {
-        return backingStore
-    }
-    
-    func editCharacterIndex(for p: Point) -> Int {
-        return textFrame.editCharacterIndex(for: convertToLocal(p))
-    }
-    func characterIndex(for p: Point) -> Int {
-        return textFrame.characterIndex(for: convertToLocal(p))
-    }
-    func characterFraction(for p: Point) -> Real {
-        return textFrame.characterFraction(for: convertToLocal(p))
-    }
-    func characterOffset(for p: Point) -> Real {
-        let i = characterIndex(for: convertToLocal(p))
-        return textFrame.characterOffset(at: i)
-    }
-    func baselineDelta(at i: Int) -> Real {
-        return textFrame.baselineDelta(at: i)
-    }
-    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> Rect {
-        return textFrame.typographicBounds(for: range)
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return Reference(name: Text(english: "Text", japanese: "テキスト"),
-                         viewDescription: Text(english: "Run (Verb sentence only): Click",
-                                                       japanese: "実行 (動詞文のみ): クリック"))
+        timer.run(after: 1, dispatchQueue: .main,
+                  beginClosure: beginClosure,
+                  waitClosure: waitClosure,
+                  endClosure: endClosure)
     }
 }
-
-struct TextFrame {
-    var attributedString = NSAttributedString() {
-        didSet {
-            self.lines = TextFrame.lineWith(attributedString: attributedString,
-                                            frameWidth: frameWidth)
-        }
-    }
-    var string: String {
-        get {
-            return attributedString.string
-        }
-        set(string) {
-            self.attributedString = .with(string: string,
-                                          font: font, color: color, alignment: alignment)
-        }
-    }
-    var font: Font? {
-        get {
-            return attributedString.font
-        }
-        set(font) {
-            self.attributedString = attributedString.with(font)
-        }
-    }
-    var color: Color? {
-        get {
-            return attributedString.color
-        }
-        set(color) {
-            self.attributedString = attributedString.with(color)
-        }
-    }
-    var alignment: CTTextAlignment? {
-        get {
-            return attributedString.alignment
-        }
-        set(alignment) {
-            self.attributedString = attributedString.with(alignment)
-        }
-    }
-    private(set) var typographicBounds = Rect()
-    var pathBounds: Rect {
-        return typographicBounds
-    }
-    
-    var frameWidth: Real? {
-        didSet {
-            self.lines = TextFrame.lineWith(attributedString: attributedString,
-                                            frameWidth: frameWidth)
-        }
-    }
-    
-    init(attributedString: NSAttributedString, frameWidth: Real? = nil) {
-        self.attributedString = attributedString
-        self.frameWidth = frameWidth
-        self.lines = TextFrame.lineWith(attributedString: attributedString,
-                                        frameWidth: frameWidth)
-        self.typographicBounds = TextFrame.typographicBounds(with: lines)
-    }
-    init(string: String = "",
-         font: Font = .default, color: Color = .font, alignment: CTTextAlignment = .natural,
-         frameWidth: Real? = nil) {
-        
-        self.init(attributedString: .with(string: string,
-                                          font: font, color: color, alignment: alignment),
-                  frameWidth: frameWidth)
-    }
-    
-    var lines = [TextLine]() {
-        didSet {
-            self.typographicBounds = TextFrame.typographicBounds(with: lines)
-        }
-    }
-    private static func lineWith(attributedString: NSAttributedString,
-                                 frameWidth: Real?) -> [TextLine] {
-        let width = Double(frameWidth ?? Real.infinity)
-        let typesetter = CTTypesetterCreateWithAttributedString(attributedString)
-        let length = attributedString.length
-        var range = CFRange(), h = 0.0.cg
-        var ls = [(ctLine: CTLine, ascent: Real, descent: Real, leading: Real)]()
-        while range.maxLocation < length {
-            range.length = CTTypesetterSuggestLineBreak(typesetter, range.location, width)
-            let ctLine = CTTypesetterCreateLine(typesetter, range)
-            var ascent = 0.0.cg, descent = 0.0.cg, leading =  0.0.cg
-            _ = CTLineGetTypographicBounds(ctLine, &ascent, &descent, &leading)
-            ls.append((ctLine, ascent, descent, leading))
-            range = CFRange(location: range.maxLocation, length: 0)
-            h += ascent + descent + leading
-        }
-        var origin = Point()
-        return ls.reversed().map {
-            origin.y += $0.descent + $0.leading
-            let result = TextLine(ctLine: $0.ctLine, origin: origin)
-            origin.y += $0.ascent
-            return result
-        }.reversed()
-    }
-    
-    func line(for point: Point) -> TextLine? {
-        guard let lastLine = lines.last else {
-            return nil
-        }
-        for line in lines {
-            let bounds = line.typographicBounds
-            let tb = Rect(origin: line.origin + bounds.origin, size: bounds.size)
-            if point.y >= tb.minY {
-                return line
-            }
-        }
-        return lastLine
-    }
-
-    func editCharacterIndex(for point: Point) -> Int {
-        guard !lines.isEmpty else {
-            return 0
-        }
-        for line in lines {
-            let bounds = line.typographicBounds
-            let tb = Rect(origin: line.origin + bounds.origin, size: bounds.size)
-            if point.y >= tb.minY {
-                return line.editCharacterIndex(for: point - tb.origin)
-            }
-        }
-        return attributedString.length - 1
-    }
-    func characterIndex(for point: Point) -> Int {
-        guard !lines.isEmpty else {
-            return 0
-        }
-        for line in lines {
-            let bounds = line.typographicBounds
-            let tb = Rect(origin: line.origin + bounds.origin, size: bounds.size)
-            if point.y >= tb.minY {
-                return line.characterIndex(for: point - tb.origin)
-            }
-        }
-        return attributedString.length - 1
-    }
-    func characterFraction(for point: Point) -> Real {
-        guard let line = self.line(for: point) else {
-            return 0.0
-        }
-        return line.characterFraction(for: point - line.origin)
-    }
-    func characterOffset(at i: Int) -> Real {
-        let lines = self.lines
-        for line in lines {
-            if line.contains(at: i) {
-                return line.characterOffset(at: i)
-            }
-        }
-        return 0.5
-    }
-    var imageBounds: Rect {
-        let lineAndOrigins = self.lines
-        return lineAndOrigins.reduce(Rect()) {
-            var imageBounds = $1.imageBounds
-            imageBounds.origin += $1.origin
-            return $0.unionNoEmpty(imageBounds)
-        }
-    }
-    static func typographicBounds(with lines: [TextLine]) -> Rect {
-        return lines.reduce(Rect()) {
-            let bounds = $1.typographicBounds
-            return $0.unionNoEmpty(Rect(origin: $1.origin + bounds.origin, size: bounds.size))
-        }
-    }
-    func typographicBounds(for range: NSRange) -> Rect {
-        return lines.reduce(Rect()) {
-            let bounds = $1.typographicBounds(for: range)
-            return $0.unionNoEmpty(Rect(origin: $1.origin + bounds.origin, size: bounds.size))
-        }
-    }
-    func baselineDelta(at i: Int) -> Real {
-        for line in lines {
-            if line.contains(at: i) {
-                return line.baselineDelta(at: i)
-            }
-        }
-        return 0.0
-    }
-    
-    func draw(in bounds: Rect, baseFont: Font, in ctx: CGContext) {
-        guard let firstLine = lines.first else {
-            return
-        }
-        ctx.saveGState()
-        let height = firstLine.origin.y + baseFont.ascent
-        ctx.translateBy(x: bounds.origin.x, y: bounds.maxY - height)
-        lines.forEach { $0.draw(in: ctx) }
-        ctx.restoreGState()
-    }
-    func drawWithCenterOfImageBounds(in bounds: Rect, in ctx: CGContext) {
-        let imageBounds = self.imageBounds
-        ctx.saveGState()
-        ctx.translateBy(x: bounds.midX - imageBounds.midX, y: bounds.midY - imageBounds.midY)
-        lines.forEach { $0.draw(in: ctx) }
-        ctx.restoreGState()
-    }
-}
-
-struct TextLine {
-    let ctLine: CTLine
-    let origin: Point
-    
-    func contains(at i: Int) -> Bool {
-        let range = CTLineGetStringRange(ctLine)
-        return i >= range.location && i < range.location + range.length
-    }
-    func contains(for range: NSRange) -> Bool {
-        let lineRange = CTLineGetStringRange(ctLine)
-        return !(range.location >= lineRange.location + lineRange.length
-            || range.location + range.length <= lineRange.location)
-    }
-    var typographicBounds: Rect {
-        var ascent = 0.0.cg, descent = 0.0.cg, leading = 0.0.cg
-        let width = CTLineGetTypographicBounds(ctLine, &ascent, &descent, &leading).cg
-            + CTLineGetTrailingWhitespaceWidth(ctLine).cg
-        return Rect(x: 0, y: -descent - leading,
-                      width: width, height: ascent + descent + leading)
-    }
-    func typographicBounds(for range: NSRange) -> Rect {
-        guard contains(for: range) else {
-            return Rect()
-        }
-        return ctLine.runs.reduce(Rect()) {
-            var origin = Point()
-            CTRunGetPositions($1, CFRange(location: range.location, length: 1), &origin)
-            let bounds = $1.typographicBounds(for: range)
-            return $0.unionNoEmpty(Rect(origin: origin + bounds.origin, size: bounds.size))
-        }
-    }
-    func editCharacterIndex(for point: Point) -> Int {
-        return CTLineGetStringIndexForPosition(ctLine, point)
-    }
-    func characterIndex(for point: Point) -> Int {
-        let range = CTLineGetStringRange(ctLine)
-        guard range.length > 0 else {
-            return range.location
-        }
-        for i in range.location..<range.maxLocation {
-            var offset = 0.0.cg
-            CTLineGetOffsetForStringIndex(ctLine, i + 1, &offset)
-            if point.x < offset {
-                return i
-            }
-        }
-        return range.maxLocation - 1
-    }
-    func characterFraction(for point: Point) -> Real {
-        let i = characterIndex(for: point)
-        if i < CTLineGetStringRange(ctLine).maxLocation {
-            let x = characterOffset(at: i)
-            let nextX = characterOffset(at: i + 1)
-            return (point.x - x) / (nextX - x)
-        }
-        return 0.0
-    }
-    func characterOffset(at i: Int) -> Real {
-        var offset = 0.0.cg
-        CTLineGetOffsetForStringIndex(ctLine, i, &offset)
-        return offset
-    }
-    func baselineDelta(at i: Int) -> Real {
-        var descent = 0.0.cg, leading = 0.0.cg
-        _ = CTLineGetTypographicBounds(ctLine, nil, &descent, &leading)
-        return descent + leading
-    }
-    var imageBounds: Rect {
-        return CTLineGetImageBounds(ctLine, nil)
-    }
-    
-    func draw(in ctx: CGContext) {
-        ctx.textPosition = origin
-        CTLineDraw(ctLine, ctx)
-    }
-}
-
-extension CFRange {
-    var maxLocation: Int {
-        return location + length
-    }
-}
-
-extension CTRun {
-    func typographicBounds(for range: NSRange) -> Rect {
-        var ascent = 0.0.cg, descent = 0.0.cg, leading = 0.0.cg
-        let range = CFRange(location: range.location, length: range.length)
-        let width = CTRunGetTypographicBounds(self, range, &ascent, &descent, &leading).cg
-        return Rect(x: 0, y: -descent, width: width, height: ascent + descent)
-    }
-}
-
-extension CTLine {
-    var runs: [CTRun] {
-        return CTLineGetGlyphRuns(self) as? [CTRun] ?? []
-    }
-}
-
-extension NSAttributedStringKey {
-    static let ctFont = NSAttributedStringKey(rawValue: String(kCTFontAttributeName))
-    static let ctForegroundColor = NSAttributedStringKey(rawValue:
-        String(kCTForegroundColorAttributeName))
-    static let ctParagraphStyle = NSAttributedStringKey(rawValue:
-        String(kCTParagraphStyleAttributeName))
-}
-extension NSAttributedString {
-    static func with(string: String, font: Font?, color: Color?,
-                     alignment: CTTextAlignment? = nil) -> NSAttributedString {
-        var attributes = [NSAttributedStringKey: Any]()
-        if let font = font {
-            attributes[.ctFont] = font.ctFont
-        }
-        if let color = color {
-            attributes[.ctForegroundColor] = color.cg
-        }
-        if var alignment = alignment {
-            let settings = [CTParagraphStyleSetting(spec: .alignment,
-                                                    valueSize: MemoryLayout<CTTextAlignment>.size,
-                                                    value: &alignment)]
-            let style = CTParagraphStyleCreate(settings, settings.count)
-            attributes[.ctParagraphStyle] = style
-        }
-        return NSAttributedString(string: string, attributes: attributes)
-    }
-    var font: Font? {
-        if length == 0 {
-            return nil
-        } else if let obj = attribute(.ctFont, at: 0, effectiveRange: nil) {
-            return Font(obj as! CTFont)
-        } else {
-            return nil
-        }
-    }
-    func with(_ font: Font?) -> NSAttributedString {
-        guard length > 0 else {
-            return NSAttributedString()
-        }
-        let attString = NSMutableAttributedString(attributedString: self)
-        attString.removeAttribute(.ctFont, range: NSRange(location: 0, length: length))
-        if let font = font {
-            attString.addAttribute(.ctFont, value: font.ctFont,
-                                   range: NSRange(location: 0, length: length))
-        }
-        return attString
-    }
-    var color: Color? {
-        if length == 0 {
-            return nil
-        } else if let obj = attribute(.ctForegroundColor, at: 0, effectiveRange: nil) {
-            return Color(obj as! CGColor)
-        } else {
-            return nil
-        }
-    }
-    func with(_ color: Color?) -> NSAttributedString {
-        guard length > 0 else {
-            return NSAttributedString()
-        }
-        let attString = NSMutableAttributedString(attributedString: self)
-        attString.removeAttribute(.ctForegroundColor, range: NSRange(location: 0, length: length))
-        if let color = color {
-            attString.addAttribute(.ctForegroundColor, value: color.cg,
-                                   range: NSRange(location: 0, length: length))
-        }
-        return attString
-    }
-    var alignment: CTTextAlignment? {
-        if length == 0 {
-            return nil
-        } else if let obj = attribute(.ctParagraphStyle, at: 0, effectiveRange: nil) {
-            var alignment = CTTextAlignment.natural
-            CTParagraphStyleGetValueForSpecifier(obj as! CTParagraphStyle,
-                                                 CTParagraphStyleSpecifier.alignment,
-                                                 MemoryLayout<CTTextAlignment>.size,
-                                                 &alignment)
-            return alignment
-        } else {
-            return nil
-        }
-    }
-    func with(_ alignment: CTTextAlignment?) -> NSAttributedString {
-        guard length > 0 else {
-            return NSAttributedString()
-        }
-        let attString = NSMutableAttributedString(attributedString: self)
-        attString.removeAttribute(.ctParagraphStyle, range: NSRange(location: 0, length: length))
-        if var alignment = alignment {
-            let settings = [CTParagraphStyleSetting(spec: .alignment,
-                                                    valueSize: MemoryLayout<CTTextAlignment>.size,
-                                                    value: &alignment)]
-            let style = CTParagraphStyleCreate(settings, settings.count)
-            attString.addAttribute(.ctParagraphStyle, value: style,
-                                   range: NSRange(location: 0, length: length))
-        }
-        return attString
-    }
-    static func attributesWith(font: Font, color: Color,
-                               alignment: CTTextAlignment = .natural) -> [NSAttributedStringKey: Any] {
-        var alignment = alignment
-        let settings = [CTParagraphStyleSetting(spec: .alignment,
-                                                valueSize: MemoryLayout<CTTextAlignment>.size,
-                                                value: &alignment)]
-        let style = CTParagraphStyleCreate(settings, settings.count)
-        return [.ctFont: font.ctFont,
-                .ctForegroundColor: color.cg,
-                .ctParagraphStyle: style]
-    }
-}
+//protocol CocoaKeyInputtable {}
+//extension TextView: CocoaKeyInputtable {
+//    var backingStore: NSMutableAttributedString {
+//        return textFrame.attributedString
+//    }
+//    var attributedString: NSAttributedString {
+//        return backingStore
+//    }
+//    var hasMarkedText: Bool {
+//        return markedRange.location != NSNotFound
+//    }
+//    func editCharacterIndex(for p: Point) -> Int {
+//        return textFrame.editCharacterIndex(for: convertToLocal(p))
+//    }
+//    func characterIndex(for p: Point) -> Int {
+//        return textFrame.characterIndex(for: convertToLocal(p))
+//    }
+//    func characterFraction(for p: Point) -> Real {
+//        return textFrame.characterFraction(for: convertToLocal(p))
+//    }
+//    func characterOffset(for p: Point) -> Real {
+//        let i = characterIndex(for: convertToLocal(p))
+//        return textFrame.characterOffset(at: i)
+//    }
+//    func baselineDelta(at i: Int) -> Real {
+//        return textFrame.baselineDelta(at: i)
+//    }
+//    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> Rect {
+//        return textFrame.typographicBounds(for: range)
+//    }
+//
+//    func insertNewline() {
+//        insertText("\n", replacementRange: NSRange(location: NSNotFound, length: 0))
+//    }
+//    func insertTab() {
+//        insertText("\t", replacementRange: NSRange(location: NSNotFound, length: 0))
+//    }
+//    func deleteBackward() {
+//        var deleteRange = selectedRange
+//        if deleteRange.length == 0 {
+//            guard deleteRange.location > 0 else { return }
+//            deleteRange.location -= 1
+//            deleteRange.length = 1
+//            deleteRange = (backingStore.string as NSString)
+//                .rangeOfComposedCharacterSequences(for: deleteRange)
+//        }
+//        deleteCharacters(in: deleteRange)
+//    }
+//    func deleteForward() {
+//        var deleteRange = selectedRange
+//        if deleteRange.length == 0 {
+//            guard deleteRange.location != backingStore.length else { return }
+//            deleteRange.length = 1
+//            deleteRange = (backingStore.string as NSString)
+//                .rangeOfComposedCharacterSequences(for: deleteRange)
+//        }
+//        deleteCharacters(in: deleteRange)
+//    }
+//    func moveLeft() {
+//        if selectedRange.length > 0 {
+//            selectedRange.length = 0
+//        } else if selectedRange.location > 0 {
+//            selectedRange.location -= 1
+//        }
+//    }
+//    func moveRight() {
+//        if selectedRange.length > 0 {
+//            selectedRange = NSRange(location: NSMaxRange(selectedRange), length: 0)
+//        } else if selectedRange.location > 0 {
+//            selectedRange.location += 1
+//        }
+//    }
+//
+//    func deleteCharacters(in range: NSRange) {
+//        if NSLocationInRange(NSMaxRange(range), markedRange) {
+//            self.markedRange = NSRange(location: range.location,
+//                                       length: markedRange.length
+//                                        - (NSMaxRange(range) - markedRange.location))
+//        } else {
+//            markedRange.location -= range.length
+//        }
+//        if markedRange.length == 0 {
+//            unmarkText()
+//        }
+//
+//        backingStore.deleteCharacters(in: range)
+//
+//        self.selectedRange = NSRange(location: range.location, length: 0)
+//        TextInputContext.invalidateCharacterCoordinates()
+//
+//        updateTextFrame()
+//    }
+//
+//    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+//        let aReplacementRange = markedRange.location != NSNotFound ? markedRange : selectedRange
+//        if let attString = string as? NSAttributedString {
+//            if attString.length == 0 {
+//                backingStore.deleteCharacters(in: aReplacementRange)
+//                unmarkText()
+//            } else {
+//                self.markedRange = NSRange(location: aReplacementRange.location,
+//                                           length: attString.length)
+//                backingStore.replaceCharacters(in: aReplacementRange, with: attString)
+//                backingStore.addAttributes(markedAttributes, range: markedRange)
+//            }
+//        } else if let string = string as? String {
+//            if (string as NSString).length == 0 {
+//                backingStore.deleteCharacters(in: aReplacementRange)
+//                unmarkText()
+//            } else {
+//                self.markedRange = NSRange(location: aReplacementRange.location,
+//                                           length: (string as NSString).length)
+//                backingStore.replaceCharacters(in: aReplacementRange, with: string)
+//                backingStore.addAttributes(markedAttributes, range: markedRange)
+//            }
+//        }
+//
+//        self.selectedRange = NSRange(location: aReplacementRange.location + selectedRange.location,
+//                                     length: selectedRange.length)
+//        TextInputContext.invalidateCharacterCoordinates()
+//
+//        updateTextFrame()
+//    }
+//    func unmarkText() {
+//        if markedRange.location != NSNotFound {
+//            markedRange = NSRange(location: NSNotFound, length: 0)
+//            TextInputContext.discardMarkedText()
+//        }
+//    }
+//
+//    func attributedSubstring(forProposedRange range: NSRange,
+//                             actualRange: NSRangePointer?) -> NSAttributedString? {
+//        actualRange?.pointee = range
+//        return backingStore.attributedSubstring(from: range)
+//    }
+//    func insertText(_ string: Any, replacementRange: NSRange) {
+//        let replaceRange = replacementRange.location != NSNotFound ?
+//            replacementRange : (markedRange.location != NSNotFound ? markedRange : selectedRange)
+//        if let attString = string as? NSAttributedString {
+//            let range = NSRange(location: replaceRange.location, length: attString.length)
+//            backingStore.replaceCharacters(in: replaceRange, with: attString)
+//            backingStore.setAttributes(defaultAttributes, range: range)
+//            selectedRange = NSRange(location: selectedRange.location + range.length, length: 0)
+//        } else if let string = string as? String {
+//            let range = NSRange(location: replaceRange.location, length: (string as NSString).length)
+//            backingStore.replaceCharacters(in: replaceRange, with: string)
+//            backingStore.setAttributes(defaultAttributes, range: range)
+//            selectedRange = NSRange(location: selectedRange.location + range.length, length: 0)
+//        }
+//        unmarkText()
+//        TextInputContext.invalidateCharacterCoordinates()
+//        updateTextFrame()
+//    }
+//}

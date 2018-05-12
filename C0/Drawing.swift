@@ -19,37 +19,24 @@
 
 import Foundation
 
-/**
- Issue: 変更通知またはイミュータブル化またはstruct化
- */
-final class Drawing: NSObject, NSCoding {
-    var lines: [Line], draftLines: [Line], selectedLineIndexes: [Int]
+struct Drawing: Codable, Equatable {
+    static let defaultLineWidth = 1.0.cg
     
-    init(lines: [Line] = [], draftLines: [Line] = [], selectedLineIndexes: [Int] = []) {
+    var lines: [Line], draftLines: [Line], selectedLineIndexes: [Int]
+    var lineColor: Color, lineWidth: Real
+    
+    init(lines: [Line] = [], draftLines: [Line] = [], selectedLineIndexes: [Int] = [],
+         lineColor: Color = .strokeLine, lineWidth: Real = defaultLineWidth) {
         self.lines = lines
         self.draftLines = draftLines
         self.selectedLineIndexes = selectedLineIndexes
-    }
-    
-    private enum CodingKeys: String, CodingKey {
-        case lines, draftLines, selectedLineIndexes
-    }
-    init?(coder: NSCoder) {
-        lines = coder.decodeDecodable([Line].self, forKey: CodingKeys.lines.rawValue) ?? []
-        draftLines = coder.decodeDecodable([Line].self, forKey: CodingKeys.draftLines.rawValue) ?? []
-        selectedLineIndexes = coder.decodeObject(
-            forKey: CodingKeys.selectedLineIndexes.rawValue) as? [Int] ?? []
-        super.init()
-    }
-    func encode(with coder: NSCoder) {
-        coder.encodeEncodable(lines, forKey: CodingKeys.lines.rawValue)
-        coder.encodeEncodable(draftLines, forKey: CodingKeys.draftLines.rawValue)
-        coder.encode(selectedLineIndexes, forKey: CodingKeys.selectedLineIndexes.rawValue)
+        self.lineColor = lineColor
+        self.lineWidth = lineWidth
     }
     
     func imageBounds(withLineWidth lineWidth: Real) -> Rect {
         return Line.imageBounds(with: lines, lineWidth: lineWidth)
-            .unionNoEmpty(Line.imageBounds(with: draftLines, lineWidth: lineWidth))
+            .union(Line.imageBounds(with: draftLines, lineWidth: lineWidth))
     }
     var isEmpty: Bool {
         return lines.isEmpty && draftLines.isEmpty
@@ -80,6 +67,9 @@ final class Drawing: NSObject, NSCoding {
         }
         return selectedLineIndexes.contains(minIndex)
     }
+    var selectedLines: [Line] {
+        return selectedLineIndexes.map { lines[$0] }
+    }
     var editLines: [Line] {
         return selectedLineIndexes.isEmpty ? lines : selectedLineIndexes.map { lines[$0] }
     }
@@ -87,7 +77,7 @@ final class Drawing: NSObject, NSCoding {
         guard  !selectedLineIndexes.isEmpty else {
             return []
         }
-        return (0 ..< lines.count)
+        return (0..<lines.count)
             .filter { !selectedLineIndexes.contains($0) }
             .map { lines[$0] }
     }
@@ -101,6 +91,17 @@ final class Drawing: NSObject, NSCoding {
         return false
     }
     
+    var imageBounds: Rect {
+        return imageBounds(withLineWidth: lineWidth)
+    }
+    
+    //view
+    func drawEdit(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
+        drawEdit(lineWidth: lineWidth * reciprocalScale, lineColor: lineColor, in: ctx)
+    }
+    func draw(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
+        draw(lineWidth: lineWidth * reciprocalScale, lineColor: lineColor, in: ctx)
+    }
     func drawEdit(lineWidth: Real, lineColor: Color, in ctx: CGContext) {
         drawDraft(lineWidth: lineWidth, lineColor: Color.draft, in: ctx)
         draw(lineWidth: lineWidth, lineColor: lineColor, in: ctx)
@@ -109,6 +110,10 @@ final class Drawing: NSObject, NSCoding {
     func drawDraft(lineWidth: Real, lineColor: Color, in ctx: CGContext) {
         ctx.setFillColor(lineColor.cg)
         draftLines.forEach { $0.draw(size: lineWidth, in: ctx) }
+    }
+    func draw(lineColor: Color, in ctx: CGContext) {
+        ctx.setFillColor(lineColor.cg)
+        lines.forEach { $0.draw(size: lineWidth, in: ctx) }
     }
     func draw(lineWidth: Real, lineColor: Color, in ctx: CGContext) {
         ctx.setFillColor(lineColor.cg)
@@ -122,16 +127,11 @@ final class Drawing: NSObject, NSCoding {
 extension Drawing: Referenceable {
     static let name = Text(english: "Drawing", japanese: "ドローイング")
 }
-extension Drawing: ClassDeepCopiable {
-    func copied(from deepCopier: DeepCopier) -> Drawing {
-        return Drawing(lines: lines, draftLines: draftLines, selectedLineIndexes: selectedLineIndexes)
-    }
-}
-extension Drawing: Viewable {
-    func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
+extension Drawing: CompactViewable {
+    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
         thumbnailView.bounds = bounds
-        return ObjectView(object: self, thumbnailView: thumbnailView, minFrame: bounds, sizeType)
+        return thumbnailView
     }
     func draw(with bounds: Rect, in ctx: CGContext) {
         let imageBounds = self.imageBounds(withLineWidth: 1)
@@ -145,24 +145,22 @@ extension Drawing: Viewable {
 /**
  Issue: DraftArray、下書き化などのコマンドを排除
  */
-final class DrawingView: View, Queryable, Assignable {
+final class DrawingView: View {
     var drawing = Drawing() {
         didSet {
-            linesView.array = drawing.lines
-            draftLinesView.array = drawing.draftLines
+            updateWithDrawing()
         }
     }
     
+    let linesView = ArrayCountView<Line>()
+    let draftLinesView = ArrayCountView<Line>()
+    
     var sizeType: SizeType
     let classNameView: TextView
-    let linesView = ArrayCountView<Line>()
-    let classDraftLinesNameView = TextView(text: Text(english: "Draft Lines:",
-                                                                  japanese: "下書き線:"))
-    let draftLinesView = ArrayCountView<Line>()
-    let changeToDraftView = ClosureView(name: Text(english: "Change to Draft",
-                                                           japanese: "下書き化"))
+    let classDraftLinesNameView = TextView(text: Text(english: "Draft Lines:", japanese: "下書き線:"))
+    let changeToDraftView = ClosureView(name: Text(english: "Change to Draft", japanese: "下書き化"))
     let exchangeWithDraftView = ClosureView(name: Text(english: "Exchange with Draft",
-                                                               japanese: "下書きと交換"))
+                                                       japanese: "下書きと交換"))
     
     init(drawing: Drawing = Drawing(), sizeType: SizeType = .regular) {
         self.sizeType = sizeType
@@ -182,12 +180,7 @@ final class DrawingView: View, Queryable, Assignable {
         return Rect(x: 0, y: 0, width: 100,
                       height: buttonH * 4 + padding * 2)
     }
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    private func updateLayout() {
+    override func updateLayout() {
         let padding = Layout.padding(with: sizeType), buttonH = Layout.height(with: sizeType)
         let px = padding, pw = bounds.width - padding * 2
         var py = bounds.height - padding
@@ -209,8 +202,10 @@ final class DrawingView: View, Queryable, Assignable {
         py -= buttonH
         exchangeWithDraftView.frame = Rect(x: px, y: py, width: pw, height: buttonH)
     }
-    
-    var disabledRegisterUndo = true
+    private func updateWithDrawing() {
+        linesView.array = drawing.lines
+        draftLinesView.array = drawing.draftLines
+    }
     
     struct Binding {
         let view: DrawingView
@@ -219,18 +214,30 @@ final class DrawingView: View, Queryable, Assignable {
     var binding: ((Binding) -> ())?
     
     func changeToDraft() {
-        
+        //register() { $0.drawing = drawing }
+        drawing.draftLines = drawing.lines
+        drawing.lines = []
     }
     func exchangeWithDraft() {
-        
+        //r
+        let lines = drawing.lines
+        drawing.lines = drawing.draftLines
+        drawing.draftLines = lines
     }
     
+    private func push(_ drawing: Drawing) {
+//        registeringUndoManager?.registerUndo(withTarget: self) {
+//            $0.set(oldDrawing, old: drawing)
+//        }
+        self.drawing = drawing
+    }
+}
+extension DrawingView: Queryable {
+    static let referenceableType: Referenceable.Type = Drawing.self
+}
+extension DrawingView: Assignable {
     func delete(for p: Point) {
-        let drawing = Drawing()
-        guard !self.drawing.isEmpty else {
-            return
-        }
-        set(drawing, old: self.drawing)
+        push(Drawing())
     }
     func copiedViewables(at p: Point) -> [Viewable] {
         return [drawing.copied]
@@ -238,24 +245,9 @@ final class DrawingView: View, Queryable, Assignable {
     func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let drawing = object as? Drawing {
-                if drawing != self.drawing {
-                    set(drawing.copied, old: self.drawing)
-                    return
-                }
+                push(drawing.copied)
+                return
             }
         }
-    }
-    
-    private func set(_ drawing: Drawing, old oldDrawing: Drawing) {
-        registeringUndoManager?.registerUndo(withTarget: self) {
-            $0.set(oldDrawing, old: drawing)
-        }
-        binding?(Binding(view: self, drawing: oldDrawing, oldDrawing: oldDrawing, phase: .began))
-        self.drawing = drawing
-        binding?(Binding(view: self, drawing: drawing, oldDrawing: oldDrawing, phase: .ended))
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return Drawing.reference
     }
 }

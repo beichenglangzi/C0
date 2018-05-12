@@ -18,83 +18,71 @@
  */
 
 import Foundation
+import CoreGraphics
 import AVFoundation
 
-final class SceneImageRendedrer {
-    private let drawView = View(drawClosure: { _, _ in })
-    let scene: Scene, renderSize: Size, cut: Cut
-    let fileType: String
-    init(scene: Scene, renderSize: Size, cut: Cut, fileType: String = kUTTypePNG as String) {
-        self.scene = scene
-        self.renderSize = renderSize
-        self.cut = cut
-        self.fileType = fileType
-        
-        let scale = renderSize.width / scene.frame.size.width
-        scene.viewTransform = Transform(translation: Point(x: renderSize.width / 2,
-                                                             y: renderSize.height / 2),
-                                        scale: Point(x: scale, y: scale),
-                                        rotation: 0)
-        drawView.bounds.size = renderSize
-        drawView.drawClosure = { [unowned self] ctx, _ in
-            ctx.concatenate(scene.viewTransform.affineTransform)
-            self.scene.editCut.draw(scene: self.scene, viewType: .preview, in: ctx)
+enum VideoType: FileTypeProtocol {
+    case mp4, mov
+    fileprivate var av: AVFileType {
+        switch self {
+        case .mp4:
+            return .mp4
+        case .mov:
+            return .mov
         }
     }
-    
-    var image: CGImage? {
-        guard let ctx = CGContext.bitmap(with: renderSize, CGColorSpace.default) else {
-            return nil
+    private var cfUTType: CFString {
+        switch self {
+        case .mp4:
+            return kUTTypeMPEG4
+        case .mov:
+            return kUTTypeQuickTimeMovie
         }
-        drawView.render(in: ctx)
-        return ctx.makeImage()
     }
-    func writeImage(to url: URL) throws {
-        guard let image = image else {
-            throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteUnknownError)
+    var utType: String {
+        return cfUTType as String
+    }
+}
+enum VideoCodec {
+    case h264
+    fileprivate var av: String {
+        switch self {
+        case .h264:
+            return AVVideoCodecH264
         }
-        try image.write(to: url, fileType: fileType)
     }
 }
 
-final class SceneMovieRenderer {
-    static func UTTypeWithAVFileType(_ fileType: AVFileType) -> String? {
-        switch fileType {
-        case .mp4:
-            return String(kUTTypeMPEG4)
-        case .mov:
-            return String(kUTTypeQuickTimeMovie)
-        default:
-            return nil
-        }
-    }
-    
-    let scene: Scene, renderSize: Size, fileType: AVFileType, codec: String
-    init(scene: Scene, renderSize: Size,
-         fileType: AVFileType = .mp4, codec: String = AVVideoCodecH264) {
-        
+protocol VideoEncoder {
+    func writeVideo(to url: URL,
+                    progressClosure: @escaping (Real, inout Bool) -> Void,
+                    completionClosure: @escaping (Error?) -> ()) throws
+}
+
+final class SceneVideoEncoder: VideoEncoder {
+    let scene: Scene, size: Size, videoType: VideoType, codec: VideoCodec
+    init(scene: Scene, size: Size, videoType: VideoType = .mp4, codec: VideoCodec = .h264) {
         self.scene = scene
-        self.renderSize = renderSize
-        self.fileType = fileType
+        self.size = size
+        self.videoType = videoType
         self.codec = codec
         
-        let scale = renderSize.width / scene.frame.size.width
-        self.screenTransform = Transform(translation: Point(x: renderSize.width / 2,
-                                                              y: renderSize.height / 2),
+        let scale = size.width / scene.canvas.frame.size.width
+        self.screenTransform = Transform(translation: Point(x: size.width / 2, y: size.height / 2),
                                          scale: Point(x: scale, y: scale),
                                          rotation: 0)
-        drawView.bounds.size = renderSize
+        drawView.bounds.size = size
         drawView.drawClosure = { [unowned self] ctx, _ in
-            ctx.concatenate(scene.viewTransform.affineTransform)
-            self.scene.editCut.draw(scene: self.scene, viewType: .preview, in: ctx)
+            ctx.concatenate(scene.canvas.viewTransform.affineTransform)
+            self.scene.timeline.canvas.draw(viewType: .preview, in: ctx)
         }
     }
     
     let drawView = View(drawClosure: { _, _ in })
     var screenTransform = Transform()
     
-    func writeMovie(to url: URL,
-                    progressClosure: @escaping (Real, UnsafeMutablePointer<Bool>) -> Void,
+    func writeVideo(to url: URL,
+                    progressClosure: @escaping (Real, inout Bool) -> Void,
                     completionClosure: @escaping (Error?) -> ()) throws {
         let colorSpace = CGColorSpace.default
         guard let colorSpaceProfile = colorSpace.iccData else {
@@ -109,10 +97,10 @@ final class SceneMovieRenderer {
             try fileManager.removeItem(at: url)
         }
         
-        let writer = try AVAssetWriter(outputURL: url, fileType: fileType)
+        let writer = try AVAssetWriter(outputURL: url, fileType: videoType.av)
         
-        let width = renderSize.width, height = renderSize.height
-        let setting: [String: Any] = [AVVideoCodecKey: codec,
+        let width = size.width, height = size.height
+        let setting: [String: Any] = [AVVideoCodecKey: codec.av,
                                       AVVideoWidthKey: width,
                                       AVVideoHeightKey: height]
         let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: setting)
@@ -132,11 +120,11 @@ final class SceneMovieRenderer {
         }
         writer.startSession(atSourceTime: kCMTimeZero)
         
-        let allFrameCount = scene.frameTime(withBeatTime: scene.duration)
-        let timeScale = Int32(scene.frameRate)
+        let allFrameCount = scene.timeline.frameTime(withBeatTime: scene.timeline.duration)
+        let timeScale = Int32(scene.timeline.frameRate)
         
         var append = false, stop = false
-        for i in 0 ..< allFrameCount {
+        for i in 0..<allFrameCount {
             autoreleasepool {
                 while !writerInput.isReadyForMoreMediaData {
                     progressClosure(Real(i) / Real(allFrameCount - 1), &stop)
@@ -166,7 +154,7 @@ final class SceneMovieRenderer {
                                        bytesPerRow: CVPixelBufferGetBytesPerRow(pb),
                                        space: colorSpace,
                                        bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) {
-                    let cutTime = scene.cutTime(withFrameTime: i)
+                    let cutTime = scene.timeline.cutTime(withFrameTime: i)
                     scene.editCutIndex = cutTime.cutItemIndex
                     cutTime.cut.currentTime = cutTime.time
                     drawView.render(in: ctx)
@@ -198,9 +186,9 @@ final class SceneMovieRenderer {
             writer.endSession(atSourceTime: CMTime(value: Int64(allFrameCount),
                                                    timescale: timeScale))
             writer.finishWriting {
-                if let audioURL = self.scene.sound.url {
+                if let audioURL = self.scene.timeline.sound.url {
                     do {
-                        try self.wrireAudio(to: url, self.fileType, audioURL: audioURL) { error in
+                        try self.wrireAudio(to: url, self.videoType.av, audioURL: audioURL) { error in
                             completionClosure(error)
                         }
                     } catch {
@@ -214,9 +202,9 @@ final class SceneMovieRenderer {
             }
         }
     }
+    
     func wrireAudio(to videoURL: URL, _ fileType: AVFileType, audioURL: URL,
                     completionClosure: @escaping (Error?) -> ()) throws {
-        
         let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(videoURL.lastPathComponent)
         let audioAsset = AVURLAsset(url: audioURL)
@@ -242,174 +230,23 @@ final class SceneMovieRenderer {
                                                    of: audioAssetTrack,
                                                    at: kCMTimeZero)
         
-        guard let assetExportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+        guard let aes = AVAssetExportSession(asset: composition,
+                                             presetName: AVAssetExportPresetHighestQuality) else {
             throw NSError(domain: AVFoundationErrorDomain, code: AVError.Code.exportFailed.rawValue)
         }
-        assetExportSession.outputFileType = fileType
-        assetExportSession.outputURL = tempURL
-        assetExportSession.exportAsynchronously { [unowned assetExportSession] in
+        aes.outputFileType = fileType
+        aes.outputURL = tempURL
+        aes.exportAsynchronously { [unowned aes] in
             let fileManager = FileManager.default
             do {
                 try _ = fileManager.replaceItemAt(videoURL, withItemAt: tempURL)
                 if fileManager.fileExists(atPath: tempURL.path) {
                     try fileManager.removeItem(at: tempURL)
                 }
-                completionClosure(assetExportSession.error)
+                completionClosure(aes.error)
             } catch {
                 completionClosure(error)
             }
         }
-    }
-}
-
-final class RendererManager {
-    weak var progressesEdgeView: View?
-    lazy var scene = Scene()
-    var rendingContentScale = 1.0.cg
-    
-    var renderQueue = OperationQueue()
-    
-    init() {
-    }
-    deinit {
-        renderQueue.cancelAllOperations()
-    }
-    
-    var bars = [ProgressNumberView]()
-    func beginProgress(_ progressBar: ProgressNumberView) {
-        bars.append(progressBar)
-        progressesEdgeView?.parent?.append(child: progressBar)
-        progressBar.begin()
-        updateProgresssPosition()
-    }
-    func endProgress(_ progressBar: ProgressNumberView) {
-        progressBar.end()
-        if let index = bars.index(where: { $0 === progressBar }) {
-            bars[index].removeFromParent()
-            bars.remove(at: index)
-            updateProgresssPosition()
-        }
-    }
-    private let progressWidth = 200.0.cg
-    func updateProgresssPosition() {
-        guard let view = progressesEdgeView else {
-            return
-        }
-        _ = bars.reduce(Point(x: view.frame.origin.x, y: view.frame.maxY)) {
-            $1.frame.origin = $0
-            return Point(x: $0.x + progressWidth, y: $0.y)
-        }
-    }
-    
-    func exportMovie(message: String?, name: String? = nil, size: Size,
-                     fileType: AVFileType = .mp4, codec: String = AVVideoCodecH264,
-                     isSelectedCutOnly: Bool = false) -> Bool {
-        guard let utType = SceneMovieRenderer.UTTypeWithAVFileType(fileType) else {
-            return true
-        }
-        URL.file(message: message, name: nil, fileTypes: [utType]) { [unowned self] e in
-            let renderer = SceneMovieRenderer(scene: self.scene.copied,
-                                              renderSize: size, fileType: fileType, codec: codec)
-            
-            let progressBar = ProgressNumberView(frame: Rect(x: 0, y: 0,
-                                                               width: self.progressWidth,
-                                                               height: Layout.basicHeight),
-                                                 name: e.url.deletingPathExtension().lastPathComponent,
-                                                 type: e.url.pathExtension.uppercased(),
-                                                 state: Text(english: "Exporting",
-                                                                     japanese: "書き出し中"))
-            let operation = BlockOperation()
-            progressBar.operation = operation
-            progressBar.deleteClosure = { [unowned self] in self.endProgress($0) }
-            self.beginProgress(progressBar)
-            
-            operation.addExecutionBlock() { [unowned operation] in
-                let progressClosure: (Real, UnsafeMutablePointer<Bool>) -> () =
-                { (totalProgress, stop) in
-                    if operation.isCancelled {
-                        stop.pointee = true
-                    } else {
-                        OperationQueue.main.addOperation() {
-                            progressBar.value = totalProgress
-                        }
-                    }
-                }
-                let completionClosure: (Error?) -> () = { (error) in
-                    do {
-                        if let error = error {
-                            throw error
-                        }
-                        OperationQueue.main.addOperation() {
-                            progressBar.value = 1
-                        }
-                        try FileManager.default.setAttributes([.extensionHidden: e.isExtensionHidden],
-                                                              ofItemAtPath: e.url.path)
-                        OperationQueue.main.addOperation() {
-                            self.endProgress(progressBar)
-                        }
-                    } catch {
-                        OperationQueue.main.addOperation() {
-                            progressBar.state = Text(english: "Error", japanese: "エラー")
-                            progressBar.nameView.textFrame.color = .warning
-                        }
-                    }
-                }
-                do {
-                    try renderer.writeMovie(to: e.url,
-                                            progressClosure: progressClosure,
-                                            completionClosure: completionClosure)
-                } catch {
-                    OperationQueue.main.addOperation() {
-                        progressBar.state = Text(english: "Error", japanese: "エラー")
-                        progressBar.nameView.textFrame.color = .warning
-                    }
-                }
-            }
-            self.renderQueue.addOperation(operation)
-        }
-        return true
-    }
-    
-    func exportImage(message: String?, size: Size) -> Bool {
-        URL.file(message: message, name: nil, fileTypes: [kUTTypePNG as String]) {
-            [unowned self] exportURL in
-            
-            let renderer = SceneImageRendedrer(scene: self.scene.copied,
-                                               renderSize: size,
-                                               cut: self.scene.editCut)
-            do {
-                try renderer.writeImage(to: exportURL.url)
-                try FileManager.default.setAttributes([.extensionHidden: exportURL.isExtensionHidden],
-                                                      ofItemAtPath: exportURL.url.path)
-            } catch {
-                self.showError(withName: exportURL.name)
-            }
-        }
-        return true
-    }
-    
-    func exportSubtitles() -> Bool {
-        let message = Text(english: "Export Subtitles",
-                                   japanese: "字幕として書き出す").currentString
-        URL.file(message: message, name: nil, fileTypes: ["vtt"]) { [unowned self] exportURL in
-            let vttData = self.scene.vtt
-            do {
-                try vttData?.write(to: exportURL.url)
-                try FileManager.default.setAttributes([.extensionHidden: exportURL.isExtensionHidden],
-                                                      ofItemAtPath: exportURL.url.path)
-            } catch {
-                self.showError(withName: exportURL.name)
-            }
-        }
-        return true
-    }
-    
-    func showError(withName name: String) {
-        let progressBar = ProgressNumberView()
-        progressBar.name = name
-        progressBar.state = Text(english: "Error", japanese: "エラー")
-        progressBar.nameView.textFrame.color = .warning
-        progressBar.deleteClosure = { [unowned self] in self.endProgress($0) }
-        beginProgress(progressBar)
     }
 }

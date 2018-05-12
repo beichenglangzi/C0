@@ -19,7 +19,7 @@
 
 import Foundation
 
-struct Transform: Codable {
+struct Transform: Codable, Initializable {//OrderedAfineTransform transformItems
     var translation: Point {
         didSet {
             affineTransform = Transform.affineTransform(translation: translation,
@@ -58,11 +58,15 @@ struct Transform: Codable {
     }
     private(set) var affineTransform: CGAffineTransform
     
-    static let zOption = RealOption(defaultModel: 0, minModel: -20, maxModel: 20,
-                                    modelInterval: 0.01, exp: 1,
-                                    numberOfDigits: 2, unit: "")
-    
-    init(translation: Point = Point(), z: Real = 0, rotation: Real = 0) {
+    init() {
+        translation = Point()
+        _z = 0
+        _scale = Point(x: 1, y: 1)
+        rotation = 0
+        affineTransform = Transform.affineTransform(translation: translation,
+                                                    scale: _scale, rotation: rotation)
+    }
+    init(translation: Point = Point(), z: Real, rotation: Real = 0) {
         let pow2 = pow(2, z)
         self.translation = translation
         _scale = Point(x: pow2, y: pow2)
@@ -104,6 +108,15 @@ struct Transform: Codable {
         return translation == Point() && scale == Point(x: 1, y: 1) && rotation == 0
     }
 }
+extension Transform {
+    static let zOption = RealOption(defaultModel: 0, minModel: -20, maxModel: 20,
+                                    modelInterval: 0.01, exp: 1,
+                                    numberOfDigits: 2, unit: "")
+    static let thetaOption = RealOption(defaultModel: 0,
+                                        minModel: -10000, maxModel: 10000,
+                                        modelInterval: 0.5, exp: 1,
+                                        numberOfDigits: 1, unit: "°")
+}
 extension Transform: Equatable {
     static func ==(lhs: Transform, rhs: Transform) -> Bool {
         return lhs.translation == rhs.translation
@@ -122,7 +135,7 @@ extension Transform: Interpolatable {
     static func firstMonospline(_ f1: Transform, _ f2: Transform, _ f3: Transform,
                                 with ms: Monospline) -> Transform {
         let translation = Point.firstMonospline(f1.translation, f2.translation,
-                                                  f3.translation, with: ms)
+                                                f3.translation, with: ms)
         let scaleX = Real.firstMonospline(f1.scale.x, f2.scale.x, f3.scale.x, with: ms)
         let scaleY = Real.firstMonospline(f1.scale.y, f2.scale.y, f3.scale.y, with: ms)
         let rotation = Real.firstMonospline(f1.rotation, f2.rotation, f3.rotation, with: ms)
@@ -132,7 +145,7 @@ extension Transform: Interpolatable {
     static func monospline(_ f0: Transform, _ f1: Transform, _ f2: Transform, _ f3: Transform,
                            with ms: Monospline) -> Transform {
         let translation = Point.monospline(f0.translation, f1.translation,
-                                             f2.translation, f3.translation, with: ms)
+                                           f2.translation, f3.translation, with: ms)
         let scaleX = Real.monospline(f0.scale.x, f1.scale.x, f2.scale.x, f3.scale.x, with: ms)
         let scaleY = Real.monospline(f0.scale.y, f1.scale.y, f2.scale.y, f3.scale.y, with: ms)
         let rotation = Real.monospline(f0.rotation, f1.rotation, f2.rotation, f3.rotation, with: ms)
@@ -140,7 +153,7 @@ extension Transform: Interpolatable {
                          scale: Point(x: scaleX, y: scaleY), rotation: rotation)
     }
     static func lastMonospline(_ f0: Transform, _ f1: Transform, _ f2: Transform,
-                              with ms: Monospline) -> Transform {
+                               with ms: Monospline) -> Transform {
         let translation = Point.lastMonospline(f0.translation, f1.translation,
                                                f2.translation, with: ms)
         let scaleX = Real.lastMonospline(f0.scale.x, f1.scale.x, f2.scale.x, with: ms)
@@ -153,14 +166,24 @@ extension Transform: Interpolatable {
 extension Transform: Referenceable {
     static let name = Text(english: "Transform", japanese: "トランスフォーム")
 }
-extension Transform: ObjectViewExpression {
+extension Transform: KeyframeValue {}
+extension Transform: CompactViewable {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return View(isForm: true)
     }
 }
 
+struct TransformTrack: Track, Codable {
+    private(set) var animation = Animation<Transform>()
+    var animatable: Animatable {
+        return animation
+    }
+}
+extension TransformTrack: Referenceable {
+    static let name = Text(english: "Transform Track", japanese: "トランスフォームトラック")
+}
 
-final class TransformView: View, Queryable, Assignable {
+final class TransformView: View {
     var transform = Transform() {
         didSet {
             if transform != oldValue {
@@ -169,16 +192,14 @@ final class TransformView: View, Queryable, Assignable {
         }
     }
     
+    var standardTranslation = Point(x: 1, y: 1)
+    
     let translationView = DiscretePointView(xInterval: 0.01, xNumberOfDigits: 2,
                                             yInterval: 0.01, yNumberOfDigits: 2,
                                             sizeType: .regular)
     let zView = DiscreteRealView(model: 0, option: Transform.zOption,
                                  frame: Layout.valueFrame(with: .regular))
-    let thetaView = DiscreteRealView(model: 0,
-                                     option: RealOption(defaultModel: 0,
-                                                        minModel: -10000, maxModel: 10000,
-                                                        modelInterval: 0.5, exp: 1,
-                                                        numberOfDigits: 1, unit: "°"),
+    let thetaView = DiscreteRealView(model: 0, option: Transform.thetaOption,
                                      frame: Layout.valueFrame(with: .regular))
     
     private let classNameView = TextView(text: Transform.name, font: .bold)
@@ -197,30 +218,19 @@ final class TransformView: View, Queryable, Assignable {
         thetaView.binding = { [unowned self] in self.setTransform(with: $0) }
     }
     
-    override var locale: Locale {
-        didSet {
-            updateLayout()
-        }
-    }
-    
     override var defaultBounds: Rect {
         let padding = Layout.basicPadding
         let w = MaterialView.defaultWidth + padding * 2
         let h = Layout.basicHeight * 2 + classNameView.frame.height + padding * 3
         return Rect(x: 0, y: 0, width: w, height: h)
     }
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    func updateLayout() {
+    override func updateLayout() {
         let padding = Layout.basicPadding
         var y = bounds.height - padding - classNameView.frame.height
         classNameView.frame.origin = Point(x: padding, y: y)
         y -= Layout.basicHeight + Layout.basicPadding
-        _ = Layout.leftAlignment([classZNameView, zView, PaddingView(),
-                                  classRotationNameView, thetaView],
+        _ = Layout.leftAlignment([.view(classZNameView), .view(zView), .xPadding(padding),
+                                  .view(classRotationNameView), .view(thetaView)],
                                  y: y, height: Layout.basicHeight)
         let tdb = translationView.defaultBounds
         translationView.frame = Rect(x: bounds.width - Layout.basicPadding - tdb.width, y: padding,
@@ -231,10 +241,6 @@ final class TransformView: View, Queryable, Assignable {
         zView.model = transform.z
         thetaView.model = transform.rotation * 180 / (.pi)
     }
-    
-    var standardTranslation = Point(x: 1, y: 1)
-    
-    var disabledRegisterUndo = true
     
     struct Binding {
         let transformView: TransformView
@@ -273,12 +279,24 @@ final class TransformView: View, Queryable, Assignable {
         }
     }
     
+    private func push(_ transform: Transform) {
+//        registeringUndoManager?.registerUndo(withTarget: self) {
+//            $0.set(oldTransform, oldTransform: transform)
+//        }
+        self.transform = transform
+    }
+}
+extension TransformView: Localizable {
+    func update(with locale: Locale) {
+        updateLayout()
+    }
+}
+extension TransformView: Queryable {
+    static let referenceableType: Referenceable.Type = Transform.self
+}
+extension TransformView: Assignable {
     func delete(for p: Point) {
-        let transform = Transform()
-        guard transform != self.transform else {
-            return
-        }
-        set(transform, oldTransform: self.transform)
+        push(Transform())
     }
     func copiedViewables(at p: Point) -> [Viewable] {
         return [transform]
@@ -286,26 +304,9 @@ final class TransformView: View, Queryable, Assignable {
     func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let transform = object as? Transform {
-                if transform != self.transform {
-                    set(transform, oldTransform: self.transform)
-                    return
-                }
+                push(transform)
+                return
             }
         }
-    }
-    
-    private func set(_ transform: Transform, oldTransform: Transform) {
-        registeringUndoManager?.registerUndo(withTarget: self) {
-            $0.set(oldTransform, oldTransform: transform)
-        }
-        binding?(Binding(transformView: self,
-                         transform: oldTransform, oldTransform: oldTransform, phase: .began))
-        self.transform = transform
-        binding?(Binding(transformView: self,
-                         transform: transform, oldTransform: oldTransform, phase: .ended))
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return Transform.reference
     }
 }

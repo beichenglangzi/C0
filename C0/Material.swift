@@ -19,11 +19,22 @@
 
 import Foundation
 
-final class Material: NSObject, NSCoding {
+struct Material: Codable, Hashable {
     enum MaterialType: Int8, Codable {
-        case normal, lineless, blur, luster, add, subtract
+        case normal, lineless, blur, luster, addition, subtract
+        
         var isDrawLine: Bool {
             return self == .normal
+        }
+        var blendType: BlendType {
+            switch self {
+            case .normal, .lineless, .blur:
+                return .normal
+            case .luster, .addition:
+                return .addition
+            case .subtract:
+                return .subtract
+            }
         }
         var displayText: Text {
             switch self {
@@ -35,8 +46,8 @@ final class Material: NSObject, NSCoding {
                 return Text(english: "Blur", japanese: "ぼかし")
             case .luster:
                 return Text(english: "Luster", japanese: "光沢")
-            case .add:
-                return Text(english: "Add", japanese: "加算")
+            case .addition:
+                return Text(english: "Addition", japanese: "加算")
             case .subtract:
                 return Text(english: "Subtract", japanese: "減算")
             }
@@ -46,93 +57,22 @@ final class Material: NSObject, NSCoding {
                     lineless.displayText,
                     blur.displayText,
                     luster.displayText,
-                    add.displayText,
+                    addition.displayText,
                     subtract.displayText]
         }
     }
     
-    let type: MaterialType
-    let color: Color, lineColor: Color
-    let lineWidth: Real, opacity: Real
-    let id: UUID
-    
     static let defaultLineWidth = 1.0.cg
-    init(type: MaterialType = .normal,
-         color: Color = Color(), lineColor: Color = .black,
-         lineWidth: Real = defaultLineWidth, opacity: Real = 1) {
-        
-        self.color = color
-        self.lineColor = lineColor
-        self.type = type
-        self.lineWidth = lineWidth
-        self.opacity = opacity
-        self.id = UUID()
-        super.init()
-    }
     
-    private enum CodingKeys: String, CodingKey {
-        case type, color, lineColor, lineWidth, opacity, id
-    }
-    init?(coder: NSCoder) {
-        type = MaterialType(
-            rawValue: Int8(coder.decodeInt32(forKey: CodingKeys.type.rawValue))) ?? .normal
-        color = coder.decodeDecodable(Color.self, forKey: CodingKeys.color.rawValue) ?? Color()
-        lineColor = coder.decodeDecodable(
-            Color.self, forKey: CodingKeys.lineColor.rawValue) ?? Color()
-        lineWidth = coder.decodeDouble(forKey: CodingKeys.lineWidth.rawValue).cg
-        opacity = coder.decodeDouble(forKey: CodingKeys.opacity.rawValue).cg
-        id = coder.decodeObject(forKey: CodingKeys.id.rawValue) as? UUID ?? UUID()
-        super.init()
-    }
-    func encode(with coder: NSCoder) {
-        coder.encode(Int32(type.rawValue), forKey: CodingKeys.type.rawValue)
-        coder.encodeEncodable(color, forKey: CodingKeys.color.rawValue)
-        coder.encodeEncodable(lineColor, forKey: CodingKeys.lineColor.rawValue)
-        coder.encode(Double(lineWidth), forKey: CodingKeys.lineWidth.rawValue)
-        coder.encode(Double(opacity), forKey: CodingKeys.opacity.rawValue)
-        coder.encode(id, forKey: CodingKeys.id.rawValue)
-    }
-    
-    func with(_ type: MaterialType) -> Material {
-        return Material(type: type,
-                        color: color, lineColor: lineColor,
-                        lineWidth: lineWidth, opacity: opacity)
-    }
-    func with(_ color: Color) -> Material {
-        return Material(type: type,
-                        color: color, lineColor: lineColor,
-                        lineWidth: lineWidth, opacity: opacity)
-    }
-    func with(lineColor: Color) -> Material {
-        return Material(type: type,
-                        color: color, lineColor: lineColor,
-                        lineWidth: lineWidth, opacity: opacity)
-    }
-    func with(lineWidth: Real) -> Material {
-        return Material(type: type,
-                        color: color, lineColor: lineColor,
-                        lineWidth: lineWidth, opacity: opacity)
-    }
-    func with(opacity: Real) -> Material {
-        return Material(type: type,
-                        color: color, lineColor: lineColor,
-                        lineWidth: lineWidth, opacity: opacity)
-    }
-    func withNewID() -> Material {
-        return Material(type: type,
-                        color: color, lineColor: lineColor,
-                        lineWidth: lineWidth, opacity: opacity)
-    }
+    var type = MaterialType.normal
+    var color = Color.random(), lineColor = Color.black
+    var lineWidth = defaultLineWidth, opacity = 1.0.cg
 }
-
 extension Material: Referenceable {
     static let name = Text(english: "Material", japanese: "マテリアル")
 }
 extension Material: Interpolatable {
     static func linear(_ f0: Material, _ f1: Material, t: Real) -> Material {
-        guard f0.id != f1.id else {
-            return f0
-        }
         let type = f0.type
         let color = Color.linear(f0.color, f1.color, t: t)
         let lineColor = Color.linear(f0.lineColor, f1.lineColor, t: t)
@@ -144,9 +84,6 @@ extension Material: Interpolatable {
     }
     static func firstMonospline(_ f1: Material, _ f2: Material, _ f3: Material,
                                 with ms: Monospline) -> Material {
-        guard f1.id != f2.id else {
-            return f1
-        }
         let type = f1.type
         let color = Color.firstMonospline(f1.color, f2.color, f3.color, with: ms)
         let lineColor = Color.firstMonospline(f1.lineColor, f2.lineColor, f3.lineColor, with: ms)
@@ -158,25 +95,19 @@ extension Material: Interpolatable {
     }
     static func monospline(_ f0: Material, _ f1: Material, _ f2: Material, _ f3: Material,
                            with ms: Monospline) -> Material {
-        guard f1.id != f2.id else {
-            return f1
-        }
         let type = f1.type
         let color = Color.monospline(f0.color, f1.color, f2.color, f3.color, with: ms)
         let lineColor = Color.monospline(f0.lineColor, f1.lineColor,
                                          f2.lineColor, f3.lineColor, with: ms)
         let lineWidth = Real.monospline(f0.lineWidth, f1.lineWidth,
-                                           f2.lineWidth, f3.lineWidth, with: ms)
+                                        f2.lineWidth, f3.lineWidth, with: ms)
         let opacity = Real.monospline(f0.opacity, f1.opacity, f2.opacity, f3.opacity, with: ms)
         return Material(type: type,
                         color: color, lineColor: lineColor,
                         lineWidth: lineWidth, opacity: opacity)
     }
     static func lastMonospline(_ f0: Material, _ f1: Material, _ f2: Material,
-                              with ms: Monospline) -> Material {
-        guard f1.id != f2.id else {
-            return f1
-        }
+                               with ms: Monospline) -> Material {
         let type = f1.type
         let color = Color.lastMonospline(f0.color, f1.color, f2.color, with: ms)
         let lineColor = Color.lastMonospline(f0.lineColor, f1.lineColor, f2.lineColor, with: ms)
@@ -187,9 +118,7 @@ extension Material: Interpolatable {
                         lineWidth: lineWidth, opacity: opacity)
     }
 }
-extension Material: ClassDeepCopiable {
-}
-extension Material: ObjectViewExpression {
+extension Material: CompactViewable {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         let view = View(isForm: true)
         view.bounds = bounds
@@ -199,31 +128,27 @@ extension Material: ObjectViewExpression {
 }
 extension Material.MaterialType: Referenceable {
     static let uninheritanceName = Text(english: "Type", japanese: "タイプ")
-    static let name = Keyframe.name.spacedUnion(uninheritanceName)
+    static let name = Material.name.spacedUnion(uninheritanceName)
 }
-extension Material.MaterialType {
-    var blendMode: CGBlendMode {
-        switch self {
-        case .normal, .lineless, .blur:
-            return .normal
-        case .luster, .add:
-            return .plusLighter
-        case .subtract:
-            return .plusDarker
-        }
+extension Material: Initializable {}
+extension Material: KeyframeValue {}
+extension Material.MaterialType: CompactViewableWithDisplayText {}
+
+struct MaterialTrack: Track, Codable {
+    private(set) var animation = Animation<Material>()
+    var animatable: Animatable {
+        return animation
     }
 }
-extension Material.MaterialType: ObjectViewExpressionWithDisplayText {
-}
 
-extension SlidableNumberView {
+extension SlidableNumberView {//no
     static func opacityView(_ sizeType: SizeType = .regular) -> SlidableNumberView {
         return SlidableNumberView(number: 1, defaultNumber: 1, min: 0, max: 1, sizeType: sizeType)
     }
     private static func opacityViewViews(with bounds: Rect,
                                          checkerWidth: Real, padding: Real) -> [View] {
         let frame = Rect(x: padding, y: bounds.height / 2 - checkerWidth,
-                           width: bounds.width - padding * 2, height: checkerWidth * 2)
+                         width: bounds.width - padding * 2, height: checkerWidth * 2)
         
         let backgroundView = View(gradient: Gradient(colors: [.subContent, .content],
                                                      locations: [0, 1],
@@ -246,19 +171,19 @@ extension SlidableNumberView {
         }
     }
 }
-extension SlidableNumberView {
+extension SlidableNumberView {//no
     static func widthViewWith(min: Real, max: Real, exp: Real,
                               _ sizeType: SizeType = .regular) -> SlidableNumberView {
         return SlidableNumberView(min: min, max: max, exp: exp, sizeType: sizeType)
     }
     private static func widthView(with bounds: Rect,
-                                   halfWidth: Real, padding: Real) -> View {
+                                  halfWidth: Real, padding: Real) -> View {
         let path = CGMutablePath()
         path.addLines(between: [Point(x: padding,y: bounds.height / 2),
                                 Point(x: bounds.width - padding,
-                                        y: bounds.height / 2 - halfWidth),
+                                      y: bounds.height / 2 - halfWidth),
                                 Point(x: bounds.width - padding,
-                                        y: bounds.height / 2 + halfWidth)])
+                                      y: bounds.height / 2 + halfWidth)])
         let shapeView = View(path: path)
         shapeView.fillColor = .content
         return shapeView
@@ -276,12 +201,9 @@ extension SlidableNumberView {
 /**
  Issue: 「線の強さ」を追加
  */
-final class MaterialView: View, Queryable, Assignable {
+final class MaterialView: View {
     var material: Material {
         didSet {
-            guard material.id != oldValue.id else {
-                return
-            }
             typeView.enumeratedType = material.type
             colorView.color = material.color
             lineColorView.color = material.lineColor
@@ -289,85 +211,64 @@ final class MaterialView: View, Queryable, Assignable {
             opacityView.number = material.opacity
         }
     }
-    var defaultMaterial = Material()
     
-    static let defaultWidth = 200.0.cg, defaultRightWidth = 60.0.cg
-    
-    private let classNameView = TextView(text: Material.name, font: .bold)
-    private let typeView =
+    let typeView =
         EnumView<Material.MaterialType>(enumeratedType: .normal,
                                         indexClosure: { Int($0) },
                                         rawValueClosure: { Material.MaterialType.RawValue($0) },
                                         names: Material.MaterialType.displayTexts)
-    private let colorView = ColorView()
-    private let lineWidthView = SlidableNumberView.widthViewWith(min: Material.defaultLineWidth,
-                                                                 max: 500,
-                                                                 exp: 3)
-    private let opacityView = SlidableNumberView.opacityView()
+    let colorView = ColorView()
+    let lineWidthView = SlidableNumberView.widthViewWith(min: Material.defaultLineWidth, max: 500,
+                                                         exp: 3)
+    let opacityView = SlidableNumberView.opacityView()
+    let lineColorView = ColorView(hLineWidth: 2, hWidth: 8, slPadding: 4, sizeType: .small)
+    
+    static let defaultWidth = 200.0.cg, defaultRightWidth = 60.0.cg
+    let classNameView = TextView(text: Material.name, font: .bold)
     private let classLineColorNameView = TextView(text: Text(english: "Line Color:",
-                                                                     japanese: "線のカラー:"))
-    private let lineColorView = ColorView(hLineWidth: 2, hWidth: 8, slPadding: 4, sizeType: .small)
+                                                             japanese: "線のカラー:"))
     
     override init() {
-        material = defaultMaterial
+        material = Material()
         super.init()
         children = [classNameView,
                     typeView,
                     colorView, classLineColorNameView, lineColorView,
                     lineWidthView, opacityView]
-        
-        typeView.binding = { [unowned self] in self.setMaterial(with: $0) }
-        
-        colorView.setColorClosure = { [unowned self] in self.setMaterial(with: $0) }
-        lineColorView.setColorClosure = { [unowned self] in self.setMaterial(with: $0) }
-        
-        lineWidthView.binding = { [unowned self] in self.setMaterial(with: $0) }
-        opacityView.binding = { [unowned self] in self.setMaterial(with: $0) }
-    }
-    
-    override var locale: Locale {
-        didSet {
-            updateLayout()
-        }
     }
     
     override var defaultBounds: Rect {
         let padding = Layout.basicPadding, h = Layout.basicHeight, cw = MaterialView.defaultWidth
         return Rect(x: 0, y: 0,
-                      width: cw + MaterialView.defaultRightWidth + padding * 2,
-                      height: cw + classNameView.frame.height + h + padding * 2)
+                    width: cw + MaterialView.defaultRightWidth + padding * 2,
+                    height: cw + classNameView.frame.height + h + padding * 2)
     }
     func defaultBounds(withWidth width: Real) -> Rect {
         let padding = Layout.basicPadding, h = Layout.basicHeight
         let cw = width - MaterialView.defaultRightWidth + padding * 2
         return Rect(x: 0, y: 0,
-                      width: cw + MaterialView.defaultRightWidth + padding * 2,
-                      height: cw + classNameView.frame.height + h + padding * 2)
+                    width: cw + MaterialView.defaultRightWidth + padding * 2,
+                    height: cw + classNameView.frame.height + h + padding * 2)
     }
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    private func updateLayout() {
+    override func updateLayout() {
         let padding = Layout.basicPadding, h = Layout.basicHeight, rw = MaterialView.defaultRightWidth
         let cw = bounds.width - rw - padding * 2
         classNameView.frame.origin = Point(x: padding,
-                                             y: bounds.height - classNameView.frame.height - padding)
+                                           y: bounds.height - classNameView.frame.height - padding)
         let tx = classNameView.frame.maxX + padding
         typeView.frame = Rect(x: tx,
-                                y: bounds.height - h * 2 - padding,
-                                width: bounds.width - tx - padding, height: h * 2)
+                              y: bounds.height - h * 2 - padding,
+                              width: bounds.width - tx - padding, height: h * 2)
         colorView.frame = Rect(x: padding, y: padding, width: cw, height: cw)
         classLineColorNameView.frame.origin = Point(x: padding + cw,
-                                                      y: padding + cw - classLineColorNameView.frame.height)
+                                                    y: padding + cw - classLineColorNameView.frame.height)
         lineColorView.frame = Rect(x: padding + cw, y: classLineColorNameView.frame.minY - rw,
-                                     width: rw, height: rw)
+                                   width: rw, height: rw)
         let lineWidthFrame = Rect(x: padding + cw, y: lineColorView.frame.minY - h,
-                                    width: rw, height: h)
+                                  width: rw, height: h)
         lineWidthView.updateLineWidthViews(withFrame: lineWidthFrame)
         let opacityFrame = Rect(x: padding + cw, y: lineColorView.frame.minY - h * 2,
-                                  width: rw, height: h)
+                                width: rw, height: h)
         opacityView.updateOpacityViews(withFrame: opacityFrame)
     }
     
@@ -384,8 +285,6 @@ final class MaterialView: View, Queryable, Assignable {
             isSubIndicatedBinding?(self, isSubIndicated)
         }
     }
-    
-    var disabledRegisterUndo = true
     
     struct Binding {
         let view: MaterialView
@@ -428,117 +327,23 @@ final class MaterialView: View, Queryable, Assignable {
     }
     var opacityBinding: ((OpacityBinding) -> ())?
     
-    private var oldMaterial = Material()
-    
-    private func setMaterial(with binding: EnumView<Material.MaterialType>.Binding) {
-        if binding.phase == .began {
-            isEditing = true
-            oldMaterial = material
-            typeBinding?(TypeBinding(view: self,
-                                     type: oldMaterial.type, oldType: oldMaterial.type,
-                                     material: oldMaterial, oldMaterial: oldMaterial,
-                                     phase: .began))
-        } else {
-            material = material.with(binding.enumeratedType)
-            typeBinding?(TypeBinding(view: self,
-                                     type: binding.enumeratedType, oldType: oldMaterial.type,
-                                     material: material, oldMaterial: oldMaterial,
-                                     phase: binding.phase))
-            if binding.phase == .ended {
-                isEditing = false
-            }
-        }
+    private func push(_ material: Material) {
+        //        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldMaterial, old: material) }
+        self.material = material
     }
-    
-    private func setMaterial(with obj: ColorView.Binding) {
-        switch obj.colorView {
-        case colorView:
-            if obj.phase == .began {
-                isEditing = true
-                oldMaterial = material
-                colorBinding?(ColorBinding(view: self,
-                                           color: obj.color, oldColor: obj.oldColor,
-                                           material: oldMaterial, oldMaterial: oldMaterial,
-                                           phase: .began))
-            } else {
-                material = material.with(obj.color)
-                colorBinding?(ColorBinding(view: self,
-                                           color: obj.color, oldColor: obj.oldColor,
-                                           material: material, oldMaterial: oldMaterial,
-                                           phase: obj.phase))
-                if obj.phase == .ended {
-                    isEditing = false
-                }
-            }
-        case lineColorView:
-            if obj.phase == .began {
-                isEditing = true
-                oldMaterial = material
-                lineColorBinding?(LineColorBinding(view: self,
-                                                   lineColor: obj.color, oldLineColor: obj.oldColor,
-                                                   material: oldMaterial, oldMaterial: oldMaterial,
-                                                   phase: .began))
-            } else {
-                material = material.with(lineColor: obj.color)
-                lineColorBinding?(LineColorBinding(view: self,
-                                                   lineColor: obj.color, oldLineColor: obj.oldColor,
-                                                   material: material, oldMaterial: oldMaterial,
-                                                   phase: obj.phase))
-                if obj.phase == .ended {
-                    isEditing = false
-                }
-            }
-        default:
-            fatalError("No case")
-        }
+}
+extension MaterialView: Localizable {
+    func update(with locale: Locale) {
+        updateLayout()
     }
-    
-    private func setMaterial(with obj: SlidableNumberView.Binding) {
-        switch obj.view {
-        case lineWidthView:
-            if obj.phase == .began {
-                isEditing = true
-                oldMaterial = material
-                lineWidthBinding?(LineWidthBinding(view: self,
-                                                   lineWidth: obj.number, oldLineWidth: obj.oldNumber,
-                                                   material: oldMaterial, oldMaterial: oldMaterial,
-                                                   phase: .began))
-            } else {
-                material = material.with(lineWidth: obj.number)
-                lineWidthBinding?(LineWidthBinding(view: self,
-                                                   lineWidth: obj.number, oldLineWidth: obj.oldNumber,
-                                                   material: material, oldMaterial: oldMaterial,
-                                                   phase: obj.phase))
-                if obj.phase == .ended {
-                    isEditing = false
-                }
-            }
-        case opacityView:
-            if obj.phase == .began {
-                isEditing = true
-                oldMaterial = material
-                opacityBinding?(OpacityBinding(view: self,
-                                               opacity: obj.number, oldOpacity: obj.oldNumber,
-                                               material: oldMaterial, oldMaterial: oldMaterial,
-                                               phase: .began))
-            } else {
-                material = material.with(opacity: obj.number)
-                opacityBinding?(OpacityBinding(view: self,
-                                               opacity: obj.number, oldOpacity: obj.oldNumber,
-                                               material: material, oldMaterial: oldMaterial,
-                                               phase: obj.phase))
-                if obj.phase == .ended {
-                    isEditing = false
-                }
-            }
-        default:
-            fatalError("No case")
-        }
-    }
-    
+}
+extension MaterialView: Queryable {
+    static let referenceableType: Referenceable.Type = Material.self
+}
+extension MaterialView: Assignable {
     func delete(for p: Point) {
         let material = Material()
-        set(material, old: self.material)
+        push(material)
     }
     func copiedViewables(at p: Point) -> [Viewable] {
         return [material]
@@ -546,24 +351,9 @@ final class MaterialView: View, Queryable, Assignable {
     func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let material = object as? Material {
-                if material.id != self.material.id {
-                    set(material, old: self.material)
-                    return
-                }
+                push(material)
+                return
             }
         }
-    }
-    
-    private func set(_ material: Material, old oldMaterial: Material) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldMaterial, old: material) }
-        binding?(Binding(view: self,
-                         material: oldMaterial, oldMaterial: oldMaterial, phase: .began))
-        self.material = material
-        binding?(Binding(view: self,
-                         material: material, oldMaterial: oldMaterial, phase: .ended))
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return Material.reference
     }
 }

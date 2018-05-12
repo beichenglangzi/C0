@@ -1,0 +1,434 @@
+/*
+ Copyright 2018 S
+ 
+ This file is part of C0.
+ 
+ C0 is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+ C0 is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ 
+ You should have received a copy of the GNU General Public License
+ along with C0.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+import struct Foundation.NSRange
+import struct Foundation.NSAttributedStringKey
+import class Foundation.NSAttributedString
+import class Foundation.NSMutableAttributedString
+import CoreText
+
+extension NSAttributedStringKey {
+    static let ctFont = NSAttributedStringKey(rawValue: String(kCTFontAttributeName))
+    static let ctForegroundColor = NSAttributedStringKey(rawValue:
+        String(kCTForegroundColorAttributeName))
+    static let ctParagraphStyle = NSAttributedStringKey(rawValue:
+        String(kCTParagraphStyleAttributeName))
+}
+extension NSAttributedString {
+    static func with(string: String, font: Font?, color: Color?,
+                     alignment: CTTextAlignment? = nil) -> NSAttributedString {
+        var attributes = [NSAttributedStringKey: Any]()
+        if let font = font {
+            attributes[.ctFont] = font.ctFont
+        }
+        if let color = color {
+            attributes[.ctForegroundColor] = color.cg
+        }
+        if var alignment = alignment {
+            let settings = [CTParagraphStyleSetting(spec: .alignment,
+                                                    valueSize: MemoryLayout<CTTextAlignment>.size,
+                                                    value: &alignment)]
+            let style = CTParagraphStyleCreate(settings, settings.count)
+            attributes[.ctParagraphStyle] = style
+        }
+        return NSAttributedString(string: string, attributes: attributes)
+    }
+    var font: Font? {
+        if length == 0 {
+            return nil
+        } else if let obj = attribute(.ctFont, at: 0, effectiveRange: nil) {
+            return Font(obj as! CTFont)
+        } else {
+            return nil
+        }
+    }
+    func with(_ font: Font?) -> NSAttributedString {
+        guard length > 0 else {
+            return NSAttributedString()
+        }
+        let attString = NSMutableAttributedString(attributedString: self)
+        attString.removeAttribute(.ctFont, range: NSRange(location: 0, length: length))
+        if let font = font {
+            attString.addAttribute(.ctFont, value: font.ctFont,
+                                   range: NSRange(location: 0, length: length))
+        }
+        return attString
+    }
+    var color: Color? {
+        if length == 0 {
+            return nil
+        } else if let obj = attribute(.ctForegroundColor, at: 0, effectiveRange: nil) {
+            return Color(obj as! CGColor)
+        } else {
+            return nil
+        }
+    }
+    func with(_ color: Color?) -> NSAttributedString {
+        guard length > 0 else {
+            return NSAttributedString()
+        }
+        let attString = NSMutableAttributedString(attributedString: self)
+        attString.removeAttribute(.ctForegroundColor, range: NSRange(location: 0, length: length))
+        if let color = color {
+            attString.addAttribute(.ctForegroundColor, value: color.cg,
+                                   range: NSRange(location: 0, length: length))
+        }
+        return attString
+    }
+    var alignment: CTTextAlignment? {
+        if length == 0 {
+            return nil
+        } else if let obj = attribute(.ctParagraphStyle, at: 0, effectiveRange: nil) {
+            var alignment = CTTextAlignment.natural
+            CTParagraphStyleGetValueForSpecifier(obj as! CTParagraphStyle,
+                                                 CTParagraphStyleSpecifier.alignment,
+                                                 MemoryLayout<CTTextAlignment>.size,
+                                                 &alignment)
+            return alignment
+        } else {
+            return nil
+        }
+    }
+    func with(_ alignment: CTTextAlignment?) -> NSAttributedString {
+        guard length > 0 else {
+            return NSAttributedString()
+        }
+        let attString = NSMutableAttributedString(attributedString: self)
+        attString.removeAttribute(.ctParagraphStyle, range: NSRange(location: 0, length: length))
+        if var alignment = alignment {
+            let settings = [CTParagraphStyleSetting(spec: .alignment,
+                                                    valueSize: MemoryLayout<CTTextAlignment>.size,
+                                                    value: &alignment)]
+            let style = CTParagraphStyleCreate(settings, settings.count)
+            attString.addAttribute(.ctParagraphStyle, value: style,
+                                   range: NSRange(location: 0, length: length))
+        }
+        return attString
+    }
+    static func attributesWith(font: Font, color: Color,
+                               alignment: CTTextAlignment = .natural) -> [NSAttributedStringKey: Any] {
+        var alignment = alignment
+        let settings = [CTParagraphStyleSetting(spec: .alignment,
+                                                valueSize: MemoryLayout<CTTextAlignment>.size,
+                                                value: &alignment)]
+        let style = CTParagraphStyleCreate(settings, settings.count)
+        return [.ctFont: font.ctFont,
+                .ctForegroundColor: color.cg,
+                .ctParagraphStyle: style]
+    }
+}
+
+struct TextFrame {
+    var baseFont: Font
+    
+    var attributedString = NSAttributedString() {
+        didSet {
+            self.lines = TextFrame.lineWith(attributedString: attributedString,
+                                            frameWidth: frameWidth)
+        }
+    }
+    var string: String {
+        get {
+            return attributedString.string
+        }
+        set(string) {
+            self.attributedString = .with(string: string,
+                                          font: font, color: color, alignment: alignment)
+        }
+    }
+    var font: Font? {
+        get {
+            return attributedString.font
+        }
+        set(font) {
+            self.attributedString = attributedString.with(font)
+        }
+    }
+    var color: Color? {
+        get {
+            return attributedString.color
+        }
+        set(color) {
+            self.attributedString = attributedString.with(color)
+        }
+    }
+    var alignment: CTTextAlignment? {
+        get {
+            return attributedString.alignment
+        }
+        set(alignment) {
+            self.attributedString = attributedString.with(alignment)
+        }
+    }
+    private(set) var typographicBounds = Rect()
+    var pathBounds: Rect {
+        return typographicBounds
+    }
+    
+    var frameWidth: Real? {
+        didSet {
+            self.lines = TextFrame.lineWith(attributedString: attributedString,
+                                            frameWidth: frameWidth)
+        }
+    }
+    
+    init(attributedString: NSAttributedString, frameWidth: Real? = nil) {
+        self.attributedString = attributedString
+        self.frameWidth = frameWidth
+        self.lines = TextFrame.lineWith(attributedString: attributedString,
+                                        frameWidth: frameWidth)
+        self.typographicBounds = TextFrame.typographicBounds(with: lines)
+    }
+    init(string: String = "",
+         font: Font = .default, color: Color = .font, alignment: CTTextAlignment = .natural,
+         frameWidth: Real? = nil) {
+        
+        let attributedString = NSAttributedString.with(string: string, font: font, color: color,
+                                                       alignment: alignment)
+        self.init(attributedString: attributedString, frameWidth: frameWidth)
+    }
+    
+    var lines = [TextLine]() {
+        didSet {
+            self.typographicBounds = TextFrame.typographicBounds(with: lines)
+        }
+    }
+    private static func lineWith(attributedString: NSAttributedString,
+                                 frameWidth: Real?) -> [TextLine] {
+        let width = Double(frameWidth ?? Real.infinity)
+        let typesetter = CTTypesetterCreateWithAttributedString(attributedString)
+        let length = attributedString.length
+        var range = CFRange(), h = 0.0.cg
+        var ls = [(ctLine: CTLine, ascent: Real, descent: Real, leading: Real)]()
+        while range.maxLocation < length {
+            range.length = CTTypesetterSuggestLineBreak(typesetter, range.location, width)
+            let ctLine = CTTypesetterCreateLine(typesetter, range)
+            var ascent = 0.0.cg, descent = 0.0.cg, leading =  0.0.cg
+            _ = CTLineGetTypographicBounds(ctLine, &ascent, &descent, &leading)
+            ls.append((ctLine, ascent, descent, leading))
+            range = CFRange(location: range.maxLocation, length: 0)
+            h += ascent + descent + leading
+        }
+        var origin = Point()
+        return ls.reversed().map {
+            origin.y += $0.descent + $0.leading
+            let result = TextLine(ctLine: $0.ctLine, origin: origin)
+            origin.y += $0.ascent
+            return result
+            }.reversed()
+    }
+    
+    func line(for point: Point) -> TextLine? {
+        guard let lastLine = lines.last else {
+            return nil
+        }
+        for line in lines {
+            let bounds = line.typographicBounds
+            let tb = Rect(origin: line.origin + bounds.origin, size: bounds.size)
+            if point.y >= tb.minY {
+                return line
+            }
+        }
+        return lastLine
+    }
+    
+    func editCharacterIndex(for point: Point) -> Int {
+        guard !lines.isEmpty else {
+            return 0
+        }
+        for line in lines {
+            let bounds = line.typographicBounds
+            let tb = Rect(origin: line.origin + bounds.origin, size: bounds.size)
+            if point.y >= tb.minY {
+                return line.editCharacterIndex(for: point - tb.origin)
+            }
+        }
+        return attributedString.length - 1
+    }
+    func characterIndex(for point: Point) -> Int {
+        guard !lines.isEmpty else {
+            return 0
+        }
+        for line in lines {
+            let bounds = line.typographicBounds
+            let tb = Rect(origin: line.origin + bounds.origin, size: bounds.size)
+            if point.y >= tb.minY {
+                return line.characterIndex(for: point - tb.origin)
+            }
+        }
+        return attributedString.length - 1
+    }
+    func characterFraction(for point: Point) -> Real {
+        guard let line = self.line(for: point) else {
+            return 0.0
+        }
+        return line.characterFraction(for: point - line.origin)
+    }
+    func characterOffset(at i: Int) -> Real {
+        let lines = self.lines
+        for line in lines {
+            if line.contains(at: i) {
+                return line.characterOffset(at: i)
+            }
+        }
+        return 0.5
+    }
+    var imageBounds: Rect {
+        let lineAndOrigins = self.lines
+        return lineAndOrigins.reduce(into: Rect.null) {
+            var imageBounds = $1.imageBounds
+            imageBounds.origin += $1.origin
+            $0.formUnion(imageBounds)
+        }
+    }
+    static func typographicBounds(with lines: [TextLine]) -> Rect {
+        return lines.reduce(into: Rect.null) {
+            let bounds = $1.typographicBounds
+            $0.formUnion(Rect(origin: $1.origin + bounds.origin, size: bounds.size))
+        }
+    }
+    func typographicBounds(for range: NSRange) -> Rect {
+        return lines.reduce(into: Rect.null) {
+            let bounds = $1.typographicBounds(for: range)
+            $0.formUnion(Rect(origin: $1.origin + bounds.origin, size: bounds.size))
+        }
+    }
+    func baselineDelta(at i: Int) -> Real {
+        for line in lines {
+            if line.contains(at: i) {
+                return line.baselineDelta(at: i)
+            }
+        }
+        return 0.0
+    }
+    
+    func draw(in bounds: Rect, baseFont: Font, in ctx: CGContext) {
+        guard let firstLine = lines.first else { return }
+        ctx.saveGState()
+        let height = firstLine.origin.y + baseFont.ascent
+        ctx.translateBy(x: bounds.origin.x, y: bounds.maxY - height)
+        lines.forEach { $0.draw(in: ctx) }
+        ctx.restoreGState()
+    }
+    func drawWithCenterOfImageBounds(in bounds: Rect, in ctx: CGContext) {
+        let imageBounds = self.imageBounds
+        ctx.saveGState()
+        ctx.translateBy(x: bounds.midX - imageBounds.midX, y: bounds.midY - imageBounds.midY)
+        lines.forEach { $0.draw(in: ctx) }
+        ctx.restoreGState()
+    }
+}
+
+struct TextLine {
+    let ctLine: CTLine
+    let origin: Point
+    
+    func contains(at i: Int) -> Bool {
+        let range = CTLineGetStringRange(ctLine)
+        return i >= range.location && i < range.location + range.length
+    }
+    func contains(for range: NSRange) -> Bool {
+        let lineRange = CTLineGetStringRange(ctLine)
+        return !(range.location >= lineRange.location + lineRange.length
+            || range.location + range.length <= lineRange.location)
+    }
+    var typographicBounds: Rect {
+        var ascent = 0.0.cg, descent = 0.0.cg, leading = 0.0.cg
+        let width = CTLineGetTypographicBounds(ctLine, &ascent, &descent, &leading).cg
+            + CTLineGetTrailingWhitespaceWidth(ctLine).cg
+        return Rect(x: 0, y: -descent - leading,
+                    width: width, height: ascent + descent + leading)
+    }
+    func typographicBounds(for range: NSRange) -> Rect {
+        guard contains(for: range) else {
+            return Rect.null
+        }
+        return ctLine.runs.reduce(into: Rect.null) {
+            var origin = Point()
+            CTRunGetPositions($1, CFRange(location: range.location, length: 1), &origin)
+            let bounds = $1.typographicBounds(for: range)
+            $0.formUnion(Rect(origin: origin + bounds.origin, size: bounds.size))
+        }
+    }
+    func editCharacterIndex(for point: Point) -> Int {
+        return CTLineGetStringIndexForPosition(ctLine, point)
+    }
+    func characterIndex(for point: Point) -> Int {
+        let range = CTLineGetStringRange(ctLine)
+        guard range.length > 0 else {
+            return range.location
+        }
+        for i in range.location..<range.maxLocation {
+            var offset = 0.0.cg
+            CTLineGetOffsetForStringIndex(ctLine, i + 1, &offset)
+            if point.x < offset {
+                return i
+            }
+        }
+        return range.maxLocation - 1
+    }
+    func characterFraction(for point: Point) -> Real {
+        let i = characterIndex(for: point)
+        if i < CTLineGetStringRange(ctLine).maxLocation {
+            let x = characterOffset(at: i)
+            let nextX = characterOffset(at: i + 1)
+            return (point.x - x) / (nextX - x)
+        }
+        return 0.0
+    }
+    func characterOffset(at i: Int) -> Real {
+        var offset = 0.0.cg
+        CTLineGetOffsetForStringIndex(ctLine, i, &offset)
+        return offset
+    }
+    func baselineDelta(at i: Int) -> Real {
+        var descent = 0.0.cg, leading = 0.0.cg
+        _ = CTLineGetTypographicBounds(ctLine, nil, &descent, &leading)
+        return descent + leading
+    }
+    var imageBounds: Rect {
+        return CTLineGetImageBounds(ctLine, nil)
+    }
+    
+    func draw(in ctx: CGContext) {
+        ctx.textPosition = origin
+        CTLineDraw(ctLine, ctx)
+    }
+}
+
+extension CFRange {
+    var maxLocation: Int {
+        return location + length
+    }
+}
+
+extension CTRun {
+    func typographicBounds(for range: NSRange) -> Rect {
+        var ascent = 0.0.cg, descent = 0.0.cg, leading = 0.0.cg
+        let range = CFRange(location: range.location, length: range.length)
+        let width = CTRunGetTypographicBounds(self, range, &ascent, &descent, &leading).cg
+        return Rect(x: 0, y: -descent, width: width, height: ascent + descent)
+    }
+}
+
+extension CTLine {
+    var runs: [CTRun] {
+        return CTLineGetGlyphRuns(self) as? [CTRun] ?? []
+    }
+}

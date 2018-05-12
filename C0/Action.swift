@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Locale
 
 struct Quasimode {
     var modifierEventableTypes: [EventableType], eventableTypes: [EventableType]
@@ -35,12 +35,10 @@ struct Quasimode {
         return ets.reduce(into: Text()) { $0 += $0.isEmpty ? $1.name : " " + $1.name }
     }
 }
-extension Quasimode: DeepCopiable {
-}
 extension Quasimode: Referenceable {
     static let name = Text(english: "Quasimode", japanese: "擬似モード")
 }
-extension Quasimode: ObjectViewExpression {
+extension Quasimode: CompactViewable {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return displayText.thumbnail(withBounds: bounds, sizeType)
     }
@@ -63,10 +61,9 @@ protocol Editor {
     associatedtype Event: Eventable
     var type: EventType { get }
     var event: Event { get }
-//    var isUpdate: Bool { get set }
 }
 struct Inputter: Editor {
-    var type: EventType, event: Event//, isUpdate = true
+    var type: EventType, event: Event
     
     init(type: EventType, event: Event) {
         self.type = type
@@ -111,7 +108,7 @@ struct Inputter: Editor {
     }
 }
 struct Dragger: Editor {
-    var type: EventType, event: Event//, isUpdate = true
+    var type: EventType, event: Event
     
     init(type: EventType, event: Event) {
         self.type = type
@@ -130,7 +127,7 @@ struct Dragger: Editor {
     }
 }
 struct Scroller: Editor {
-    var type: EventType, event: Event//, isUpdate = true
+    var type: EventType, event: Event
     
     init(type: EventType, event: Event) {
         self.type = type
@@ -150,7 +147,7 @@ struct Scroller: Editor {
     }
 }
 struct Pincher: Editor {
-    var type: EventType, event: Event//, isUpdate = true
+    var type: EventType, event: Event
     
     init(type: EventType, event: Event) {
         self.type = type
@@ -167,7 +164,7 @@ struct Pincher: Editor {
     }
 }
 struct Rotater: Editor {
-    var type: EventType, event: Event//, isUpdate = true
+    var type: EventType, event: Event
     
     init(type: EventType, event: Event) {
         self.type = type
@@ -212,17 +209,17 @@ extension Action: Equatable {
 extension Action: Referenceable {
     static let name = Text(english: "Action", japanese: "アクション")
 }
-extension Action: ObjectViewExpression {
+extension Action: CompactViewable {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return name.thumbnail(withBounds: bounds, sizeType)
     }
 }
 
 struct ActionEvent {
-    var action: Action, phase: Phase//, isUpdate: Bool
+    var action: Action, phase: Phase
     
     func contains(_ other: Action) -> Bool {
-        return action == other// && isUpdate
+        return action == other
     }
     func isSendable<T: Eventable>(_ event: T) -> Bool {
         return (phase == .began && event.phase == .began) || phase != .began
@@ -251,14 +248,6 @@ struct EventMap {
             + pinchers.map { $0.type } as [EventableType]
             + rotaters.map { $0.type } as [EventableType]
     }
-
-//    mutating func set(isUpdate: Bool) {
-//        (0..<inputters.count).forEach { inputters[$0].isUpdate = isUpdate }
-//        (0..<draggers.count).forEach { draggers[$0].isUpdate = isUpdate }
-//        (0..<scrollers.count).forEach { scrollers[$0].isUpdate = isUpdate }
-//        (0..<pinchers.count).forEach { pinchers[$0].isUpdate = isUpdate }
-//        (0..<rotaters.count).forEach { rotaters[$0].isUpdate = isUpdate }
-//    }
     
     mutating func updateActionEvents(with actions: [Action]) {
         let lhs = Set(eventableTypes.map { $0.name.currentString })
@@ -292,7 +281,7 @@ struct EventMap {
         }
         
         actionEvents = newActionEvents
-//        print(draggers.map { $0.event.phase }, "N", newActionEvents.map { $0.phase })
+        //        print(draggers.map { $0.event.phase }, "N", newActionEvents.map { $0.phase })
     }
     mutating func removeEndedActionEvent() {
         actionEvents = actionEvents.filter { $0.phase != .ended }
@@ -426,7 +415,7 @@ struct EventMap {
         return nil
     }
     func sendableTuple(with action: Action,
-                              _ eventType: Dragger.EventType) -> (Dragger.Event, Phase)? {
+                       _ eventType: Dragger.EventType) -> (Dragger.Event, Phase)? {
         if let actionEvent = sendableActionEvent(with: action),
             let draggerEvent = event(with: eventType),
             actionEvent.isSendable(draggerEvent) {
@@ -446,7 +435,7 @@ struct EventMap {
         return nil
     }
     func sendableTuple(with action: Action,
-                               _ eventType: Pincher.EventType) -> (Pincher.Event, Phase)? {
+                       _ eventType: Pincher.EventType) -> (Pincher.Event, Phase)? {
         if let actionEvent = sendableActionEvent(with: action),
             let pincherEvent = event(with: eventType),
             actionEvent.isSendable(pincherEvent) {
@@ -456,7 +445,7 @@ struct EventMap {
         return nil
     }
     func sendableTuple(with action: Action,
-                              _ eventType: Rotater.EventType) -> (Rotater.Event, Phase)? {
+                       _ eventType: Rotater.EventType) -> (Rotater.Event, Phase)? {
         if let actionEvent = sendableActionEvent(with: action),
             let rotaterEvent = event(with: eventType),
             actionEvent.isSendable(rotaterEvent) {
@@ -517,8 +506,8 @@ protocol ActionManagable {
     func send(_ eventMap: EventMap, in rootView: View)
 }
 
-enum ViewQuasimode {
-    case none, moveZ, transform, warp, editPoint, vertex
+protocol Localizable: class {
+    func update(with locale: Locale)
 }
 
 protocol Indicatable {
@@ -632,9 +621,7 @@ final class SelectableActionManager: ActionManagable {
                     oldIsDeselect = isDeselect
                 }
             case .changed, .ended:
-                guard let receiver = receiver else {
-                    return
-                }
+                guard let receiver = receiver else { return }
                 if isDeselect != oldIsDeselect {
                     selectionView?.fillColor = isDeselect ? .deselect : .select
                     selectionView?.lineColor = isDeselect ? .deselectBorder : .selectBorder
@@ -642,8 +629,8 @@ final class SelectableActionManager: ActionManagable {
                 }
                 let lp = event.rootLocation
                 selectionView?.frame = Rect(origin: startRootPoint,
-                                              size: Size(width: lp.x - startRootPoint.x,
-                                                           height: lp.y - startRootPoint.y))
+                                            size: Size(width: lp.x - startRootPoint.x,
+                                                       height: lp.y - startRootPoint.y))
                 let p = receiver.convertFromRoot(event.rootLocation)
                 let aabb = AABB(minX: min(startPoint.x, p.x), maxX: max(startPoint.x, p.x),
                                 minY: min(startPoint.y, p.y), maxY: max(startPoint.y, p.y))
@@ -682,23 +669,23 @@ final class SelectableActionManager: ActionManagable {
     }
 }
 
-protocol Bindable {
-    func bind(for p: Point)
+protocol Editable {
+    func edit(for p: Point)
 }
-final class BindableActionManager: ActionManagable {
-    typealias Receiver = View & Bindable
+final class EditableActionManager: ActionManagable {
+    typealias Receiver = View & Editable
     
-    var bindAction = Action(name: Text(english: "Bind", japanese: "バインド"),
-                           quasimode: Quasimode([Inputter.EventType.subClick]))
+    var editAction = Action(name: Text(english: "Edit", japanese: "編集"),
+                            quasimode: Quasimode([Inputter.EventType.subClick]))
     var actions: [Action] {
-        return [bindAction]
+        return [editAction]
     }
     
     func send(_ eventMap: EventMap, in rootView: View) {
-        if let inputterEvent = eventMap.sendableInputterEvent(with: bindAction, .subClick) {
+        if let inputterEvent = eventMap.sendableInputterEvent(with: editAction, .subClick) {
             if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
-                receiver.bind(for: p)
+                receiver.edit(for: p)
             }
         }
     }
@@ -725,9 +712,7 @@ final class ScrollableActionManager: ActionManagable {
                     self.receiver = receiver
                 }
             }
-            guard let receiver = receiver else {
-                return
-            }
+            guard let receiver = receiver else { return }
             let p = receiver.convertFromRoot(event.rootLocation)
             receiver.scroll(for: p, time: event.time, scrollDeltaPoint: event.scrollDeltaPoint,
                             phase: phase, momentumPhase: event.momentumPhase)
@@ -766,9 +751,7 @@ final class ZoomableActionManager: ActionManagable {
                     self.receiver = receiver
                 }
             }
-            guard let receiver = receiver else {
-                return
-            }
+            guard let receiver = receiver else { return }
             let p = receiver.convertFromRoot(event.rootLocation)
             receiver.zoom(for: p, time: event.time, magnification: event.magnification, phase)
             if phase == .ended {
@@ -811,9 +794,7 @@ final class RotatableActionManager: ActionManagable {
                     self.receiver = receiver
                 }
             }
-            guard let receiver = receiver else {
-                return
-            }
+            guard let receiver = receiver else { return }
             let p = receiver.convertFromRoot(event.rootLocation)
             receiver.rotate(for: p, time: event.time, rotationQuantity: event.rotationQuantity, phase)
             if phase == .ended {
@@ -830,59 +811,49 @@ final class RotatableActionManager: ActionManagable {
     }
 }
 
+protocol QueryableViewer: class {
+    var info: Info { get set }
+}
 protocol Queryable {
-    func reference(at p: Point) -> Reference
+    static var referenceableType: Referenceable.Type { get }
+}
+protocol ViewQueryable: Queryable {
+    static var viewDescription: Text { get }
 }
 final class QueryableActionManager: ActionManagable {
     typealias Receiver = View & Queryable
+    typealias Viewer = View & QueryableViewer
+    typealias ViewReceiver = View & ViewQueryable
     
     var lookUpAction = Action(name: Text(english: "Look Up", japanese: "調べる"),
-                           quasimode: Quasimode([Inputter.EventType.tap]))
+                              quasimode: Quasimode([Inputter.EventType.tap]))
     var actions: [Action] {
         return [lookUpAction]
     }
     
     func send(_ eventMap: EventMap, in rootView: View) {
         if let inputterEvent = eventMap.sendableInputterEvent(with: lookUpAction, .tap) {
-            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
-                
-                let p = receiver.convertFromRoot(inputterEvent.rootLocation)
-                receiver.sendToTop(receiver.reference(at: p))
+            guard let viewer = rootView.at(inputterEvent.rootLocation, Viewer.self) else { return }
+            if let receiver = rootView.at(inputterEvent.rootLocation, ViewReceiver.self) {
+                viewer.info = Info(modelReference: type(of: receiver).referenceableType.reference,
+                                   viewDescription: type(of: receiver).viewDescription)
+            } else if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+                viewer.info = Info(modelReference: type(of: receiver).referenceableType.reference,
+                                   viewDescription: Text(english: "None", japanese: "なし"))
             }
         }
     }
 }
 
-protocol Undoable {
-    var undoManager: UndoManager? { get }
-    var disabledRegisterUndo: Bool { get }
-    var registeringUndoManager: UndoManager? { get }
-    func undo()
-    func redo()
-}
-extension Undoable {
-    var undoManager: UndoManager? {
-        return nil
-    }
-    var disabledRegisterUndo: Bool {
-        return false
-    }
-    var registeringUndoManager: UndoManager? {
-        return disabledRegisterUndo ? nil : undoManager
-    }
-    func undo() {
-        registeringUndoManager?.undo()
-    }
-    func redo() {
-        registeringUndoManager?.redo()
-    }
+protocol Versionable {
+    var binder: BinderProtocol { get }
 }
 final class UndoableActionManager: ActionManagable {
-    typealias Receiver = View & Undoable
+    typealias Receiver = View & Versionable
     
     var undoAction = Action(name: Text(english: "Undo", japanese: "取り消す"),
-                           quasimode: Quasimode(modifier: [Inputter.EventType.command],
-                                                [Inputter.EventType.z]))
+                            quasimode: Quasimode(modifier: [Inputter.EventType.command],
+                                                 [Inputter.EventType.z]))
     var redoAction = Action(name: Text(english: "Redo", japanese: "やり直す"),
                             quasimode: Quasimode(modifier: [Inputter.EventType.shift,
                                                             Inputter.EventType.command],
@@ -894,32 +865,36 @@ final class UndoableActionManager: ActionManagable {
     func send(_ eventMap: EventMap, in rootView: View) {
         if let inputterEvent = eventMap.sendableInputterEvent(with: undoAction, .z) {
             if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
-                receiver.undo()
+                receiver.binder.version.undo()
             }
         }
         if let inputterEvent = eventMap.sendableInputterEvent(with: redoAction, .z) {
             if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
-                receiver.redo()
+                receiver.binder.version.redo()
             }
         }
     }
 }
 
+protocol CopiedViewablesViewer: class {
+    var copiedViewables: [Viewable] { get }
+    func push(copiedViewables: [Viewable])
+}
 protocol Copiable {
     func copiedViewables(at p: Point) -> [Viewable]
-    var topCopiedViewables: [Viewable] { get }
 }
 protocol Assignable: Copiable {
     func delete(for p: Point)
     func paste(_ objects: [Any], for p: Point)
 }
 final class AssignableActionManager: ActionManagable {
+    typealias Viewer = View & CopiedViewablesViewer
     typealias Receiver = View & Assignable
     typealias CopyReceiver = View & Copiable
     
     var cutAction = Action(name: Text(english: "Cut", japanese: "カット"),
-                            quasimode: Quasimode(modifier: [Inputter.EventType.command],
-                                                 [Inputter.EventType.x]))
+                           quasimode: Quasimode(modifier: [Inputter.EventType.command],
+                                                [Inputter.EventType.x]))
     var copyAction = Action(name: Text(english: "Copy", japanese: "コピー"),
                             quasimode: Quasimode(modifier: [Inputter.EventType.command],
                                                  [Inputter.EventType.c]))
@@ -932,28 +907,34 @@ final class AssignableActionManager: ActionManagable {
     
     func send(_ eventMap: EventMap, in rootView: View) {
         if let inputterEvent = eventMap.sendableInputterEvent(with: cutAction, .x) {
-            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+            if let viewer = rootView.at(inputterEvent.rootLocation, Viewer.self),
+                let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+                
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
                 let copiedViewables = receiver.copiedViewables(at: p)
                 if !copiedViewables.isEmpty {
                     receiver.delete(for: p)
-                    receiver.sendToTop(copiedViewables: copiedViewables)
+                    viewer.push(copiedViewables: copiedViewables)
                 }
             }
         }
         if let inputterEvent = eventMap.sendableInputterEvent(with: copyAction, .c) {
-            if let receiver = rootView.at(inputterEvent.rootLocation, CopyReceiver.self) {
+            if let viewer = rootView.at(inputterEvent.rootLocation, Viewer.self),
+                let receiver = rootView.at(inputterEvent.rootLocation, CopyReceiver.self) {
+                
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
                 let copiedViewables = receiver.copiedViewables(at: p)
                 if !copiedViewables.isEmpty {
-                    receiver.sendToTop(copiedViewables: copiedViewables)
+                    viewer.push(copiedViewables: copiedViewables)
                 }
             }
         }
         if let inputterEvent = eventMap.sendableInputterEvent(with: pasteAction, .v) {
-            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+            if let viewer = rootView.at(inputterEvent.rootLocation, Viewer.self),
+                let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+                
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
-                receiver.paste(receiver.topCopiedViewables, for: p)
+                receiver.paste(viewer.copiedViewables, for: p)
             }
         }
     }
@@ -989,7 +970,7 @@ final class RunnableActionManager: ActionManagable {
     typealias Receiver = View & Runnable
     
     var runAction = Action(name: Text(english: "Run", japanese: "実行"),
-                              quasimode: Quasimode([Inputter.EventType.click]))
+                           quasimode: Quasimode([Inputter.EventType.click]))
     var actions: [Action] {
         return [runAction]
     }
@@ -1012,10 +993,8 @@ protocol Movable {
     func move(for p: Point, pressure: Real, time: Second, _ phase: Phase)
 }
 protocol Transformable: Movable {
-    var viewQuasimode: ViewQuasimode { get set }
     func transform(for p: Point, pressure: Real, time: Second, _ phase: Phase)
     func warp(for p: Point, pressure: Real, time: Second, _ phase: Phase)
-    func moveZ(for p: Point, pressure: Real, time: Second, _ phase: Phase)
 }
 final class TransformableActionManager: ActionManagable {
     typealias Receiver = View & Transformable
@@ -1023,33 +1002,15 @@ final class TransformableActionManager: ActionManagable {
     
     var moveAction = Action(name: Text(english: "Move", japanese: "移動"),
                             quasimode: Quasimode([Dragger.EventType.drag]))
-    var transformViewQuasimodeAction = Action(name: Text(english: "Show / Hide Transform",
-                                                         japanese: "変形の表示／非表示"),
-                                              quasimode: Quasimode([Inputter.EventType.option]))
     var transformAction = Action(name: Text(english: "Transform", japanese: "変形"),
                                  quasimode: Quasimode(modifier: [Inputter.EventType.option],
                                                       [Dragger.EventType.drag]))
-    var warpViewQuasimodeAction = Action(name: Text(english: "Show / Hide Warp",
-                                                    japanese: "歪曲の表示／非表示"),
-                                         quasimode: Quasimode([Inputter.EventType.shift,
-                                                               Inputter.EventType.option]))
     var warpAction = Action(name: Text(english: "Warp", japanese: "歪曲"),
                             quasimode: Quasimode(modifier: [Inputter.EventType.shift,
                                                             Inputter.EventType.option],
                                                  [Dragger.EventType.drag]))
-    var moveZViewQuasimodeAction = Action(name: Text(english: "Show / Hide Move Z",
-                                                         japanese: "Z移動の表示／非表示"),
-                                              quasimode: Quasimode([Inputter.EventType.control,
-                                                                    Inputter.EventType.option]))
-    var moveZAction = Action(name: Text(english: "Move Z", japanese: "Z移動"),
-                             quasimode: Quasimode(modifier: [Inputter.EventType.control,
-                                                             Inputter.EventType.option],
-                                                  [Dragger.EventType.drag]))
     var actions: [Action] {
-        return [moveAction,
-                transformViewQuasimodeAction, transformAction,
-                warpViewQuasimodeAction, warpAction,
-                moveZViewQuasimodeAction, moveZAction]
+        return [moveAction, transformAction, warpAction]
     }
     
     private final class Mover {
@@ -1060,9 +1021,7 @@ final class TransformableActionManager: ActionManagable {
                     self.receiver = receiver
                 }
             }
-            guard let receiver = receiver else {
-                return
-            }
+            guard let receiver = receiver else { return }
             let p = receiver.convertFromRoot(event.rootLocation)
             receiver.move(for: p, pressure: event.pressure,
                           time: event.time, phase)
@@ -1081,9 +1040,7 @@ final class TransformableActionManager: ActionManagable {
                     self.receiver = receiver
                 }
             }
-            guard let receiver = receiver else {
-                return
-            }
+            guard let receiver = receiver else { return }
             let p = receiver.convertFromRoot(event.rootLocation)
             receiver.transform(for: p, pressure: event.pressure, time: event.time, phase)
             if phase == .ended {
@@ -1101,9 +1058,7 @@ final class TransformableActionManager: ActionManagable {
                     self.receiver = receiver
                 }
             }
-            guard let receiver = receiver else {
-                return
-            }
+            guard let receiver = receiver else { return }
             let p = receiver.convertFromRoot(event.rootLocation)
             receiver.warp(for: p, pressure: event.pressure, time: event.time, phase)
             if phase == .ended {
@@ -1112,26 +1067,6 @@ final class TransformableActionManager: ActionManagable {
         }
     }
     private var warpEditor = WarpEditor()
-    
-    private final class MoveZEditor {
-        weak var receiver: Receiver?
-        func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View) {
-            if phase == .began {
-                if let receiver = rootView.at(event.rootLocation, Receiver.self) {
-                    self.receiver = receiver
-                }
-            }
-            guard let receiver = receiver else {
-                return
-            }
-            let p = receiver.convertFromRoot(event.rootLocation)
-            receiver.moveZ(for: p, pressure: event.pressure, time: event.time, phase)
-            if phase == .ended {
-                self.receiver = nil
-            }
-        }
-    }
-    private var moveZEditor = MoveZEditor()
     
     func send(_ eventMap: EventMap, in rootView: View) {
         if let (draggerEvent, phase) = eventMap.sendableTuple(with: moveAction, .drag) {
@@ -1143,13 +1078,11 @@ final class TransformableActionManager: ActionManagable {
         if let (draggerEvent, phase) = eventMap.sendableTuple(with: warpAction, .drag) {
             warpEditor.send(draggerEvent, phase, in: rootView)
         }
-        if let (draggerEvent, phase) = eventMap.sendableTuple(with: moveZAction, .drag) {
-            moveZEditor.send(draggerEvent, phase, in: rootView)
-        }
     }
 }
 
 protocol Strokable {
+    var viewScale: Real { get }
     func stroke(for p: Point, pressure: Real, time: Second, _ phase: Phase)
     func lassoErase(for p: Point, pressure: Real, time: Second, _ phase: Phase)
 }
@@ -1173,9 +1106,7 @@ final class StrokableActionManager: ActionManagable {
                     self.receiver = receiver
                 }
             }
-            guard let receiver = receiver else {
-                return
-            }
+            guard let receiver = receiver else { return }
             let p = receiver.convertFromRoot(event.rootLocation)
             receiver.stroke(for: p, pressure: event.pressure, time: event.time, phase)
             if phase == .ended {
@@ -1193,9 +1124,7 @@ final class StrokableActionManager: ActionManagable {
                     self.receiver = receiver
                 }
             }
-            guard let receiver = receiver else {
-                return
-            }
+            guard let receiver = receiver else { return }
             let p = receiver.convertFromRoot(event.rootLocation)
             receiver.lassoErase(for: p, pressure: event.pressure, time: event.time, phase)
             if phase == .ended {
@@ -1215,19 +1144,19 @@ final class StrokableActionManager: ActionManagable {
     }
 }
 
-protocol PointEditable: class {
-    var viewQuasimode: ViewQuasimode { get set }
+protocol PointMovable: class {
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase)
+}
+protocol VertexMovable: PointMovable {
+    func moveVertex(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase)
+}
+protocol PointEditable: VertexMovable {
     func insert(_ p: Point)
     func removeNearestPoint(for p: Point)
-    func movePoint(for p: Point, pressure: Real, time: Second, _ phase: Phase)
-    func moveVertex(for p: Point, pressure: Real, time: Second, _ phase: Phase)
 }
 final class PointEditableActionManager: ActionManagable {
     typealias Receiver = View & PointEditable
     
-    var pointViewQuasimodeAction = Action(name: Text(english: "Show / Hide Point",
-                                                     japanese: "編集点の表示／非表示"),
-                                          quasimode: Quasimode([Inputter.EventType.control]))
     var removeEditPointAction = Action(name: Text(english: "Remove Edit Point",
                                                   japanese: "編集点を削除"),
                                        quasimode: Quasimode(modifier: [Inputter.EventType.control],
@@ -1239,36 +1168,30 @@ final class PointEditableActionManager: ActionManagable {
     var moveEditPointAction = Action(name: Text(english: "Move Edit Point", japanese: "編集点を移動"),
                                      quasimode: Quasimode(modifier: [Inputter.EventType.control],
                                                           [Dragger.EventType.drag]))
-    var vertexViewQuasimodeAction = Action(name: Text(english: "Show / Hide Vertex",
-                                                      japanese: "頂点の表示／非表示"),
-                                           quasimode: Quasimode([Inputter.EventType.shift,
-                                                                 Inputter.EventType.control]))
     var moveVertexAction = Action(name: Text(english: "Move Vertex", japanese: "頂点を移動"),
                                   quasimode: Quasimode(modifier: [Inputter.EventType.shift,
                                                                   Inputter.EventType.control],
                                                        [Dragger.EventType.drag]))
     var actions: [Action] {
-        return [pointViewQuasimodeAction,
-                removeEditPointAction, insertEditPointAction,
-                moveEditPointAction,
-                vertexViewQuasimodeAction, moveVertexAction]
+        return [removeEditPointAction, insertEditPointAction,
+                moveEditPointAction, moveVertexAction]
     }
     
     private weak var oldReceiver: Receiver?
     
     private final class MovePointEditor {
         weak var receiver: Receiver?
+        var fp = Point()
         func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View) {
             if phase == .began {
                 if let receiver = rootView.at(event.rootLocation, Receiver.self) {
                     self.receiver = receiver
+                    fp = receiver.convertFromRoot(event.rootLocation)
                 }
             }
-            guard let receiver = receiver else {
-                return
-            }
+            guard let receiver = receiver else { return }
             let p = receiver.convertFromRoot(event.rootLocation)
-            receiver.movePoint(for: p, pressure: event.pressure, time: event.time, phase)
+            receiver.movePoint(for: p, first: fp, pressure: event.pressure, time: event.time, phase)
             if phase == .ended {
                 self.receiver = nil
             }
@@ -1278,17 +1201,17 @@ final class PointEditableActionManager: ActionManagable {
     
     private final class MoveVertexEditor {
         weak var receiver: Receiver?
+        var fp = Point()
         func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View) {
             if phase == .began {
                 if let receiver = rootView.at(event.rootLocation, Receiver.self) {
                     self.receiver = receiver
+                    fp = receiver.convertFromRoot(event.rootLocation)
                 }
             }
-            guard let receiver = receiver else {
-                return
-            }
+            guard let receiver = receiver else { return }
             let p = receiver.convertFromRoot(event.rootLocation)
-            receiver.moveVertex(for: p, pressure: event.pressure, time: event.time, phase)
+            receiver.moveVertex(for: p, first: fp, pressure: event.pressure, time: event.time, phase)
             if phase == .ended {
                 self.receiver = nil
             }
@@ -1297,32 +1220,6 @@ final class PointEditableActionManager: ActionManagable {
     private var moveVertexEditor = MoveVertexEditor()
     
     func send(_ eventMap: EventMap, in rootView: View) {
-        if eventMap.containsWithEditedEventableTypes(pointViewQuasimodeAction),//no
-            let (inputterEvent, _) = eventMap.sendableTuple(with: pointViewQuasimodeAction,
-                                                            .control) {
-            if let receiver = oldReceiver, inputterEvent.phase == .ended {
-                receiver.viewQuasimode = .none
-                oldReceiver = nil
-            } else if inputterEvent.phase == .began,
-                let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
-                
-                receiver.viewQuasimode = .editPoint
-                oldReceiver = receiver
-            }
-        }
-        if eventMap.containsWithEditedEventableTypes(vertexViewQuasimodeAction),//no
-            let (inputterEvent, _) = eventMap.sendableTuple(with: pointViewQuasimodeAction,
-                                                            .control) {
-            if let receiver = oldReceiver, inputterEvent.phase == .ended {
-                receiver.viewQuasimode = .none
-                oldReceiver = nil
-            } else if inputterEvent.phase == .began,
-                let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
-                
-                receiver.viewQuasimode = .vertex
-                oldReceiver = receiver
-            }
-        }
         if let inputterEvent = eventMap.sendableInputterEvent(with: removeEditPointAction, .x) {
             if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
@@ -1335,14 +1232,10 @@ final class PointEditableActionManager: ActionManagable {
                 receiver.insert(p)
             }
         }
-        if let (draggerEvent, phase)
-            = eventMap.sendableTuple(with: moveEditPointAction, .drag) {
-            
+        if let (draggerEvent, phase) = eventMap.sendableTuple(with: moveEditPointAction, .drag) {
             movePointEditor.send(draggerEvent, phase, in: rootView)
         }
-        if let (draggerEvent, phase)
-            = eventMap.sendableTuple(with: moveVertexAction, .drag) {
-            
+        if let (draggerEvent, phase) = eventMap.sendableTuple(with: moveVertexAction, .drag) {
             moveVertexEditor.send(draggerEvent, phase, in: rootView)
         }
     }
@@ -1351,7 +1244,7 @@ final class PointEditableActionManager: ActionManagable {
 final class Sender {
     var indicatableActionManager = IndicatableActionManager()
     var selectableActionManager = SelectableActionManager()
-    var bindableActionManager = BindableActionManager()
+    var editableActionManager = EditableActionManager()
     var scrollableActionManager = ScrollableActionManager()
     var zoomableActionManager = ZoomableActionManager()
     var rotatableActionManager = RotatableActionManager()
@@ -1372,7 +1265,7 @@ final class Sender {
     
     init(rootView: View = View()) {
         self.rootView = rootView
-        actionManagers = [indicatableActionManager, selectableActionManager, bindableActionManager,
+        actionManagers = [indicatableActionManager, selectableActionManager, editableActionManager,
                           scrollableActionManager, zoomableActionManager, rotatableActionManager,
                           runnableActionManager, queryableActionManager, undoableActionManager,
                           assignableActionManager, newableActionManager, runnableActionManager,
@@ -1518,7 +1411,7 @@ extension Sender: Referenceable {
                                        japanese: "OSの環境設定に依存")
 }
 
-final class QuasimodeView: View, Copiable {
+final class QuasimodeView: View {
     var quasimode: Quasimode {
         didSet {
             textView.text = quasimode.displayText
@@ -1536,7 +1429,7 @@ final class QuasimodeView: View, Copiable {
         self.quasimode = quasimode
         self.isSizeToFit = isSizeToFit
         textView = TextView(text: quasimode.displayText,
-                                font: Font(monospacedSize: 10), frameAlignment: .right)
+                            font: Font(monospacedSize: 10), frameAlignment: .right)
         
         super.init()
         if isSizeToFit {
@@ -1546,37 +1439,31 @@ final class QuasimodeView: View, Copiable {
         updateLayout()
     }
     
-    override var locale: Locale {
-        didSet {
-            if isSizeToFit {
-                bounds = defaultBounds
-            }
-            updateLayout()
-        }
-    }
-    
     override var defaultBounds: Rect {
         return Rect(x: 0, y: 0, width: textView.bounds.width, height: textView.bounds.height)
     }
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    func updateLayout() {
+    override func updateLayout() {
         textView.frame.origin = Point(x: 0, y: bounds.height - textView.frame.height)
     }
-    
+}
+extension QuasimodeView: Localizable {
+    func update(with locale: Locale) {
+        if isSizeToFit {
+            bounds = defaultBounds
+        }
+        updateLayout()
+    }
+}
+extension QuasimodeView: Queryable {
+    static let referenceableType: Referenceable.Type = Quasimode.self
+}
+extension QuasimodeView: Copiable {
     func copiedViewables(at p: Point) -> [Viewable] {
         return [quasimode]
     }
-    
-    func reference(at p: Point) -> Reference {
-        return Quasimode.reference
-    }
 }
 
-final class ActionView: View, Copiable {
+final class ActionView: View {
     var action: Action {
         didSet {
             nameView.text = action.name
@@ -1596,31 +1483,26 @@ final class ActionView: View, Copiable {
         children = [nameView, quasimodeView]
     }
     
-    func copiedViewables(at p: Point) -> [Viewable] {
-        return [action]
-    }
-    
     override var defaultBounds: Rect {
         let padding = Layout.basicPadding
         let width = nameView.bounds.width + padding + quasimodeView.bounds.width
         let height = nameView.frame.height + Layout.smallPadding * 2
         return Rect(x: 0, y: 0, width: width, height: height)
     }
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    func updateLayout() {
+    override func updateLayout() {
         let padding = Layout.smallPadding
         nameView.frame.origin = Point(x: padding,
-                                        y: bounds.height - nameView.frame.height - padding)
+                                      y: bounds.height - nameView.frame.height - padding)
         quasimodeView.frame.origin = Point(x: bounds.width - quasimodeView.frame.width - padding,
-                                             y: bounds.height - nameView.frame.height - padding)
+                                           y: bounds.height - nameView.frame.height - padding)
     }
-    
-    func reference(at p: Point) -> Reference {
-        return Action.reference
+}
+extension ActionView: Queryable {
+    static let referenceableType: Referenceable.Type = Action.self
+}
+extension ActionView: Copiable {
+    func copiedViewables(at p: Point) -> [Viewable] {
+        return [action]
     }
 }
 
@@ -1641,22 +1523,14 @@ final class ActionManagableView: View {
         let height = actionHeight * Real(actionMangable.actions.count) + padding * 2
         return Rect(x: 0, y: 0, width: ActionManagableView.defaultWidth, height: height)
     }
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    func updateLayout() {
+    override func updateLayout() {
         let padding = Layout.basicPadding
-        let actionHeight = Layout.basicTextHeight + Layout.smallPadding * 2
+        let ah = Layout.basicTextHeight + Layout.smallPadding * 2
         let aw = bounds.width - padding * 2
         var y = bounds.height - padding
         children = actionMangable.actions.map {
-            y -= actionHeight
-            let actionView = ActionView(action: $0,
-                                        frame: Rect(x: padding, y: y,
-                                                      width: aw, height: actionHeight))
-            return actionView
+            y -= ah
+            return ActionView(action: $0, frame: Rect(x: padding, y: y, width: aw, height: ah))
         }
     }
 }
@@ -1665,7 +1539,7 @@ final class ActionManagableView: View {
  Issue: アクションの表示をキーボードに常に表示（ハードウェアの変更が必要）
  Issue: コマンドの編集自由化
  */
-final class SenderView: View, Queryable {
+final class SenderView: View {
     var sender = Sender()
     
     let classNameView = TextView(text: Sender.name, font: .bold)
@@ -1679,26 +1553,14 @@ final class SenderView: View, Queryable {
         bounds = defaultBounds
     }
     
-    override var locale: Locale {
-        didSet {
-            updateLayout()
-        }
-    }
-    
     override var defaultBounds: Rect {
         let padding = Layout.basicPadding
         let ah = actionManagableViews.reduce(0.0.cg) { $0 + $1.bounds.height }
         let height = classNameView.frame.height + padding * 3 + ah
         return Rect(x: 0, y: 0,
-                      width: ActionManagableView.defaultWidth + padding * 2,
-                      height: height)
+                    width: ActionManagableView.defaultWidth + padding * 2, height: height)
     }
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    func updateLayout() {
+    override func updateLayout() {
         let padding = Layout.basicPadding
         let w = bounds.width - padding * 2
         var y = bounds.height - classNameView.frame.height - padding
@@ -1710,8 +1572,12 @@ final class SenderView: View, Queryable {
             return ny
         }
     }
-    
-    func reference(at p: Point) -> Reference {
-        return Sender.reference
+}
+extension SenderView: Localizable {
+    func update(with locale: Locale) {
+        updateLayout()
     }
+}
+extension SenderView: Queryable {
+    static let referenceableType: Referenceable.Type = Sender.self
 }

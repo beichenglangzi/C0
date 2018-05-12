@@ -17,43 +17,35 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.URL
+import struct Foundation.Data
 
 extension URL {
-    func isConforms(uti: String) -> Bool {
-        if let aUTI = self.uti {
-            return UTTypeConformsTo(aUTI as CFString, uti as CFString)
-        } else {
-            return false
-        }
-    }
-    var uti: String? {
-        return (try? resourceValues(forKeys: Set([URLResourceKey.typeIdentifierKey])))?
-            .typeIdentifier
-    }
     init?(bookmark: Data?) {
         guard let bookmark = bookmark else {
             return nil
         }
         do {
-            var bookmarkDataIsStale = false
-            guard let url = try URL(resolvingBookmarkData: bookmark,
-                                    bookmarkDataIsStale: &bookmarkDataIsStale) else {
-                                        return nil
+            var bds = false
+            guard let url = try URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &bds) else {
+                return nil
             }
             self = url
         } catch {
             return nil
         }
     }
+    var type: String? {
+        let resourceValues = try? self.resourceValues(forKeys: Set([.typeIdentifierKey]))
+        return resourceValues?.typeIdentifier
+    }
 }
 extension URL: Referenceable {
     static let name = Text("URL")
 }
-extension URL: DeepCopiable {
-}
-extension URL: ObjectViewExpression {
+extension URL: Thumbnailable {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return lastPathComponent.view(withBounds: bounds, sizeType)
     }
 }
+extension URL: CompactViewable {}

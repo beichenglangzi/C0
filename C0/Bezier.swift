@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import CoreGraphics
 
 struct BezierIntersection: Codable {
     var t: Real, isLeft: Bool, point: Point
@@ -85,7 +85,7 @@ struct Bezier2: Equatable, Codable {
     func length(withFlatness flatness: Int = 128) -> Real {
         var d = 0.0.cg, oldP = p0
         let nd = 1 / Real(flatness)
-        for i in 0 ..< flatness {
+        for i in 0..<flatness {
             let newP = position(withT: Real(i + 1) * nd)
             d += oldP.distance(newP)
             oldP = newP
@@ -95,7 +95,7 @@ struct Bezier2: Equatable, Codable {
     func t(withLength length: Real, flatness: Int = 128) -> Real {
         var d = 0.0.cg, oldP = p0
         let nd = 1 / Real(flatness)
-        for i in 0 ..< flatness {
+        for i in 0..<flatness {
             let t = Real(i + 1) * nd
             let newP = position(withT: t)
             d += oldP.distance(newP)
@@ -136,21 +136,20 @@ struct Bezier2: Equatable, Codable {
         return Bezier2(p0: np0, cp: ncp, p1: np1)
     }
     func intersects(_ bounds: Rect) -> Bool {
-        if boundingBox.intersects(bounds) {
-            if bounds.contains(p0) {
-                return true
-            }
+        guard boundingBox.intersects(bounds) else {
+            return false
+        }
+        if bounds.contains(p0) {
+            return true
+        } else {
             let x0y0 = bounds.origin, x1y0 = Point(x: bounds.maxX, y: bounds.minY)
             let x0y1 = Point(x: bounds.minX, y: bounds.maxY)
             let x1y1 = Point(x: bounds.maxX, y: bounds.maxY)
-            if intersects(Bezier2.linear(x0y0, x1y0)) ||
-                intersects(Bezier2.linear(x1y0, x1y1)) ||
-                intersects(Bezier2.linear(x1y1, x0y1)) ||
-                intersects(Bezier2.linear(x0y1, x0y0)) {
-                return true
-            }
+            return intersects(Bezier2.linear(x0y0, x1y0))
+                || intersects(Bezier2.linear(x1y0, x1y1))
+                || intersects(Bezier2.linear(x1y1, x0y1))
+                || intersects(Bezier2.linear(x0y1, x0y0))
         }
-        return false
     }
     func intersects(_ other: Bezier2) -> Bool {
         guard self != other else {
@@ -161,9 +160,8 @@ struct Bezier2: Equatable, Codable {
     private static let intersectsMinRange = 0.000001.cg
     private func intersects(_ other: Bezier2, _ min0: Real, _ max0: Real,
                             _ min1: Real, _ max1: Real, isFlipped: Bool) -> Bool {
-        
         let aabb0 = AABB(self), aabb1 = AABB(other)
-        if !aabb0.intersects(aabb1) {
+        guard aabb0.intersects(aabb1) else {
             return false
         }
         if max(aabb1.maxX - aabb1.minX, aabb1.maxY - aabb1.minY) < Bezier2.intersectsMinRange {
@@ -191,9 +189,7 @@ struct Bezier2: Equatable, Codable {
                                _ min0: Real, _ max0: Real, _ min1: Real, _ max1: Real,
                                isFlipped: Bool) {
         let aabb0 = AABB(self), aabb1 = AABB(other)
-        if !aabb0.intersects(aabb1) {
-            return
-        }
+        guard aabb0.intersects(aabb1) else { return }
         let range1 = max1 - min1
         if max(aabb1.maxX - aabb1.minX, aabb1.maxY - aabb1.minY) >= Bezier2.intersectsMinRange {
             let nb = other.midSplit()
@@ -216,9 +212,7 @@ struct Bezier2: Equatable, Codable {
             }
             return true
         }
-        if !isSolution() {
-            return
-        }
+        guard isSolution() else { return }
         let b0t: Real, b1t: Real, b0: Bezier2, b1:Bezier2
         if !isFlipped {
             b0t = (min0 + max0) / 2
@@ -374,7 +368,7 @@ struct Bezier3: Codable {
     func length(flatness: Int = 128) -> Real {
         var d = 0.0.cg, oldP = p0
         let nd = 1 / Real(flatness)
-        for i in 0 ..< flatness {
+        for i in 0..<flatness {
             let newP = position(withT: Real(i + 1) * nd)
             d += oldP.distance(newP)
             oldP = newP
@@ -384,7 +378,7 @@ struct Bezier3: Codable {
     func tWith(length: Real, flatness: Int = 128) -> Real {
         var d = 0.0.cg, oldP = p0
         let nd = 1 / Real(flatness)
-        for i in 0 ..< flatness {
+        for i in 0..<flatness {
             let t = Real(i + 1) * nd
             let newP = position(withT: t)
             d += oldP.distance(newP)
@@ -459,21 +453,20 @@ struct Bezier3: Codable {
         return atan2(dp.y, dp.x)
     }
     func intersects(_ bounds: Rect) -> Bool {
-        if boundingBox.intersects(bounds) {
-            if bounds.contains(p0) {
-                return true
-            }
+        guard boundingBox.intersects(bounds) else {
+            return false
+        }
+        if bounds.contains(p0) {
+            return true
+        } else {
             let x0y0 = bounds.origin, x1y0 = Point(x: bounds.maxX, y: bounds.minY)
             let x0y1 = Point(x: bounds.minX, y: bounds.maxY)
             let x1y1 = Point(x: bounds.maxX, y: bounds.maxY)
-            if intersects(Bezier3.linear(x0y0, x1y0)) ||
-                intersects(Bezier3.linear(x1y0, x1y1)) ||
-                intersects(Bezier3.linear(x1y1, x0y1)) ||
-                intersects(Bezier3.linear(x0y1, x0y0)) {
-                return true
-            }
+            return intersects(Bezier3.linear(x0y0, x1y0))
+                || intersects(Bezier3.linear(x1y0, x1y1))
+                || intersects(Bezier3.linear(x1y1, x0y1))
+                || intersects(Bezier3.linear(x0y1, x0y0))
         }
-        return false
     }
     func intersects(_ other: Bezier3) -> Bool {
         return intersects(other, 0, 1, 0, 1, false)
@@ -482,7 +475,6 @@ struct Bezier3: Codable {
     private func intersects(_ other: Bezier3,
                             _ min0: Real, _ max0: Real,
                             _ min1: Real, _ max1: Real, _ isFlipped: Bool) -> Bool {
-        
         let aabb0 = AABB(self), aabb1 = AABB(other)
         if aabb0.minX <= aabb1.maxX && aabb0.maxX >= aabb1.minX
             && aabb0.minY <= aabb1.maxY && aabb0.maxY >= aabb1.minY {
@@ -512,7 +504,6 @@ struct Bezier3: Codable {
     private func intersections(_ other: Bezier3, _ results: inout [BezierIntersection],
                                _ min0: Real, _ max0: Real,
                                _ min1: Real, _ max1: Real, _ flip: Bool) {
-        
         let aabb0 = AABB(self), aabb1 = AABB(other)
         if aabb0.minX <= aabb1.maxX && aabb0.maxX >= aabb1.minX
             && aabb0.minY <= aabb1.maxY && aabb0.maxY >= aabb1.minY {

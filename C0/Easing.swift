@@ -17,9 +17,9 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import CoreGraphics
 
-struct Easing: Codable, Equatable, Hashable, DeepCopiable {
+struct Easing: Codable, Hashable {
     var cp0 = Point(), cp1 = Point(x: 1, y: 1)
     
     func split(with t: Real) -> (b0: Easing, b1: Easing) {
@@ -60,7 +60,7 @@ struct Easing: Codable, Equatable, Hashable, DeepCopiable {
 extension Easing: Referenceable {
     static let name = Text(english: "Easing", japanese: "イージング")
 }
-extension Easing: ObjectViewExpression {
+extension Easing: CompactViewable {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
         thumbnailView.bounds = bounds
@@ -78,7 +78,7 @@ extension Easing: ObjectViewExpression {
 /**
  Issue: 前後キーフレームからの傾斜スナップ
  */
-final class EasingView: View, Queryable, Assignable {
+final class EasingView: View {
     var easing = Easing() {
         didSet {
             if easing != oldValue {
@@ -87,6 +87,13 @@ final class EasingView: View, Queryable, Assignable {
         }
     }
     
+    let cp0View = PointView(), cp1View = PointView()
+    
+    var padding = Layout.basicPadding {
+        didSet {
+            updateLayout()
+        }
+    }
     private let classXNameView: TextView, classYNameView: TextView
     private let controlLinePathView: View = {
         let controlLine = View(path: CGMutablePath())
@@ -94,85 +101,70 @@ final class EasingView: View, Queryable, Assignable {
         controlLine.lineWidth = 1
         return controlLine
     } ()
-    private let easingLinePathVIew: View = {
+    private let easingLinePathView: View = {
         let easingLinePathView = View(path: CGMutablePath())
         easingLinePathView.lineColor = .content
         easingLinePathView.lineWidth = 2
         return easingLinePathView
     } ()
-    private let axisPathVIew: View = {
+    private let axisPathView: View = {
         let axisPathView = View(path: CGMutablePath())
         axisPathView.lineColor = .content
         axisPathView.lineWidth = 1
         return axisPathView
     } ()
-    private let cp0View = PointView(), cp1View = PointView()
-    var padding = Layout.basicPadding {
-        didSet {
-            updateLayout()
-        }
-    }
     
     init(frame: Rect = Rect(), sizeType: SizeType = .regular) {
         classXNameView = TextView(text: "t", font: Font.italic(with: sizeType))
         classYNameView = TextView(text: "t'", font: Font.italic(with: sizeType))
         super.init()
         children = [classXNameView, classYNameView,
-                    controlLinePathView, easingLinePathVIew, axisPathVIew, cp0View, cp1View]
+                    controlLinePathView, easingLinePathView, axisPathView, cp0View, cp1View]
         self.frame = frame
         
         cp0View.binding = { [unowned self] in self.setEasing(with: $0) }
         cp1View.binding = { [unowned self] in self.setEasing(with: $0) }
     }
     
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    private func updateLayout() {
+    override func updateLayout() {
         cp0View.frame = Rect(x: padding,
-                               y: padding,
-                               width: (bounds.width - padding * 2) / 2,
-                               height: (bounds.height - padding * 2) / 2)
+                             y: padding,
+                             width: (bounds.width - padding * 2) / 2,
+                             height: (bounds.height - padding * 2) / 2)
         cp1View.frame = Rect(x: bounds.width / 2,
-                               y: padding + (bounds.height - padding * 2) / 2,
-                               width: (bounds.width - padding * 2) / 2,
-                               height: (bounds.height - padding * 2) / 2)
+                             y: padding + (bounds.height - padding * 2) / 2,
+                             width: (bounds.width - padding * 2) / 2,
+                             height: (bounds.height - padding * 2) / 2)
         let path = CGMutablePath()
         let sp = Layout.smallPadding
         path.addLines(between: [Point(x: padding + cp0View.padding,
-                                        y: bounds.height - padding - classYNameView.frame.height - sp),
+                                      y: bounds.height - padding - classYNameView.frame.height - sp),
                                 Point(x: padding + cp0View.padding,
-                                        y: padding + cp0View.padding),
+                                      y: padding + cp0View.padding),
                                 Point(x: bounds.width - padding - classXNameView.frame.width - sp,
-                                        y: padding + cp0View.padding)])
-        axisPathVIew.path = path
+                                      y: padding + cp0View.padding)])
+        axisPathView.path = path
         classXNameView.frame.origin = Point(x: bounds.width - padding - classXNameView.frame.width,
-                                      y: padding)
+                                            y: padding)
         classYNameView.frame.origin = Point(x: padding,
-                                      y: bounds.height - padding - classYNameView.frame.height)
+                                            y: bounds.height - padding - classYNameView.frame.height)
         updateWithEasing()
     }
     private func updateWithEasing() {
-        guard !bounds.isEmpty else {
-            return
-        }
+        guard !bounds.isEmpty else { return }
         cp0View.point = easing.cp0
         cp1View.point = easing.cp1
-        easingLinePathVIew.path = easing.path(in: bounds.insetBy(dx: padding + cp0View.padding,
-                                                         dy: padding + cp0View.padding))
+        easingLinePathView.path = easing.path(in: bounds.insetBy(dx: padding + cp0View.padding,
+                                                                 dy: padding + cp0View.padding))
         let knobLinePath = CGMutablePath()
         knobLinePath.addLines(between: [Point(x: cp0View.frame.minX + cp0View.padding,
-                                                y: cp0View.frame.minY + cp0View.padding),
+                                              y: cp0View.frame.minY + cp0View.padding),
                                         cp0View.knobView.position + cp0View.frame.origin])
         knobLinePath.addLines(between: [Point(x: cp1View.frame.maxX - cp1View.padding,
-                                                y: cp1View.frame.maxY - cp1View.padding),
+                                              y: cp1View.frame.maxY - cp1View.padding),
                                         cp1View.knobView.position + cp1View.frame.origin])
         controlLinePathView.path = knobLinePath
     }
-    
-    var disabledRegisterUndo = false
     
     struct Binding {
         let view: EasingView, easing: Easing, oldEasing: Easing, phase: Phase
@@ -195,12 +187,19 @@ final class EasingView: View, Queryable, Assignable {
         }
     }
     
+    private func push(_ easing: Easing) {
+        //        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldEasing, old: easing) }
+        self.easing = easing
+    }
+}
+extension EasingView: ViewQueryable {
+    static let referenceableType: Referenceable.Type = Easing.self
+    static let viewDescription = Text(english: "Ring: Hue, Width: Saturation, Height: Luminance",
+                                      japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
+}
+extension EasingView: Assignable {
     func delete(for p: Point) {
-        let easing = Easing()
-        guard easing != self.easing else {
-            return
-        }
-        set(easing, old: self.easing)
+        push(Easing())
     }
     func copiedViewables(at p: Point) -> [Viewable] {
         return [easing]
@@ -208,25 +207,9 @@ final class EasingView: View, Queryable, Assignable {
     func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let easing = object as? Easing {
-                if easing != self.easing {
-                    set(easing, old: self.easing)
-                    return
-                }
+                push(easing)
+                return
             }
         }
-    }
-    
-    private func set(_ easing: Easing, old oldEasing: Easing) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldEasing, old: easing) }
-        binding?(Binding(view: self, easing: oldEasing, oldEasing: oldEasing, phase: .began))
-        self.easing = easing
-        binding?(Binding(view: self, easing: easing, oldEasing: oldEasing, phase: .ended))
-    }
-    
-    func reference(at p: Point) -> Reference {
-        var reference = Easing.reference
-        reference.viewDescription = Text(english: "Horizontal axis t: Time\nVertical axis t': Correction time",
-                                                 japanese: "横軸t: 時間\n縦軸t': 補正後の時間")
-        return reference
     }
 }

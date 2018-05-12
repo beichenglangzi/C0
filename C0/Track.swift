@@ -1,5 +1,5 @@
 /*
- Copyright 2017 S
+ Copyright 2018 S
  
  This file is part of C0.
  
@@ -19,1808 +19,280 @@
 
 import Foundation
 
-/**
- Issue: 変更通知またはイミュータブル化またはstruct化
- */
-protocol Track: Animatable {
-    var animation: Animation { get }
-}
-protocol KeyframeValue {
+protocol Track: Codable {
+    var animatable: Animatable { get }
 }
 
-final class TempoTrack: NSObject, Track, NSCoding {
-    private(set) var animation: Animation
-    private var keySeconds = [Second]()
+struct TrackTree<Value: KeyframeValue>: Track, Codable, TreeNode {
+    var children: [TrackTree] {
+        didSet {
+            updateSumAnimation()
+        }
+    }
     
-    func updateKeySeconds() {
-        guard animation.loopFrames.count >= 2 else {
-            keySeconds = []
+//    var trackItem
+    
+    var animation: Animation<Value> {
+        didSet {
+            updateSumAnimation()
+        }
+    }
+    var animatable: Animatable {
+        return animation
+    }
+    
+    var sumAnimation: Animation<SumKeyframeValue>
+    mutating func updateSumAnimation() {
+        var keyframeDics = [Beat: Keyframe<SumKeyframeValue>]()
+        func updateKeyframesWith(time: Beat, _ label: KeyframeTiming.Label) {
+            if keyframeDics[time] != nil {
+                if label == .main {
+                    keyframeDics[time]?.timing.label = .main
+                }
+            } else {
+                var newKeyframe = Keyframe<SumKeyframeValue>()
+                newKeyframe.timing.time = time
+                newKeyframe.timing.label = label
+                keyframeDics[time] = newKeyframe
+            }
+        }
+        let beginTime = animatable.beginTime
+        children.forEach { track in
+            track.animatable.keyframeTimings.forEach {
+                updateKeyframesWith(time: $0.time + track.animatable.beginTime + beginTime, $0.label)
+            }
+            let maxTime = track.animatable.duration + track.animatable.beginTime + beginTime
+            updateKeyframesWith(time: maxTime, KeyframeTiming.Label.main)
+        }
+        var keyframes = keyframeDics.values.sorted(by: { $0.timing.time < $1.timing.time })
+        guard let lastTime = keyframes.last?.timing.time else {
+            sumAnimation = Animation()
             return
         }
-        var second = Second(0)
-        keySeconds = (0..<animation.loopFrames.count).map { li in
-            if li == animation.loopFrames.count - 1 {
-                return second
-            } else {
-                let s = second
-                second += integralSecondDuration(at: li)
-                return s
-            }
-        }
-    }
-    func realBeatTime(withSecondTime second: Second) -> RealBeat {
-        guard animation.loopFrames.count >= 2 else {
-            return RealBeat(second * tempoItem.tempo / 60)
-        }
-        let tempos = tempoItem.keyTempos
-        for (li, keySecond) in keySeconds.enumerated().reversed() {
-            if keySecond <= second {
-                let loopFrame = animation.loopFrames[li]
-                if li == animation.loopFrames.count - 1 {
-                    let tempo = tempos[loopFrame.index]
-                    let lastTime = RealBeat((second - keySecond) * (tempo / 60))
-                    return RealBeat(loopFrame.time) + lastTime
-                } else {
-                    let i2t = animation.loopFrames[li + 1].time
-                    let d = i2t - loopFrame.time
-                    if d == 0 {
-                        return RealBeat(loopFrame.time)
-                    } else {
-                        return timeWithIntegralSecond(at: li, second - keySecond)
-                    }
-                }
-            }
-        }
-        return 0
-    }
-    func secondTime(withBeatTime time: Beat) -> Second {
-        guard animation.loopFrames.count >= 2 else {
-            return Second(time * 60) / Second(tempoItem.tempo)
-        }
-        let tempos = tempoItem.keyTempos
-        for (li, loopFrame) in animation.loopFrames.enumerated().reversed() {
-            if loopFrame.time <= time {
-                if li == animation.loopFrames.count - 1 {
-                    let tempo = tempos[loopFrame.index]
-                    return keySeconds[li] + Second((time - loopFrame.time) * 60) / Second(tempo)
-                } else {
-                    let i2t = animation.loopFrames[li + 1].time
-                    let d = i2t - loopFrame.time
-                    if d == 0 {
-                        return keySeconds[li]
-                    } else {
-                        let t = Real((time - loopFrame.time) / d)
-                        return keySeconds[li] + integralSecondDuration(at: li, maxT: t)
-                    }
-                }
-            }
-        }
-        return 0
-    }
-    
-    func timeWithIntegralSecond(at li: Int, _ second: Second, minT: Real = 0,
-                                splitSecondCount: Int = 10) -> RealBeat {
-        let lf1 = animation.loopFrames[li], lf2 = animation.loopFrames[li + 1]
-        let tempos = tempoItem.keyTempos
-        let te1 = tempos[lf1.index], te2 = tempos[lf2.index]
-        let d = Real(lf2.time - lf1.time)
-        func shc() -> Int {
-            return max(2, Int(max(te1, te2) / d) * splitSecondCount / 2)
-        }
-        var doubleTime = RealBeat(0)
-        func step(_ lf1: Animation.LoopFrame) {
-            doubleTime = RealBeat((second * te1) / 60)
-        }
-        func simpsonInteglalB(_ f: (Real) -> (Real)) {
-            let ns = second / (d * 60)
-            let b = Real.simpsonIntegralB(splitHalfCount: shc(), a: minT, maxB: 1, s: ns, f: f)
-            doubleTime = RealBeat(d * b)
-        }
-        func linear(_ lf1: Animation.LoopFrame, _ lf2: Animation.LoopFrame) {
-            let easing = animation.keyframes[lf1.index].easing
-            if easing.isLinear {
-                let m = te2 - te1, n = te1
-                let l = log(te1) + (m * second) / (d * 60)
-                let b = (exp(l) - n) / m
-                doubleTime = RealBeat(d * b)
-            } else {
-                simpsonInteglalB {
-                    let t = easing.convertT($0)
-                    return 1 / BPM.linear(te1, te2, t: t)
-                }
-            }
-        }
-        func monospline(_ lf0: Animation.LoopFrame, _ lf1: Animation.LoopFrame,
-                        _ lf2: Animation.LoopFrame, _ lf3: Animation.LoopFrame) {
-            let te0 = tempos[lf0.index], te3 = tempos[lf3.index]
-            var ms = Monospline(x0: Real(lf0.time), x1: Real(lf1.time),
-                                x2: Real(lf2.time), x3: Real(lf3.time), t: 0)
-            let easing = animation.keyframes[lf1.index].easing
-            simpsonInteglalB {
-                ms.t = easing.convertT($0)
-                return 1 / BPM.monospline(te0, te1, te2, te3, with: ms)
-            }
-        }
-        func firstMonospline(_ lf1: Animation.LoopFrame, _ lf2: Animation.LoopFrame,
-                             _ lf3: Animation.LoopFrame) {
-            let te3 = tempos[lf3.index]
-            var ms = Monospline(x1: Real(lf1.time), x2: Real(lf2.time),
-                                x3: Real(lf3.time), t: 0)
-            let easing = animation.keyframes[lf1.index].easing
-            simpsonInteglalB {
-                ms.t = easing.convertT($0)
-                return 1 / BPM.firstMonospline(te1, te2, te3, with: ms)
-            }
-        }
-        func lastMonospline(_ lf0: Animation.LoopFrame, _ lf1: Animation.LoopFrame,
-                            _ lf2: Animation.LoopFrame) {
-            let te0 = tempos[lf0.index]
-            var ms = Monospline(x0: Real(lf0.time), x1: Real(lf1.time),
-                                x2: Real(lf2.time), t: 0)
-            let easing = animation.keyframes[lf1.index].easing
-            simpsonInteglalB {
-                ms.t = easing.convertT($0)
-                return 1 / BPM.lastMonospline(te0, te1, te2, with: ms)
-            }
-        }
-        if te1 == te2 {
-            step(lf1)
-        } else {
-            animation.interpolation(at: li,
-                                    step: step, linear: linear,
-                                    monospline: monospline,
-                                    firstMonospline: firstMonospline, endMonospline: lastMonospline)
-        }
-        return RealBeat(lf1.time) + doubleTime
-    }
-    func integralSecondDuration(at li: Int, minT: Real = 0, maxT: Real = 1,
-                                splitSecondCount: Int = 10) -> Second {
-        let lf1 = animation.loopFrames[li], lf2 = animation.loopFrames[li + 1]
-        let tempos = tempoItem.keyTempos
-        let te1 = tempos[lf1.index], te2 = tempos[lf2.index]
-        let d = Real(lf2.time - lf1.time)
-        func shc() -> Int {
-            return max(2, Int(max(te1, te2) / d) * splitSecondCount / 2)
-        }
+        keyframes.removeLast()
         
-        var rTempo = 0.0.cg
-        func step(_ lf1: Animation.LoopFrame) {
-            rTempo = (maxT - minT) / te1
-        }
-        func linear(_ lf1: Animation.LoopFrame, _ lf2: Animation.LoopFrame) {
-            let easing = animation.keyframes[lf1.index].easing
-            if easing.isLinear {
-                let linearA = te2 - te1
-                let rla = (1 / linearA)
-                let fb = rla * log(linearA * maxT + te1)
-                let fa = rla * log(linearA * minT + te1)
-                rTempo = fb - fa
-            } else {
-                rTempo = Real.simpsonIntegral(splitHalfCount: shc(), a: minT, b: maxT) {
-                    let t = easing.convertT($0)
-                    return 1 / BPM.linear(te1, te2, t: t)
-                }
+        let clippedSelectedKeyframeIndexes = sumAnimation.selectedKeyframeIndexes.isEmpty ?
+            [] :
+            sumAnimation.selectedKeyframeIndexes[...keyframes.count]
+        sumAnimation = Animation(keyframes: keyframes, duration: lastTime,
+                                 selectedKeyframeIndexes: Array(clippedSelectedKeyframeIndexes))
+    }
+    
+    var childrenMaxDuration: Beat {
+        var maxDuration = animation.duration
+        children.forEach {
+            let duration = $0.animatable.duration
+            if duration > maxDuration {
+                maxDuration = duration
             }
         }
-        func monospline(_ lf0: Animation.LoopFrame, _ lf1: Animation.LoopFrame,
-                        _ lf2: Animation.LoopFrame, _ lf3: Animation.LoopFrame) {
-            let te0 = tempos[lf0.index], te3 = tempos[lf3.index]
-            var ms = Monospline(x0: Real(lf0.time), x1: Real(lf1.time),
-                                x2: Real(lf2.time), x3: Real(lf3.time), t: 0)
-            let easing = animation.keyframes[lf1.index].easing
-            rTempo = Real.simpsonIntegral(splitHalfCount: shc(), a: minT, b: maxT) {
-                ms.t = easing.convertT($0)
-                return 1 / BPM.monospline(te0, te1, te2, te3, with: ms)
-            }
-        }
-        func firstMonospline(_ lf1: Animation.LoopFrame, _ lf2: Animation.LoopFrame,
-                             _ lf3: Animation.LoopFrame) {
-            let te3 = tempos[lf3.index]
-            var ms = Monospline(x1: Real(lf1.time), x2: Real(lf2.time),
-                                x3: Real(lf3.time), t: 0)
-            let easing = animation.keyframes[lf1.index].easing
-            rTempo = Real.simpsonIntegral(splitHalfCount: shc(), a: minT, b: maxT) {
-                ms.t = easing.convertT($0)
-                return 1 / BPM.firstMonospline(te1, te2, te3, with: ms)
-            }
-        }
-        func lastMonospline(_ lf0: Animation.LoopFrame, _ lf1: Animation.LoopFrame,
-                            _ lf2: Animation.LoopFrame) {
-            let te0 = tempos[lf0.index]
-            var ms = Monospline(x0: Real(lf0.time), x1: Real(lf1.time),
-                                x2: Real(lf2.time), t: 0)
-            let easing = animation.keyframes[lf1.index].easing
-            rTempo = Real.simpsonIntegral(splitHalfCount: shc(), a: minT, b: maxT) {
-                ms.t = easing.convertT($0)
-                return 1 / BPM.lastMonospline(te0, te1, te2, with: ms)
-            }
-        }
-        if te1 == te2 {
-            step(lf1)
-        } else {
-            animation.interpolation(at: li,
-                                    step: step, linear: linear,
-                                    monospline: monospline,
-                                    firstMonospline: firstMonospline, endMonospline: lastMonospline)
-        }
-        return Second(d * 60 * rTempo)
+        return maxDuration
     }
     
-    var time: Beat {
-        didSet {
-            updateInterpolation()
+    //    var diffDataModel: DataModel {
+    //        didSet {
+    //            diffDataModel.dataClosure = { [unowned self] in self.diff.jsonData }
+    //        }
+    //    }
+    //    func read() {
+    //        if !diffDataModel.isRead,
+    //            let diff: NodeDiff = diffDataModel.readObject() {
+    //
+    //            self.diff = diff
+    //        }
+    //    }
+    //    var diff: NodeDiff {
+    //        get {
+    //            let trackDiffs = tracks.reduce(into: [UUID: MultipleTrackDiff]()) { trackDiffs, track in
+    //                let cellDiffs = track.geometryItems.enumerated().reduce(into: [UUID: CellDiff]()) {
+    //                    $0[$1.element.id] = CellDiff(geometry: track.cells[$1.offset].geometry,
+    //                                                 keyGeometries: $1.element.keyGeometries)
+    //                }
+    //                trackDiffs[track.id] = MultipleTrackDiff(drawing: track.drawing,
+    //                                                         keyDrawings: track.drawingItem.keyDrawings,
+    //                                                         cellDiffs: cellDiffs)
+    //            }
+    //            return NodeDiff(trackDiffs: trackDiffs)
+    //        }
+    //        set {
+    //            tracks.forEach { track in
+    //                guard let td = newValue.trackDiffs[track.id] else {
+    //                    return
+    //                }
+    //                track.drawing = td.drawing
+    //                if track.drawingItem.keyDrawings.count == td.keyDrawings.count {
+    //                    track.set(td.keyDrawings)
+    //                } else {
+    //                    let count = min(track.drawingItem.keyDrawings.count, td.keyDrawings.count)
+    //                    var keyDrawings = track.drawingItem.keyDrawings
+    //                    (0..<count).forEach { keyDrawings[$0] = td.keyDrawings[$0] }
+    //                    track.set(keyDrawings)
+    //                }
+    //
+    //                track.geometryItems.enumerated().forEach { (i, geometryItem) in
+    //                    guard let gs = td.cellDiffs[geometryItem.id] else {
+    //                        return
+    //                    }
+    //                    track.cells[i].geometry = gs.geometry
+    //                    if geometryItem.keyGeometries.count == gs.keyGeometries.count {
+    //                        track.set(gs.keyGeometries, in: geometryItem, isSetGeometryInCell: false)
+    //                    } else {
+    //                        let count = min(geometryItem.keyGeometries.count, gs.keyGeometries.count)
+    //                        var keyGeometries = geometryItem.keyGeometries
+    //                        (0..<count).forEach { keyGeometries[$0] = gs.keyGeometries[$0] }
+    //                        track.set(keyGeometries, in: geometryItem, isSetGeometryInCell: false)
+    //                    }
+    //                }
+    //            }
+    //        }
+    //    }
+}
+
+enum AlgebraicTrackItem: Track {
+    var animatable: Animatable {
+        switch self {
+        case .tempo(let track):
+            return track.animation
+        case .subtitle(let track):
+            return track.animation
+        case .transform(let track):
+            return track.animation
+        case .wiggle(let track):
+            return track.animation
         }
     }
-    func updateInterpolation() {
-        animation.update(withTime: time, to: self)
+    case tempo(TempoTrack)
+    case subtitle(SubtitleTrack)
+    case transform(TransformTrack)
+    case wiggle(WiggleTrack)
+}
+extension AlgebraicTrackItem: Codable {
+    enum CodingKeys: CodingKey {
+        case tempo, subtitle, transform, wiggle
     }
-    func step(_ f0: Int) {
-        tempoItem.step(f0)
+    enum CodingError: Error {
+        case decoding(String)
     }
-    func linear(_ f0: Int, _ f1: Int, t: Real) {
-        tempoItem.linear(f0, f1, t: t)
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        if let track = try? values.decode(TempoTrack.self, forKey: .tempo) {
+            self = .tempo(track)
+        } else if let track = try? values.decode(SubtitleTrack.self, forKey: .subtitle) {
+            self = .subtitle(track)
+        } else if let track = try? values.decode(TransformTrack.self, forKey: .transform) {
+            self = .transform(track)
+        } else if let track = try? values.decode(WiggleTrack.self, forKey: .wiggle) {
+            self = .wiggle(track)
+        }
+        throw CodingError.decoding("\(dump(values))")
     }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        tempoItem.firstMonospline(f1, f2, f3, with: ms)
-    }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        tempoItem.monospline(f0, f1, f2, f3, with: ms)
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        tempoItem.lastMonospline(f0, f1, f2, with: ms)
-    }
-    
-    var tempoItem: TempoItem {
-        didSet {
-            check(keyCount: tempoItem.keyTempos.count)
-            updateKeySeconds()
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .tempo(let track):
+            try container.encode(track, forKey: .tempo)
+        case .subtitle(let track):
+            try container.encode(track, forKey: .subtitle)
+        case .transform(let track):
+            try container.encode(track, forKey: .transform)
+        case .wiggle(let track):
+            try container.encode(track, forKey: .wiggle)
         }
     }
-    
-    func replace(_ keyframe: Keyframe, at index: Int) {
-        animation.keyframes[index] = keyframe
-        updateKeySeconds()
-    }
-    func replace(_ keyframes: [Keyframe]) {
-        check(keyCount: keyframes.count)
-        animation.keyframes = keyframes
-        updateKeySeconds()
-    }
-    func replace(duration: Beat) {
-        animation.duration = duration
-    }
-    func replace(_ keyframes: [Keyframe], duration: Beat) {
-        check(keyCount: keyframes.count)
-        animation.keyframes = keyframes
-        animation.duration = duration
-        updateKeySeconds()
-    }
-    func set(selectedkeyframeIndexes: [Int]) {
-        animation.selectedKeyframeIndexes = selectedkeyframeIndexes
-    }
-    
-    private func check(keyCount count: Int) {
-        guard count == animation.keyframes.count else {
-            fatalError()
-        }
-    }
-    
-    struct KeyframeValues: KeyframeValue {
-        var tempo: BPM
-    }
-    func insert(_ keyframe: Keyframe, _ kv: KeyframeValues, at index: Int) {
-        tempoItem.keyTempos.insert(kv.tempo, at: index)
-        animation.keyframes.insert(keyframe, at: index)
-        updateKeySeconds()
-    }
-    func removeKeyframe(at index: Int) {
-        animation.keyframes.remove(at: index)
-        tempoItem.keyTempos.remove(at: index)
-        updateKeySeconds()
-    }
-    func set(_ keyTempos: [BPM], isSetTempoInItem: Bool  = true) {
-        guard keyTempos.count == animation.keyframes.count else {
-            fatalError()
-        }
-        if isSetTempoInItem {
-            tempoItem.tempo = keyTempos[animation.editKeyframeIndex]
-        }
-        tempoItem.keyTempos = keyTempos
-        updateKeySeconds()
-    }
-    func replace(tempo: BPM, at i: Int) {
-        tempoItem.replace(tempo: tempo, at: i)
-        updateKeySeconds()
-    }
-    var currentItemValues: KeyframeValues {
-        return KeyframeValues(tempo: tempoItem.tempo)
-    }
-    func keyframeItemValues(at index: Int) -> KeyframeValues {
-        return KeyframeValues(tempo: tempoItem.keyTempos[index])
-    }
-    
-    init(animation: Animation = Animation(), time: Beat = 0,
-         tempoItem: TempoItem = TempoItem()) {
+}
+
+final class TrackItemView<T: BinderProtocol>: View {
+    let effectView: EffectView<T>
+    var animation: Animation<Transform>
+    init(binder: T) {
+        effectView = EffectView(binder: binder,
+                                keyPath: \SceneBinder.scene.canvas.editingCellGroup.effect,
+                                sizeType: .small)
+        super.init()
         
-        self.animation = animation
-        self.time = time
-        self.tempoItem = tempoItem
-        super.init()
-    }
-    
-    private enum CodingKeys: String, CodingKey {
-        case animation, time, duration, tempoItem, keySeconds
-    }
-    init?(coder: NSCoder) {
-        animation = coder.decodeDecodable(
-            Animation.self, forKey: CodingKeys.animation.rawValue) ?? Animation()
-        time = coder.decodeDecodable(Beat.self, forKey: CodingKeys.time.rawValue) ?? 0
-        tempoItem = coder.decodeDecodable(
-            TempoItem.self, forKey: CodingKeys.tempoItem.rawValue) ?? TempoItem()
-        keySeconds = coder.decodeObject(forKey: CodingKeys.keySeconds.rawValue) as? [Second] ?? []
-        super.init()
-    }
-    func encode(with coder: NSCoder) {
-        coder.encodeEncodable(animation, forKey: CodingKeys.animation.rawValue)
-        coder.encodeEncodable(time, forKey: CodingKeys.time.rawValue)
-        coder.encodeEncodable(tempoItem, forKey: CodingKeys.tempoItem.rawValue)
-        coder.encode(keySeconds, forKey: CodingKeys.keySeconds.rawValue)
-    }
-}
-extension TempoTrack: ClassDeepCopiable {
-    func copied(from deepCopier: DeepCopier) -> TempoTrack {
-        return TempoTrack(animation: animation, time: time,
-                          tempoItem: deepCopier.copied(tempoItem))
-    }
-}
-extension TempoTrack: Referenceable {
-    static let name = Text(english: "Tempo Track", japanese: "テンポトラック")
-}
-
-final class NodeTrack: NSObject, Track, NSCoding {
-    private(set) var animation: Animation
-    private var keyPhases = [Real]()
-    
-    var name: String
-    let id: UUID
-    
-    var time: Beat {
-        didSet {
-            updateInterpolation()
-        }
-    }
-    func updateInterpolation() {
-        animation.update(withTime: time, to: self)
-    }
-    func step(_ f0: Int) {
-        drawingItem.step(f0)
-        cellItems.forEach { $0.step(f0) }
-        materialItems.forEach { $0.step(f0) }
-        effectItem?.step(f0)
-        transformItem?.step(f0)
-        wiggleItem?.step(f0)
-    }
-    func linear(_ f0: Int, _ f1: Int, t: Real) {
-        drawingItem.linear(f0, f1, t: t)
-        cellItems.forEach { $0.linear(f0, f1, t: t) }
-        materialItems.forEach { $0.linear(f0, f1, t: t) }
-        effectItem?.linear(f0, f1, t: t)
-        transformItem?.linear(f0, f1, t: t)
-        wiggleItem?.linear(f0, f1, t: t)
-    }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        drawingItem.firstMonospline(f1, f2, f3, with: ms)
-        cellItems.forEach { $0.firstMonospline(f1, f2, f3, with: ms) }
-        materialItems.forEach { $0.firstMonospline(f1, f2, f3, with: ms) }
-        effectItem?.firstMonospline(f1, f2, f3, with: ms)
-        transformItem?.firstMonospline(f1, f2, f3, with: ms)
-        wiggleItem?.firstMonospline(f1, f2, f3, with: ms)
-    }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        drawingItem.monospline(f0, f1, f2, f3, with: ms)
-        cellItems.forEach { $0.monospline(f0, f1, f2, f3, with: ms) }
-        materialItems.forEach { $0.monospline(f0, f1, f2, f3, with: ms) }
-        effectItem?.monospline(f0, f1, f2, f3, with: ms)
-        transformItem?.monospline(f0, f1, f2, f3, with: ms)
-        wiggleItem?.monospline(f0, f1, f2, f3, with: ms)
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        drawingItem.lastMonospline(f0, f1, f2, with: ms)
-        cellItems.forEach { $0.lastMonospline(f0, f1, f2, with: ms) }
-        materialItems.forEach { $0.lastMonospline(f0, f1, f2, with: ms) }
-        effectItem?.lastMonospline(f0, f1, f2, with: ms)
-        transformItem?.lastMonospline(f0, f1, f2, with: ms)
-        wiggleItem?.lastMonospline(f0, f1, f2, with: ms)
-    }
-    
-    var isHidden: Bool {
-        didSet {
-            cellItems.forEach { $0.cell.isHidden = isHidden }
-        }
-    }
-    
-    var drawingItem: DrawingItem {
-        didSet {
-            check(keyCount: drawingItem.keyDrawings.count)
-        }
-    }
-    
-    var selectedCellItems: [CellItem]
-    private(set) var cellItems: [CellItem]
-    func append(_ cellItem: CellItem) {
-        check(keyCount: cellItem.keyGeometries.count)
-        cellItems.append(cellItem)
-    }
-    func remove(_ cellItem: CellItem) {
-        if let i = cellItems.index(of: cellItem) {
-            cellItems.remove(at: i)
-        }
-    }
-    func replace(_ cellItems: [CellItem]) {
-        cellItems.forEach { check(keyCount: $0.keyGeometries.count) }
-        self.cellItems = cellItems
-    }
-    func move(_ cellItem: CellItem, keyGeometries: [Geometry], from track: NodeTrack) {
-        track.remove(cellItem)
-        cellItem.keyGeometries = keyGeometries
-        append(cellItem)
-    }
-    
-    func alignedKeyGeometries(_ keyGeometries: [Geometry]) -> [Geometry] {
-        if keyGeometries.count > animation.keyframes.count {
-            return Array(keyGeometries[..<animation.keyframes.count])
-        } else {
-            let count = animation.keyframes.count - keyGeometries.count
-            let geometries = (0..<count).map { _ in Geometry() }
-            return keyGeometries + geometries
-        }
-    }
-    
-    private(set) var materialItems: [MaterialItem]
-    func append(_ materialItem: MaterialItem) {
-        check(keyCount: materialItem.keyMaterials.count)
-        materialItems.append(materialItem)
-    }
-    func remove(_ materialItem: MaterialItem) {
-        if let i = materialItems.index(of: materialItem) {
-            materialItems.remove(at: i)
-        }
-    }
-    func replace(_ materialItems: [MaterialItem]) {
-        materialItems.forEach { check(keyCount: $0.keyMaterials.count) }
-        self.materialItems = materialItems
-    }
-    
-    var subtitleItem: SubtitleItem?
-    var soundItem: SoundItem?
-    
-    var effectItem: EffectItem? {
-        didSet {
-            if let effectItem = effectItem {
-                check(keyCount: effectItem.keyEffects.count)
-            }
-        }
-    }
-    
-    var transformItem: TransformItem? {
-        didSet {
-            if let transformItem = transformItem {
-                check(keyCount: transformItem.keyTransforms.count)
-            }
-        }
-    }
-    
-    var wiggleItem: WiggleItem? {
-        didSet {
-            if let wiggleItem = wiggleItem {
-                check(keyCount: wiggleItem.keyWiggles.count)
-            }
-            updateKeyPhases()
-        }
-    }
-    private func updateKeyPhases() {
-        guard animation.loopFrames.count >= 2 && wiggleItem != nil else {
-            keyPhases = []
-            return
-        }
-        var phase = 0.0.cg
-        keyPhases = (0..<animation.loopFrames.count).map { li in
-            if li == animation.loopFrames.count - 1 {
-                return phase
-            } else {
-                let p = phase
-                phase += integralPhaseDifference(at: li)
-                return p
-            }
-        }
-    }
-    
-    func wigglePhase(withBeatTime time: Beat) -> Real {
-        guard let wiggleItem = wiggleItem else {
-            return 0
-        }
-        guard animation.loopFrames.count >= 2 else {
-            return wiggleItem.wiggle.frequency * Real(time)
-        }
-        let wiggles = wiggleItem.keyWiggles
-        for (li, loopFrame) in animation.loopFrames.enumerated().reversed() {
-            if loopFrame.time <= time {
-                if li == animation.loopFrames.count - 1 {
-                    let wiggle = wiggles[loopFrame.index]
-                    return keyPhases[li] + wiggle.frequency * Real(time - loopFrame.time)
-                } else {
-                    let i2t = animation.loopFrames[li + 1].time
-                    let d = i2t - loopFrame.time
-                    if d == 0 {
-                        return keyPhases[li]
-                    } else {
-                        let t = Real((time - loopFrame.time) / d)
-                        return keyPhases[li] + integralPhaseDifference(at: li, maxT: t)
-                    }
-                }
-            }
-        }
-        return 0
-    }
-    func integralPhaseDifference(at li: Int, minT: Real = 0, maxT: Real = 1,
-                                 splitSecondCount: Int = 20) -> Real {
-        guard let wiggleItem = wiggleItem else {
-            return 0
-        }
-        let lf1 = animation.loopFrames[li], lf2 = animation.loopFrames[li + 1]
-        let wiggles = wiggleItem.keyWiggles
-        let f1 = wiggles[lf1.index].frequency, f2 = wiggles[lf2.index].frequency
-        let d = Real(lf2.time - lf1.time)
-        func shc() -> Int {
-            return max(2, Int(d) * splitSecondCount / 2)
-        }
-        
-        var df = 0.0.cg
-        func step(_ lf1: Animation.LoopFrame) {
-            df = f1 * Real(maxT - minT)
-        }
-        func linear(_ lf1: Animation.LoopFrame, _ lf2: Animation.LoopFrame) {
-            let easing = animation.keyframes[lf1.index].easing
-            if easing.isLinear {
-                df = Real.integralLinear(f1, f2, a: minT, b: maxT)
-            } else {
-                df = Real.simpsonIntegral(splitHalfCount: shc(), a: minT, b: maxT) {
-                    let t = easing.convertT($0)
-                    return Real.linear(f1, f2, t: t)
-                }
-            }
-        }
-        func monospline(_ lf0: Animation.LoopFrame, _ lf1: Animation.LoopFrame,
-                        _ lf2: Animation.LoopFrame, _ lf3: Animation.LoopFrame) {
-            let f0 = wiggles[lf0.index].frequency, f3 = wiggles[lf3.index].frequency
-            var ms = Monospline(x0: Real(lf0.time), x1: Real(lf1.time),
-                                x2: Real(lf2.time), x3: Real(lf3.time), t: 0)
-            let easing = animation.keyframes[lf1.index].easing
-            if easing.isLinear {
-                df = ms.integralInterpolatedValue(f0, f1, f2, f3, a: minT, b: maxT)
-            } else {
-                df = Real.simpsonIntegral(splitHalfCount: shc(), a: minT, b: maxT) {
-                    ms.t = easing.convertT($0)
-                    return Real.monospline(f0, f1, f2, f3, with: ms)
-                }
-            }
-        }
-        func firstMonospline(_ lf1: Animation.LoopFrame, _ lf2: Animation.LoopFrame,
-                             _ lf3: Animation.LoopFrame) {
-            let f3 = wiggles[lf3.index].frequency
-            var ms = Monospline(x1: Real(lf1.time), x2: Real(lf2.time),
-                                x3: Real(lf3.time), t: 0)
-            let easing = animation.keyframes[lf1.index].easing
-            if easing.isLinear {
-                df = ms.integralFirstInterpolatedValue(f1, f2, f3, a: minT, b: maxT)
-            } else {
-                df = Real.simpsonIntegral(splitHalfCount: shc(), a: minT, b: maxT) {
-                    ms.t = easing.convertT($0)
-                    return Real.firstMonospline(f1, f2, f3, with: ms)
-                }
-            }
-        }
-        func lastMonospline(_ lf0: Animation.LoopFrame, _ lf1: Animation.LoopFrame,
-                            _ lf2: Animation.LoopFrame) {
-            let f0 = wiggles[lf0.index].frequency
-            var ms = Monospline(x0: Real(lf0.time), x1: Real(lf1.time),
-                                x2: Real(lf2.time), t: 0)
-            let easing = animation.keyframes[lf1.index].easing
-            if easing.isLinear {
-                df = ms.integralLastInterpolatedValue(f0, f1, f2, a: minT, b: maxT)
-            } else {
-                df = Real.simpsonIntegral(splitHalfCount: shc(), a: minT, b: maxT) {
-                    ms.t = easing.convertT($0)
-                    return Real.lastMonospline(f0, f1, f2, with: ms)
-                }
-            }
-        }
-        if f1 == f2 {
-            step(lf1)
-        } else {
-            animation.interpolation(at: li,
-                                    step: step, linear: linear,
-                                    monospline: monospline,
-                                    firstMonospline: firstMonospline, endMonospline: lastMonospline)
-        }
-        return df * d
-    }
-    
-    func replace(_ keyframe: Keyframe, at index: Int) {
-        animation.keyframes[index] = keyframe
-        updateKeyPhases()
-    }
-    func replace(_ keyframes: [Keyframe]) {
-        check(keyCount: keyframes.count)
-        animation.keyframes = keyframes
-        updateKeyPhases()
-    }
-    func replace(_ keyframes: [Keyframe], duration: Beat) {
-        check(keyCount: keyframes.count)
-        animation.keyframes = keyframes
-        animation.duration = duration
-        updateKeyPhases()
-    }
-    func set(duration: Beat) {
-        animation.duration = duration
-    }
-    func set(selectedkeyframeIndexes: [Int]) {
-        animation.selectedKeyframeIndexes = selectedkeyframeIndexes
-    }
-    
-    private func check(keyCount count: Int) {
-        guard count == animation.keyframes.count else {
-            fatalError()
-        }
-    }
-    
-    func insertCell(_ cellItem: CellItem, in parents: [(cell: Cell, index: Int)]) {
-        guard cellItem.cell.children.isEmpty else {
-            fatalError()
-        }
-        guard cellItem.keyGeometries.count == animation.keyframes.count else {
-            fatalError()
-        }
-        guard !cellItems.contains(cellItem) else {
-            fatalError()
-        }
-        parents.forEach { $0.cell.children.insert(cellItem.cell, at: $0.index) }
-        cellItems.append(cellItem)
-    }
-    func insertCells(_ insertCellItems: [CellItem], rootCell: Cell, at index: Int, in parent: Cell) {
-        rootCell.children.reversed().forEach { parent.children.insert($0, at: index) }
-        insertCellItems.forEach {
-            guard $0.keyGeometries.count == animation.keyframes.count else {
-                fatalError()
-            }
-            guard !cellItems.contains($0) else {
-                fatalError()
-            }
-            cellItems.append($0)
-        }
-    }
-    func removeCell(_ cellItem: CellItem, in parents: [(cell: Cell, index: Int)]) {
-        guard cellItem.cell.children.isEmpty else {
-            fatalError()
-        }
-        parents.forEach { $0.cell.children.remove(at: $0.index) }
-        cellItems.remove(at: cellItems.index(of: cellItem)!)
-    }
-    func removeCells(_ removeCellItems: [CellItem], rootCell: Cell, in parent: Cell) {
-        rootCell.children.forEach { parent.children.remove(at: parent.children.index(of: $0)!) }
-        removeCellItems.forEach { cellItems.remove(at: cellItems.index(of: $0)!) }
-    }
-    
-    struct KeyframeValues: KeyframeValue {
-        var drawing: Drawing, geometries: [Geometry], materials: [Material]
-        var effect: Effect?, transform: Transform?, wiggle: Wiggle?
-    }
-    func insert(_ keyframe: Keyframe, _ kv: KeyframeValues, at index: Int) {
-        guard kv.geometries.count <= cellItems.count
-            && kv.materials.count <= materialItems.count else {
-                fatalError()
-        }
-        animation.keyframes.insert(keyframe, at: index)
-        drawingItem.keyDrawings.insert(kv.drawing, at: index)
-        cellItems.enumerated().forEach {
-            $0.element.keyGeometries.insert(kv.geometries[$0.offset], at: index)
-        }
-        materialItems.enumerated().forEach {
-            $0.element.keyMaterials.insert(kv.materials[$0.offset], at: index)
-        }
-        if let effect = kv.effect {
-            effectItem?.keyEffects.insert(effect, at: index)
-        }
-        if let transform = kv.transform {
-            transformItem?.keyTransforms.insert(transform, at: index)
-        }
-        if let wiggle = kv.wiggle {
-            wiggleItem?.keyWiggles.insert(wiggle, at: index)
-        }
-        updateKeyPhases()
-    }
-    func removeKeyframe(at index: Int) {
-        animation.keyframes.remove(at: index)
-        drawingItem.keyDrawings.remove(at: index)
-        cellItems.forEach { $0.keyGeometries.remove(at: index) }
-        materialItems.forEach { $0.keyMaterials.remove(at: index) }
-        effectItem?.keyEffects.remove(at: index)
-        transformItem?.keyTransforms.remove(at: index)
-        wiggleItem?.keyWiggles.remove(at: index)
-        updateKeyPhases()
-    }
-    func set(_ keyDrawings: [Drawing]) {
-        guard keyDrawings.count == animation.keyframes.count else {
-            fatalError()
-        }
-        drawingItem.keyDrawings = keyDrawings
-    }
-    func set(_ keyGeometries: [Geometry], in cellItem: CellItem, isSetGeometryInCell: Bool = true) {
-        guard keyGeometries.count == animation.keyframes.count else {
-            fatalError()
-        }
-        if isSetGeometryInCell, let i = cellItem.keyGeometries.index(of: cellItem.cell.geometry) {
-            cellItem.cell.geometry = keyGeometries[i]
-        }
-        cellItem.keyGeometries = keyGeometries
-    }
-    func set(_ keyEffects: [Effect], isSetEffectInItem: Bool = true) {
-        guard let effectItem = effectItem else {
-            return
-        }
-        guard keyEffects.count == animation.keyframes.count else {
-            fatalError()
-        }
-        if isSetEffectInItem,
-            let i = effectItem.keyEffects.index(of: effectItem.effect) {
-            
-            effectItem.effect = keyEffects[i]
-        }
-        effectItem.keyEffects = keyEffects
-    }
-    func set(_ keyTransforms: [Transform], isSetTransformInItem: Bool = true) {
-        guard let transformItem = transformItem else {
-            return
-        }
-        guard keyTransforms.count == animation.keyframes.count else {
-            fatalError()
-        }
-        if isSetTransformInItem,
-            let i = transformItem.keyTransforms.index(of: transformItem.transform) {
-            
-            transformItem.transform = keyTransforms[i]
-        }
-        transformItem.keyTransforms = keyTransforms
-    }
-    func set(_ keyWiggles: [Wiggle], isSetWiggleInItem: Bool = true) {
-        guard let wiggleItem = wiggleItem else {
-            return
-        }
-        guard keyWiggles.count == animation.keyframes.count else {
-            fatalError()
-        }
-        if isSetWiggleInItem, let i = wiggleItem.keyWiggles.index(of: wiggleItem.wiggle) {
-            wiggleItem.wiggle = keyWiggles[i]
-        }
-        wiggleItem.keyWiggles = keyWiggles
-        updateKeyPhases()
-    }
-    func replace(_ wiggle: Wiggle, at i: Int) {
-        wiggleItem?.replace(wiggle, at: i)
-        updateKeyPhases()
-    }
-    func replace(_ drawing: Drawing, at i: Int) {
-        drawingItem.replace(drawing, at: i)
-        updateKeyPhases()
-    }
-    
-    func set(_ keyMaterials: [Material], in materailItem: MaterialItem) {
-        guard keyMaterials.count == animation.keyframes.count else {
-            fatalError()
-        }
-        materailItem.keyMaterials = keyMaterials
-    }
-    var currentItemValues: KeyframeValues {
-        let geometries = cellItems.map { $0.cell.geometry }
-        let materials = materialItems.map { $0.material }
-        return KeyframeValues(drawing: drawingItem.drawing,
-                              geometries: geometries, materials: materials,
-                              effect: effectItem?.effect,
-                              transform: transformItem?.transform, wiggle: wiggleItem?.wiggle)
-    }
-    func keyframeItemValues(at index: Int) -> KeyframeValues {
-        let geometries = cellItems.map { $0.keyGeometries[index] }
-        let materials = materialItems.map { $0.keyMaterials[index] }
-        return KeyframeValues(drawing: drawingItem.keyDrawings[index],
-                              geometries: geometries, materials: materials,
-                              effect: effectItem?.keyEffects[index],
-                              transform: transformItem?.keyTransforms[index],
-                              wiggle: wiggleItem?.keyWiggles[index])
-    }
-    
-    init(animation: Animation = Animation(), name: String = "",
-         time: Beat = 0,
-         isHidden: Bool = false, selectedCellItems: [CellItem] = [],
-         drawingItem: DrawingItem = DrawingItem(), cellItems: [CellItem] = [],
-         materialItems: [MaterialItem] = [],
-         effectItem: EffectItem? = nil,
-         transformItem: TransformItem? = nil, wiggleItem: WiggleItem? = nil) {
-        
-        self.animation = animation
-        self.name = name
-        self.time = time
-        self.isHidden = isHidden
-        self.selectedCellItems = selectedCellItems
-        self.drawingItem = drawingItem
-        self.cellItems = cellItems
-        self.materialItems = materialItems
-        self.effectItem = effectItem
-        self.transformItem = transformItem
-        self.wiggleItem = wiggleItem
-        id = UUID()
-        super.init()
-    }
-    private init(animation: Animation, name: String, time: Beat,
-                 isHidden: Bool, selectedCellItems: [CellItem],
-                 drawingItem: DrawingItem, cellItems: [CellItem], materialItems: [MaterialItem],
-                 effectItem: EffectItem?,
-                 transformItem: TransformItem?, wiggleItem: WiggleItem?, keyPhases: [Real]) {
-        self.animation = animation
-        self.name = name
-        self.time = time
-        self.isHidden = isHidden
-        self.selectedCellItems = selectedCellItems
-        self.drawingItem = drawingItem
-        self.cellItems = cellItems
-        self.materialItems = materialItems
-        self.effectItem = effectItem
-        self.transformItem = transformItem
-        self.wiggleItem = wiggleItem
-        self.keyPhases = keyPhases
-        id = UUID()
-        super.init()
-    }
-    
-    private enum CodingKeys: String, CodingKey {
-        case
-        animation, name, time, duration, isHidden, selectedCellItems,
-        drawingItem, cellItems, materialItems, effectItem, transformItem, wiggleItem, keyPhases, id
-    }
-    init?(coder: NSCoder) {
-        animation = coder.decodeDecodable(
-            Animation.self, forKey: CodingKeys.animation.rawValue) ?? Animation()
-        name = coder.decodeObject(forKey: CodingKeys.name.rawValue) as? String ?? ""
-        time = coder.decodeDecodable(Beat.self, forKey: CodingKeys.time.rawValue) ?? 0
-        isHidden = coder.decodeBool(forKey: CodingKeys.isHidden.rawValue)
-        drawingItem = coder.decodeObject(
-            forKey: CodingKeys.drawingItem.rawValue) as? DrawingItem ?? DrawingItem()
-        cellItems = coder.decodeObject(forKey: CodingKeys.cellItems.rawValue) as? [CellItem] ?? []
-        selectedCellItems = coder.decodeObject(
-            forKey: CodingKeys.selectedCellItems.rawValue) as? [CellItem] ?? []
-        materialItems = coder.decodeObject(
-            forKey: CodingKeys.materialItems.rawValue) as? [MaterialItem] ?? []
-        effectItem = coder.decodeDecodable(
-            EffectItem.self, forKey: CodingKeys.effectItem.rawValue)
-        transformItem = coder.decodeDecodable(
-            TransformItem.self, forKey: CodingKeys.transformItem.rawValue)
-        wiggleItem = coder.decodeDecodable(WiggleItem.self, forKey: CodingKeys.wiggleItem.rawValue)
-        keyPhases = coder.decodeObject(forKey: CodingKeys.keyPhases.rawValue) as? [Real] ?? []
-        id = coder.decodeObject(forKey: CodingKeys.id.rawValue) as? UUID ?? UUID()
-        super.init()
-        if drawingItem.keyDrawings.count != animation.keyframes.count {
-            drawingItem.keyDrawings = emptyKeyDrawings
-        }
-        cellItems.forEach {
-            if $0.keyGeometries.count != animation.keyframes.count {
-                $0.keyGeometries = emptyKeyGeometries
-            }
-        }
-    }
-    func encode(with coder: NSCoder) {
-        coder.encodeEncodable(animation, forKey: CodingKeys.animation.rawValue)
-        coder.encode(name, forKey: CodingKeys.name.rawValue)
-        coder.encodeEncodable(time, forKey: CodingKeys.time.rawValue)
-        coder.encode(isHidden, forKey: CodingKeys.isHidden.rawValue)
-        coder.encode(drawingItem, forKey: CodingKeys.drawingItem.rawValue)
-        coder.encode(cellItems, forKey: CodingKeys.cellItems.rawValue)
-        coder.encode(selectedCellItems, forKey: CodingKeys.selectedCellItems.rawValue)
-        coder.encode(materialItems, forKey: CodingKeys.materialItems.rawValue)
-        coder.encodeEncodable(effectItem, forKey: CodingKeys.effectItem.rawValue)
-        coder.encodeEncodable(transformItem, forKey: CodingKeys.transformItem.rawValue)
-        coder.encodeEncodable(wiggleItem, forKey: CodingKeys.wiggleItem.rawValue)
-        coder.encode(keyPhases, forKey: CodingKeys.keyPhases.rawValue)
-        coder.encode(id, forKey: CodingKeys.id.rawValue)
-    }
-    
-    func contains(_ cell: Cell) -> Bool {
-        for cellItem in cellItems {
-            if cellItem.cell == cell {
-                return true
-            }
-        }
-        return false
-    }
-    func contains(_ cellItem: CellItem) -> Bool {
-        return cellItems.contains(cellItem)
-    }
-    func cellItem(with cell: Cell) -> CellItem? {
-        for cellItem in cellItems {
-            if cellItem.cell == cell {
-                return cellItem
-            }
-        }
-        return nil
-    }
-    func cellItem(withCellID id: UUID) -> CellItem? {
-        for cellItem in cellItems {
-            if cellItem.cell.id == id {
-                return cellItem
-            }
-        }
-        return nil
-    }
-    var cells: [Cell] {
-        return cellItems.map { $0.cell }
-    }
-    var selectedCellItemsWithNoEmptyGeometry: [CellItem] {
-        return selectedCellItems.filter { !$0.cell.geometry.isEmpty }
-    }
-    func selectedCellItemsWithNoEmptyGeometry(at point: Point) -> [CellItem] {
-        for cellItem in selectedCellItems {
-            if cellItem.cell.contains(point) {
-                return selectedCellItems.filter { !$0.cell.geometry.isEmpty }
-            }
-        }
-        return []
-    }
-    
-    var emptyKeyDrawings: [Drawing] {
-        return animation.keyframes.map { _ in Drawing() }
-    }
-    var emptyKeyGeometries: [Geometry] {
-        return animation.keyframes.map { _ in Geometry() }
-    }
-    var isEmptyGeometryWithCells: Bool {
-        for cellItem in cellItems {
-            if !cellItem.cell.geometry.isEmpty {
-                return false
-            }
-        }
-        return true
-    }
-    func isEmptyGeometryWithCells(at time: Beat) -> Bool {
-        let index = animation.loopedKeyframeIndex(withTime: time).keyframeIndex
-        for cellItem in cellItems {
-            if !cellItem.keyGeometries[index].isEmpty {
-                return false
-            }
-        }
-        return true
-    }
-    func emptyKeyMaterials(with material: Material) -> [Material] {
-        return animation.keyframes.map { _ in material.withNewID() }
-    }
-    
-    func keyMaterial(with cell: Cell) -> Material {
-        for materialItem in materialItems {
-            if materialItem.cells.contains(cell) {
-                return materialItem.keyMaterials[animation.editKeyframeIndex]
-            }
-        }
-        return cell.material
-    }
-    
-    var imageBounds: Rect {
-        return cellItems.reduce(Rect()) { $0.unionNoEmpty($1.cell.imageBounds) }
-            .unionNoEmpty(drawingItem.imageBounds)
-    }
-    
-    func snapCells(with cell: Cell) -> [Cell] {
-        var cells = self.cells
-        var snapedCells = cells.compactMap { $0 !== cell && $0.isSnaped(cell) ? $0 : nil }
-        func snap(_ withCell: Cell) {
-            var newSnapedCells = [Cell]()
-            cells = cells.compactMap {
-                if $0.isSnaped(withCell) {
-                    newSnapedCells.append($0)
-                    return nil
-                } else {
-                    return $0
-                }
-            }
-            if !newSnapedCells.isEmpty {
-                snapedCells += newSnapedCells
-                for newCell in newSnapedCells { snap(newCell) }
-            }
-        }
-        snap(cell)
-        return snapedCells
-    }
-    
-    func snapPoint(_ point: Point, with n: Node.Nearest.BezierSortedResult,
-                   snapDistance: Real, grid: Real?) -> Point {
-        
-        let p: Point
-        if let grid = grid {
-            p = Point(x: point.x.interval(scale: grid), y: point.y.interval(scale: grid))
-        } else {
-            p = point
-        }
-        var minD = Real.infinity, minP = p
-        func updateMin(with ap: Point) {
-            let d0 = p.distance(ap)
-            if d0 < snapDistance && d0 < minD {
-                minD = d0
-                minP = ap
-            }
-        }
-        func update(cellItem: CellItem?) {
-            for (i, line) in drawingItem.drawing.lines.enumerated() {
-                if i == n.lineCap.lineIndex {
-                    updateMin(with: n.lineCap.isFirst ? line.lastPoint : line.firstPoint)
-                } else {
-                    updateMin(with: line.firstPoint)
-                    updateMin(with: line.lastPoint)
-                }
-            }
-            for aCellItem in cellItems {
-                for (i, line) in aCellItem.cell.geometry.lines.enumerated() {
-                    if aCellItem == cellItem && i == n.lineCap.lineIndex {
-                        updateMin(with: n.lineCap.isFirst ? line.lastPoint : line.firstPoint)
-                    } else {
-                        updateMin(with: line.firstPoint)
-                        updateMin(with: line.lastPoint)
-                    }
-                }
-            }
-        }
-        if n.drawing != nil {
-            update(cellItem: nil)
-        } else if let cellItem = n.cellItem {
-            update(cellItem: cellItem)
-        }
-        return minP
-    }
-    
-    func snapPoint(_ sp: Point, editLine: Line, editPointIndex: Int,
-                   snapDistance: Real) -> Point {
-        
-        let p: Point, isFirst = editPointIndex == 1 || editPointIndex == editLine.controls.count - 1
-        if isFirst {
-            p = editLine.firstPoint
-        } else if editPointIndex == editLine.controls.count - 2 || editPointIndex == 0 {
-            p = editLine.lastPoint
-        } else {
-            fatalError()
-        }
-        var snapLines = [(ap: Point, bp: Point)](), lastSnapLines = [(ap: Point, bp: Point)]()
-        func snap(with lines: [Line]) {
-            for line in lines {
-                if editLine.controls.count == 3 {
-                    if line != editLine {
-                        if line.firstPoint == editLine.firstPoint {
-                            snapLines.append((line.controls[1].point, editLine.firstPoint))
-                        } else if line.lastPoint == editLine.firstPoint {
-                            snapLines.append((line.controls[line.controls.count - 2].point,
-                                              editLine.firstPoint))
-                        }
-                        if line.firstPoint == editLine.lastPoint {
-                            lastSnapLines.append((line.controls[1].point, editLine.lastPoint))
-                        } else if line.lastPoint == editLine.lastPoint {
-                            lastSnapLines.append((line.controls[line.controls.count - 2].point,
-                                                  editLine.lastPoint))
-                        }
-                    }
-                } else {
-                    if line.firstPoint == p && !(line == editLine && isFirst) {
-                        snapLines.append((line.controls[1].point, p))
-                    } else if line.lastPoint == p && !(line == editLine && !isFirst) {
-                        snapLines.append((line.controls[line.controls.count - 2].point, p))
-                    }
-                }
-            }
-        }
-        snap(with: drawingItem.drawing.lines)
-        for cellItem in cellItems {
-            snap(with: cellItem.cell.geometry.lines)
-        }
-        
-        var minD = Real.infinity, minIntersectionPoint: Point?, minPoint = sp
-        if !snapLines.isEmpty && !lastSnapLines.isEmpty {
-            for sl in snapLines {
-                for lsl in lastSnapLines {
-                    if let ip = Point.intersectionLine(sl.ap, sl.bp, lsl.ap, lsl.bp) {
-                        let d = ip.distance(sp)
-                        if d < snapDistance && d < minD {
-                            minD = d
-                            minIntersectionPoint = ip
-                        }
-                    }
-                }
-            }
-        }
-        if let minPoint = minIntersectionPoint {
-            return minPoint
-        }
-        let ss = snapLines + lastSnapLines
-        for sl in ss {
-            let np = sp.nearestWithLine(ap: sl.ap, bp: sl.bp)
-            let d = np.distance(sp)
-            if d < snapDistance && d < minD {
-                minD = d
-                minPoint = np
-            }
-        }
-        return minPoint
-    }
-    
-    func drawPreviousNext(isHiddenPrevious: Bool, isHiddenNext: Bool,
-                          time: Beat, reciprocalScale: Real, in ctx: CGContext) {
-        let index = animation.loopedKeyframeIndex(withTime: time).keyframeIndex
-        drawingItem.drawPreviousNext(isHiddenPrevious: isHiddenPrevious, isHiddenNext: isHiddenNext,
-                                     index: index, reciprocalScale: reciprocalScale, in: ctx)
-        cellItems.forEach {
-            $0.drawPreviousNext(lineWidth: drawingItem.lineWidth * reciprocalScale,
-                                isHiddenPrevious: isHiddenPrevious, isHiddenNext: isHiddenNext,
-                                index: index, in: ctx)
-        }
-    }
-    func drawSelectedCells(opacity: Real, color: Color, subColor: Color,
-                            reciprocalScale: Real, in ctx: CGContext) {
-        guard !isHidden && !selectedCellItems.isEmpty else {
-            return
-        }
-        ctx.setAlpha(opacity)
-        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
-        var geometrys = [Geometry]()
-        ctx.setFillColor(subColor.with(alpha: 1).cg)
-        func setPaths(with cellItem: CellItem) {
-            let cell = cellItem.cell
-            if !cell.geometry.isEmpty {
-                cell.geometry.addPath(in: ctx)
-                ctx.fillPath()
-                geometrys.append(cell.geometry)
-            }
-        }
-        selectedCellItems.forEach { setPaths(with: $0) }
-        ctx.endTransparencyLayer()
-        ctx.setAlpha(1)
-        
-        ctx.setFillColor(color.with(alpha: 1).cg)
-        geometrys.forEach { $0.draw(withLineWidth: 1.5 * reciprocalScale, in: ctx) }
-    }
-    func drawTransparentCellLines(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
-        cellItems.forEach {
-            $0.cell.geometry.drawLines(withColor: Color.getSetBorder,
-                                       reciprocalScale: reciprocalScale, in: ctx)
-            $0.cell.geometry.drawPathLine(withReciprocalScale: reciprocalScale, in: ctx)
-        }
-    }
-    func drawSkinCellItem(_ cellItem: CellItem,
-                          reciprocalScale: Real, reciprocalAllScale: Real, in ctx: CGContext) {
-        cellItem.cell.geometry.drawSkin(lineColor: .indicated,
-                                        subColor: Color.subIndicated.multiply(alpha: 0.2),
-                                        skinLineWidth: animation.isInterpolated ? 3 : 1,
-                                        reciprocalScale: reciprocalScale,
-                                        reciprocalAllScale: reciprocalAllScale, in: ctx)
-    }
-}
-extension NodeTrack: ClassDeepCopiable {
-    func copied(from deepCopier: DeepCopier) -> NodeTrack {
-        return NodeTrack(animation: animation, name: name,
-                         time: time, isHidden: isHidden,
-                         selectedCellItems: selectedCellItems.map { deepCopier.copied($0) },
-                         drawingItem: deepCopier.copied(drawingItem),
-                         cellItems: cellItems.map { deepCopier.copied($0) },
-                         materialItems: materialItems.map { deepCopier.copied($0) },
-                         effectItem: effectItem != nil ? deepCopier.copied(effectItem!) : nil,
-                         transformItem: transformItem != nil ? deepCopier.copied(transformItem!) : nil,
-                         wiggleItem: wiggleItem != nil ? deepCopier.copied(wiggleItem!) : nil,
-                         keyPhases: keyPhases)
-    }
-}
-extension NodeTrack: Referenceable {
-    static let name = Text(english: "Node Track", japanese: "ノードトラック")
-}
-extension NodeTrack: ObjectViewExpression {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return name.view(withBounds: bounds, sizeType)
+        self[keyPath: newKey] = []
     }
 }
 
-/**
- Issue: 変更通知またはイミュータブル化またはstruct化
- */
-protocol TrackItem {
-    func step(_ f0: Int)
-    func linear(_ f0: Int, _ f1: Int, t: Real)
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline)
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline)
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline)
+struct LinesTrack: Track, Codable {
+    var animation: Animation<LinesKeyframeValue>
+    var animatable: Animatable {
+        return animation
+    }
+    
+    var cellTreeIndexes: [TreeIndex<Cell>]
 }
 
-final class DrawingItem: NSObject, TrackItem, NSCoding {
-    var drawing: Drawing, color: Color, lineWidth: Real
-    fileprivate(set) var keyDrawings: [Drawing]
-    func replace(_ drawing: Drawing, at i: Int) {
-        if keyDrawings[i] == self.drawing {
-            self.drawing = drawing
-        }
-        keyDrawings[i] = drawing
+struct SumKeyframeValue: KeyframeValue {}
+extension SumKeyframeValue: Interpolatable {
+    static func linear(_ f0: SumKeyframeValue, _ f1: SumKeyframeValue, t: Real) -> SumKeyframeValue {
+        return f0
     }
-    
-    func step(_ f0: Int) {
-        drawing = keyDrawings[f0]
+    static func firstMonospline(_ f1: SumKeyframeValue, _ f2: SumKeyframeValue,
+                                _ f3: SumKeyframeValue, with ms: Monospline) -> SumKeyframeValue {
+        return f1
     }
-    func linear(_ f0: Int, _ f1: Int, t: Real) {
-        drawing = keyDrawings[f0]
+    static func monospline(_ f0: SumKeyframeValue, _ f1: SumKeyframeValue,
+                           _ f2: SumKeyframeValue, _ f3: SumKeyframeValue,
+                           with ms: Monospline) -> SumKeyframeValue {
+        return f1
     }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        drawing = keyDrawings[f1]
-    }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        drawing = keyDrawings[f1]
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        drawing = keyDrawings[f1]
-    }
-    
-    static let defaultLineWidth = 1.0.cg
-    
-    init(drawing: Drawing = Drawing(), keyDrawings: [Drawing] = [],
-         color: Color = .strokeLine, lineWidth: Real = defaultLineWidth) {
-        
-        self.drawing = drawing
-        self.keyDrawings = keyDrawings.isEmpty ? [drawing] : keyDrawings
-        self.color = color
-        self.lineWidth = lineWidth
-        super.init()
-    }
-    
-    private enum CodingKeys: String, CodingKey {
-        case drawing, keyDrawings, lineWidth
-    }
-    init(coder: NSCoder) {
-        drawing = coder.decodeObject(forKey: CodingKeys.drawing.rawValue) as? Drawing ?? Drawing()
-        keyDrawings = coder.decodeObject(forKey: CodingKeys.keyDrawings.rawValue) as? [Drawing] ?? []
-        lineWidth = coder.decodeDouble(forKey: CodingKeys.lineWidth.rawValue).cg
-        color = .strokeLine
-        super.init()
-    }
-    var isEncodeDrawings = true
-    func encode(with coder: NSCoder) {
-        if isEncodeDrawings {
-            coder.encode(drawing, forKey: CodingKeys.drawing.rawValue)
-            coder.encode(keyDrawings, forKey: CodingKeys.keyDrawings.rawValue)
-        }
-        coder.encode(Double(lineWidth), forKey: CodingKeys.lineWidth.rawValue)
-    }
-    
-    var imageBounds: Rect {
-        return drawing.imageBounds(withLineWidth: lineWidth)
-    }
-    
-    func drawEdit(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
-        drawing.drawEdit(lineWidth: lineWidth * reciprocalScale, lineColor: color, in: ctx)
-    }
-    func draw(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
-        drawing.draw(lineWidth: lineWidth * reciprocalScale, lineColor: color, in: ctx)
-    }
-    func drawPreviousNext(isHiddenPrevious: Bool, isHiddenNext: Bool,
-                          index: Int, reciprocalScale: Real, in ctx: CGContext) {
-        let lineWidth = self.lineWidth * reciprocalScale
-        if !isHiddenPrevious && index - 1 >= 0 {
-            keyDrawings[index - 1].draw(lineWidth: lineWidth, lineColor: Color.previous, in: ctx)
-        }
-        if !isHiddenNext && index + 1 <= keyDrawings.count - 1 {
-            keyDrawings[index + 1].draw(lineWidth: lineWidth, lineColor: Color.next, in: ctx)
-        }
+    static func lastMonospline(_ f0: SumKeyframeValue, _ f1: SumKeyframeValue,
+                               _ f2: SumKeyframeValue, with ms: Monospline) -> SumKeyframeValue {
+        return f1
     }
 }
-extension DrawingItem: ClassDeepCopiable {
-    func copied(from deepCopier: DeepCopier) -> DrawingItem {
-        return DrawingItem(drawing: deepCopier.copied(drawing),
-                           keyDrawings: keyDrawings.map { deepCopier.copied($0) }, color: color)
-    }
-}
-extension DrawingItem: Referenceable {
-    static let name = Text(english: "Drawing Item", japanese: "ドローイングアイテム")
+extension SumKeyframeValue: Referenceable {
+    static let name = Text(english: "Sum Keyframe Value", japanese: "合計キーフレーム値")
 }
 
-final class CellItem: NSObject, TrackItem, NSCoding {
-    let cell: Cell
-    let id: UUID
-    fileprivate(set) var keyGeometries: [Geometry]
-    func replace(_ geometry: Geometry, at i: Int) {
-        if keyGeometries[i] == cell.geometry {
-            cell.geometry = geometry
-        }
-        keyGeometries[i] = geometry
-    }
+struct LinesKeyframeValue: KeyframeValue {
+    var drawing = Drawing()
+    var geometries = [Geometry]()
     
-    func step(_ f0: Int) {
-        cell.geometry = keyGeometries[f0]
-        cell.drawGeometry = keyGeometries[f0]
+    //previousNextview
+    //    func drawPreviousNext(lineWidth: Real,
+    //                          isHiddenPrevious: Bool, isHiddenNext: Bool, index: Int, in ctx: CGContext) {
+    //        if !isHiddenPrevious && index - 1 >= 0 {
+    //            ctx.setFillColor(Color.previous.cg)
+    //            keyGeometries[index - 1].draw(withLineWidth: lineWidth, in: ctx)
+    //        }
+    //        if !isHiddenNext && index + 1 <= keyGeometries.count - 1 {
+    //            ctx.setFillColor(Color.next.cg)
+    //            keyGeometries[index + 1].draw(withLineWidth: lineWidth, in: ctx)
+    //        }
+    //    }
+}
+extension LinesKeyframeValue: Interpolatable {
+    static func linear(_ f0: LinesKeyframeValue, _ f1: LinesKeyframeValue,
+                       t: Real) -> LinesKeyframeValue {
+        let drawing = f0.drawing
+        let geometries = [Geometry].linear(f0.geometries, f1.geometries, t: t)
+        return LinesKeyframeValue(drawing: drawing, geometries: geometries)
     }
-    func linear(_ f0: Int, _ f1: Int, t: Real) {
-        cell.geometry = keyGeometries[f0]
-        cell.drawGeometry = Geometry.linear(keyGeometries[f0], keyGeometries[f1], t: t)
+    static func firstMonospline(_ f1: LinesKeyframeValue, _ f2: LinesKeyframeValue,
+                                _ f3: LinesKeyframeValue, with ms: Monospline) -> LinesKeyframeValue {
+        let drawing = f1.drawing
+        let geometries = [Geometry].firstMonospline(f1.geometries,
+                                                    f2.geometries, f3.geometries, with: ms)
+        return LinesKeyframeValue(drawing: drawing, geometries: geometries)
     }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        cell.geometry = keyGeometries[f1]
-        cell.drawGeometry = Geometry.firstMonospline(keyGeometries[f1], keyGeometries[f2],
-                                                     keyGeometries[f3], with: ms)
+    static func monospline(_ f0: LinesKeyframeValue, _ f1: LinesKeyframeValue,
+                           _ f2: LinesKeyframeValue, _ f3: LinesKeyframeValue,
+                           with ms: Monospline) -> LinesKeyframeValue {
+        let drawing = f1.drawing
+        let geometries = [Geometry].monospline(f0.geometries, f1.geometries,
+                                               f2.geometries, f3.geometries, with: ms)
+        return LinesKeyframeValue(drawing: drawing, geometries: geometries)
     }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        cell.geometry = keyGeometries[f1]
-        cell.drawGeometry = Geometry.monospline(keyGeometries[f0], keyGeometries[f1],
-                                                keyGeometries[f2], keyGeometries[f3], with: ms)
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        cell.geometry = keyGeometries[f1]
-        cell.drawGeometry = Geometry.lastMonospline(keyGeometries[f0], keyGeometries[f1],
-                                                    keyGeometries[f2], with: ms)
-    }
-    
-    init(cell: Cell, keyGeometries: [Geometry] = []) {
-        self.cell = cell
-        self.keyGeometries = keyGeometries
-        id = UUID()
-        super.init()
-    }
-    
-    private enum CodingKeys: String, CodingKey {
-        case cell, cells, keyGeometries, id
-    }
-    init?(coder: NSCoder) {
-        cell = coder.decodeObject(forKey: CodingKeys.cell.rawValue) as? Cell ?? Cell()
-        keyGeometries = coder.decodeObject(
-            forKey: CodingKeys.keyGeometries.rawValue) as? [Geometry] ?? []
-        id = coder.decodeObject(forKey: CodingKeys.id.rawValue) as? UUID ?? UUID()
-        super.init()
-    }
-    var isEncodeGeometries = true {
-        didSet {
-            cell.isEncodeGeometry = isEncodeGeometries
-        }
-    }
-    func encode(with coder: NSCoder) {
-        coder.encode(cell, forKey: CodingKeys.cell.rawValue)
-        if isEncodeGeometries {
-            coder.encode(keyGeometries, forKey: CodingKeys.keyGeometries.rawValue)
-        }
-        coder.encode(id, forKey: CodingKeys.id.rawValue)
-    }
-    
-    var isEmptyKeyGeometries: Bool {
-        for keyGeometry in keyGeometries {
-            if !keyGeometry.isEmpty {
-                return false
-            }
-        }
-        return true
-    }
-    
-    func drawPreviousNext(lineWidth: Real,
-                          isHiddenPrevious: Bool, isHiddenNext: Bool, index: Int, in ctx: CGContext) {
-        if !isHiddenPrevious && index - 1 >= 0 {
-            ctx.setFillColor(Color.previous.cg)
-            keyGeometries[index - 1].draw(withLineWidth: lineWidth, in: ctx)
-        }
-        if !isHiddenNext && index + 1 <= keyGeometries.count - 1 {
-            ctx.setFillColor(Color.next.cg)
-            keyGeometries[index + 1].draw(withLineWidth: lineWidth, in: ctx)
-        }
+    static func lastMonospline(_ f0: LinesKeyframeValue, _ f1: LinesKeyframeValue,
+                               _ f2: LinesKeyframeValue, with ms: Monospline) -> LinesKeyframeValue {
+        let drawing = f1.drawing
+        let geometries = [Geometry].lastMonospline(f0.geometries,
+                                                   f1.geometries, f2.geometries, with: ms)
+        return LinesKeyframeValue(drawing: drawing, geometries: geometries)
     }
 }
-extension CellItem: ClassDeepCopiable {
-    func copied(from deepCopier: DeepCopier) -> CellItem {
-        return CellItem(cell: deepCopier.copied(cell), keyGeometries: keyGeometries)
-    }
-}
-extension CellItem: Referenceable {
-    static let name = Text(english: "Cell Item", japanese: "セルアイテム")
-}
-
-final class MaterialItem: NSObject, TrackItem, NSCoding {
-    var cells: [Cell]
-    var material: Material {
-        didSet {
-            self.cells.forEach { $0.material = material }
-        }
-    }
-    fileprivate(set) var keyMaterials: [Material]
-    func replace(_ material: Material, at i: Int) {
-        if keyMaterials[i] == self.material {
-            self.material = material
-        }
-        keyMaterials[i] = material
-    }
-    
-    func step(_ f0: Int) {
-        self.material = keyMaterials[f0]
-    }
-    func linear(_ f0: Int, _ f1: Int, t: Real) {
-        self.material = Material.linear(keyMaterials[f0], keyMaterials[f1], t: t)
-    }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        self.material = Material.firstMonospline(keyMaterials[f1], keyMaterials[f2],
-                                                 keyMaterials[f3], with: ms)
-    }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        self.material = Material.monospline(keyMaterials[f0], keyMaterials[f1],
-                                            keyMaterials[f2], keyMaterials[f3], with: ms)
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        self.material = Material.lastMonospline(keyMaterials[f0], keyMaterials[f1],
-                                               keyMaterials[f2], with: ms)
-    }
-    
-    init(material: Material = Material(), cells: [Cell] = [], keyMaterials: [Material] = []) {
-        self.material = material
-        self.cells = cells
-        self.keyMaterials = keyMaterials
-        super.init()
-    }
-    
-    private enum CodingKeys: String, CodingKey {
-        case material, cells, keyMaterials
-    }
-    init?(coder: NSCoder) {
-        material = coder.decodeObject(
-            forKey: CodingKeys.material.rawValue) as? Material ?? Material()
-        cells = coder.decodeObject(forKey: CodingKeys.cells.rawValue) as? [Cell] ?? []
-        keyMaterials = coder.decodeObject(
-            forKey: CodingKeys.keyMaterials.rawValue) as? [Material] ?? []
-        super.init()
-    }
-    func encode(with coder: NSCoder) {
-        coder.encode(material, forKey: CodingKeys.material.rawValue)
-        coder.encode(cells, forKey: CodingKeys.cells.rawValue)
-        coder.encode(keyMaterials, forKey: CodingKeys.keyMaterials.rawValue)
-    }
-}
-extension MaterialItem: ClassDeepCopiable {
-    func copied(from deepCopier: DeepCopier) -> MaterialItem {
-        return MaterialItem(material: material,
-                            cells: cells.map { deepCopier.copied($0) }, keyMaterials: keyMaterials)
-    }
-}
-extension MaterialItem: Referenceable {
-    static let name = Text(english: "Material Item", japanese: "マテリアルアイテム")
-}
-
-final class EffectItem: TrackItem, Codable {
-    var effect: Effect
-    fileprivate(set) var keyEffects: [Effect]
-    func replace(_ effect: Effect, at i: Int) {
-        if keyEffects[i] == self.effect {
-            self.effect = effect
-        }
-        keyEffects[i] = effect
-    }
-    var drawEffect: Effect
-    
-    func step(_ f0: Int) {
-        effect = keyEffects[f0]
-        drawEffect = keyEffects[f0]
-    }
-    func linear(_ f0: Int, _ f1: Int, t: Real) {
-        effect = keyEffects[f0]
-        drawEffect = Effect.linear(keyEffects[f0], keyEffects[f1], t: t)
-    }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        effect = keyEffects[f1]
-        drawEffect = Effect.firstMonospline(keyEffects[f1], keyEffects[f2],
-                                            keyEffects[f3], with: ms)
-    }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        effect = keyEffects[f1]
-        drawEffect = Effect.monospline(keyEffects[f0], keyEffects[f1],
-                                       keyEffects[f2], keyEffects[f3], with: ms)
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        effect = keyEffects[f1]
-        drawEffect = Effect.lastMonospline(keyEffects[f0], keyEffects[f1],
-                                           keyEffects[f2], with: ms)
-    }
-    
-    init(effect: Effect = Effect(), keyEffects: [Effect] = [Effect()]) {
-        self.effect = effect
-        self.drawEffect = effect
-        self.keyEffects = keyEffects
-    }
-    
-    static func empty(with animation: Animation) -> EffectItem {
-        let effectItem =  EffectItem()
-        let effects = animation.keyframes.map { _ in Effect() }
-        effectItem.keyEffects = effects
-        effectItem.effect = effects[animation.editKeyframeIndex]
-        return effectItem
-    }
-    var isEmpty: Bool {
-        for t in keyEffects {
-            if !t.isEmpty {
-                return false
-            }
-        }
-        return true
-    }
-}
-extension EffectItem: ClassDeepCopiable {
-    func copied(from deepCopier: DeepCopier) -> EffectItem {
-        return EffectItem(effect: effect, keyEffects: keyEffects)
-    }
-}
-extension EffectItem: Referenceable {
-    static let name = Text(english: "Effect Item", japanese: "エフェクトアイテム")
-}
-
-final class TransformItem: TrackItem, Codable {
-    var transform: Transform
-    fileprivate(set) var keyTransforms: [Transform]
-    func replace(_ transform: Transform, at i: Int) {
-        if keyTransforms[i] == self.transform {
-            self.transform = transform
-        }
-        keyTransforms[i] = transform
-    }
-    var drawTransform: Transform
-    
-    func step(_ f0: Int) {
-        transform = keyTransforms[f0]
-        drawTransform = keyTransforms[f0]
-    }
-    func linear(_ f0: Int, _ f1: Int, t: Real) {
-        transform = keyTransforms[f0]
-        drawTransform = Transform.linear(keyTransforms[f0], keyTransforms[f1], t: t)
-    }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        transform = keyTransforms[f1]
-        drawTransform = Transform.firstMonospline(keyTransforms[f1], keyTransforms[f2],
-                                                  keyTransforms[f3], with: ms)
-    }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        transform = keyTransforms[f1]
-        drawTransform = Transform.monospline(keyTransforms[f0], keyTransforms[f1],
-                                             keyTransforms[f2], keyTransforms[f3], with: ms)
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        transform = keyTransforms[f1]
-        drawTransform = Transform.lastMonospline(keyTransforms[f0], keyTransforms[f1],
-                                                 keyTransforms[f2], with: ms)
-    }
-    
-    init(transform: Transform = Transform(), keyTransforms: [Transform] = [Transform()]) {
-        self.transform = transform
-        self.drawTransform = transform
-        self.keyTransforms = keyTransforms
-    }
-    
-    static func empty(with animation: Animation) -> TransformItem {
-        let transformItem =  TransformItem()
-        let transforms = animation.keyframes.map { _ in Transform() }
-        transformItem.keyTransforms = transforms
-        transformItem.transform = transforms[animation.editKeyframeIndex]
-        return transformItem
-    }
-    var isEmpty: Bool {
-        for t in keyTransforms {
-            if !t.isIdentity {
-                return false
-            }
-        }
-        return true
-    }
-}
-extension TransformItem: ClassDeepCopiable {
-    func copied(from deepCopier: DeepCopier) -> TransformItem {
-        return TransformItem(transform: transform, keyTransforms: keyTransforms)
-    }
-}
-extension TransformItem: Referenceable {
-    static let name = Text(english: "Transform Item", japanese: "トランスフォームアイテム")
-}
-
-final class WiggleItem: TrackItem, Codable {
-    var wiggle: Wiggle
-    fileprivate(set) var keyWiggles: [Wiggle]
-    func replace(_ wiggle: Wiggle, at i: Int) {
-        if keyWiggles[i] == self.wiggle {
-            self.wiggle = wiggle
-        }
-        keyWiggles[i] = wiggle
-    }
-    var drawWiggle: Wiggle
-    
-    func step(_ f0: Int) {
-        wiggle = keyWiggles[f0]
-        drawWiggle = keyWiggles[f0]
-    }
-    func linear(_ f0: Int, _ f1: Int, t: Real) {
-        wiggle = keyWiggles[f0]
-        drawWiggle = Wiggle.linear(keyWiggles[f0], keyWiggles[f1], t: t)
-    }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        wiggle = keyWiggles[f1]
-        drawWiggle = Wiggle.firstMonospline(keyWiggles[f1], keyWiggles[f2],
-                                            keyWiggles[f3], with: ms)
-    }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        wiggle = keyWiggles[f1]
-        drawWiggle = Wiggle.monospline(keyWiggles[f0], keyWiggles[f1],
-                                       keyWiggles[f2], keyWiggles[f3], with: ms)
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        wiggle = keyWiggles[f1]
-        drawWiggle = Wiggle.lastMonospline(keyWiggles[f0], keyWiggles[f1],
-                                           keyWiggles[f2], with: ms)
-    }
-    
-    init(wiggle: Wiggle = Wiggle(), keyWiggles: [Wiggle] = [Wiggle()]) {
-        self.wiggle = wiggle
-        drawWiggle = wiggle
-        self.keyWiggles = keyWiggles
-    }
-    
-    static func empty(with animation: Animation) -> WiggleItem {
-        let wiggleItem =  WiggleItem()
-        let wiggles = animation.keyframes.map { _ in Wiggle() }
-        wiggleItem.keyWiggles = wiggles
-        wiggleItem.wiggle = wiggles[animation.editKeyframeIndex]
-        return wiggleItem
-    }
-    var isEmpty: Bool {
-        for t in keyWiggles {
-            if !t.isEmpty {
-                return false
-            }
-        }
-        return true
-    }
-}
-extension WiggleItem: ClassDeepCopiable {
-    func copied(from deepCopier: DeepCopier) -> WiggleItem {
-        return WiggleItem(wiggle: wiggle, keyWiggles: keyWiggles)
-    }
-}
-extension WiggleItem: Referenceable {
-    static let name = Text(english: "Wiggle Item", japanese: "振動アイテム")
-}
-
-final class TempoItem: TrackItem, Codable {
-    var tempo: BPM
-    fileprivate(set) var keyTempos: [BPM]
-    func replace(tempo: BPM, at i: Int) {
-        keyTempos[i] = tempo
-        self.tempo = tempo
-    }
-    var drawTempo: BPM
-
-    func step(_ f0: Int) {
-        tempo = keyTempos[f0]
-        drawTempo = keyTempos[f0]
-    }
-    func linear(_ f0: Int, _ f1: Int, t: Real) {
-        tempo = keyTempos[f0]
-        drawTempo = BPM.linear(keyTempos[f0], keyTempos[f1], t: t)
-    }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        tempo = keyTempos[f1]
-        drawTempo = BPM.firstMonospline(keyTempos[f1], keyTempos[f2], keyTempos[f3], with: ms)
-    }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        tempo = keyTempos[f1]
-        drawTempo = BPM.monospline(keyTempos[f0], keyTempos[f1],
-                                   keyTempos[f2], keyTempos[f3], with: ms)
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        tempo = keyTempos[f1]
-        drawTempo = BPM.lastMonospline(keyTempos[f0], keyTempos[f1], keyTempos[f2], with: ms)
-    }
-
-    static let defaultTempo = BPM(60)
-    init(tempo: BPM = defaultTempo, keyTempos: [BPM] = [defaultTempo]) {
-        self.tempo = tempo
-        drawTempo = tempo
-        self.keyTempos = keyTempos
-    }
-
-    static func empty(with animation: Animation) -> TempoItem {
-        let tempoItem =  TempoItem()
-        let tempos = animation.keyframes.map { _ in defaultTempo }
-        tempoItem.keyTempos = tempos
-        tempoItem.tempo = tempos[animation.editKeyframeIndex]
-        return tempoItem
-    }
-}
-extension TempoItem: ClassDeepCopiable {
-    func copied(from deepCopier: DeepCopier) -> TempoItem {
-        return TempoItem(tempo: tempo, keyTempos: keyTempos)
-    }
-}
-extension TempoItem: Referenceable {
-    static let name = Text(english: "Tempo Item", japanese: "テンポアイテム")
-}
-
-final class TracksManager {
-    let tracksView = ListArrayView()
-    
-    init() {
-        tracksView.nameClosure = { [unowned self] in
-            let tracks = self.node.tracks
-            guard $0 < tracks.count else {
-                return Text()
-            }
-            return Text(tracks[$0].name)
-        }
-        tracksView.copiedViewablesClosure = { [unowned self] _, _ in
-            return [self.node.editTrack.copied]
-        }
-        tracksView.moveClosure = { [unowned self] in self.moveTrack(for: $1, $2) }
-    }
-    
-    var node = Node() {
-        didSet {
-            if node != oldValue {
-                updateWithTracks(isAlwaysUpdate: true)
-            }
-        }
-    }
-    
-    func updateWithTracks(isAlwaysUpdate: Bool = false) {
-        tracksView.set(selectedIndex: node.editTrackIndex, count: node.tracks.count)
-        if isAlwaysUpdate {
-            tracksView.updateLayout()
-        }
-    }
-    
-    var disabledRegisterUndo = true
-    
-    struct NodeTracksBinding {
-        let tracksManager: TracksManager
-        let track: NodeTrack, index: Int, oldIndex: Int, beginIndex: Int
-        let inNode: Node, phase: Phase
-    }
-    var setTracksClosure: ((NodeTracksBinding) -> ())?
-    
-    var moveHeight = 8.0.cg
-    private var oldIndex = 0, beginIndex = 0, oldP = Point()
-    private weak var editTrack: NodeTrack?
-    private var oldInNode = Node(), oldTracks = [NodeTrack]()
-    func moveTrack(for p: Point, _ phase: Phase) {
-        switch phase {
-        case .began:
-            oldInNode = node
-            oldTracks = oldInNode.tracks
-            oldIndex = oldInNode.editTrackIndex
-            beginIndex = oldIndex
-            editTrack = oldInNode.editTrack
-            oldP = p
-            setTracksClosure?(NodeTracksBinding(tracksManager: self,
-                                                track: oldInNode.editTrack,
-                                                index: oldIndex,
-                                                oldIndex: oldIndex,
-                                                beginIndex: beginIndex,
-                                                inNode: oldInNode, phase: .began))
-        case .changed, .ended:
-            guard let editTrack = editTrack else {
-                return
-            }
-            let d = p.y - oldP.y
-            let i = (beginIndex + Int(d / moveHeight)).clip(min: 0, max: oldTracks.count - 1)
-            if i != oldIndex || (phase == .ended && i != beginIndex) {
-                setTracksClosure?(NodeTracksBinding(tracksManager: self,
-                                                    track: editTrack,
-                                                    index: i,
-                                                    oldIndex: oldIndex,
-                                                    beginIndex: beginIndex,
-                                                    inNode: oldInNode, phase: phase))
-                oldIndex = i
-            }
-            if phase == .ended {
-                oldTracks = []
-            }
-        }
-    }
+extension LinesKeyframeValue: Referenceable {
+    static let name = Text(english: "Lines Keyframe Value", japanese: "線キーフレーム値")
 }

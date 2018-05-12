@@ -17,52 +17,46 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
-
 typealias Closure = (() -> ())
 
-final class ClosureView: View, Queryable, Runnable {
-    var closure: Closure
+final class ClosureView: View {
+    typealias Model = Closure
+    var model: Model
     
-    let nameView: TextView
     var sizeType: SizeType
+    let nameView: TextView
     
-    init(closure: @escaping Closure = {},
-         name: Text = "",
+    init(model: @escaping Model = {}, name: Text = "",
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
-        self.closure = closure
-        self.nameView = TextView(text: name, font: Font.default(with: sizeType), color: .locked)
+        self.model = model
+        
         self.sizeType = sizeType
+        self.nameView = TextView(text: name, font: Font.default(with: sizeType), color: .locked)
         
         super.init()
-        self.frame = frame
         children = [nameView]
+        self.frame = frame
     }
     
     override var defaultBounds: Rect {
         let fitSize = nameView.fitSize, padding = Layout.padding(with: sizeType)
-        return Rect(x: 0,
-                      y: 0,
-                      width: fitSize.width + padding * 2,
-                      height: fitSize.height + padding * 2)
+        return Rect(x: 0, y: 0,
+                    width: fitSize.width + padding * 2, height: fitSize.height + padding * 2)
     }
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    func updateLayout() {
+    override func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        nameView.frame.origin = Point(x: padding,
-                                        y: bounds.height - nameView.frame.height - padding)
+        nameView.frame.origin = Point(x: padding, y: bounds.height - nameView.frame.height - padding)
     }
-    
+}
+private struct _Closure: Referenceable {
+    static let name = Text(english: "Closure", japanese: "クロージャ")
+}
+extension ClosureView: Queryable {
+    static let referenceableType: Referenceable.Type = _Closure.self
+}
+extension ClosureView: Runnable {
     func run(for p: Point) {
-        closure()
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return Reference(name: Text(english: "Closure", japanese: "クロージャ"))
+        model()
     }
 }

@@ -19,77 +19,52 @@
 
 import Foundation
 
-typealias Version = UndoManager
-
-extension Version: Referenceable {
-    static let name = Text(english: "Version", japanese: "バージョン")
-}
-
-/**
- Issue: Versionクラス
- Issue: バージョン管理UndoManager
- Issue: ブランチ機能
- */
-final class VersionView: View, Queryable {
-    var version = Version() {
-        didSet {
-            removeNotification()
-            let nc = NotificationCenter.default
-            
-            undoGroupToken = nc.addObserver(forName: .NSUndoManagerDidCloseUndoGroup,
-                                            object: version, queue: nil) { [unowned self] in
-                if let undoManager = $0.object as? UndoManager, undoManager == self.version {
-                    if undoManager.groupingLevel == 0 {
-                        self.undoCount += 1
-                        self.allCount = self.undoCount
-                        self.updateWithVersion()
-                    }
-                }
-            }
-            
-            undoToken = nc.addObserver(forName: .NSUndoManagerDidUndoChange,
-                                       object: version, queue: nil) { [unowned self] in
-                if let undoManager = $0.object as? UndoManager, undoManager == self.version {
-                    self.undoCount -= 1
-                    self.updateWithVersion()
-                }
-            }
-            
-            redoToken = nc.addObserver(forName: .NSUndoManagerDidRedoChange,
-                                       object: version, queue: nil) { [unowned self] in
-                if let undoManager = $0.object as? UndoManager, undoManager == self.version {
-                    self.undoCount += 1
-                    self.updateWithVersion()
-                }
-            }
-            
-            updateWithVersion()
-        }
+final class Version: UndoManager {
+    var disabledUndoRegistrationKeys = [String]()
+    private(set) var undoedIndex = 0, index = 0
+    var undoedDiffCount: Int {
+        return undoedIndex - index
     }
-    var undoCount = 0, allCount = 0
-    var differentialCount: Int {
-        return undoCount - allCount
-    }
+    var indexBinding: ((Version, Int) -> ())?
+    var undoedIndexBinding: ((Version, Int) -> ())?
+    
     private var undoGroupToken: NSObjectProtocol?
     private var undoToken: NSObjectProtocol?, redoToken: NSObjectProtocol?
-    override var undoManager: UndoManager? {
-        return version
-    }
-    
-    let allCountView = IntView(model: 0, option: IntGetterOption(unit: ""))
-    let differentialCountView = IntView(model: 0, option: IntGetterOption(unit: ""))
-    
-    var sizeType: SizeType
-    let classNameView = TextView(text: Version.name, font: .bold)
-    
-    init(sizeType: SizeType = .regular) {
-        self.sizeType = sizeType
-        _ = Layout.leftAlignment([classNameView, PaddingView(), allCountView],
-                                 height: Layout.basicHeight)
-        
+    override init() {
         super.init()
-        isClipped = true
-        children = [classNameView, allCountView]
+        
+        let nc = NotificationCenter.default
+        
+        let undoGroupClosure: (Notification) -> () = { [unowned self] in
+            if let undoManager = $0.object as? UndoManager, undoManager == self {
+                if undoManager.groupingLevel == 0 {
+                    self.undoedIndex += 1
+                    self.index = self.undoedIndex
+                    self.indexBinding?(self, self.index)
+                    self.undoedIndexBinding?(self, self.undoedIndex)
+                }
+            }
+        }
+        undoGroupToken = nc.addObserver(forName: .NSUndoManagerDidCloseUndoGroup,
+                                        object: self, queue: nil, using: undoGroupClosure)
+        
+        let undoClosure: (Notification) -> () = { [unowned self] in
+            if let undoManager = $0.object as? UndoManager, undoManager == self {
+                self.undoedIndex -= 1
+                self.undoedIndexBinding?(self, self.undoedIndex)
+            }
+        }
+        undoToken = nc.addObserver(forName: .NSUndoManagerDidUndoChange,
+                                   object: self, queue: nil, using: undoClosure)
+        
+        let redoClosure: (Notification) -> () = { [unowned self] in
+            if let undoManager = $0.object as? UndoManager, undoManager == self {
+                self.undoedIndex += 1
+                self.undoedIndexBinding?(self, self.undoedIndex)
+            }
+        }
+        redoToken = nc.addObserver(forName: .NSUndoManagerDidRedoChange,
+                                   object: self, queue: nil, using: redoClosure)
     }
     
     deinit {
@@ -106,64 +81,106 @@ final class VersionView: View, Queryable {
             NotificationCenter.default.removeObserver(token)
         }
     }
+}
+extension Version: Referenceable {
+    static let name = Text(english: "Version", japanese: "バージョン")
+}
+
+/**
+ Issue: バージョン管理
+ Issue: ブランチ機能
+ */
+final class VersionView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = Version
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
     
-    override var locale: Locale {
-        didSet {
-            updateLayout()
-        }
+    let indexView: IntGetterView<Binder>
+    let undoedDiffCountView: IntGetterView<Binder>
+    
+    var sizeType: SizeType {
+        didSet { updateLayout() }
+    }
+    let classNameView = TextView(text: Version.name, font: .bold)
+    
+    init(binder: Binder, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        self.sizeType = sizeType
+        indexView = IntGetterView(binder: binder,
+                                     keyPath: keyPath.appending(path: \Model.index),
+                                     option: IntGetterOption(unit: ""))
+        undoedDiffCountView = IntGetterView(binder: binder,
+                                      keyPath: keyPath.appending(path: \Model.undoedDiffCount),
+                                      option: IntGetterOption(unit: ""))
+        
+        super.init()
+        isClipped = true
+        children = [classNameView, indexView]
+        self.frame = frame
     }
     
     override var defaultBounds: Rect {
         return Rect(x: 0, y: 0, width: 120, height: Layout.height(with: sizeType))
     }
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    func updateLayout() {
-        let padding = Layout.basicPadding
+    override func updateLayout() {
+        let padding = Layout.padding(with: sizeType)
         classNameView.frame.origin = Point(x: padding,
-                                             y: bounds.height - classNameView.frame.height - padding)
-        if undoCount < allCount {
-            _ = Layout.leftAlignment([allCountView, PaddingView(), differentialCountView],
-                                     minX: classNameView.frame.maxX + padding,
-                                     height: frame.height)
-        } else {
-            _ = Layout.leftAlignment([allCountView],
-                                     minX: classNameView.frame.maxX + padding,
-                                     height: frame.height)
-        }
+                                           y: bounds.height - classNameView.frame.height - padding)
+        let items: [Layout.Item] = model.undoedIndex < model.index ?
+            [.view(indexView), .xPadding(padding), .view(undoedDiffCountView)] :
+            [.view(indexView)]
+        _ = Layout.leftAlignment(items, minX: classNameView.frame.maxX + padding, height: frame.height)
     }
-    func updateWithVersion() {
-        if undoCount < allCount {
-            allCountView.model = allCount
-            differentialCountView.model = differentialCount
-            allCountView.bounds = Rect(origin: Point(), size: allCountView.optionTextView.fitSize)
-            differentialCountView.bounds = Rect(origin: Point(),
-                                                size: differentialCountView.optionTextView.fitSize)
-            differentialCountView.optionTextView.textFrame.color = .warning
-            if differentialCountView.parent == nil {
-                children = [classNameView, allCountView, differentialCountView]
+    func updateWithModel() {
+        model.indexBinding = { [unowned self] _, _ in self.updateWithVersionIndex() }
+        model.undoedIndexBinding = { [unowned self] _, _ in self.updateWithVersionIndex() }
+        updateWithVersionIndex()
+    }
+    private func updateWithVersionIndex() {
+        if model.undoedIndex < model.index {
+            indexView.updateWithModel()
+            undoedDiffCountView.updateWithModel()
+            indexView.bounds = Rect(origin: Point(), size: indexView.optionTextView.fitSize)
+            undoedDiffCountView.bounds = Rect(origin: Point(),
+                                              size: undoedDiffCountView.optionTextView.fitSize)
+            undoedDiffCountView.optionTextView.textFrame.color = .warning
+            if undoedDiffCountView.parent == nil {
+                children = [classNameView, indexView, undoedDiffCountView]
                 updateLayout()
             }
         } else {
-            allCountView.model = allCount
-            allCountView.bounds = Rect(origin: Point(), size: allCountView.optionTextView.fitSize)
-            differentialCountView.bounds = Rect(origin: Point(),
-                                                size: differentialCountView.optionTextView.fitSize)
-            differentialCountView.optionTextView.textFrame.color = .warning
-            if differentialCountView.parent != nil {
-                children = [classNameView, allCountView]
+            indexView.updateWithModel()
+            indexView.bounds = Rect(origin: Point(), size: indexView.optionTextView.fitSize)
+            undoedDiffCountView.bounds = Rect(origin: Point(),
+                                              size: undoedDiffCountView.optionTextView.fitSize)
+            undoedDiffCountView.optionTextView.textFrame.color = .warning
+            if undoedDiffCountView.parent != nil {
+                children = [classNameView, indexView]
                 updateLayout()
             }
         }
     }
-    
-    func reference(at p: Point) -> Reference {
-        var reference = Version.reference
-        reference.classDescription  = Text(english: "Show undoable count and undoed count in parent view",
-                                                   japanese: "親表示での取り消し可能回数、取り消し済み回数を表示")
-        return reference
+}
+extension VersionView: Localizable {
+    func update(with locale: Locale) {
+        updateLayout()
+    }
+}
+extension VersionView: ViewQueryable {
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
+    static var viewDescription: Text {
+        return Text(english: "Show undoable count and undoed count in parent view",
+                    japanese: "親表示での取り消し可能回数、取り消し済み回数を表示")
     }
 }

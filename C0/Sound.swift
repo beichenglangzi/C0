@@ -20,47 +20,9 @@
 import Foundation
 import AudioToolbox
 
-final class SoundItem: TrackItem, Codable {
-    var sound: Sound
-    fileprivate(set) var keySounds: [Sound]
-    func replace(_ sound: Sound, at i: Int) {
-        keySounds[i] = sound
-        self.sound = sound
-    }
-    
-    func step(_ f0: Int) {
-        sound = keySounds[f0]
-    }
-    func linear(_ f0: Int, _ f1: Int, t: Real) {
-        sound = keySounds[f0]
-    }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        sound = keySounds[f1]
-    }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        sound = keySounds[f1]
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        sound = keySounds[f1]
-    }
-    
-    static let defaultSound = Sound()
-    init(sound: Sound = defaultSound, keySounds: [Sound] = [defaultSound]) {
-        self.sound = sound
-        self.keySounds = keySounds
-    }
-}
-extension SoundItem: ClassDeepCopiable {
-    func copied(from deepCopier: DeepCopier) -> SoundItem {
-        return SoundItem(sound: sound, keySounds: keySounds)
-    }
-}
-extension SoundItem: Referenceable {
-    static let name = Text(english: "Sound Item", japanese: "サウンドアイテム")
-}
-
 struct Sound {
     static let basicSampleRate = 44100.0
+    
     var url: URL? {
         didSet {
             if let url = url {
@@ -122,7 +84,7 @@ struct Sound {
                                                                count: Int(abl.mNumberBuffers))
                 let capacity = Int(buffers[0].mDataByteSize / floatSize)
                 if let subSamples = buffers[0].mData?.bindMemory(to: Float.self, capacity: capacity) {
-                    (0 ..< capacity).forEach { samples.append(subSamples[$0]) }
+                    (0..<capacity).forEach { samples.append(subSamples[$0]) }
                 }
             }
         }
@@ -133,7 +95,7 @@ struct Sound {
         let samples = self.samples()
         let rc = 1 / Real(count - 1)
         var oldSampleIndex = 0
-        return (1 ..< count).map { i in
+        return (1..<count).map { i in
             let t = Real(i) * rc
             let sampleIndex = Int(Real(samples.count - 1) * t)
             let subSamples = samples[oldSampleIndex...sampleIndex]
@@ -175,9 +137,35 @@ extension Sound: Codable {
 extension Sound: Referenceable {
     static let name = Text(english: "Sound", japanese: "サウンド")
 }
-extension Sound: ObjectViewExpression {
+extension Sound: Initializable {}
+extension Sound: Interpolatable {
+    static func linear(_ f0: Sound, _ f1: Sound, t: Real) -> Sound {
+        return f0
+    }
+    static func firstMonospline(_ f1: Sound, _ f2: Sound,
+                                _ f3: Sound, with ms: Monospline) -> Sound {
+        return f1
+    }
+    static func monospline(_ f0: Sound, _ f1: Sound,
+                           _ f2: Sound, _ f3: Sound, with ms: Monospline) -> Sound {
+        return f1
+    }
+    static func lastMonospline(_ f0: Sound, _ f1: Sound,
+                               _ f2: Sound, with ms: Monospline) -> Sound {
+        return f1
+    }
+}
+extension Sound: KeyframeValue {}
+extension Sound: CompactViewable {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return name.view(withBounds: bounds, sizeType)
+    }
+}
+
+struct SoundTrack: Track, Codable {
+    private(set) var animation = Animation<Sound>()
+    var animatable: Animatable {
+        return animation
     }
 }
 
@@ -201,7 +189,7 @@ final class SoundWaveformView: View {
         }
     }
     
-    var tempoTrack = TempoTrack()
+    var tempoTrack = TempoTrack()//delete
     
     static let defautBaseWidth = 6.0.cg
     var baseWidth = defautBaseWidth {
@@ -233,7 +221,8 @@ final class SoundWaveformView: View {
         isClipped = true
         children = [waveformView]
     }
-    func updateWaveform(isRefreshCache: Bool = false) {
+    
+    private func updateWaveform(isRefreshCache: Bool = false) {
         switch waveformType {
         case .normal:
             let samples = sound.samples(withSampleRate: sampleRate)
@@ -246,8 +235,6 @@ final class SoundWaveformView: View {
             secondDuration = Second(Double(samples.count) / sampleRate)
             duration = tempoTrack.realBeatTime(withSecondTime: secondDuration)
             
-            
-            let path = CGMutablePath()
             let count = Int(frame.width / 5)
             let rc = 1 / Real(count - 1)
             
@@ -255,6 +242,7 @@ final class SoundWaveformView: View {
             func y(withSample sample: SoundSample) -> Real {
                 return midY + halfH * Real(sample)
             }
+            let path = CGMutablePath()
             path.addLines(between: (0..<count).map { i in
                 let xt = Real(i) * rc
                 let si = Int(Real(samples.count - 1) * xt)
@@ -303,7 +291,7 @@ final class SoundWaveformView: View {
  Issue: 効果音編集
  Issue: シーケンサー
  */
-final class SoundView: View, Queryable, Assignable {
+final class SoundView: View {
     var sound = Sound() {
         didSet {
             nameView.text = sound.url != nil ? Text(sound.name) : ""
@@ -326,18 +314,7 @@ final class SoundView: View, Queryable, Assignable {
         updateLayout()
     }
     
-    override var locale: Locale {
-        didSet {
-            updateLayout()
-        }
-    }
-    
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    private func updateLayout() {
+    override func updateLayout() {
         let padding = Layout.padding(with: sizeType)
         let y = bounds.height - padding - classNameView.frame.height
         classNameView.frame.origin = Point(x: padding, y: y)
@@ -346,18 +323,27 @@ final class SoundView: View, Queryable, Assignable {
                                 height: bounds.height - padding * 2)
     }
     
-    var disabledRegisterUndo = false
-    
     struct Binding {
         let soundView: SoundView, sound: Sound, oldSound: Sound, phase: Phase
     }
     var setSoundClosure: ((Binding) -> ())?
     
+    func push(_ sound: Sound) {
+        //        registeringUndoManager?.registerUndo(withTarget: self) { [old =]$0.set(oldSound, old: sound) }
+        self.sound = sound
+    }
+}
+extension SoundView: Localizable {
+    func update(with locale: Locale) {
+        updateLayout()
+    }
+}
+extension SoundView: Queryable {
+    static let referenceableType: Referenceable.Type = Sound.self
+}
+extension SoundView: Assignable {
     func delete(for p: Point) {
-        guard sound.url != nil else {
-            return
-        }
-        set(Sound(), old: self.sound)
+        push(Sound())
     }
     func copiedViewables(at p: Point) -> [Viewable] {
         guard let url = sound.url else {
@@ -368,26 +354,14 @@ final class SoundView: View, Queryable, Assignable {
     func paste(_ objects: [Any], for p: Point) {
         for object in objects {
             if let sound = object as? Sound {
-                set(sound, old: self.sound)
+                push(sound)
                 return
             } else if let url = object as? URL, url.isConforms(uti: kUTTypeAudio as String) {
                 var sound = Sound()
                 sound.url = url
-                set(sound, old: self.sound)
+                push(sound)
                 return
             }
         }
-    }
-    private func set(_ sound: Sound, old oldSound: Sound) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldSound, old: sound) }
-        setSoundClosure?(Binding(soundView: self,
-                                 sound: oldSound, oldSound: oldSound, phase: .began))
-        self.sound = sound
-        setSoundClosure?(Binding(soundView: self,
-                                 sound: sound, oldSound: oldSound, phase: .ended))
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return Sound.reference
     }
 }

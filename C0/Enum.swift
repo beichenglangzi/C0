@@ -17,104 +17,84 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Locale
 
 typealias EnumType = RawRepresentable & Referenceable & Viewable & Equatable
 
-final class EnumView<T: EnumType>: View, Queryable, Assignable, Runnable, Movable {
-    var enumeratedType: T {
-        didSet {
-            index = indexClosure(enumeratedType.rawValue)
-        }
-    }
-    private(set) var index = 0 {
-        didSet {
-            if index != oldValue {
-                updateWithEnumeratedType()
-                updateLayout()
-            }
-        }
-    }
-    var defaultEnumeratedType: T
-    var cationEnumeratedType: T? {
-        didSet {
-            if let cationEnumeratedType = cationEnumeratedType {
-                cationIndex = indexClosure(cationEnumeratedType.rawValue)
-            } else {
-                cationIndex = nil
-            }
-        }
-    }
-    private var cationIndex: Int?
+struct EnumOption<Model: EnumType> {
+    var defaultModel: Model
+    var cationModels: [Model]
+    let indexClosure: ((Model.RawValue) -> (Int))
+    let rawValueClosure: ((Int) -> (Model.RawValue?))
+    let names: [Text]
     
-    var indexClosure: ((T.RawValue) -> (Int))
-    var rawValueClosure: ((Int) -> (T.RawValue?))
+    func index(with model: Model) -> Int {
+        return indexClosure(model.rawValue)
+    }
+    func model(at index: Int) -> Model {
+        if let rawValue = rawValueClosure(index) {
+            return Model(rawValue: rawValue) ?? defaultModel
+        } else {
+            return defaultModel
+        }
+    }
+}
+
+final class EnumView<T: EnumType, U: BinderProtocol>: View, BindableReceiver {
+    typealias Model = T
+    typealias ModelOption = EnumOption<Model>
+    typealias Binder = U
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
     
-    var sizeType: SizeType
+    var option: ModelOption {
+        didSet { updateWithModel() }
+    }
+    
+    var sizeType: SizeType {
+        didSet { updateLayout() }
+    }
     let classNameView: TextView
-    let knobView: DiscreteKnobView
-    private let lineView: View = {
-        let lineView = View(path: CGMutablePath())
-        lineView.fillColor = .content
-        return lineView
-    } ()
-    var classNameViews: [TextView]
+    let nameViews: [TextView]
+    let knobView: View
     
-    init(enumeratedType: T, defaultEnumeratedType: T? = nil,
-         cationEnumeratedType: T? = nil,
-         indexClosure: @escaping ((T.RawValue) -> (Int)) = { $0 as? Int ?? 0 },
-         rawValueClosure: @escaping ((Int) -> (T.RawValue?)) = { $0 as? T.RawValue },
-         frame: Rect = Rect(),
-         names: [Text] = [], sizeType: SizeType = .regular) {
+    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
-        classNameView = TextView(text: T.uninheritanceName, font: Font.bold(with: sizeType))
-        self.enumeratedType = enumeratedType
-        self.defaultEnumeratedType = defaultEnumeratedType ?? enumeratedType
-        self.cationEnumeratedType = cationEnumeratedType
-        self.indexClosure = indexClosure
-        self.rawValueClosure = rawValueClosure
-        index = indexClosure(enumeratedType.rawValue)
-        if let cationEnumeratedType = cationEnumeratedType {
-            cationIndex = indexClosure(cationEnumeratedType.rawValue)
-        }
+        self.binder = binder
+        self.keyPath = keyPath
+        self.option = option
         
-        classNameViews = names.map { TextView(text: $0, font: Font.default(with: sizeType)) }
-        self.knobView = sizeType == .small ?
-            DiscreteKnobView(Size(square: 6), lineWidth: 1) :
-            DiscreteKnobView(Size(square: 8), lineWidth: 1)
         self.sizeType = sizeType
+        classNameView = TextView(text: Model.uninheritanceName, font: Font.bold(with: sizeType))
+        nameViews = option.names.map { TextView(text: $0, font: Font.default(with: sizeType)) }
+        knobView = sizeType == .small ?
+            View.discreteKnob(Size(square: 6), lineWidth: 1) :
+            View.discreteKnob(Size(square: 8), lineWidth: 1)
         
         super.init()
+        children = [classNameView, knobView] + nameViews
         self.frame = frame
-        children = [classNameView, lineView, knobView] + classNameViews
-        updateLayout()
-        updateWithEnumeratedType()
-    }
-    
-    override var locale: Locale {
-        didSet {
-            updateLayout()
-        }
     }
     
     override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
-        let nw = classNameViews.reduce(0.0.cg) { $0 + $1.frame.width } + Real(classNameViews.count - 1) * padding
+        let np = Real(nameViews.count - 1) * padding
+        let nw = nameViews.reduce(0.0.cg) { $0 + $1.frame.width } + np
         return Rect(x: 0, y: 0, width: classNameView.frame.width + nw + padding * 2, height: height)
     }
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    private func updateLayout() {
+    override func updateLayout() {
         let padding = Layout.padding(with: sizeType)
         classNameView.frame.origin = Point(x: padding,
-                                             y: bounds.height - classNameView.frame.height - padding)
-        let path = CGMutablePath()
+                                           y: bounds.height - classNameView.frame.height - padding)
+        
         let h = Layout.height(with: sizeType) - padding * 2
         var y = bounds.height - padding - h
-        _ = classNameViews.reduce(classNameView.frame.maxX + padding) {
+        _ = nameViews.reduce(classNameView.frame.maxX + padding) {
             let x: Real
             if $0 + $1.frame.width + padding > bounds.width {
                 x = padding
@@ -123,134 +103,92 @@ final class EnumView<T: EnumType>: View, Queryable, Assignable, Runnable, Movabl
                 x = $0
             }
             $1.frame.origin = Point(x: x, y: y)
-            path.addRect($1.frame)
             return x + $1.frame.width + padding
         }
-        lineView.path = path
         
-        knobView.frame = classNameViews[index].frame.inset(by: -1)
+        updateWithModel()
     }
-    private func updateWithEnumeratedType() {
-        knobView.frame = classNameViews[index].frame.inset(by: -1)
-        classNameViews.forEach {
+    func updateWithModel() {
+        let index = option.index(with: model)
+        knobView.frame = nameViews[index].frame.inset(by: -1)
+        nameViews.forEach {
             $0.fillColor = .background
             $0.lineColor = .subContent
         }
-        classNameViews[index].fillColor = .knob
-        classNameViews[index].lineColor = .knob
-        classNameViews.enumerated().forEach {
+        if !option.cationModels.isEmpty {
+            knobView.lineColor = knobLineColor
+        }
+        nameViews[index].fillColor = .knob
+        nameViews[index].lineColor = .knob
+        nameViews.enumerated().forEach {
             $0.element.textFrame.color = $0.offset == index ? .locked : .subLocked
         }
     }
     
-    func enumeratedType(at index: Int) -> T {
-        if let rawValue = rawValueClosure(index) {
-            return T(rawValue: rawValue) ?? defaultEnumeratedType
-        } else {
-            return defaultEnumeratedType
-        }
+    var knobLineColor: Color {
+        return option.cationModels.contains(model) ? .warning : .getSetBorder
     }
-    func enumeratedType(at p: Point) -> T {
+    func model(at p: Point) -> T {
         var minI = 0, minD = Real.infinity
-        for (i, view) in classNameViews.enumerated() {
+        for (i, view) in nameViews.enumerated() {
             let d = view.frame.distance²(p)
             if d < minD {
                 minI = i
                 minD = d
             }
         }
-        return enumeratedType(at: minI)
+        return option.model(at: minI)
     }
-    
-    struct Binding {
-        let view: EnumView, enumeratedType: T, oldEnumeratedType: T, phase: Phase
+}
+extension EnumView: Localizable {
+    func update(with locale: Locale) {
+        updateLayout()
     }
-    var binding: ((Binding) -> ())?
-    
-    var disabledRegisterUndo = false
-    
+}
+extension EnumView: Queryable {
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
+}
+extension EnumView: Assignable {
     func delete(for p: Point) {
-        let enumeratedType = defaultEnumeratedType
-        if enumeratedType != self.enumeratedType {
-            push(enumeratedType, old: self.enumeratedType)
-        }
+        let model = option.defaultModel
+        push(model)
     }
     func copiedViewables(at p: Point) -> [Viewable] {
-        return [enumeratedType]
+        return [model]
     }
     func paste(_ objects: [Any], for p: Point) {
         for object in objects {
-            if let enumeratedType = object as? T {
-                if enumeratedType != self.enumeratedType {
-                    push(enumeratedType, old: self.enumeratedType)
-                    return
-                }
+            if let model = object as? Model {
+                push(model)
+                return
             } else if let string = object as? String, let index = Int(string) {
-                let enumeratedType = self.enumeratedType(at: index)
-                if enumeratedType != self.enumeratedType {
-                    push(enumeratedType, old: self.enumeratedType)
-                    return
-                }
+                let model = option.model(at: index)
+                push(model)
+                return
             }
         }
     }
-    func push(_ enumeratedType: T, old oldEnumeratedType: T) {
-        registeringUndoManager?.registerUndo(withTarget: self) {
-            $0.push(oldEnumeratedType, old: enumeratedType)
-        }
-        binding?(Binding(view: self, enumeratedType: oldEnumeratedType,
-                         oldEnumeratedType: oldEnumeratedType, phase: .began))
-        self.enumeratedType = enumeratedType
-        binding?(Binding(view: self, enumeratedType: enumeratedType,
-                         oldEnumeratedType: oldEnumeratedType, phase: .ended))
-    }
-    
+}
+extension EnumView: Runnable {
     func run(for p: Point) {
-        let enumeratedType = self.enumeratedType(at: p)
-        if enumeratedType != self.enumeratedType {
-            push(enumeratedType, old: self.enumeratedType)
-        }
+        let model = self.model(at: p)
+        push(model)
     }
-    
-    private var oldEnumeratedType: T?, oldPoint = Point()
-    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
+}
+extension EnumView: PointMovable {
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
         case .began:
+            capture(model)
             knobView.fillColor = .editing
-            let oldEnumeratedType = enumeratedType
-            self.oldEnumeratedType = oldEnumeratedType
-            oldPoint = p
-            binding?(Binding(view: self, enumeratedType: enumeratedType,
-                             oldEnumeratedType: oldEnumeratedType, phase: .began))
-            enumeratedType = self.enumeratedType(at: p)
-            binding?(Binding(view: self, enumeratedType: enumeratedType,
-                             oldEnumeratedType: oldEnumeratedType, phase: .changed))
+            model = self.model(at: p)
         case .changed:
-            guard let oldEnumeratedType = oldEnumeratedType else {
-                return
-            }
-            enumeratedType = self.enumeratedType(at: p)
-            binding?(Binding(view: self, enumeratedType: enumeratedType,
-                             oldEnumeratedType: oldEnumeratedType, phase: .changed))
+            model = self.model(at: p)
         case .ended:
-            guard let oldEnumeratedType = oldEnumeratedType else {
-                return
-            }
-            enumeratedType = self.enumeratedType(at: p)
-            if enumeratedType != oldEnumeratedType {
-                registeringUndoManager?.registerUndo(withTarget: self) {
-                    [enumeratedType, oldEnumeratedType] in
-                    
-                    $0.push(oldEnumeratedType, old: enumeratedType)
-                }
-            }
-            binding?(Binding(view: self, enumeratedType: enumeratedType,
-                             oldEnumeratedType: oldEnumeratedType, phase: .ended))
-            knobView.fillColor = .knob
+            model = self.model(at: p)
+            knobView.fillColor = knobLineColor
         }
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return T.reference
     }
 }

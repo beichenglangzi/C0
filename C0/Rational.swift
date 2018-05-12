@@ -17,14 +17,10 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
-
 struct Rational: AdditiveGroup, SignedNumeric {
     var p, q: Int
     init(_ p: Int, _ q: Int) {
-        guard q != 0 else {
-            fatalError("Division by zero")
-        }
+        guard q != 0 else { fatalError("Division by zero") }
         let d = abs(Int.gcd(p, q)) * (q / abs(q))
         (self.p, self.q) = d == 1 ? (p, q) : (p / d, q / d)
     }
@@ -40,42 +36,34 @@ struct Rational: AdditiveGroup, SignedNumeric {
     }
     init(_ x: Real, maxDenominator: Int = 10000000, tolerance: Real = 0.000001) {
         var x = x
-        var a = floor(x)
-        var p1 = Int(a), q1 = 1
-        if fabs(x - a) < tolerance {
-            self.init(p1, q1)
-            return
-        }
-        x = 1 / (x - a)
-        a = floor(x)
-        var p0 = 1, q0 = 0
-        while true {
+        var a = x.rounded(.down)
+        var p0 = 1, q0 = 0, p1 = Int(a), q1 = 1
+        while abs(x - a) >= tolerance {
+            x = 1 / (x - a)
+            a = x.rounded(.down)
             let ia = Int(a)
-            let pn = ia * p1 + p0
-            let qn = ia * q1 + q0
-            (p0, q0) = (p1, q1)
-            (p1, q1) = (pn, qn)
-            
-            if qn > maxDenominator || abs(x - a) < 0.000001 {
-                self.init(pn, qn)
+            let p2 = ia * p1 + p0
+            let q2 = ia * q1 + q0
+            if q2 > maxDenominator {
+                self.init(p2, q2)
                 return
             }
-            x = 1 / (x - a)
-            a = floor(x)
+            (p0, q0) = (p1, q1)
+            (p1, q1) = (p2, q2)
         }
-        fatalError()
+        self.init(p1, q1)
     }
     
     static func continuedFractions(with x: Real, maxCount: Int = 32) -> [Int] {
         var x = x, cfs = [Int]()
-        var a = floor(x)
+        var a = x.rounded(.down)
         for _ in 0..<maxCount {
             cfs.append(Int(a))
             if abs(x - a) < 0.000001 {
                 break
             }
             x = 1 / (x - a)
-            a = floor(x)
+            a = x.rounded(.down)
         }
         return cfs
     }
@@ -165,9 +153,9 @@ extension Rational: Codable {
 }
 extension Rational: Referenceable {
     static let name = Text(english: "Rational Number (\(MemoryLayout<Rational>.size * 8)bit)",
-                                   japanese: "有理数 (\(MemoryLayout<Rational>.size * 8)bit)")
+                           japanese: "有理数 (\(MemoryLayout<Rational>.size * 8)bit)")
 }
-extension Rational: ObjectViewExpression {
+extension Rational: CompactViewable {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return description.view(withBounds: bounds, sizeType)
     }
@@ -175,8 +163,10 @@ extension Rational: ObjectViewExpression {
 extension Rational: CustomStringConvertible {
     var description: String {
         switch q {
-        case 1:  return "\(p)"
-        default: return "\(p)/\(q)"
+        case 1:
+            return "\(p)"
+        default:
+            return "\(p)/\(q)"
         }
     }
 }
@@ -199,97 +189,7 @@ func ceil(_ x: Rational) -> Rational {
     return Rational(x.decimalPart.p == 0 ? x.integralPart : x.integralPart + 1)
 }
 
-final class RationalView: View, Queryable, Copiable {
-    var rational: Rational {
-        didSet {
-            updateWithRational()
-        }
-    }
-    
-    var isIntegerAndProperFraction: Bool {
-        didSet {
-            if isIntegerAndProperFraction != oldValue {
-                updateChildren()
-            }
-        }
-    }
-    var unit: String {
-        didSet {
-            updateWithRational()
-        }
-    }
-    
-    var sizeType: SizeType
-    let integerView: IntView
-    let plusView: TextView
-    let pView: IntView, qView: IntView
-    let unitView: TextView
-    let linePathView = View(path: CGMutablePath())
-    
-    init(rational: Rational = 0,
-         isIntegerAndProperFraction: Bool = true, unit: String = "",
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
-        self.rational = rational
-        self.isIntegerAndProperFraction = isIntegerAndProperFraction
-        self.unit = unit
-        self.sizeType = sizeType
-        integerView = IntView(model: 0, option: IntGetterOption(unit: ""), sizeType: sizeType)
-        plusView = TextView(text: "+", font: Font.default(with: sizeType))
-        pView = IntView(model: 0, option: IntGetterOption(unit: ""), sizeType: sizeType)
-        qView = IntView(model: 1, option: IntGetterOption(unit: ""), sizeType: sizeType)
-        unitView = TextView(text: Text(unit), font: Font.default(with: sizeType))
-        
-        super.init()
-        isClipped = true
-        updateChildren()
-        self.frame = frame
-    }
-    
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    private func updateChildren() {
-        if isIntegerAndProperFraction {
-            children = [integerView, plusView, pView, linePathView, qView]
-        } else {
-            children = [pView, linePathView, qView]
-        }
-    }
-    private func updateLayout() {
-        updateWithRational()
-    }
-    private func updateWithRational() {
-        if isIntegerAndProperFraction {
-            let (integer, properFraction) = rational.integerAndProperFraction
-            integerView.model = integer
-            pView.model = properFraction.p
-            qView.model = properFraction.q
-        } else {
-            pView.model = rational.p
-            qView.model = rational.q
-        }
-        
-        let padding = Layout.padding(with: sizeType)
-        if isIntegerAndProperFraction {
-            
-        } else {
-            pView.frame.origin = Point(x: padding, y: padding)
-        }
-    }
-    
-    func copiedViewables(at p: Point) -> [Viewable] {
-        return [rational]
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return Rational.reference
-    }
-}
-
-struct RationalOption: OneDimensionalOption {
+struct RationalOption: Object1DOption {
     typealias Model = Rational
     
     var defaultModel: Model
@@ -342,5 +242,8 @@ struct RationalOption: OneDimensionalOption {
     func model(withRatio ratio: Real) -> Model {
         return (maxModel - minModel) * Rational(ratio) + minModel
     }
+    func clippedModel(_ model: Model) -> Model {
+        return model.clip(min: minModel, max: maxModel)
+    }
 }
-typealias DiscreteRationalView = DiscreteOneDimensionalView<Rational, RationalOption>
+typealias DiscreteRationalView<Binder: BinderProtocol> = Discrete1DView<RationalOption, Binder>

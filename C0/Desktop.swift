@@ -19,24 +19,26 @@
 
 import Foundation
 
-final class Desktop {
-    var version = Version()
+struct Desktop {
     var copiedViewables = [Viewable]() {
         didSet {
             copiedViewablesBinding?(copiedViewables)
         }
     }
     var copiedViewablesBinding: (([Viewable]) -> ())?
+    
     var isHiddenActionManager = false
     var isSimpleReference = false
+    var reference = Reference()
     var sender = Sender()
-    var objects = [Any]()
+    var objects = [Codable]()
+    
     private enum CodingKeys: String, CodingKey {
         case isSimpleReference, isHiddenActionManager
     }
 }
 extension Desktop: Codable {
-    convenience init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         self.init()
         let values = try decoder.container(keyedBy: CodingKeys.self)
         isSimpleReference = try values.decode(Bool.self, forKey: .isSimpleReference)
@@ -52,19 +54,28 @@ extension Desktop: Referenceable {
     static let name = Text(english: "Desktop", japanese: "デスクトップ")
 }
 
-/**
- Issue: sceneViewを取り除く
- */
-final class DesktopView: View, Queryable {
-    var desktop = Desktop() {
+final class DesktopBinder: BinderProtocol {
+    var desktop: Desktop {
         didSet {
-            versionView.version = desktop.version
-            actionManagerView.sender = desktop.sender
-            isSimpleReferenceView.bool = desktop.isSimpleReference
-            isHiddenActionManagerView.bool = desktop.isHiddenActionManager
-            updateLayout()
+            dataModel.isWrite = true
         }
     }
+    var version: Version
+    let sceneBinder = SceneBinder()
+    
+    init(desktop: Desktop = Desktop(), version: Version = Version()) {
+        self.desktop = desktop
+        self.version = version
+        
+        diffDesktopDataModel = DataModel(key: diffDesktopDataModelKey)
+        objectsDataModel = DataModel(key: objectsDataModelKey,
+                                     directoryWith: [sceneBinder.dataModel])
+        dataModel = DataModel(key: dataModelKey,
+                              directoryWith: [diffDesktopDataModel, objectsDataModel])
+        
+        diffDesktopDataModel.dataClosure = { [unowned self] in self.desktop.jsonData }
+    }
+    
     let dataModelKey = "desktop"
     var dataModel: DataModel {
         didSet {
@@ -74,30 +85,56 @@ final class DesktopView: View, Queryable {
                 dataModel.insert(objectsDataModel)
             }
             
-            if let dDesktopDataModel = dataModel.children[differentialDesktopDataModelKey] {
-                self.differentialDesktopDataModel = dDesktopDataModel
+            if let dDesktopDataModel = dataModel.children[diffDesktopDataModelKey] {
+                self.diffDesktopDataModel = dDesktopDataModel
             } else {
-                dataModel.insert(differentialDesktopDataModel)
+                dataModel.insert(diffDesktopDataModel)
             }
             
-            if let sceneDataModel = objectsDataModel.children[sceneView.dataModelKey] {
-                sceneView.dataModel = sceneDataModel
+            if let sceneDataModel = objectsDataModel.children[sceneBinder.dataModelKey] {
+                sceneBinder.dataModel = sceneDataModel
             } else {
-                objectsDataModel.insert(sceneView.dataModel)
+                objectsDataModel.insert(sceneBinder.dataModel)
             }
         }
     }
-    let differentialDesktopDataModelKey = "differentialDesktop"
-    var differentialDesktopDataModel: DataModel {
+    let diffDesktopDataModelKey = "diffDesktop"
+    var diffDesktopDataModel: DataModel {
         didSet {
-            if let desktop: Desktop = differentialDesktopDataModel.readObject() {
+            if let desktop = diffDesktopDataModel.readObject(Desktop.self) {
                 self.desktop = desktop
             }
-            differentialDesktopDataModel.dataClosure = { [unowned self] in self.desktop.jsonData }
+            diffDesktopDataModel.dataClosure = { [unowned self] in self.desktop.jsonData }
         }
     }
     let objectsDataModelKey = "objects"
     var objectsDataModel: DataModel
+}
+
+/**
+ Issue: sceneViewを取り除く
+ */
+final class DesktopView: View {
+    var desktop: Desktop {
+        get {
+            return desktopBinder[keyPath: keyPath]
+        }
+        set {
+            desktopBinder[keyPath: keyPath] = newValue
+            updateWithDesktop()
+        }
+    }
+    var desktopBinder = DesktopBinder() {
+        didSet {
+            versionView.version = desktopBinder.version
+            updateWithDesktop()
+        }
+    }
+    var keyPath: WritableKeyPath<DesktopBinder, Desktop> = \DesktopBinder.desktop {
+        didSet {
+            updateWithDesktop()
+        }
+    }
     
     var versionWidth = 120.0.cg
     var actionWidth = ActionManagableView.defaultWidth {
@@ -111,36 +148,32 @@ final class DesktopView: View, Queryable {
         }
     }
     let versionView = VersionView()
-    let classCopiedViewablesNameView = TextView(text: Text(english: "Copied:",
-                                                                 japanese: "コピー済み:"))
+    let classCopiedViewablesNameView = TextView(text: Text(english: "Copied:", japanese: "コピー済み:"))
     let copiedViewablesView = AnyArrayView()
     let isHiddenActionManagerView = BoolView(name: Text(english: "Action Manager",
-                                                                japanese: "アクション管理"),
+                                                        japanese: "アクション管理"),
                                              boolInfo: BoolInfo.hidden)
     let isSimpleReferenceView = BoolView(name: Text(english: "Reference", japanese: "情報"),
                                          boolInfo: BoolInfo(trueName: Text(english: "Outline",
-                                                                                   japanese: "概略"),
+                                                                           japanese: "概略"),
                                                             falseName: Text(english: "detail",
-                                                                                    japanese: "詳細")))
-    let referenceView = ReferenceView()
+                                                                            japanese: "詳細")))
+    let infoView = InfoView()
     let actionManagerView = SenderView()
     let objectsView = AnyArrayView()
-    let sceneView = SceneView()
+    let sceneView: SceneView
     
     override init() {
-        differentialDesktopDataModel = DataModel(key: differentialDesktopDataModelKey)
-        objectsDataModel = DataModel(key: objectsDataModelKey, directoryWith: [sceneView.dataModel])
-        dataModel = DataModel(key: dataModelKey,
-                              directoryWith: [differentialDesktopDataModel, objectsDataModel])
+        sceneView = SceneView(desktopBinder.sceneBinder, keyPath: \SceneBinder.scene)
         
         super.init()
         fillColor = .background
-        versionView.version = desktop.version
+        versionView.version = desktopBinder.version
         
         objectsView.children = [sceneView]
         children = [versionView, classCopiedViewablesNameView, copiedViewablesView,
                     isHiddenActionManagerView, isSimpleReferenceView,
-                    actionManagerView, referenceView, objectsView]
+                    actionManagerView, infoView, objectsView]
         
         isHiddenActionManagerView.binding = { [unowned self] in
             self.update(withIsHiddenActionManager: $0.bool)
@@ -150,15 +183,17 @@ final class DesktopView: View, Queryable {
             self.update(withIsSimpleReference: $0.bool)
             self.isSimpleReferenceBinding?($0.bool)
         }
-        
-        differentialDesktopDataModel.dataClosure = { [unowned self] in self.desktop.jsonData }
     }
     
     var isHiddenActionManagerBinding: ((Bool) -> (Void))? = nil
     var isSimpleReferenceBinding: ((Bool) -> (Void))? = nil
     
-    override var undoManager: UndoManager? {
-        return desktop.version
+    var locale = Locale.current {
+        didSet {
+            if locale.languageCode != oldValue.languageCode {
+                allChildrenAndSelf { ($0 as? Localizable)?.update(with: locale) }
+            }
+        }
     }
     
     override var contentsScale: Real {
@@ -168,28 +203,14 @@ final class DesktopView: View, Queryable {
             }
         }
     }
-    override var locale: Locale {
-        didSet {
-            if locale.languageCode != oldValue.languageCode {
-                allChildrenAndSelf { $0.locale = locale }
-            }
-        }
-    }
-    
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    private func updateLayout() {
+    override func updateLayout() {
         let padding = Layout.basicPadding
-        let referenceHeight = 150.0.cg
+        let referenceHeight = 80.0.cg
         let isrw = isSimpleReferenceView.defaultBounds.width
         let ihamvw = isHiddenActionManagerView.defaultBounds.width
         let headerY = bounds.height - topViewsHeight - padding
-        versionView.frame = Rect(x: padding,
-                                   y: headerY,
-                                   width: versionWidth, height: topViewsHeight)
+        versionView.frame = Rect(x: padding, y: headerY,
+                                 width: versionWidth, height: topViewsHeight)
         classCopiedViewablesNameView.frame.origin = Point(x: versionView.frame.maxX + padding, y: headerY + padding)
         let cw = max(bounds.width - actionWidth - versionWidth - isrw - ihamvw - classCopiedViewablesNameView.frame.width - padding * 3, 0)
         copiedViewablesView.frame = Rect(x: classCopiedViewablesNameView.frame.maxX,
@@ -198,105 +219,117 @@ final class DesktopView: View, Queryable {
                                          height: topViewsHeight)
         updateCopiedObjectViewPositions()
         isSimpleReferenceView.frame = Rect(x: copiedViewablesView.frame.maxX,
-                                             y: headerY,
-                                             width: isrw,
-                                             height: topViewsHeight)
+                                           y: headerY,
+                                           width: isrw,
+                                           height: topViewsHeight)
         isHiddenActionManagerView.frame = Rect(x: isSimpleReferenceView.frame.maxX,
-                                                 y: headerY,
-                                                 width: ihamvw,
-                                                 height: topViewsHeight)
+                                               y: headerY,
+                                               width: ihamvw,
+                                               height: topViewsHeight)
         if desktop.isSimpleReference {
-            referenceView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
-                                         y: headerY,
-                                         width: actionWidth,
-                                         height: topViewsHeight)
+            infoView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
+                                  y: headerY,
+                                  width: actionWidth,
+                                  height: topViewsHeight)
         } else {
             let h = desktop.isHiddenActionManager ? bounds.height - padding * 2 : referenceHeight
-            referenceView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
-                                         y: bounds.height - h - padding,
-                                         width: actionWidth,
-                                         height: h)
+            infoView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
+                                  y: bounds.height - h - padding,
+                                  width: actionWidth,
+                                  height: h)
         }
         if !desktop.isHiddenActionManager {
             let h = desktop.isSimpleReference ?
                 bounds.height - isSimpleReferenceView.frame.height - padding * 2 :
                 bounds.height - referenceHeight - padding * 2
             actionManagerView.frame = Rect(x: isHiddenActionManagerView.frame.maxX, y: padding,
-                                             width: actionWidth, height: h)
+                                           width: actionWidth, height: h)
         }
         
         if desktop.isHiddenActionManager && desktop.isSimpleReference {
             objectsView.frame = Rect(x: padding,
-                                       y: padding,
-                                       width: bounds.width - padding * 2,
-                                       height: bounds.height - topViewsHeight - padding * 2)
+                                     y: padding,
+                                     width: bounds.width - padding * 2,
+                                     height: bounds.height - topViewsHeight - padding * 2)
         } else {
             objectsView.frame = Rect(x: padding,
-                                       y: padding,
-                                       width: bounds.width - (padding * 2 + actionWidth),
-                                       height: bounds.height - topViewsHeight - padding * 2)
+                                     y: padding,
+                                     width: bounds.width - (padding * 2 + actionWidth),
+                                     height: bounds.height - topViewsHeight - padding * 2)
         }
         objectsView.bounds.origin = Point(x: -round((objectsView.frame.width / 2)),
-                                            y: -round((objectsView.frame.height / 2)))
+                                          y: -round((objectsView.frame.height / 2)))
         sceneView.frame.origin = Point(x: -round(sceneView.frame.width / 2),
-                                         y: -round(sceneView.frame.height / 2))
+                                       y: -round(sceneView.frame.height / 2))
     }
+    private func updateWithDesktop() {
+        actionManagerView.sender = desktop.sender
+        isSimpleReferenceView.bool = desktop.isSimpleReference
+        isHiddenActionManagerView.bool = desktop.isHiddenActionManager
+        updateLayout()
+    }
+    
     func update(withIsHiddenActionManager isHiddenActionManager: Bool) {
         actionManagerView.isHidden = isHiddenActionManager
         desktop.isHiddenActionManager = isHiddenActionManager
         updateLayout()
-        differentialDesktopDataModel.isWrite = true
     }
     func update(withIsSimpleReference isSimpleReference: Bool) {
         desktop.isSimpleReference = isSimpleReference
         updateLayout()
-        differentialDesktopDataModel.isWrite = true
     }
+    
     var objectViewWidth = 80.0.cg
     private func updateCopiedObjectViews() {
         copiedViewablesView.array = desktop.copiedViewables
         let padding = Layout.smallPadding
         let bounds = Rect(x: 0,
-                            y: 0,
-                            width: objectViewWidth,
-                            height: copiedViewablesView.bounds.height - padding * 2)
+                          y: 0,
+                          width: objectViewWidth,
+                          height: copiedViewablesView.bounds.height - padding * 2)
         copiedViewablesView.children = desktop.copiedViewables.map {
             $0.view(withBounds: bounds, .small)
         }
         updateCopiedObjectViewPositions()
     }
-    func updateCopiedObjectViewPositions() {
+    private func updateCopiedObjectViewPositions() {
         let padding = Layout.smallPadding
         _ = Layout.leftAlignment(copiedViewablesView.children, minX: padding, y: padding)
     }
-
-    override var topCopiedViewables: [Viewable] {
+}
+extension DesktopView: QueryableViewer {
+    var info: Info {
+        get {
+            return infoView.info
+        }
+        set {
+            push(newValue)
+        }
+    }
+    private func push(_ info: Info) {
+        //        undoManager?.registerUndo(withTarget: self) { [oldInfo = infoView.info] in
+        //            $0.push(oldInfo)
+        //
+        infoView.info = info
+    }
+}
+extension DesktopView: Queryable {
+    static let referenceableType: Referenceable.Type = Desktop.self
+}
+extension DesktopView: Versionable {
+    var binder: BinderProtocol {
+        return desktopBinder
+    }
+}
+extension DesktopView: CopiedViewablesViewer {
+    var copiedViewables: [Viewable] {
         return desktop.copiedViewables
     }
-    override func sendToTop(copiedViewables: [Viewable]) {
-        push(copiedViewables: copiedViewables)
-    }
     func push(copiedViewables: [Viewable]) {
-        push(copiedViewables: copiedViewables, oldCopiedViewables: desktop.copiedViewables)
-    }
-    private func push(copiedViewables: [Viewable], oldCopiedViewables: [Viewable]) {
-        undoManager?.registerUndo(withTarget: self) {
-            $0.push(copiedViewables: oldCopiedViewables, oldCopiedViewables: copiedViewables)
-        }
+        //        undoManager?.registerUndo(withTarget: self) { [oldCopiedViewables = desktop.copiedViewables] in
+        //            $0.push(copiedViewables: oldCopiedViewables)
+        //        }
         desktop.copiedViewables = copiedViewables
         updateCopiedObjectViews()
-    }
-    
-    override func sendToTop(_ reference: Reference) {
-        push(reference, old: referenceView.reference)
-    }
-    func push(_ reference: Reference, old oldReference: Reference) {
-        undoManager?.registerUndo(withTarget: self) {
-            $0.push(oldReference, old: reference)
-        }
-        referenceView.reference = reference
-    }
-    func reference(at p: Point) -> Reference {
-        return Desktop.reference
     }
 }

@@ -17,10 +17,10 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import CoreGraphics
 
 /**
- Issue: Core Graphicsとの置き換え
+ Issue: Core Graphicsと置き換え
  */
 struct _Point: Equatable {
     var x = 0.0.cg, y = 0.0.cg
@@ -238,13 +238,6 @@ extension Point {
     static func /(lhs: Point, rhs: Real) -> Point {
         return Point(x: lhs.x / rhs, y: lhs.y / rhs)
     }
-    //
-    //    init(_ string: String?) {
-    //        self = NSPointToCGPoint(NSPointFromString(string))
-    //    }
-    //    var string: String? {
-    //        return jsonString
-    //    }
     
     func draw(radius r: Real, lineWidth: Real = 1,
               inColor: Color = .knob, outColor: Color = .getSetBorder, in ctx: CGContext) {
@@ -283,288 +276,70 @@ extension Point: Interpolatable {
 extension Point: Referenceable {
     static let name = Text(english: "Point", japanese: "ポイント")
 }
-extension Point: DeepCopiable {
-}
-extension Point: ObjectViewExpression {
+extension Point: CompactViewable {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return (jsonString ?? "").view(withBounds: bounds, sizeType)
     }
 }
 
-final class PointView: View, Queryable, Assignable, Movable, Runnable {
-    var point = Point() {
-        didSet {
-            if point != oldValue {
-                knobView.position = position(from: point)
-            }
+extension Array where Element == Point {
+    var convexHull: [Point] {
+        let points = self
+        guard points.count > 3 else {
+            return points
         }
-    }
-    var defaultPoint = Point()
-    var pointAABB = AABB(minX: 0, maxX: 1, minY: 0, maxY: 1) {
-        didSet {
-            guard pointAABB.maxX - pointAABB.minX > 0 && pointAABB.maxY - pointAABB.minY > 0 else {
-                fatalError("Division by zero")
-            }
-        }
-    }
-    
-    var formBackgroundViews = [View]() {
-        didSet {
-            children = formBackgroundViews + [knobView]
-        }
-    }
-    let knobView = KnobView()
-    
-    var padding = 5.0.cg
-    
-    init(frame: Rect = Rect()) {
-        super.init()
-        self.frame = frame
-        append(child: knobView)
-    }
-    
-    override var bounds: Rect {
-        didSet {
-            knobView.position = position(from: point)
-        }
-    }
-    
-    func clippedPoint(with point: Point) -> Point {
-        return pointAABB.clippedPoint(with: point)
-    }
-    func point(withPosition position: Point) -> Point {
-        let inB = bounds.inset(by: padding)
-        let x = pointAABB.width * (position.x - inB.origin.x) / inB.width + pointAABB.minX
-        let y = pointAABB.height * (position.y - inB.origin.y) / inB.height + pointAABB.minY
-        return Point(x: x, y: y)
-    }
-    func position(from point: Point) -> Point {
-        let inB = bounds.inset(by: padding)
-        let x = inB.width * (point.x - pointAABB.minX) / pointAABB.width + inB.origin.x
-        let y = inB.height * (point.y - pointAABB.minY) / pointAABB.height + inB.origin.y
-        return Point(x: x, y: y)
-    }
-    
-    struct Binding {
-        let view: PointView, point: Point, oldPoint: Point, phase: Phase
-    }
-    var binding: ((Binding) -> ())?
-    
-    var disabledRegisterUndo = false
-    
-    func delete(for p: Point) {
-        let point = defaultPoint
-        if point != self.point {
-            push(point, old: self.point)
-        }
-    }
-    func copiedViewables(at p: Point) -> [Viewable] {
-        return [point]
-    }
-    func paste(_ objects: [Any], for p: Point) {
-        for object in objects {
-            if let unclippedPoint = object as? Point {
-                let point = clippedPoint(with: unclippedPoint)
-                if point != self.point {
-                    push(point, old: self.point)
-                    return
-                }
-            } else if let string = object as? String, let unclippedPoint = Point(jsonString: string) {
-                let point = clippedPoint(with: unclippedPoint)
-                if point != self.point {
-                    push(point, old: self.point)
-                    return
+        let minY = (points.min { $0.y < $1.y })!.y
+        let firstP = points.filter { $0.y == minY }.min { $0.x < $1.x }!
+        var ap = firstP, chps = [Point]()
+        repeat {
+            chps.append(ap)
+            var bp = points[0]
+            for i in 1..<points.count {
+                let cp = points[i]
+                if bp == ap {
+                    bp = cp
+                } else {
+                    let v = (bp - ap).crossVector(cp - ap)
+                    if v > 0 || (v == 0 && ap.distance²(cp) > ap.distance²(bp)) {
+                        bp = cp
+                    }
                 }
             }
-        }
-    }
-    
-    func run(for p: Point) {
-        let point = clippedPoint(with: self.point(withPosition: p))
-        if point != self.point {
-            push(point, old: self.point)
-        }
-    }
-    
-    private var oldPoint = Point()
-    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
-        switch phase {
-        case .began:
-            knobView.fillColor = .editing
-            oldPoint = point
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .began))
-            point = clippedPoint(with: self.point(withPosition: p))
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .changed))
-        case .changed:
-            point = clippedPoint(with: self.point(withPosition: p))
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .changed))
-        case .ended:
-            point = clippedPoint(with: self.point(withPosition: p))
-            if point != oldPoint {
-                registeringUndoManager?.registerUndo(withTarget: self) { [point, oldPoint] in
-                    $0.push(oldPoint, old: point)
-                }
-            }
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .ended))
-            knobView.fillColor = .knob
-        }
-    }
-    
-    func push(_ point: Point, old oldPoint: Point) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.push(oldPoint, old: point) }
-        binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .began))
-        self.point = point
-        binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .ended))
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return Point.reference
+            ap = bp
+        } while ap != firstP
+        return chps
     }
 }
 
-final class DiscretePointView: View, Queryable, Assignable {
-    var point = Point() {
-        didSet {
-            if point != oldValue {
-                xView.model = point.x
-                yView.model = point.y
-            }
-        }
-    }
-    var defaultPoint = Point()
+extension Point: Object2D {
+    typealias XModel = Real
+    typealias YModel = Real
     
-    var sizeType: SizeType
-    let classXNameView: TextView
-    let xView: DiscreteRealView
-    let classYNameView: TextView
-    let yView: DiscreteRealView
-    
-    init(point: Point = Point(), defaultPoint: Point = Point(),
-         minPoint: Point = Point(x: -10000, y: -10000),
-         maxPoint: Point = Point(x: 10000, y: 10000),
-         xEXP: Real = 1, yEXP: Real = 1,
-         xInterval: Real = 1, xNumberOfDigits: Int = 0, xUnit: String = "",
-         yInterval: Real = 1, yNumberOfDigits: Int = 0, yUnit: String = "",
-         frame: Rect = Rect(),
-         sizeType: SizeType = .regular) {
-        
-        self.sizeType = sizeType
-        
-        classXNameView = TextView(text: "x:", font: Font.default(with: sizeType))
-        xView = DiscreteRealView(model: point.x,
-                                 option: RealOption(defaultModel: defaultPoint.x,
-                                                    minModel: minPoint.x, maxModel: maxPoint.x,
-                                                    modelInterval: xInterval, exp: xEXP,
-                                                    numberOfDigits: xNumberOfDigits, unit: xUnit),
-                                 frame: Layout.valueFrame(with: sizeType),
-                                 sizeType: sizeType)
-        classYNameView = TextView(text: "y:", font: Font.default(with: sizeType))
-        yView = DiscreteRealView(model: point.y,
-                                 option: RealOption(defaultModel: defaultPoint.y,
-                                                    minModel: minPoint.y, maxModel: maxPoint.y,
-                                                    modelInterval: yInterval, exp: yEXP,
-                                                    numberOfDigits: yNumberOfDigits, unit: yUnit),
-                                 frame: Layout.valueFrame(with: sizeType),
-                                 sizeType: sizeType)
-        
-        self.point = point
-        self.defaultPoint = defaultPoint
-        
-        super.init()
-        children = [classXNameView, xView, classYNameView, yView]
-        xView.binding = { [unowned self] in self.setPoint(with: $0) }
-        yView.binding = { [unowned self] in self.setPoint(with: $0) }
-        updateLayout()
+    init(xModel: XModel, yModel: YModel) {
+        self.init(x: xModel, y: yModel)
     }
     
-    override var defaultBounds: Rect {
-        let padding = Layout.padding(with: sizeType)
-        let valueFrame = Layout.valueFrame(with: sizeType)
-        let xWidth = classXNameView.frame.width + valueFrame.width
-        let yWidth = classYNameView.frame.height + valueFrame.width
-        return Rect(x: 0,
-                    y: 0,
-                    width: max(xWidth, yWidth) + padding * 2,
-                    height: valueFrame.height * 2 + padding * 2)
+    var xModel: XModel {
+        get { return x }
+        set { x = newValue }
     }
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
-        let valueFrame = Layout.valueFrame(with: sizeType)
-        var x = bounds.width - padding, y = bounds.height - padding
-        x -= valueFrame.width
-        y -= valueFrame.height
-        xView.frame.origin = Point(x: x, y: y)
-        x -= classXNameView.frame.width
-        classXNameView.frame.origin = Point(x: x, y: y + padding)
-        x = bounds.width - padding
-        x -= valueFrame.width
-        y -= valueFrame.height
-        yView.frame.origin = Point(x: x, y: y)
-        x -= classYNameView.frame.width
-        classYNameView.frame.origin = Point(x: x, y: y + padding)
-    }
-    
-    struct Binding {
-        let view: DiscretePointView
-        let point: Point, oldPoint: Point, phase: Phase
-    }
-    var binding: ((Binding) -> ())?
-    
-    var disabledRegisterUndo = false
-    
-    private var oldPoint = Point()
-    private func setPoint(with obj: DiscreteRealView.Binding<Real>) {
-        if obj.phase == .began {
-            oldPoint = point
-            binding?(Binding(view: self, point: oldPoint, oldPoint: oldPoint, phase: .began))
-        } else {
-            if obj.view == xView {
-                point.x = obj.model
-            } else {
-                point.y = obj.model
-            }
-            binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: obj.phase))
-        }
-    }
-    
-    func delete(for p: Point) {
-        let point = defaultPoint
-        if point != self.point {
-            push(point, old: self.point)
-        }
-    }
-    func copiedViewables(at p: Point) -> [Viewable] {
-        return [point]
-    }
-    func paste(_ objects: [Any], for p: Point) {
-        for object in objects {
-            if let point = object as? Point {
-                if point != self.point {
-                    push(point, old: self.point)
-                    return
-                }
-            } else if let string = object as? String, let point = Point(jsonString: string) {
-                if point != self.point {
-                    push(point, old: self.point)
-                    return
-                }
-            }
-        }
-    }
-    
-    func push(_ point: Point, old oldPoint: Point) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.push(oldPoint, old: point) }
-        binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .began))
-        self.point = point
-        binding?(Binding(view: self, point: point, oldPoint: oldPoint, phase: .ended))
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return Point.reference
+    var yModel: YModel {
+        get { return y }
+        set { y = newValue }
     }
 }
+
+struct PointOption: Object2DOption {
+    typealias Model = Point
+    typealias XOption = RealOption
+    typealias YOption = RealOption
+    
+    var xOption: XOption
+    var yOption: YOption
+    
+    func model(with string: String) -> Model? {
+        return Model(jsonString: string)
+    }
+}
+typealias SlidablePointView<Binder: BinderProtocol> = Slidable2DView<PointOption, Binder>
+typealias DiscretePointView<Binder: BinderProtocol> = Discrete2DView<PointOption, Binder>

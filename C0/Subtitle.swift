@@ -19,289 +19,35 @@
 
 import Foundation
 
-final class SubtitleTrack: NSObject, Track, NSCoding {
-    private(set) var animation: Animation
-    
-    let subtitleItem: SubtitleItem
-    
-    var time: Beat {
-        didSet {
-            updateInterpolation()
-            updateDrawSubtitle()
-        }
-    }
-    func updateInterpolation() {
-        animation.update(withTime: time, to: self)
-    }
-    func step(_ f0: Int) {
-        subtitleItem.step(f0)
-    }
-    func linear(_ f0: Int, _ f1: Int, t: Real) {
-        subtitleItem.linear(f0, f1, t: t)
-    }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        subtitleItem.firstMonospline(f1, f2, f3, with: ms)
-    }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        subtitleItem.monospline(f0, f1, f2, f3, with: ms)
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        subtitleItem.lastMonospline(f0, f1, f2, with: ms)
-    }
-    
-    private(set) var drawSubtitle = Subtitle()
-    func updateDrawSubtitle() {
-        var count = 0
-        for subtitle in subtitleItem.keySubtitles[(animation.editKeyframeIndex + 1)...] {
-            if subtitle.isConnectedWithPrevious {
-                count += 1
-            } else {
-                break
-            }
-        }
-        let editSubtitle = subtitleItem.keySubtitles[animation.editKeyframeIndex]
-        guard count > 0 || editSubtitle.isConnectedWithPrevious else {
-            drawSubtitle = editSubtitle
-            return
-        }
-        var string = editSubtitle.string
-        if animation.editKeyframeIndex > 0 {
-            for i in (1...animation.editKeyframeIndex).reversed() {
-                let subtitle = subtitleItem.keySubtitles[i]
-                if subtitle.isConnectedWithPrevious {
-                    string = subtitleItem.keySubtitles[i - 1].string + "\n" + string
-                } else {
-                    break
-                }
-            }
-        }
-        (0..<count).forEach { _ in string += "\n" }
-        drawSubtitle = Subtitle(string: string, isConnectedWithPrevious: false)
-    }
-    
-    init(animation: Animation = Animation(), time: Beat = 0,
-         subtitleItem: SubtitleItem = SubtitleItem()) {
-        guard animation.keyframes.count == subtitleItem.keySubtitles.count else {
-            fatalError()
-        }
-        self.animation = animation
-        self.time = time
-        self.subtitleItem = subtitleItem
-        super.init()
-        updateDrawSubtitle()
-    }
-    
-    private enum CodingKeys: String, CodingKey {
-        case animation, time, subtitleItem
-    }
-    init?(coder: NSCoder) {
-        animation = coder.decodeDecodable(
-            Animation.self, forKey: CodingKeys.animation.rawValue) ?? Animation()
-        time = coder.decodeDecodable(Beat.self, forKey: CodingKeys.time.rawValue) ?? 0
-        subtitleItem = coder.decodeObject(
-            forKey: CodingKeys.subtitleItem.rawValue) as? SubtitleItem ?? SubtitleItem()
-        super.init()
-        if animation.keyframes.count < subtitleItem.keySubtitles.count {
-            subtitleItem.keySubtitles = Array(subtitleItem.keySubtitles[..<animation.keyframes.count])
-        } else if animation.keyframes.count > subtitleItem.keySubtitles.count {
-            let count = animation.keyframes.count - subtitleItem.keySubtitles.count
-            let subtitles = (0..<count).map { _ in Subtitle() }
-            subtitleItem.keySubtitles += subtitles
-        }
-    }
-    func encode(with coder: NSCoder) {
-        coder.encodeEncodable(animation, forKey: CodingKeys.animation.rawValue)
-        coder.encodeEncodable(time, forKey: CodingKeys.time.rawValue)
-        coder.encode(subtitleItem, forKey: CodingKeys.subtitleItem.rawValue)
-    }
-    
-    func replace(_ keyframe: Keyframe, at index: Int) {
-        animation.keyframes[index] = keyframe
-    }
-    func replace(_ keyframes: [Keyframe]) {
-        check(keyCount: keyframes.count)
-        animation.keyframes = keyframes
-    }
-    func replace(duration: Beat) {
-        animation.duration = duration
-    }
-    func replace(_ keyframes: [Keyframe], duration: Beat) {
-        check(keyCount: keyframes.count)
-        animation.keyframes = keyframes
-        animation.duration = duration
-    }
-    func set(selectedkeyframeIndexes: [Int]) {
-        animation.selectedKeyframeIndexes = selectedkeyframeIndexes
-    }
-    
-    private func check(keyCount count: Int) {
-        guard count == animation.keyframes.count else {
-            fatalError()
-        }
-    }
-    
-    struct KeyframeValues: KeyframeValue {
-        var subtitle: Subtitle
-    }
-    func insert(_ keyframe: Keyframe, _ kv: KeyframeValues, at index: Int) {
-        subtitleItem.keySubtitles.insert(kv.subtitle, at: index)
-        animation.keyframes.insert(keyframe, at: index)
-        updateDrawSubtitle()
-    }
-    func removeKeyframe(at index: Int) {
-        animation.keyframes.remove(at: index)
-        subtitleItem.keySubtitles.remove(at: index)
-        updateDrawSubtitle()
-    }
-    func set(_ keySubtitles: [Subtitle], isSetSubtitleInItem: Bool  = true) {
-        guard keySubtitles.count == animation.keyframes.count else {
-            fatalError()
-        }
-        if isSetSubtitleInItem {
-            subtitleItem.subtitle = keySubtitles[animation.editKeyframeIndex]
-        }
-        subtitleItem.keySubtitles = keySubtitles
-    }
-    func replace(_ subtitle: Subtitle, at i: Int) {
-        subtitleItem.replace(subtitle, at: i)
-        updateDrawSubtitle()
-    }
-    var currentItemValues: KeyframeValues {
-        return KeyframeValues(subtitle: subtitleItem.subtitle)
-    }
-    func keyframeItemValues(at index: Int) -> KeyframeValues {
-        return KeyframeValues(subtitle: subtitleItem.keySubtitles[index])
-    }
-}
-extension SubtitleTrack: ClassDeepCopiable {
-    func copied(from deepCopier: DeepCopier) -> SubtitleTrack {
-        return SubtitleTrack(animation: animation, time: time, subtitleItem: deepCopier.copied(subtitleItem))
-    }
-}
-extension SubtitleTrack: Referenceable {
-    static let name = Text(english: "Subtitle Track", japanese: "字幕トラック")
-}
-
-final class SubtitleItem: NSObject, TrackItem, NSCoding {
-    fileprivate(set) var keySubtitles: [Subtitle]
-    var subtitle: Subtitle
-    
-    func replace(_ subtitle: Subtitle, at i: Int) {
-        keySubtitles[i] = subtitle
-        self.subtitle = subtitle
-    }
-    
-    func step(_ f0: Int) {
-        subtitle = keySubtitles[f0]
-    }
-    func linear(_ f0: Int, _ f1: Int, t: Real) {
-        subtitle = keySubtitles[f0]
-    }
-    func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        subtitle = keySubtitles[f1]
-    }
-    func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) {
-        subtitle = keySubtitles[f1]
-    }
-    func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) {
-        subtitle = keySubtitles[f1]
-    }
-    
-    init(keySubtitles: [Subtitle] = [], subtitle: Subtitle = Subtitle()) {
-        if keySubtitles.isEmpty {
-            self.keySubtitles = [subtitle]
-        } else {
-            self.keySubtitles = keySubtitles
-        }
-        self.subtitle = subtitle
-        super.init()
-    }
-    
-    private enum CodingKeys: String, CodingKey {
-        case keySubtitles, subtitle
-    }
-    init?(coder: NSCoder) {
-        keySubtitles = coder.decodeDecodable([Subtitle].self,
-                                             forKey: CodingKeys.keySubtitles.rawValue) ?? []
-        subtitle = coder.decodeDecodable(Subtitle.self,
-                                         forKey: CodingKeys.subtitle.rawValue) ?? Subtitle()
-        super.init()
-        if keySubtitles.isEmpty {
-            keySubtitles = [subtitle]
-        }
-    }
-    func encode(with coder: NSCoder) {
-        coder.encodeEncodable(keySubtitles, forKey: CodingKeys.keySubtitles.rawValue)
-        coder.encodeEncodable(subtitle, forKey: CodingKeys.subtitle.rawValue)
-    }
-    
-    var isEmpty: Bool {
-        for t in keySubtitles {
-            if !t.isEmpty {
-                return false
-            }
-        }
-        return true
-    }
-}
-extension SubtitleItem: ClassDeepCopiable {
-    func copied(from deepCopier: DeepCopier) -> SubtitleItem {
-        return SubtitleItem(keySubtitles: keySubtitles, subtitle: subtitle)
-    }
-}
-extension SubtitleItem: Referenceable {
-    static let name = Text(english: "Subtitle Item", japanese: "字幕アイテム")
-}
-
 struct Subtitle: Codable, Equatable {
+    enum FileType: FileTypeProtocol {
+        case vtt
+        var utType: String {
+            switch self {
+            case .vtt:
+                return "vtt"
+            }
+        }
+    }
+    
     struct Option {
         var borderColor = Color.subtitleBorder, fillColor = Color.subtitleFill
         var font = Font.subtitle
     }
+    
     var string = ""
-    var isConnectedWithPrevious = false
+    
     var vttString: String {
         return string
     }
     var isEmpty: Bool {
         return string.isEmpty
     }
-    func draw(bounds: Rect, with option: Option = Option(), in ctx: CGContext) {
-        guard !string.isEmpty else {
-            return
-        }
-        let attributes: [NSAttributedStringKey : Any] = [
-            NSAttributedStringKey(rawValue: String(kCTFontAttributeName)): option.font.ctFont,
-            NSAttributedStringKey(rawValue: String(kCTForegroundColorFromContextAttributeName)): true
-            ]
-        let attString = NSAttributedString(string: string, attributes: attributes)
-        let framesetter = CTFramesetterCreateWithAttributedString(attString)
-        let range = CFRange(location: 0, length: attString.length), ratio = bounds.size.width/640
-        let size = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, range, nil,
-                                                                Size(width: Real.infinity,
-                                                                       height: Real.infinity), nil)
-        let lineBounds = Rect(origin: Point(), size: size)
-        let ctFrame = CTFramesetterCreateFrame(framesetter, range,
-                                               CGPath(rect: lineBounds, transform: nil), nil)
-        ctx.saveGState()
-        ctx.setAllowsFontSmoothing(false)
-        ctx.translateBy(x: round(bounds.midX - lineBounds.midX),  y: round(bounds.minY + 20 * ratio))
-        ctx.setTextDrawingMode(.stroke)
-        ctx.setLineWidth(ceil(3 * ratio))
-        ctx.setStrokeColor(option.borderColor.cg)
-        CTFrameDraw(ctFrame, ctx)
-        ctx.setTextDrawingMode(.fill)
-        ctx.setFillColor(option.fillColor.cg)
-        CTFrameDraw(ctFrame, ctx)
-        ctx.restoreGState()
-    }
     
     static func vttStringWith(_ subtitleTuples: [(time: Beat, duration: Beat, subtitle: Subtitle)],
                               timeClosure: (Beat) -> (Second)) -> String {
         return subtitleTuples.reduce(into: "WEBVTT") {
-            guard !$1.subtitle.isEmpty else {
-                return
-            }
+            guard !$1.subtitle.isEmpty else { return }
             let beginTime = timeClosure($1.time), endTime = timeClosure($1.time + $1.duration)
             func timeString(withSecond second: Second) -> String {
                 let s = Int(second)
@@ -325,93 +71,73 @@ struct Subtitle: Codable, Equatable {
                     timeClosure: (Beat) -> (Second)) -> Data? {
         return vttStringWith(subtitleTuples, timeClosure: timeClosure).data(using: .utf8)
     }
+    
+    //view
+//    func draw(bounds: Rect, with option: Option = Option(), in ctx: CGContext) {
+//        guard !string.isEmpty else { return }
+//        let attributes: [NSAttributedStringKey : Any] = [
+//            NSAttributedStringKey(rawValue: String(kCTFontAttributeName)): option.font.ctFont,
+//            NSAttributedStringKey(rawValue: String(kCTForegroundColorFromContextAttributeName)): true
+//        ]
+//        let attString = NSAttributedString(string: string, attributes: attributes)
+//        let framesetter = CTFramesetterCreateWithAttributedString(attString)
+//        let range = CFRange(location: 0, length: attString.length), ratio = bounds.size.width/640
+//        let size = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, range, nil,
+//                                                                Size(width: Real.infinity,
+//                                                                     height: Real.infinity), nil)
+//        let lineBounds = Rect(origin: Point(), size: size)
+//        let ctFrame = CTFramesetterCreateFrame(framesetter, range,
+//                                               CGPath(rect: lineBounds, transform: nil), nil)
+//        ctx.saveGState()
+//        ctx.setAllowsFontSmoothing(false)
+//        ctx.translateBy(x: round(bounds.midX - lineBounds.midX),  y: round(bounds.minY + 20 * ratio))
+//        ctx.setTextDrawingMode(.stroke)
+//        ctx.setLineWidth(ceil(3 * ratio))
+//        ctx.setStrokeColor(option.borderColor.cg)
+//        CTFrameDraw(ctFrame, ctx)
+//        ctx.setTextDrawingMode(.fill)
+//        ctx.setFillColor(option.fillColor.cg)
+//        CTFrameDraw(ctFrame, ctx)
+//        ctx.restoreGState()
+//    }
+}
+extension Subtitle: Interpolatable {
+    static func linear(_ f0: Subtitle, _ f1: Subtitle, t: Real) -> Subtitle {
+        let string = String.linear(f0.string, f1.string, t: t)
+        return Subtitle(string: string)
+    }
+    static func firstMonospline(_ f1: Subtitle, _ f2: Subtitle,
+                                _ f3: Subtitle, with ms: Monospline) -> Subtitle {
+        let string = String.firstMonospline(f1.string, f2.string, f3.string, with: ms)
+        return Subtitle(string: string)
+    }
+    static func monospline(_ f0: Subtitle, _ f1: Subtitle,
+                           _ f2: Subtitle, _ f3: Subtitle, with ms: Monospline) -> Subtitle {
+        let string = String.monospline(f0.string, f1.string, f2.string, f3.string, with: ms)
+        return Subtitle(string: string)
+    }
+    static func lastMonospline(_ f0: Subtitle, _ f1: Subtitle,
+                               _ f2: Subtitle, with ms: Monospline) -> Subtitle {
+        let string = String.lastMonospline(f0.string, f1.string, f2.string, with: ms)
+        return Subtitle(string: string)
+    }
 }
 extension Subtitle: Referenceable {
     static let name = Text(english: "Subtitle", japanese: "字幕")
 }
-extension Subtitle: ObjectViewExpression {
+extension Subtitle: KeyframeValue {}
+extension Subtitle: CompactViewable {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return string.view(withBounds: bounds, sizeType)
     }
 }
 
-final class SubtitleView: View, Queryable, Copiable {
-    var subtitle = Subtitle() {
-        didSet {
-            isConnectedWithPreviousView.bool = subtitle.isConnectedWithPrevious
-        }
+struct SubtitleTrack: Track {
+    private(set) var animation = Animation<Subtitle>()
+    var animatable: Animatable {
+        return animation
     }
-    
-    var sizeType: SizeType
-    private let classNameView: TextView
-    private let isConnectedWithPreviousView: BoolView
-    init(sizeType: SizeType = .regular) {
-        self.sizeType = sizeType
-        classNameView = TextView(text: Subtitle.name, font: Font.bold(with: sizeType))
-        isConnectedWithPreviousView = BoolView(cationBool: true,
-                                               name: Text(english: "No Connected With Previous",
-                                                                  japanese: "前と結合なし"),
-                                               sizeType: sizeType)
-        super.init()
-        children = [classNameView, isConnectedWithPreviousView]
-        
-        isConnectedWithPreviousView.binding = { [unowned self] in
-            self.setIsConnectedWithPrevious(with: $0)
-        }
-    }
-    
-    override var locale: Locale {
-        didSet {
-            updateLayout()
-        }
-    }
-    
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    private func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
-        classNameView.frame.origin = Point(x: padding,
-                                              y: bounds.height - classNameView.frame.height - padding)
-        let icpw = bounds.width - classNameView.frame.width - padding * 3
-        let icph = Layout.height(with: sizeType)
-        isConnectedWithPreviousView.frame = Rect(x: classNameView.frame.maxX + padding, y: padding,
-                                                   width: icpw, height: icph)
-    }
-    func updateWithSubtitle() {
-        isConnectedWithPreviousView.bool = subtitle.isConnectedWithPrevious
-    }
-    
-    var disabledRegisterUndo = true
-    
-    struct Binding {
-        let view: SubtitleView, isConnectedWithPrevious: Bool, oldIsConnectedWithPrevious: Bool
-        let subtitle: Subtitle, oldSubtitle: Subtitle, phase: Phase
-    }
-    var binding: ((Binding) -> ())?
-    
-    private var oldSubtitle = Subtitle()
-    
-    private func setIsConnectedWithPrevious(with binding: BoolView.Binding) {
-        if binding.phase == .began {
-            oldSubtitle = subtitle
-        } else {
-            subtitle.isConnectedWithPrevious = binding.bool
-        }
-        self.binding?(Binding(view: self,
-                              isConnectedWithPrevious: binding.bool,
-                              oldIsConnectedWithPrevious: binding.oldBool,
-                              subtitle: subtitle, oldSubtitle: oldSubtitle,
-                              phase: binding.phase))
-    }
-    
-    func copiedViewables(at p: Point) -> [Viewable] {
-        return [subtitle]
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return Subtitle.reference
-    }
+}
+extension SubtitleTrack: Referenceable {
+    static let name = Text(english: "Subtitle Track", japanese: "字幕トラック")
 }

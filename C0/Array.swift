@@ -17,173 +17,21 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Locale
 
-final class TreeNode<T: Equatable>: Equatable {
-    static func ==(lhs: TreeNode<T>, rhs: TreeNode<T>) -> Bool {
-        return lhs === rhs
-    }
-    
-    var object: T
-    init(_ object: T, children: [TreeNode<T>] = []) {
-        self.object = object
-        self.children = children
-        children.forEach { $0.parent = self }
-    }
-    
-    private(set) weak var parent: TreeNode<T>?
-    var children: [TreeNode<T>] {
-        didSet {
-            oldValue.forEach { $0.parent = nil }
-            children.forEach { $0.parent = self }
+typealias AbstractElement = Equatable & AbstractViewable & Referenceable
+
+struct ArrayIndex<T>: Codable, Hashable {
+    var index = 0
+}
+extension Array {
+    subscript(arrayIndex: ArrayIndex<Element>) -> Element {
+        get {
+            return self[arrayIndex.index]
         }
-    }
-    func allChildren(_ closure: (TreeNode<T>) -> Void) {
-        func allChildrenRecursion(_ node: TreeNode<T>, _ closure: (TreeNode<T>) -> Void) {
-            node.children.forEach { allChildrenRecursion($0, closure) }
-            closure(node)
+        set {
+            self[arrayIndex.index] = newValue
         }
-        children.forEach { allChildrenRecursion($0, closure) }
-    }
-    func allChildrenAndSelf(_ closure: (TreeNode<T>) -> Void) {
-        func allChildrenRecursion(_ node: TreeNode<T>, _ closure: (TreeNode<T>) -> Void) {
-            node.children.forEach { allChildrenRecursion($0, closure) }
-            closure(node)
-        }
-        allChildrenRecursion(self, closure)
-    }
-    func allChildren(_ closure: (TreeNode<T>, inout Bool) -> ()) {
-        var stop = false
-        func allChildrenRecursion(_ node: TreeNode<T>, _ closure: (TreeNode<T>, inout Bool) -> ()) {
-            for child in node.children {
-                allChildrenRecursion(child, closure)
-                if stop {
-                    return
-                }
-            }
-            closure(node, &stop)
-            if stop {
-                return
-            }
-        }
-        for child in children {
-            allChildrenRecursion(child, closure)
-            if stop {
-                return
-            }
-        }
-    }
-    func selfAndAllParents(_ closure: ((TreeNode<T>) -> ())) {
-        closure(self)
-        parent?.selfAndAllParents(closure)
-    }
-    
-    func at(_ object: T) -> TreeNode<T> {
-        var node: TreeNode<T>?
-        allChildren { (aNode, stop) in
-            if aNode.object == object {
-                node = aNode
-                stop = true
-            }
-        }
-        return node!
-    }
-    
-    func remove(atAllIndex i: Int) {
-        let node = at(allIndex: i)
-        let parent = node.parent!
-        parent.children.remove(at: parent.children.index(of: node)!)
-        node.parent = nil
-    }
-    var allCount: Int {
-        var count = 0
-        func allChildrenRecursion(_ node: TreeNode<T>) {
-            node.children.forEach { allChildrenRecursion($0) }
-            count += node.children.count
-        }
-        allChildrenRecursion(self)
-        return count
-    }
-    func at(allIndex ti: Int) -> TreeNode<T> {
-        var i = 0, node: TreeNode<T>?
-        allChildren { (aNode, stop) in
-            if i == ti {
-                node = aNode
-                stop = true
-            } else {
-                i += 1
-            }
-        }
-        return node!
-    }
-    func allIndex(with node: TreeNode<T>) -> Int {
-        var i = 0
-        allChildren { (aNode, stop) in
-            if aNode === node {
-                stop = true
-            } else {
-                i += 1
-            }
-        }
-        return i
-    }
-    func allIndex(with object: T) -> Int {
-        var i = 0
-        allChildren { (aNode, stop) in
-            if aNode.object == object {
-                stop = true
-            } else {
-                i += 1
-            }
-        }
-        return i
-    }
-    
-    var movableCount: Int {
-        var count = 0
-        func allChildrenRecursion(_ node: TreeNode<T>) {
-            node.children.forEach { allChildrenRecursion($0) }
-            count += node.children.count + 1
-        }
-        allChildrenRecursion(self)
-        return count
-    }
-    func movableIndexTuple(atMovableIndex mi: Int) -> (parent: TreeNode<T>, insertIndex: Int) {
-        var i = 0
-        func movableIndexTuple(with node: TreeNode<T>) -> (parent: TreeNode<T>, insertIndex: Int)? {
-            for (ii, child) in node.children.enumerated() {
-                if let result = movableIndexTuple(with: child) {
-                    return result
-                }
-                if i == mi {
-                    return (node, ii)
-                } else {
-                    i += 1
-                }
-            }
-            if i == mi {
-                return (node, node.children.count)
-            } else {
-                i += 1
-                return nil
-            }
-        }
-        return movableIndexTuple(with: self)!
-    }
-    func movableIndex(with object: T) -> Int {
-        return movableIndex(with: at(object))
-    }
-    func movableIndex(with node: TreeNode<T>) -> Int {
-        let aParent = node.parent!
-        var ini = aParent.children.count == 1
-            || aParent.children.index(of: node)! == aParent.children.count - 1 ? 0 : 1
-        node.selfAndAllParents { (aNode) in
-            if let parent = aNode.parent {
-                let i = parent.children.index(of: aNode)!
-                (0..<i).forEach { ini += parent.children[$0].movableCount + 1 }
-            }
-        }
-        return ini
     }
 }
 
@@ -224,264 +72,169 @@ extension Array: Referenceable where Element: Referenceable {
         return "[" + Element.name + "]"
     }
 }
-extension Array: Viewable & DeepCopiable where Element: Viewable & DeepCopiable {
+extension Array: Viewable where Element: Viewable {
     func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return ObjectView(object: self, thumbnailView: nil, minFrame: bounds, sizeType)
     }
 }
 
-final class AnyArrayView: View, Queryable, Copiable {
-    var array = [Viewable]()
+// CompactViewablesView
+final class ViewablesView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = [Viewable]
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
     
-    init(children: [View] = [], frame: Rect = Rect()) {
+    init(binder: Binder, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
         super.init()
         isClipped = true
+        //children
         self.frame = frame
-        self.children = children
     }
-    
+    func updateWithModel() {
+        
+    }
+}
+private struct _Viewables: Referenceable {
+    static let name = Text(english: "Array", japanese: "配列")
+}
+extension ViewablesView: Queryable {
+    static var referenceableType: Referenceable.Type {
+        return _Viewables.self
+    }
+}
+extension ViewablesView: Copiable {
     func copiedViewables(at p: Point) -> [Viewable] {
-        return array
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return Reference(name: Text(english: "Array", japanese: "配列"))
+        return model
     }
 }
 
-final class ArrayView<T: Viewable & DeepCopiable>: View, Queryable, Copiable {
-    var array = [T]()
-    
-    init(children: [View] = [], frame: Rect = Rect()) {
-        super.init()
-        isClipped = true
-        self.frame = frame
-        self.children = children
+final class ArrayView<T: BinderProtocol, U: AbstractElement>: View, BindableReceiver {
+    typealias Element = U
+    typealias Model = [U]
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
     }
     
-    func copiedViewables(at p: Point) -> [Viewable] {
-        return [array.copied]
+    var sizeType: SizeType {
+        didSet { updateLayout() }
     }
     
-    func reference(at p: Point) -> Reference {
-        return T.reference
-    }
-}
-
-final class ArrayCountView<T: Viewable & DeepCopiable>: View, Queryable, Copiable {
-    var array = [T]() {
-        didSet {
-            countView.model = array.count
-        }
-    }
-    
-    var sizeType: SizeType
-    let classNameView: TextView
-    let classCountNameView: TextView
-    let countView: IntView
-    
-    init(array: [T] = [], frame: Rect = Rect(),
-         sizeType: SizeType = .regular) {
-        self.array = array
-        classNameView = TextView(text: [T].name, font: Font.bold(with: sizeType))
-        classCountNameView = TextView(text: Text(english: "Count:", japanese: "個数:"),
-                                      font: Font.default(with: sizeType))
-        countView = IntView(model: array.count, option: IntGetterOption(unit: ""), sizeType: sizeType)
+    init(binder: Binder, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
         self.sizeType = sizeType
         
         super.init()
         isClipped = true
+        //children
         self.frame = frame
-        children = [classNameView, classCountNameView, countView]
     }
     
-    override var locale: Locale {
-        didSet {
-            updateLayout()
-        }
+    override func updateLayout() {
+        
+    }
+    func updateWithModel() {
+        
     }
     
-    var width = 40.0.cg
-    override var defaultBounds: Rect {
-        let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
-        return Rect(x: 0, y: 0, width: classNameView.frame.width + classCountNameView.frame.width + width + padding * 3, height: h)
+    func append(_ element: Element) {
+        let keyPath = self.keyPath.appending(path: \Model.[model.count - 1])
+        let view = element.abstractViewWith(binder: binder, keyPath: keyPath, frame: Rect(), sizeType)
+        
     }
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
+}
+extension ArrayView: Queryable {
+    static var referenceableType: Referenceable.Type {
+        return [Model].self
     }
-    func updateLayout() {
-        let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
-        classNameView.frame.origin = Point(x: padding,
-                                             y: bounds.height - classNameView.frame.height - padding)
-        classCountNameView.frame.origin = Point(x: classNameView.frame.maxX + padding,
-                                                  y: padding)
-        countView.frame = Rect(x: classCountNameView.frame.maxX, y: padding,
-                                 width: width, height: h - padding * 2)
-    }
-    
+}
+extension ArrayView: Copiable {
     func copiedViewables(at p: Point) -> [Viewable] {
-        return [array.copied]
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return T.reference
+        return [model]
     }
 }
 
-/**
- Issue: ツリー操作が複雑
- Issue: クリップ表示を廃止し、圧縮表示を実装
- */
-final class ListArrayView: View, Queryable, Assignable, Newable, Movable {
-    private let nameLineView: View = {
-        let lineView = View(path: CGMutablePath())
-        lineView.fillColor = .subContent
-        return lineView
-    } ()
-    private let knobLineView: View = {
-        let lineView = View(path: CGMutablePath())
-        lineView.fillColor = .content
-        return lineView
-    } ()
-    private let knobView = DiscreteKnobView(Size(width: 8, height: 8), lineWidth: 1)
-    private var nameViews = [TextView](), treeLevelTextViews = [TextView]()
-    func set(selectedIndex: Int, count: Int) {
-        let isUpdate = self.selectedIndex != selectedIndex || self.count != count
-        self.selectedIndex = selectedIndex
-        self.count = count
-        if isUpdate {
-            knobView.isHidden = count <= 1
-            updateLayout()
-        }
+final class ArrayCountView<T: BinderProtocol, U: AbstractElement>: View, BindableReceiver {
+    typealias Model = [U]
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
     }
-    private(set) var selectedIndex = 0
-    private(set) var count = 0
-    var nameClosure: ((Int) -> (Text))? {
-        didSet {
-            updateLayout()
-        }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
     }
-    var treeLevelClosure: ((Int) -> (Int))?
-    private let knobPaddingWidth = 16.0.cg
     
-    override init() {
+    let countView: IntGetterView<Binder>
+    
+    var sizeType: SizeType {
+        didSet { updateLayout() }
+    }
+    var width = 40.0.cg {
+        didSet { updateLayout() }
+    }
+    let classNameView: TextView
+    let countNameView: TextView
+    
+    init(binder: Binder, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        self.sizeType = sizeType
+        classNameView = TextView(text: Model.name, font: Font.bold(with: sizeType))
+        countNameView = TextView(text: Text(english: "Count:", japanese: "個数:"),
+                                 font: Font.default(with: sizeType))
+        countView = IntGetterView(binder: binder, keyPath: keyPath.appending(path: \Model.capacity),
+                                  option: IntGetterOption(unit: ""), sizeType: sizeType)
+        
         super.init()
         isClipped = true
+        children = [classNameView, countNameView, countView]
+        self.frame = frame
+    }
+    
+    override var defaultBounds: Rect {
+        let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
+        return Rect(x: 0, y: 0, width: classNameView.frame.width + countNameView.frame.width + width + padding * 3, height: h)
+    }
+    override func updateLayout() {
+        let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
+        classNameView.frame.origin = Point(x: padding,
+                                           y: bounds.height - classNameView.frame.height - padding)
+        countNameView.frame.origin = Point(x: classNameView.frame.maxX + padding,
+                                           y: padding)
+        countView.frame = Rect(x: countNameView.frame.maxX, y: padding,
+                               width: width, height: h - padding * 2)
+        updateWithModel()
+    }
+    func updateWithModel() {
+        countView.updateWithModel()
+    }
+}
+extension ArrayCountView: Localizable {
+    func update(with locale: Locale) {
         updateLayout()
     }
-    
-    private let indexHeight = Layout.basicHeight - Layout.basicPadding * 2
-    
-    func flootIndex(atY y: Real) -> Real {
-        let selectedY = bounds.midY - indexHeight / 2
-        return (y - selectedY) / indexHeight + Real(selectedIndex)
+}
+extension ArrayCountView: Queryable {
+    static var referenceableType: Referenceable.Type {
+        return Model.self
     }
-    func index(atY y: Real) -> Int {
-        return Int(flootIndex(atY: y))
-    }
-    func y(at index: Int) -> Real {
-        let selectedY = bounds.midY - indexHeight / 2
-        return Real(index - selectedIndex) * indexHeight + selectedY
-    }
-    
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    
-    func updateLayout() {
-        guard selectedIndex < count, count > 0, let nameClosure = nameClosure else {
-            return
-        }
-        let minI = Int(floor(flootIndex(atY: bounds.minY)))
-        let minIndex = max(minI, 0)
-        let maxI = Int(floor(flootIndex(atY: bounds.maxY)))
-        let maxIndex = min(maxI, count - 1)
-        let knobLineX = knobPaddingWidth / 2
-        
-        let nameLinePath = CGMutablePath(), llh = 1.0.cg
-        (minIndex - 1...maxIndex + 1).forEach {
-            nameLinePath.addRect(Rect(x: 0, y: y(at: $0) - llh / 2,
-                                        width: bounds.width, height: llh))
-        }
-        
-        let knobLinePath = CGMutablePath(), lw = 2.0.cg
-        let knobLineMinY = max(y(at: 0) + (selectedIndex > 0 ? -indexHeight : indexHeight / 2),
-                               bounds.minY)
-        let knobLineMaxY = min(y(at: maxIndex)
-            + (selectedIndex < count - 1 ? indexHeight : indexHeight / 2),
-                               bounds.maxY)
-        knobLinePath.addRect(Rect(x: knobLineX - lw / 2, y: knobLineMinY,
-                                    width: lw, height: knobLineMaxY - knobLineMinY))
-        let linePointMinIndex = minI < 0 ? minIndex + 1 : minIndex
-        if linePointMinIndex <= maxIndex {
-            (linePointMinIndex...maxIndex).forEach {
-                knobLinePath.addRect(Rect(x: knobPaddingWidth / 2 - 2,
-                                            y: y(at: $0) - 2,
-                                            width: 4,
-                                            height: 4))
-            }
-        }
-        
-        let padding = treeLevelClosure != nil ? 12.0.cg : 0.0.cg
-        nameViews = (minIndex...maxIndex).map {
-            let nameView = TextView(text: nameClosure($0))
-            nameView.fillColor = nil
-            nameView.frame.origin = Point(x: knobPaddingWidth + padding, y: y(at: $0))
-            return nameView
-        }
-        
-        if let treeLevelClosure = treeLevelClosure {
-            treeLevelTextViews = (minIndex...maxIndex).map {
-                let treeLevelTextView = TextView(text: Text("\(treeLevelClosure($0))"))
-                treeLevelTextView.fillColor = nil
-                treeLevelTextView.frame.origin = Point(x: knobPaddingWidth, y: y(at: $0))
-                knobLinePath.addRect(Rect(x: knobPaddingWidth / 2 - 2,
-                                            y: treeLevelTextView.frame.midY - 2,
-                                            width: 4,
-                                            height: 4))
-                return treeLevelTextView
-            }
-        } else {
-            treeLevelTextViews = []
-        }
-        
-        nameLineView.path = nameLinePath
-        knobLineView.path = knobLinePath
-        
-        knobView.position = Point(x: knobLineX, y: bounds.midY)
-        
-        children = [nameLineView, knobLineView, knobView]
-            + treeLevelTextViews as [View] + nameViews as [View]
-    }
-    
-    var deleteClosure: ((ListArrayView, Point) -> ())?
-    func delete(for p: Point) {
-        deleteClosure?(self, p)
-    }
-    var copiedViewablesClosure: ((ListArrayView, Point) -> ([Viewable]))?
+}
+extension ArrayCountView: Copiable {
     func copiedViewables(at p: Point) -> [Viewable] {
-        return copiedViewablesClosure?(self, p) ?? []
-    }
-    var pasteClosure: ((ListArrayView, [Any], Point) -> ())?
-    func paste(_ objects: [Any], for p: Point) {
-        pasteClosure?(self, objects, p)
-    }
-    var newClosure: ((ListArrayView, Point) -> ())?
-    func new(for p: Point) {
-        newClosure?(self, p)
-    }
-    
-    var moveClosure: ((ListArrayView, Point, Phase) -> ())?
-    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
-        moveClosure?(self, p, phase)
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return Reference()
+        return [model]
     }
 }

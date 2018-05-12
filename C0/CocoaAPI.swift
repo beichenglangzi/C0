@@ -19,6 +19,21 @@
 
 import Cocoa
 
+struct Hash {
+    static func uniformityHashValue(with hashValues: [Int]) -> Int {
+        return Int(bitPattern: hashValues.reduce(into: UInt(bitPattern: 0), unionHashValues))
+    }
+    static func unionHashValues(_ lhs: inout UInt, _ rhs: Int) {
+        #if arch(arm64) || arch(x86_64)
+        let magicValue: UInt = 0x9e3779b97f4a7c15
+        #else
+        let magicValue: UInt = 0x9e3779b9
+        #endif
+        let urhs = UInt(bitPattern: rhs)
+        lhs ^= urhs &+ magicValue &+ (lhs << 6) &+ (lhs >> 2)
+    }
+}
+
 struct Font {
     static let small = Font(monospacedSize: 8)
     static let `default` = Font(monospacedSize: 11)
@@ -92,96 +107,6 @@ struct Font {
     }
 }
 
-struct Cursor {
-    static let arrow = Cursor(NSCursor.arrow)
-    static let iBeam = Cursor(NSCursor.iBeam)
-    static let leftRight = slideCursor(isVertical: false)
-    static let upDown = slideCursor(isVertical: true)
-    static let pointingHand = Cursor(NSCursor.pointingHand)
-    static let stroke = circleCursor(size: 2)
-    
-    static func circleCursor(size s: Real, color: Color = .black,
-                             outlineColor: Color = .white) -> Cursor {
-        let lineWidth = 2.0.cg, subLineWidth = 1.0.cg
-        let d = subLineWidth + lineWidth / 2
-        let b = Rect(x: d, y: d, width: d * 2 + s, height: d * 2 + s)
-        let image = NSImage(size: Size(width: s + d * 2 * 2,  height: s + d * 2 * 2)) { ctx in
-            ctx.setLineWidth(lineWidth + subLineWidth * 2)
-            ctx.setFillColor(outlineColor.with(alpha: 0.35).cg)
-            ctx.setStrokeColor(outlineColor.with(alpha: 0.8).cg)
-            ctx.addEllipse(in: b)
-            ctx.drawPath(using: .fillStroke)
-            ctx.setLineWidth(lineWidth)
-            ctx.setStrokeColor(color.cg)
-            ctx.strokeEllipse(in: b)
-        }
-        let hotSpot = NSPoint(x: d * 2 + s / 2, y: -d * 2 - s / 2)
-        return Cursor(NSCursor(image: image, hotSpot: hotSpot))
-    }
-    static func slideCursor(color: Color = .black, outlineColor: Color = .white,
-                            isVertical: Bool) -> Cursor {
-        let lineWidth = 1.0.cg, lineHalfWidth = 4.0.cg, halfHeight = 4.0.cg, halfLineHeight = 1.5.cg
-        let aw = floor(halfHeight * sqrt(3)), d = lineWidth / 2
-        let w = ceil(aw * 2 + lineHalfWidth * 2 + d), h =  ceil(halfHeight * 2 + d)
-        let size = isVertical ? Size(width: h,  height: w) : Size(width: w,  height: h)
-        let image = NSImage(size: size) { ctx in
-            if isVertical {
-                ctx.translateBy(x: h / 2, y: w / 2)
-                ctx.rotate(by: .pi / 2)
-                ctx.translateBy(x: -w / 2, y: -h / 2)
-            }
-            ctx.addLines(between: [Point(x: d, y: d + halfHeight),
-                                   Point(x: d + aw, y: d + halfHeight * 2),
-                                   Point(x: d + aw, y: d + halfHeight + halfLineHeight),
-                                   Point(x: d + aw + lineHalfWidth * 2,
-                                           y: d + halfHeight + halfLineHeight),
-                                   Point(x: d + aw + lineHalfWidth * 2, y: d + halfHeight * 2),
-                                   Point(x: d + aw * 2 + lineHalfWidth * 2, y: d + halfHeight),
-                                   Point(x: d + aw + lineHalfWidth * 2, y: d),
-                                   Point(x: d + aw + lineHalfWidth * 2,
-                                           y: d + halfHeight - halfLineHeight),
-                                   Point(x: d + aw, y: d + halfHeight - halfLineHeight),
-                                   Point(x: d + aw, y: d)])
-            ctx.closePath()
-            ctx.setLineJoin(.miter)
-            ctx.setLineWidth(lineWidth)
-            ctx.setFillColor(color.cg)
-            ctx.setStrokeColor(outlineColor.cg)
-            ctx.drawPath(using: .fillStroke)
-        }
-        let hotSpot = isVertical ? Point(x: h / 2, y: -w / 2) : Point(x: w / 2, y: -h / 2)
-        return Cursor(NSCursor(image: image, hotSpot: hotSpot))
-    }
-    
-    var image: CGImage {
-        didSet {
-            nsCursor = NSCursor(image: NSImage(cgImage: image, size: NSSize()), hotSpot: hotSpot)
-        }
-    }
-    var hotSpot: Point {
-        didSet {
-            nsCursor = NSCursor(image: NSImage(cgImage: image, size: NSSize()), hotSpot: hotSpot)
-        }
-    }
-    fileprivate var nsCursor: NSCursor
-    
-    private init(_ nsCursor: NSCursor) {
-        self.image = nsCursor.image.cgImage(forProposedRect: nil, context: nil, hints: nil)!
-        self.hotSpot = nsCursor.hotSpot
-        self.nsCursor = nsCursor
-    }
-    init(image: CGImage, hotSpot: Point) {
-        self.image = image
-        self.hotSpot = hotSpot
-        nsCursor = NSCursor(image: NSImage(cgImage: image, size: NSSize()), hotSpot: hotSpot)
-    }
-}
-extension Cursor: Equatable {
-    static func ==(lhs: Cursor, rhs: Cursor) -> Bool {
-        return lhs.image === rhs.image && lhs.hotSpot == rhs.hotSpot
-    }
-}
-
 extension NSImage {
     convenience init(size: Size, closure: (CGContext) -> Void) {
         self.init(size: size)
@@ -205,35 +130,36 @@ struct TextInputContext {
     }
 }
 
+protocol FileTypeProtocol {
+    var utType: String { get }
+}
 extension URL {
     struct File {
-        var url: URL, name: String, isExtensionHidden: Bool
+        var url: URL, name: Text, isExtensionHidden: Bool
     }
-    static func file(message: String?,
-                     name: String?,
-                     fileTypes: [String],
+    static func file(message: Text? = nil,
+                     name: Text? = nil,
+                     fileTypes: [FileTypeProtocol],
                      completionClosure closure: @escaping (URL.File) -> (Void)) {
-        guard let window = NSApp.mainWindow else {
-            return
-        }
+        guard let window = NSApp.mainWindow else { return }
         let savePanel = NSSavePanel()
-        savePanel.message = message
+        savePanel.message = message?.currentString
         if let name = name {
-            savePanel.nameFieldStringValue = name
+            savePanel.nameFieldStringValue = name.currentString
         }
         savePanel.canSelectHiddenExtension = true
-        savePanel.allowedFileTypes = fileTypes
+        savePanel.allowedFileTypes = fileTypes.map { $0.utType }
         savePanel.beginSheetModal(for: window) { [unowned savePanel] result in
             if result == .OK, let url = savePanel.url {
                 closure(URL.File(url: url,
-                                 name: savePanel.nameFieldStringValue,
+                                 name: Text(savePanel.nameFieldStringValue),
                                  isExtensionHidden: savePanel.isExtensionHidden))
             }
         }
     }
 }
 
-fileprivate struct C0Coder {
+private struct C0Coder {
     static let appUTI = Bundle.main.bundleIdentifier ?? "smdls.C0."
     
     static func typeKey(from object: Any) -> String {
@@ -247,10 +173,11 @@ fileprivate struct C0Coder {
         if let object = NSKeyedUnarchiver.unarchiveObject(with: data) {
             return object
         }
+        
         let decoder = JSONDecoder()
         switch key {
-        case typeKey(from: Keyframe.self):
-            return try? decoder.decode(Keyframe.self, from: data)
+        case typeKey(from: KeyframeTiming.self):
+            return try? decoder.decode(KeyframeTiming.self, from: data)
         case typeKey(from: Easing.self):
             return try? decoder.decode(Easing.self, from: data)
         case typeKey(from: Transform.self):
@@ -284,8 +211,6 @@ fileprivate struct C0Coder {
             return codable.jsonData
         } else if object is [Action] {
             return nil
-        } else if let coding = object as? NSCoding {
-            return coding.data
         } else if let codable = object as? Encodable {
             return codable.jsonData
         } else {
@@ -294,7 +219,7 @@ fileprivate struct C0Coder {
     }
 }
 
-fileprivate struct C0Preference: Codable {
+private struct C0Preference: Codable {
     var isFullScreen = false, windowFrame = NSRect()
 }
 
@@ -360,14 +285,14 @@ final class C0Application: NSApplication {
         openItem?.title = Text(english: "Open…", japanese: "開く…").string(with: locale)
         saveAsItem?.title = Text(english: "Save As…", japanese: "別名で保存…").string(with: locale)
         openRecentItem?.title = Text(english: "Open Recent",
-                                             japanese: "最近使った項目を開く").string(with: locale)
+                                     japanese: "最近使った項目を開く").string(with: locale)
         closeItem?.title = Text(english: "Close", japanese: "閉じる").string(with: locale)
         saveItem?.title = Text(english: "Save…", japanese: "保存…").string(with: locale)
         windowMenu?.title = Text(english: "Window", japanese: "ウインドウ").string(with: locale)
         minimizeItem?.title = Text(english: "Minimize", japanese: "しまう").string(with: locale)
         zoomItem?.title = Text(english: "Zoom", japanese: "拡大／縮小").string(with: locale)
         bringAllToFrontItem?.title = Text(english: "Bring All to Front",
-                                                  japanese: "すべてを手前に移動").string(with: locale)
+                                          japanese: "すべてを手前に移動").string(with: locale)
     }
     
     @IBAction func readme(_ sender: Any?) {
@@ -394,7 +319,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
     let preferenceDataModelKey = "preference"
     var preferenceDataModel: DataModel {
         didSet {
-            if let preference: C0Preference = preferenceDataModel.readObject() {
+            if let preference = preferenceDataModel.readObject(type: C0Preference.self) {
                 self.preference = preference
             }
             preferenceDataModel.didChangeIsWriteClosure = { [unowned self] (_, isWrite) in
@@ -410,9 +335,9 @@ final class C0Document: NSDocument, NSWindowDelegate {
     var window: NSWindow {
         return windowControllers.first!.window!
     }
-    weak var view: C0View!
+    weak var c0View: C0View!
     var desktop: Desktop {
-        return view.desktopView.desktop
+        return c0View.desktopView.desktop
     }
     
     override init() {
@@ -443,12 +368,12 @@ final class C0Document: NSDocument, NSWindowDelegate {
             .instantiateController(withIdentifier: identifier) as! NSWindowController
         addWindowController(windowController)
         window.acceptsMouseMovedEvents = true
-        view = windowController.contentViewController!.view as! C0View
+        c0View = windowController.contentViewController!.view as! C0View
         
-        if let desktopDataModel = rootDataModel.children[view.desktopView.dataModelKey] {
-            view.desktopView.dataModel = desktopDataModel
+        if let desktopDataModel = rootDataModel.children[c0View.desktopView.binder.dataModelKey] {
+            view.desktopView.binder.dataModel = desktopDataModel
         } else {
-            rootDataModel.insert(view.desktopView.dataModel)
+            rootDataModel.insert(c0View.desktopView.binder.dataModel)
         }
         
         if preference.windowFrame.isEmpty, let frame = NSScreen.main?.frame {
@@ -459,22 +384,19 @@ final class C0Document: NSDocument, NSWindowDelegate {
         }
         setupWindow(with: preference)
         
-        undoManager = view.desktopView.sceneView.undoManager
+        undoManager = c0View.desktopView.sceneView.binder.version
         
         let isWriteClosure: (DataModel, Bool) -> Void = { [unowned self] (_, isWrite) in
             if isWrite {
                 self.updateChangeCount(.changeDone)
             }
         }
-        view.desktopView.differentialDesktopDataModel.didChangeIsWriteClosure = isWriteClosure
-        view.desktopView.sceneView.differentialSceneDataModel.didChangeIsWriteClosure = isWriteClosure
+        c0View.desktopView.binder.diffDesktopDataModel.didChangeIsWriteClosure = isWriteClosure
+        c0View.desktopView.sceneView.binder.diffSceneDataModel.didChangeIsWriteClosure = isWriteClosure
         preferenceDataModel.didChangeIsWriteClosure = isWriteClosure
         
-        view.desktopView.undoManager?.disableUndoRegistration()
-        view.desktopView.push(copiedViewables: NSPasteboard.general.copiedViewables)
-        view.desktopView.undoManager?.enableUndoRegistration()
-        
-        view.desktopView.desktop.copiedViewablesBinding = { [unowned self] _ in
+        c0View.desktopView.push(copiedViewables: NSPasteboard.general.copiedViewables)
+        c0View.desktopView.desktop.copiedViewablesBinding = { [unowned self] _ in
             self.didSetCopiedViewables()
         }
     }
@@ -521,7 +443,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
         let pasteboard = NSPasteboard.general
         if pasteboard.changeCount != oldChangeCountWithPsteboard {
             oldChangeCountWithPsteboard = pasteboard.changeCount
-            view.desktopView.push(copiedViewables: pasteboard.copiedViewables)
+            c0View.desktopView.push(copiedViewables: pasteboard.copiedViewables)
             oldChangeCountWithCopiedViewables = changeCountWithCopiedViewables
         }
     }
@@ -642,10 +564,8 @@ final class C0View: NSView, NSTextInputClient {
     func setup() {
         acceptsTouchEvents = true
         wantsLayer = true
-        guard let layer = layer else {
-            return
-        }
-
+        guard let layer = layer else { return }
+        
         desktopView.isHiddenActionManagerBinding = { [unowned self] in
             UserDefaults.standard.set($0, forKey: self.isHiddenActionManagerKey)
         }
@@ -675,11 +595,11 @@ final class C0View: NSView, NSTextInputClient {
                                object: self,
                                queue: nil) { ($0.object as? C0View)?.updateFrame() }
     }
-
+    
     override func makeBackingLayer() -> CALayer {
         return backingLayer(with: desktopView)
     }
-
+    
     deinit {
         if let token = token {
             NotificationCenter.default.removeObserver(token)
@@ -688,7 +608,7 @@ final class C0View: NSView, NSTextInputClient {
             NotificationCenter.default.removeObserver(localToken)
         }
     }
-
+    
     override var acceptsFirstResponder: Bool {
         return true
     }
@@ -698,18 +618,18 @@ final class C0View: NSView, NSTextInputClient {
     override func resignFirstResponder() -> Bool {
         return true
     }
-
+    
     override func viewDidChangeBackingProperties() {
         if let backingScaleFactor = window?.backingScaleFactor {
             Screen.shared.backingScaleFactor = backingScaleFactor
             desktopView.contentsScale = backingScaleFactor
         }
     }
-
+    
     func updateFrame() {
         desktopView.frame.size = bounds.size
     }
-
+    
     func screenPoint(with event: NSEvent) -> Point {
         return convertToLayer(convert(event.locationInWindow, from: nil))
     }
@@ -757,7 +677,7 @@ final class C0View: NSView, NSTextInputClient {
         return Scroller.Event(rootLocation: screenPoint(with: nsEvent),
                               time: nsEvent.timestamp.cg,
                               scrollDeltaPoint: Point(x: nsEvent.scrollingDeltaX,
-                                                        y: -nsEvent.scrollingDeltaY),
+                                                      y: -nsEvent.scrollingDeltaY),
                               phase: phase,
                               momentumPhase: scrollMomentumPhase)
     }
@@ -795,9 +715,7 @@ final class C0View: NSView, NSTextInputClient {
     }
     
     override func keyDown(with nsEvent: NSEvent) {
-        guard !nsEvent.isARepeat else {
-            return
-        }
+        guard !nsEvent.isARepeat else { return }
         if let key = nsEvent.key {
             sender.send(Inputter(type: key, event: inputterEventWith(nsEvent, .began)))
         }
@@ -807,14 +725,14 @@ final class C0View: NSView, NSTextInputClient {
             sender.send(Inputter(type: key, event: inputterEventWith(nsEvent, .ended)))
         }
     }
-
+    
     override func cursorUpdate(with nsEvent: NSEvent) {
         mouseMoved(with: nsEvent)
     }
     override func mouseMoved(with nsEvent: NSEvent) {
         sender.send(Dragger(type: .pointing, event: draggerEventWith(pointing: nsEvent, .began)))
     }
-
+    
     override func rightMouseDown(with nsEvent: NSEvent) {
         sender.send(Dragger(type: .subDrag, event: draggerEventWith(nsEvent, .began)))
     }
@@ -854,9 +772,7 @@ final class C0View: NSView, NSTextInputClient {
             workItem?.cancel()
             self.workItem = nil
             
-            guard let beginDragger = beginDragger else {
-                return
-            }
+            guard let beginDragger = beginDragger else { return }
             if beginDragger.event.rootLocation != endDragger.event.rootLocation {
                 sender.send(Dragger(type: .pointing,
                                     event: draggerEventWith(pointing: nsEvent, .began)))
@@ -884,17 +800,15 @@ final class C0View: NSView, NSTextInputClient {
         let touches = nsEvent.touches(matching: .began, in: self)
         beginTouchesNormalizedPosition = touches.reduce(Point()) {
             return Point(x: max($0.x, $1.normalizedPosition.x),
-                           y: max($0.y, $1.normalizedPosition.y))
+                         y: max($0.y, $1.normalizedPosition.y))
         }
     }
     override func touchesEnded(with event: NSEvent) {
         beginTouchesNormalizedPosition = Point()
     }
-
+    
     override func scrollWheel(with nsEvent: NSEvent) {
-        guard nsEvent.phase != .mayBegin && nsEvent.phase != .cancelled else {
-            return
-        }
+        guard nsEvent.phase != .mayBegin && nsEvent.phase != .cancelled else { return }
         let phase: Phase = nsEvent.phase == .began ?
             .began : (nsEvent.phase == .ended ? .ended : .changed)
         let type: Scroller.EventType = beginTouchesNormalizedPosition.y > 0.85 ?
@@ -908,7 +822,7 @@ final class C0View: NSView, NSTextInputClient {
             sender.send(Scroller(type: type, event: scrollerEventWith(nsEvent, .ended)))
         }
     }
-
+    
     private enum TouchGesture {
         case none, scroll, pinch, rotate
     }
@@ -952,7 +866,7 @@ final class C0View: NSView, NSTextInputClient {
         sender.send(Inputter(type: .tap, event: inputterEventWith(nsEvent, .began)))
         sender.send(Inputter(type: .tap, event: inputterEventWith(nsEvent, .ended)))
     }
-
+    
     func sentKeyInput() {
         if let nsEvent = NSApp.currentEvent {
             inputContext?.handleEvent(nsEvent)
@@ -1023,7 +937,7 @@ final class C0View: NSView, NSTextInputClient {
     func drawsVerticallyForCharacter(at charIndex: Int) -> Bool {
         return false
     }
-
+    
     override func insertNewline(_ sender: Any?) {
         editTextView?.insertNewline()
     }
@@ -1041,6 +955,16 @@ final class C0View: NSView, NSTextInputClient {
     }
     override func moveRight(_ sender: Any?) {
         editTextView?.moveRight()
+    }
+}
+
+extension URL {
+    func isConforms(type otherType: String) -> Bool {
+        if let type = type {
+            return UTTypeConformsTo(type as CFString, otherType as CFString)
+        } else {
+            return false
+        }
     }
 }
 

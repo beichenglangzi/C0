@@ -17,14 +17,73 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import CoreGraphics
+import QuartzCore
 
+struct Image {
+    enum FileType: FileTypeProtocol {
+        case png, jpeg, tiff
+        fileprivate var cfUTType: CFString {
+            switch self {
+            case .png:
+                return kUTTypePNG
+            case .jpeg:
+                return kUTTypeJPEG
+            case .tiff:
+                return kUTTypeTIFF
+            }
+        }
+        var utType: String {
+            return cfUTType as String
+        }
+    }
+    
+    let url: URL?
+    let cg: CGImage
+    init?(url: URL) {
+        guard
+            let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
+            let cg = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+                return nil
+        }
+        self.url = url
+        self.cg = cg
+    }
+    init(_ cg: CGImage) {
+        url = nil
+        self.cg = cg
+    }
+    var size: Size {
+        return cg.size
+    }
+    func write(_ type: FileType, to url: URL) throws {
+        try cg.write(type, to: url)
+    }
+}
+extension Image: Referenceable {
+    static let name = Text(english: "Image", japanese: "画像")
+}
+extension Image: Equatable {
+    static func ==(lhs: Image, rhs: Image) -> Bool {
+        return lhs.cg == rhs.cg || lhs.url == rhs.url
+    }
+}
+
+extension CGContext {
+    var renderImage: Image? {
+        if let cg = makeImage() {
+            return Image(cg)
+        } else {
+            return nil
+        }
+    }
+}
 extension CGImage {
     var size: Size {
         return Size(width: width, height: height)
     }
-    func write(to url: URL, fileType: String) throws {
-        let cfUrl = url as CFURL, cfFileType = fileType as CFString
+    func write(_ fileType: Image.FileType, to url: URL) throws {
+        let cfUrl = url as CFURL, cfFileType = fileType.cfUTType
         guard let idn = CGImageDestinationCreateWithURL(cfUrl, cfFileType, 1, nil) else {
             throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteUnknownError)
         }
@@ -34,48 +93,56 @@ extension CGImage {
         }
     }
 }
-extension CGImage: Referenceable {
-    static let name = Text(english: "Image", japanese: "画像")
-}
-
-final class ImageView: View, Queryable, Movable {
-    var url: URL? {
-        didSet {
-            if let url = url {
-                self.image = ImageView.image(with: url)
+extension CALayer {
+    var image: Image? {
+        get {
+            guard let contents = contents else {
+                return nil
+            }
+            return Image(contents as! CGImage)
+        }
+        set {
+            contents = newValue?.cg
+            if newValue != nil {
+                minificationFilter = kCAFilterTrilinear
+                magnificationFilter = kCAFilterTrilinear
+            } else {
+                minificationFilter = kCAFilterLinear
+                magnificationFilter = kCAFilterLinear
             }
         }
     }
-    static func image(with url: URL) -> CGImage? {
-        guard
-            let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-            let image = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
-                return nil
-        }
-        return image
+}
+
+final class ImageView<T: BinderProtocol>: View, BindableReceiver, Movable {
+    typealias Model = Image
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
     }
     
-    init(image: CGImage? = nil) {
+    init(binder: Binder, keyPath: BinderKeyPath, frame: Rect = Rect()) {
+        self.binder = binder
+        self.keyPath = keyPath
+        
         super.init()
-        self.image = image
-    }
-    init(url: URL?) {
-        super.init()
-        self.url = url
-        if let url = url {
-            self.image = ImageView.image(with: url)
-        }
+        self.frame = frame
     }
     
-    enum DragType {
+    func updateWithModel() {
+        self.image = model
+    }
+    
+    private enum DragType {
         case move, resizeMinXMinY, resizeMaxXMinY, resizeMinXMaxY, resizeMaxXMaxY
     }
-    var dragType = DragType.move, downPosition = Point(), oldFrame = Rect()
-    var resizeWidth = 10.0.cg, ratio = 1.0.cg
+    private var dragType = DragType.move, downPosition = Point(), oldFrame = Rect()
+    private var resizeWidth = 10.0.cg, ratio = 1.0.cg
     func move(for point: Point, pressure: Real, time: Second, _ phase: Phase) {
-        guard let parent = parent else {
-            return
-        }
+        guard let parent = parent else { return }
         let p = parent.convert(point, from: self), ip = point
         switch phase {
         case .began:
@@ -122,8 +189,9 @@ final class ImageView: View, Queryable, Movable {
             self.frame = phase == .ended ? frame.integral : frame
         }
     }
-    
-    func reference(at p: Point) -> Reference {
-        return CGImage.reference
+}
+extension ImageView: Queryable {
+    static var referenceableType: Referenceable.Type {
+        return Image.self
     }
 }

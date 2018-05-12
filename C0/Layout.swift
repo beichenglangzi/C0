@@ -17,9 +17,24 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+enum Orientation {
+    enum Horizontal {
+        case leftToRight, rightToLeft
+    }
+    enum Vertical {
+        case bottomToTop, topToBottom
+    }
+    enum XY {
+        case horizontal(Horizontal), vertical(Vertical)
+    }
+    enum Circular {
+        case clockwise, counterClockwise
+    }
+    
+    case xy(XY), circular(Circular)
+}
 
-struct Layout {
+struct Layout {    
     static let smallPadding = 2.0.cg, basicPadding = 3.0.cg, basicLargePadding = 14.0.cg
     static let smallRatio = Font.small.size / Font.default.size
     static let basicTextHeight = Font.default.ceilHeight(withPadding: 1)
@@ -27,9 +42,10 @@ struct Layout {
     static let smallHeight = Font.small.ceilHeight(withPadding: 1) + smallPadding * 2
     static let basicValueWidth = 56.cg, smallValueWidth = 40.0.cg
     static let basicValueFrame = Rect(x: 0, y: basicPadding,
-                                        width: basicValueWidth, height: basicHeight)
+                                      width: basicValueWidth, height: basicHeight)
     static let smallValueFrame = Rect(x: 0, y: smallPadding,
-                                        width: smallValueWidth, height: smallHeight)
+                                      width: smallValueWidth, height: smallHeight)
+    static let propertyWidth = 140.0.cg
     static func padding(with sizeType: SizeType) -> Real {
         return sizeType == .small ? smallPadding : basicPadding
     }
@@ -43,73 +59,100 @@ struct Layout {
         return sizeType == .small ? smallValueFrame : basicValueFrame
     }
     
-    static func centered(_ views: [View],
-                         in bounds: Rect, paddingWidth: Real = 0) {
-        let w = views.reduce(-paddingWidth) { $0 +  $1.frame.width + paddingWidth }
-        _ = views.reduce(floor((bounds.width - w) / 2)) { x, view in
-            view.frame.origin.x = x
-            return x + view.frame.width + paddingWidth
+    enum Item {
+        case view(View), xPadding(Real), yPadding(Real)
+        
+        var view: View? {
+            switch self {
+            case .view(let view): return view
+            default: break
+            }
         }
-    }
-    static func leftAlignmentWidth(_ views: [View], minX: Real = basicPadding,
-                                   paddingWidth: Real = 0) -> Real {
-        return views.reduce(minX) { $0 + $1.frame.width + paddingWidth } - paddingWidth
-    }
-    static func leftAlignment(_ views: [View], minX: Real = basicPadding,
-                              y: Real = 0, paddingWidth: Real = 0) {
-        _ = views.reduce(minX) { x, view in
-            view.frame.origin = Point(x: x, y: y)
-            return x + view.frame.width + paddingWidth
+        var width: Real {
+            switch self {
+            case .view(let view): return view.bounds.width
+            case .xPadding(let padding): return padding
+            case .yPadding: return 0
+            }
         }
-    }
-    static func leftAlignment(_ views: [View], minX: Real = basicPadding,
-                              y: Real = 0, height: Real, paddingWidth: Real = 0) -> Size {
-        let width = views.reduce(minX) { x, view in
-            view.frame.origin = Point(x: x, y: y + round((height - view.frame.height) / 2))
-            return x + view.frame.width + paddingWidth
+        var height: Real {
+            switch self {
+            case .view(let view): return view.bounds.width
+            case .xPadding: return 0
+            case .yPadding(let padding): return padding
+            }
         }
-        return Size(width: width, height: height)
-    }
-    static func topAlignment(_ views: [View],
-                             minX: Real = basicPadding, minY: Real = basicPadding,
-                             minSize: inout Size, padding: Real = Layout.basicPadding) {
-        let width = views.reduce(0.0.cg) { max($0, $1.defaultBounds.width) } + padding * 2
-        let height = views.reversed().reduce(minY) { y, view in
-            view.frame = Rect(x: minX, y: y,
-                                 width: width, height: view.defaultBounds.height)
-            return y + view.frame.height
+        var bounds: Rect {
+            switch self {
+            case .view(let view): return view.bounds
+            case .xPadding(let padding): return Rect(x: 0, y: 0, width: padding, height: 0)
+            case .yPadding(let padding): return Rect(x: 0, y: 0, width: 0, height: padding)
+            }
         }
-        minSize = Size(width: width, height: height - minY)
-    }
-    static func autoHorizontalAlignment(_ views: [View],
-                                        padding: Real = 0, in bounds: Rect) {
-        guard !views.isEmpty else {
-            return
-        }
-        let w = views.reduce(0.0.cg) { $0 +  $1.defaultBounds.width + padding } - padding
-        let dx = (bounds.width - w) / Real(views.count)
-        _ = views.enumerated().reduce(bounds.minX) { x, value in
-            if value.offset == views.count - 1 {
-                value.element.frame = Rect(x: x, y: bounds.minY,
-                                             width: bounds.maxX - x, height: bounds.height)
-                return bounds.maxX
-            } else {
-                value.element.frame = Rect(x: x,
-                                             y: bounds.minY,
-                                             width: round(value.element.defaultBounds.width + dx),
-                                             height: bounds.height)
-                return x + value.element.frame.width + padding
+        var defaultBounds: Rect {
+            switch self {
+            case .view(let view): return view.defaultBounds
+            case .xPadding(let padding): return Rect(x: 0, y: 0, width: padding, height: 0)
+            case .yPadding(let padding): return Rect(x: 0, y: 0, width: 0, height: padding)
             }
         }
     }
-}
-final class PaddingView: View, Queryable {
-    override init() {
-        super.init()
-        self.frame = Rect(origin: Point(), size: Size(square: Layout.basicPadding))
-    }
     
-    func reference(at p: Point) -> Reference {
-        return Reference(name: Text(english: "Padding", japanese: "パディング"))
+    static func centered(_ items: [Item],
+                         in bounds: Rect, paddingWidth: Real = 0) {
+        let w = items.reduce(-paddingWidth) { $0 +  $1.bounds.width + paddingWidth }
+        _ = items.reduce(((bounds.width - w) / 2).rounded(.down)) { x, item in
+            item.view?.frame.origin.x = x
+            return x + item.width + paddingWidth
+        }
+    }
+    static func leftAlignmentWidth(_ items: [Item], minX: Real = basicPadding,
+                                   paddingWidth: Real = 0) -> Real {
+        return items.reduce(minX) { $0 + $1.bounds.width + paddingWidth } - paddingWidth
+    }
+    static func leftAlignment(_ items: [Item], minX: Real = basicPadding,
+                              y: Real = 0, paddingWidth: Real = 0) {
+        _ = items.reduce(minX) { x, item in
+            item.view?.frame.origin = Point(x: x, y: y)
+            return x + item.width + paddingWidth
+        }
+    }
+    static func leftAlignment(_ items: [Item], minX: Real = basicPadding,
+                              y: Real = 0, height: Real, paddingWidth: Real = 0) -> Size {
+        let width = items.reduce(minX) { x, item in
+            item.view?.frame.origin = Point(x: x, y: y + ((height - item.bounds.height) / 2).rounded())
+            return x + item.width + paddingWidth
+        }
+        return Size(width: width, height: height)
+    }
+    static func topAlignment(_ items: [Item],
+                             minX: Real = basicPadding, minY: Real = basicPadding,
+                             minSize: inout Size, padding: Real = Layout.basicPadding) {
+        let width = items.reduce(0.0.cg) { max($0, $1.defaultBounds.width) } + padding * 2
+        let height = items.reversed().reduce(minY) { y, item in
+            item.view?.frame = Rect(x: minX, y: y, width: width, height: item.defaultBounds.height)
+            return y + item.height
+        }
+        minSize = Size(width: width, height: height - minY)
+    }
+    static func autoHorizontalAlignment(_ items: [Item],
+                                        padding: Real = 0, in bounds: Rect) {
+        guard !items.isEmpty else { return }
+        let w = items.reduce(0.0.cg) { $0 +  $1.defaultBounds.width + padding } - padding
+        let dx = (bounds.width - w) / Real(items.count)
+        _ = items.enumerated().reduce(bounds.minX) { x, value in
+            let (i, item) = value
+            if i == items.count - 1 {
+                item.view?.frame = Rect(x: x, y: bounds.minY,
+                                        width: bounds.maxX - x, height: bounds.height)
+                return bounds.maxX
+            } else {
+                item.view?.frame = Rect(x: x,
+                                        y: bounds.minY,
+                                        width: (value.element.defaultBounds.width + dx).rounded(),
+                                        height: bounds.height)
+                return x + item.width + padding
+            }
+        }
     }
 }

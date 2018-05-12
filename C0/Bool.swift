@@ -17,183 +17,161 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
-
 extension Bool: Referenceable {
     static let name = Text(english: "Bool", japanese: "ブール値")
 }
-extension Bool: ObjectViewExpression {
+extension Bool: Thumbnailable {
     func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
         return (self ? "true" : "false").view(withBounds: bounds, sizeType)
     }
 }
+extension Bool: CompactViewable {}
 
-struct BoolInfo {
-    var trueName = Text(), falseName = Text()
-    static let `default` = BoolInfo(trueName: Text(english: "True", japanese: "真"),
-                                    falseName: Text(english: "False", japanese: "偽"))
-    static let hidden = BoolInfo(trueName: Text(english: "Hidden", japanese: "隠し済み"),
+struct BoolOption {
+    struct Info {
+        var trueName = Text(english: "True", japanese: "真")
+        var falseName = Text(english: "False", japanese: "偽")
+        
+        static let hidden = Info(trueName: Text(english: "Hidden", japanese: "隠し済み"),
                                  falseName: Text(english: "Shown", japanese: "表示済み"))
-    static let locked = BoolInfo(trueName: Text(english: "Locked", japanese: "ロック済み"),
+        static let locked = Info(trueName: Text(english: "Locked", japanese: "ロック済み"),
                                  falseName: Text(english: "Unlocked", japanese: "未ロック"))
+    }
+    
+    var defaultModel = false
+    var cationModel: Bool?
+    var name = Text()
+    var info = Info()
 }
 
-final class BoolView: View, Queryable, Assignable, Runnable, Movable {
-    var bool: Bool {
+final class BoolView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = Bool
+    typealias ModelOption = BoolOption
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    
+    var option: ModelOption {
         didSet {
-            updateWithBool()
+            parentTextView.model = option.name
+            parentTrueNameView.model = option.info.trueName
+            parentFalseNameView.model = option.info.falseName
+            updateWithModel()
         }
     }
-    var defaultBool: Bool
-    var cationBool: Bool?
     
-    var sizeType: SizeType
-    let parentClassTextView: TextView
-    var boolInfo: BoolInfo {
-        didSet {
-            parentClassTrueNameView.text = boolInfo.trueName
-            parentClassFalseNameView.text = boolInfo.falseName
-        }
+    var sizeType: SizeType {
+        didSet { updateLayout() }
     }
-    let parentClassTrueNameView: TextView
-    let parentClassFalseNameView: TextView
-    let knobView: DiscreteKnobView
-    let lineView = View(path: CGMutablePath())
+    let parentTextView: TextFormView
+    let parentTrueNameView: TextFormView
+    let parentFalseNameView: TextFormView
+    let knobView: View
     
-    init(bool: Bool = false, defaultBool: Bool = false, cationBool: Bool? = nil,
-         name: Text = "", boolInfo: BoolInfo = BoolInfo(),
-         sizeType: SizeType = .regular) {
-        self.bool = bool
-        self.defaultBool = bool
-        self.cationBool = cationBool
-        parentClassTextView = TextView(text: name.isEmpty ? "" : name + ":",
-                                       font: Font.default(with: sizeType))
-        self.boolInfo = boolInfo
-        parentClassTrueNameView = TextView(text: boolInfo.trueName,
-                                           font: Font.default(with: sizeType))
-        parentClassFalseNameView = TextView(text: boolInfo.falseName,
-                                            font: Font.default(with: sizeType))
-        knobView = DiscreteKnobView()
+    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        self.option = option
+        
         self.sizeType = sizeType
-        lineView.lineColor = .content
-        lineView.lineWidth = 1
+        let font = Font.default(with: sizeType)
+        parentTextView = TextFormView(text: option.name.isEmpty ? "" : option.name + ":", font: font)
+        parentTrueNameView = TextFormView(text: option.info.trueName, font: font)
+        parentFalseNameView = TextFormView(text: option.info.falseName, font: font)
+        knobView = View.discreteKnob()
         
         super.init()
         isLiteral = true
-        children = [parentClassTextView, lineView, knobView,
-                    parentClassTrueNameView, parentClassFalseNameView]
-        updateLayout()
+        children = [parentTextView, knobView, parentTrueNameView, parentFalseNameView]
+        self.frame = frame
     }
     
     override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType)
+        let width = parentTextView.frame.width
+            + parentFalseNameView.frame.width + parentTrueNameView.frame.width + padding * 4
         return Rect(x: 0, y: 0,
-                      width: parentClassTextView.frame.width + parentClassFalseNameView.frame.width + parentClassTrueNameView.frame.width + padding * 4,
-                      height: parentClassTextView.frame.height + padding * 2)
+                    width: width, height: parentTextView.frame.height + padding * 2)
     }
-    override var bounds: Rect {
-        didSet {
-            updateLayout()
-        }
-    }
-    func updateLayout() {
+    override func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        parentClassTextView.frame.origin = Point(x: padding, y: padding)
-        parentClassFalseNameView.frame.origin = Point(x: parentClassTextView.frame.maxX + padding, y: padding)
-        parentClassTrueNameView.frame.origin = Point(x: parentClassFalseNameView.frame.maxX + padding,
-                                                       y: padding)
-        updateWithBool()
+        parentTextView.frame.origin = Point(x: padding, y: padding)
+        parentFalseNameView.frame.origin = Point(x: parentTextView.frame.maxX + padding, y: padding)
+        parentTrueNameView.frame.origin = Point(x: parentFalseNameView.frame.maxX + padding,
+                                                y: padding)
+        updateWithModel()
     }
-    func updateWithBool() {
-        knobView.frame = !bool ?
-            parentClassFalseNameView.frame.inset(by: -1) :
-            parentClassTrueNameView.frame.inset(by: -1)
-        if let cationBool = cationBool {
-            knobView.lineColor = cationBool == bool ? .warning : .getSetBorder
+    func updateWithModel() {
+        knobView.frame = model ?
+            parentTrueNameView.frame.inset(by: -1) :
+            parentFalseNameView.frame.inset(by: -1)
+        if option.cationModel != nil {
+            knobView.lineColor = knobLineColor
         }
-        parentClassFalseNameView.fillColor = !bool ? .knob : .background
-        parentClassTrueNameView.fillColor = bool ? .knob : .background
-        parentClassFalseNameView.lineColor = !bool ? .knob : .subContent
-        parentClassTrueNameView.lineColor = bool ? .knob : .subContent
-        parentClassFalseNameView.textFrame.color = !bool ? .locked : .subLocked
-        parentClassTrueNameView.textFrame.color = bool ? .locked : .subLocked
+        parentFalseNameView.fillColor = model ? .background : .knob
+        parentTrueNameView.fillColor = model ? .knob : .background
+        parentFalseNameView.lineColor = model ? .subContent : .knob
+        parentTrueNameView.lineColor = model ? .knob : .subContent
+        parentFalseNameView.textFrame.color = model ? .subLocked : .locked
+        parentTrueNameView.textFrame.color = model ? .locked : .subLocked
     }
     
-    func bool(at p: Point) -> Bool {
-        return parentClassFalseNameView.frame.distance²(p) >
-            parentClassTrueNameView.frame.distance²(p)
+    var knobLineColor: Color {
+        return option.cationModel == model ? .warning : .getSetBorder
     }
-    
-    var disabledRegisterUndo = false
-    
-    struct Binding {
-        let view: BoolView
-        let bool: Bool, oldBool: Bool, phase: Phase
+    func model(at p: Point) -> Bool {
+        return parentFalseNameView.frame.distance²(p) > parentTrueNameView.frame.distance²(p)
     }
-    var binding: ((Binding) -> ())?
-    
+}
+extension BoolView: Queryable {
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
+}
+extension BoolView: Assignable {
     func delete(for p: Point) {
-        let bool = defaultBool
-        if bool != self.bool {
-            push(bool, old: self.bool)
-        }
+        let model = option.defaultModel
+        push(model)
     }
     func copiedViewables(at p: Point) -> [Viewable] {
-        return [bool]
+        return [model]
     }
     func paste(_ objects: [Any], for p: Point) {
         for object in objects {
-            if let string = object as? String {
-                if let bool = Bool(string) {
-                    if bool != self.bool {
-                        push(bool, old: self.bool)
-                        return
-                    }
-                }
+            if let model = object as? Model {
+                push(model)
+                return
+            } else if let string = object as? String, let model = Model(string) {
+                push(model)
+                return
             }
         }
     }
-    
+}
+extension BoolView: Runnable {
     func run(for p: Point) {
-        let bool = self.bool(at: p)
-        if bool != self.bool {
-            push(bool, old: self.bool)
-        }
+        let model = self.model(at: p)
+        push(model)
     }
-    
-    private var oldBool = false, oldPoint = Point()
-    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
+}
+extension BoolView: PointMovable {
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
         case .began:
+            capture(model)
             knobView.fillColor = .editing
-            oldBool = bool
-            oldPoint = p
-            binding?(Binding(view: self, bool: bool, oldBool: oldBool, phase: .began))
-            bool = self.bool(at: p)
-            binding?(Binding(view: self, bool: bool, oldBool: oldBool, phase: .changed))
+            model = self.model(at: p)
         case .changed:
-            bool = self.bool(at: p)
-            binding?(Binding(view: self, bool: bool, oldBool: oldBool, phase: .changed))
+            model = self.model(at: p)
         case .ended:
-            bool = self.bool(at: p)
-            if bool != oldBool {
-                registeringUndoManager?.registerUndo(withTarget: self) { [bool, oldBool] in
-                    $0.push(oldBool, old: bool)
-                }
-            }
-            binding?(Binding(view: self, bool: bool, oldBool: oldBool, phase: .ended))
-            knobView.fillColor = .knob
+            model = self.model(at: p)
+            knobView.fillColor = knobLineColor
         }
-    }
-    
-    private func push(_ bool: Bool, old oldBool: Bool) {
-        registeringUndoManager?.registerUndo(withTarget: self) { $0.push(oldBool, old: bool) }
-        binding?(Binding(view: self, bool: oldBool, oldBool: oldBool, phase: .began))
-        self.bool = bool
-        binding?(Binding(view: self, bool: bool, oldBool: oldBool, phase: .ended))
-    }
-    
-    func reference(at p: Point) -> Reference {
-        return Bool.reference
     }
 }

@@ -17,11 +17,52 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Data
+import class Foundation.ByteCountFormatter
+import class Foundation.FileWrapper
+import class Foundation.JSONDecoder
+import class Foundation.JSONEncoder
+
+extension Data {
+    var bytesString: String {
+        return ByteCountFormatter().string(fromByteCount: Int64(count))
+    }
+}
+extension Data: Referenceable {
+    static let name = Text(english: "Data", japanese: "データ")
+}
+
+extension Decodable {
+    init?(jsonData: Data) {
+        if let obj = try? JSONDecoder().decode(Self.self, from: jsonData) {
+            self = obj
+        } else {
+            return nil
+        }
+    }
+    init?(jsonString: String) {
+        guard let jsonData = jsonString.data(using: .utf8) else {
+            return nil
+        }
+        self.init(jsonData: jsonData)
+    }
+}
+extension Encodable {
+    var jsonData: Data? {
+        return try? JSONEncoder().encode(self)
+    }
+    var jsonString: String? {
+        guard let data = try? JSONEncoder().encode(self) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+}
 
 final class DataModel {
     let key: String, isDirectory: Bool
     var fileWrapper: FileWrapper
+    
     init(key: String) {
         self.key = key
         fileWrapper = FileWrapper()
@@ -63,9 +104,7 @@ final class DataModel {
         return fileWrapper.fileWrappers?.keys.max() ?? "0"
     }
     func set(_ dataModels: [DataModel]) {
-        guard isDirectory else {
-            fatalError()
-        }
+        guard isDirectory else { fatalError() }
         guard !dataModels.isEmpty else {
             children.forEach { $0.value.parent = nil }
             children = [:]
@@ -77,18 +116,14 @@ final class DataModel {
         children.forEach { $0.value.parent = self }
     }
     func insert(_ dataModel: DataModel) {
-        guard isDirectory && children[dataModel.key] == nil else {
-            fatalError()
-        }
+        guard isDirectory && children[dataModel.key] == nil else { fatalError() }
         dataModel.fileWrapper.preferredFilename = dataModel.key
         fileWrapper.addFileWrapper(dataModel.fileWrapper)
         children[dataModel.key] = dataModel
         dataModel.parent = self
     }
     func remove(_ dataModel: DataModel) {
-        guard isDirectory && children[dataModel.key] != nil else {
-            fatalError()
-        }
+        guard isDirectory && children[dataModel.key] != nil else { fatalError() }
         fileWrapper.removeFileWrapper(dataModel.fileWrapper)
         dataModel.parent = nil
         children[dataModel.key] = nil
@@ -96,18 +131,7 @@ final class DataModel {
     
     private(set) var isRead = false
     private var object: Any?
-    func readObject<T: NSCoding>() -> T? {
-        guard !isRead else {
-            return object as? T
-        }
-        if let data = fileWrapper.regularFileContents, let object = T.with(data) {
-            isRead = true
-            self.object = object
-            return object
-        }
-        return nil
-    }
-    func readObject<T: Decodable>() -> T? {
+    func readObject<T: Decodable>(_ type: T.Type) -> T? {
         guard !isRead else {
             return object as? T
         }
@@ -133,63 +157,13 @@ final class DataModel {
         children.forEach { $0.value.writeAllFileWrappers() }
     }
     func write() {
-        if isWrite {
-            if let data = dataClosure(), let parentFileWrapper = parent?.fileWrapper {
-                parentFileWrapper.removeFileWrapper(fileWrapper)
-                fileWrapper = FileWrapper(regularFileWithContents: data)
-                fileWrapper.preferredFilename = key
-                parentFileWrapper.addFileWrapper(fileWrapper)
-            }
-            isWrite = false
+        guard isWrite else { return }
+        if let data = dataClosure(), let parentFileWrapper = parent?.fileWrapper {
+            parentFileWrapper.removeFileWrapper(fileWrapper)
+            fileWrapper = FileWrapper(regularFileWithContents: data)
+            fileWrapper.preferredFilename = key
+            parentFileWrapper.addFileWrapper(fileWrapper)
         }
-    }
-}
-
-extension NSCoder {
-    func decodeDecodable<T: Decodable>(_ type: T.Type, forKey key: String) -> T? {
-        guard let data = decodeObject(forKey: key) as? Data else {
-            return nil
-        }
-        return try? JSONDecoder().decode(type, from: data)
-    }
-    func encodeEncodable<T: Encodable>(_ object: T, forKey key: String) {
-        if let data = try? JSONEncoder().encode(object) {
-            encode(data, forKey: key)
-        }
-    }
-}
-extension NSCoding {
-    static func with(_ data: Data) -> Self? {
-        return data.isEmpty ? nil : NSKeyedUnarchiver.unarchiveObject(with: data) as? Self
-    }
-    var data: Data {
-        return NSKeyedArchiver.archivedData(withRootObject: self)
-    }
-}
-
-extension Decodable {
-    init?(jsonData: Data) {
-        if let obj = try? JSONDecoder().decode(Self.self, from: jsonData) {
-            self = obj
-        } else {
-            return nil
-        }
-    }
-    init?(jsonString: String) {
-        guard let jsonData = jsonString.data(using: .utf8) else {
-            return nil
-        }
-        self.init(jsonData: jsonData)
-    }
-}
-extension Encodable {
-    var jsonData: Data? {
-        return try? JSONEncoder().encode(self)
-    }
-    var jsonString: String? {
-        guard let data = try? JSONEncoder().encode(self) else {
-            return nil
-        }
-        return String(data: data, encoding: .utf8)
+        isWrite = false
     }
 }
