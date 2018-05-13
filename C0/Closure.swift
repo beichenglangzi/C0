@@ -23,8 +23,10 @@ final class ClosureView: View {
     typealias Model = Closure
     var model: Model
     
-    var sizeType: SizeType
-    let nameView: TextView
+    var sizeType: SizeType {
+        didSet { updateLayout() }
+    }
+    let nameView: TextFormView
     
     init(model: @escaping Model = {}, name: Text = "",
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
@@ -32,7 +34,7 @@ final class ClosureView: View {
         self.model = model
         
         self.sizeType = sizeType
-        self.nameView = TextView(text: name, font: Font.default(with: sizeType), color: .locked)
+        self.nameView = TextFormView(text: name, font: Font.default(with: sizeType), color: .locked)
         
         super.init()
         children = [nameView]
@@ -40,7 +42,7 @@ final class ClosureView: View {
     }
     
     override var defaultBounds: Rect {
-        let fitSize = nameView.fitSize, padding = Layout.padding(with: sizeType)
+        let fitSize = nameView.defaultBounds.size, padding = Layout.padding(with: sizeType)
         return Rect(x: 0, y: 0,
                     width: fitSize.width + padding * 2, height: fitSize.height + padding * 2)
     }
@@ -56,7 +58,7 @@ extension ClosureView: Queryable {
     static let referenceableType: Referenceable.Type = _Closure.self
 }
 extension ClosureView: Runnable {
-    func run(for p: Point) {
+    func run(for p: Point, _ version: Version) {
         model()
     }
 }

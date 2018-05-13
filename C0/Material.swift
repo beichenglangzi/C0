@@ -36,30 +36,6 @@ struct Material: Codable, Hashable {
                 return .subtract
             }
         }
-        var displayText: Text {
-            switch self {
-            case .normal:
-                return Text(english: "Normal", japanese: "通常")
-            case .lineless:
-                return Text(english: "Lineless", japanese: "線なし")
-            case .blur:
-                return Text(english: "Blur", japanese: "ぼかし")
-            case .luster:
-                return Text(english: "Luster", japanese: "光沢")
-            case .addition:
-                return Text(english: "Addition", japanese: "加算")
-            case .subtract:
-                return Text(english: "Subtract", japanese: "減算")
-            }
-        }
-        static var displayTexts: [Text] {
-            return [normal.displayText,
-                    lineless.displayText,
-                    blur.displayText,
-                    luster.displayText,
-                    addition.displayText,
-                    subtract.displayText]
-        }
     }
     
     static let defaultLineWidth = 1.0.cg
@@ -118,9 +94,9 @@ extension Material: Interpolatable {
                         lineWidth: lineWidth, opacity: opacity)
     }
 }
-extension Material: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        let view = View(isForm: true)
+extension Material: MiniViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        let view = View(isLocked: true)
         view.bounds = bounds
         view.fillColor = color
         return view
@@ -132,7 +108,32 @@ extension Material.MaterialType: Referenceable {
 }
 extension Material: Initializable {}
 extension Material: KeyframeValue {}
-extension Material.MaterialType: CompactViewableWithDisplayText {}
+extension Material.MaterialType: DisplayableText {
+    var displayText: Text {
+        switch self {
+        case .normal:
+            return Text(english: "Normal", japanese: "通常")
+        case .lineless:
+            return Text(english: "Lineless", japanese: "線なし")
+        case .blur:
+            return Text(english: "Blur", japanese: "ぼかし")
+        case .luster:
+            return Text(english: "Luster", japanese: "光沢")
+        case .addition:
+            return Text(english: "Addition", japanese: "加算")
+        case .subtract:
+            return Text(english: "Subtract", japanese: "減算")
+        }
+    }
+    static var displayTexts: [Text] {
+        return [normal.displayText,
+                lineless.displayText,
+                blur.displayText,
+                luster.displayText,
+                addition.displayText,
+                subtract.displayText]
+    }
+}
 
 struct MaterialTrack: Track, Codable {
     private(set) var animation = Animation<Material>()
@@ -345,10 +346,10 @@ extension MaterialView: Assignable {
         let material = Material()
         push(material)
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [material]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         for object in objects {
             if let material = object as? Material {
                 push(material)

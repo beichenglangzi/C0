@@ -148,23 +148,28 @@ struct TrackTree<Value: KeyframeValue>: Track, Codable, TreeNode {
     //    }
 }
 
+/**
+ Issue: Protocolから静的に決定可能な代数的データ型のコードを自動生成
+ */
 enum AlgebraicTrackItem: Track {
     var animatable: Animatable {
         switch self {
-        case .tempo(let track):
-            return track.animation
-        case .subtitle(let track):
-            return track.animation
-        case .transform(let track):
-            return track.animation
-        case .wiggle(let track):
-            return track.animation
+        case .tempo(let track): return track.animation
+        case .subtitle(let track): return track.animation
+        case .transform(let track): return track.animation
+        case .wiggle(let track): return track.animation
         }
     }
     case tempo(TempoTrack)
     case subtitle(SubtitleTrack)
     case transform(TransformTrack)
     case wiggle(WiggleTrack)
+    var tempoTrack: TempoTrack? {
+        switch self {
+        case .tempo(let track): return track
+        default: return nil
+        }
+    }
 }
 extension AlgebraicTrackItem: Codable {
     enum CodingKeys: CodingKey {
@@ -183,20 +188,17 @@ extension AlgebraicTrackItem: Codable {
             self = .transform(track)
         } else if let track = try? values.decode(WiggleTrack.self, forKey: .wiggle) {
             self = .wiggle(track)
+        } else {
+            throw CodingError.decoding("\(dump(values))")
         }
-        throw CodingError.decoding("\(dump(values))")
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case .tempo(let track):
-            try container.encode(track, forKey: .tempo)
-        case .subtitle(let track):
-            try container.encode(track, forKey: .subtitle)
-        case .transform(let track):
-            try container.encode(track, forKey: .transform)
-        case .wiggle(let track):
-            try container.encode(track, forKey: .wiggle)
+        case .tempo(let track): try container.encode(track, forKey: .tempo)
+        case .subtitle(let track): try container.encode(track, forKey: .subtitle)
+        case .transform(let track): try container.encode(track, forKey: .transform)
+        case .wiggle(let track): try container.encode(track, forKey: .wiggle)
         }
     }
 }

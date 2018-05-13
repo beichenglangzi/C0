@@ -38,9 +38,9 @@ struct Quasimode {
 extension Quasimode: Referenceable {
     static let name = Text(english: "Quasimode", japanese: "擬似モード")
 }
-extension Quasimode: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return displayText.thumbnail(withBounds: bounds, sizeType)
+extension Quasimode: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return displayText.thumbnailView(withFrame: frame, sizeType)
     }
 }
 
@@ -209,9 +209,9 @@ extension Action: Equatable {
 extension Action: Referenceable {
     static let name = Text(english: "Action", japanese: "アクション")
 }
-extension Action: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return name.thumbnail(withBounds: bounds, sizeType)
+extension Action: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return name.thumbnailView(withFrame: frame, sizeType)
     }
 }
 
@@ -570,6 +570,7 @@ final class IndicatableActionManager: ActionManagable {
 }
 
 protocol Selectable {
+    func captureSelect(to version: Version)
     func select(from rect: Rect, _ phase: Phase)
     func deselect(from rect: Rect, _ phase: Phase)
     func selectAll()
@@ -600,7 +601,8 @@ final class SelectableActionManager: ActionManagable {
         var selectionView: View?
         weak var receiver: Receiver?
         private var startPoint = Point(), startRootPoint = Point(), oldIsDeselect = false
-        func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View, isDeselect: Bool) {
+        func send(_ event: Dragger.Event, _ phase: Phase, _ version: Version,
+                  in rootView: View, isDeselect: Bool) {
             switch phase {
             case .began:
                 let selectionView = isDeselect ? View.deselection : View.selection
@@ -614,9 +616,9 @@ final class SelectableActionManager: ActionManagable {
                     
                     let rect = Rect(origin: startPoint, size: Size())
                     if isDeselect {
-                        receiver.deselect(from: rect, phase)
+                        receiver.deselect(from: rect, phase, version)
                     } else {
-                        receiver.select(from: rect, phase)
+                        receiver.select(from: rect, phase, version)
                     }
                     oldIsDeselect = isDeselect
                 }
@@ -636,9 +638,9 @@ final class SelectableActionManager: ActionManagable {
                                 minY: min(startPoint.y, p.y), maxY: max(startPoint.y, p.y))
                 let rect = aabb.rect
                 if isDeselect {
-                    receiver.deselect(from: rect, phase)
+                    receiver.deselect(from: rect, phase, version)
                 } else {
-                    receiver.select(from: rect, phase)
+                    receiver.select(from: rect, phase, version)
                 }
                 
                 if phase == .ended {
@@ -652,18 +654,25 @@ final class SelectableActionManager: ActionManagable {
     private var selector = Selector()
     
     func send(_ eventMap: EventMap, in rootView: View) {
-        if let sendableTuple = eventMap.sendableTuple(with: [selectAction, deselectAction], .drag) {
-            selector.send(sendableTuple.draggerEvent, sendableTuple.phase, in: rootView,
+        if let sendableTuple = eventMap.sendableTuple(with: [selectAction, deselectAction], .drag),
+            let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+            
+            selector.send(sendableTuple.draggerEvent, sendableTuple.phase, version, in: rootView,
                           isDeselect: sendableTuple.mainActionEvent.action == deselectAction)
         }
         if let inputterEvent = eventMap.sendableInputterEvent(with: selectAllAction, .a) {
-            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
+                let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                
+                receiver.capture(to: version)
                 receiver.selectAll()
             }
         }
         if let inputterEvent = eventMap.sendableInputterEvent(with: deselectAllAction, .a) {
-            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
-                receiver.deselectAll()
+            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
+                let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                
+                receiver.deselectAll(version)
             }
         }
     }
@@ -728,7 +737,7 @@ final class ScrollableActionManager: ActionManagable {
 }
 
 protocol Zoomable {
-    func zoom(for p: Point, time: Second, magnification: Real, _ phase: Phase)
+    func zoom(for p: Point, time: Second, magnification: Real, _ phase: Phase, _ version: Version)
     func resetView(for p: Point)
 }
 final class ZoomableActionManager: ActionManagable {
@@ -775,7 +784,7 @@ final class ZoomableActionManager: ActionManagable {
 }
 
 protocol Rotatable {
-    func rotate(for p: Point, time: Second, rotationQuantity: Real, _ phase: Phase)
+    func rotate(for p: Point, time: Second, rotationQuantity: Real, _ phase: Phase, _ version: Version)
 }
 final class RotatableActionManager: ActionManagable {
     typealias Receiver = View & Rotatable
@@ -811,8 +820,9 @@ final class RotatableActionManager: ActionManagable {
     }
 }
 
-protocol QueryableViewer: class {
-    var info: Info { get set }
+protocol ReferenceViewer: class {
+    var model: Reference { get }
+    func push(_ model: [Reference], to version: Version)
 }
 protocol Queryable {
     static var referenceableType: Referenceable.Type { get }
@@ -821,8 +831,8 @@ protocol ViewQueryable: Queryable {
     static var viewDescription: Text { get }
 }
 final class QueryableActionManager: ActionManagable {
+    typealias Viewer = View & ReferenceViewer
     typealias Receiver = View & Queryable
-    typealias Viewer = View & QueryableViewer
     typealias ViewReceiver = View & ViewQueryable
     
     var lookUpAction = Action(name: Text(english: "Look Up", japanese: "調べる"),
@@ -834,19 +844,23 @@ final class QueryableActionManager: ActionManagable {
     func send(_ eventMap: EventMap, in rootView: View) {
         if let inputterEvent = eventMap.sendableInputterEvent(with: lookUpAction, .tap) {
             guard let viewer = rootView.at(inputterEvent.rootLocation, Viewer.self) else { return }
-            if let receiver = rootView.at(inputterEvent.rootLocation, ViewReceiver.self) {
-                viewer.info = Info(modelReference: type(of: receiver).referenceableType.reference,
-                                   viewDescription: type(of: receiver).viewDescription)
-            } else if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
-                viewer.info = Info(modelReference: type(of: receiver).referenceableType.reference,
-                                   viewDescription: Text(english: "None", japanese: "なし"))
+            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+                let r = type(of: receiver).referenceableType
+                let viewDescription: Text
+                if let receiver = rootView.at(inputterEvent.rootLocation, ViewReceiver.self) {
+                    viewDescription = type(of: receiver).viewDescription
+                } else {
+                    viewDescription = Text(english: "None", japanese: "なし")
+                }
+                viewer.reference = Reference(name: r.name, classDescription: r.classDescription,
+                                             viewDescription: viewDescription)
             }
         }
     }
 }
 
 protocol Versionable {
-    var binder: BinderProtocol { get }
+    var version: Version { get }
 }
 final class UndoableActionManager: ActionManagable {
     typealias Receiver = View & Versionable
@@ -865,30 +879,30 @@ final class UndoableActionManager: ActionManagable {
     func send(_ eventMap: EventMap, in rootView: View) {
         if let inputterEvent = eventMap.sendableInputterEvent(with: undoAction, .z) {
             if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
-                receiver.binder.version.undo()
+                receiver.version.undo()
             }
         }
         if let inputterEvent = eventMap.sendableInputterEvent(with: redoAction, .z) {
             if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
-                receiver.binder.version.redo()
+                receiver.version.redo()
             }
         }
     }
 }
 
-protocol CopiedViewablesViewer: class {
-    var copiedViewables: [Viewable] { get }
-    func push(copiedViewables: [Viewable])
+protocol CopiedObjectsViewer: class {
+    var model: [Object] { get }
+    func push(_ model: [Object], to version: Version)
 }
 protocol Copiable {
-    func copiedViewables(at p: Point) -> [Viewable]
+    func copiedObjects(at p: Point) -> [Object]
 }
 protocol Assignable: Copiable {
-    func delete(for p: Point)
-    func paste(_ objects: [Any], for p: Point)
+    func delete(for p: Point, _ version: Version)
+    func paste(_ objects: [Object], for p: Point, _ version: Version)
 }
 final class AssignableActionManager: ActionManagable {
-    typealias Viewer = View & CopiedViewablesViewer
+    typealias Viewer = View & CopiedObjectsViewer
     typealias Receiver = View & Assignable
     typealias CopyReceiver = View & Copiable
     
@@ -908,40 +922,43 @@ final class AssignableActionManager: ActionManagable {
     func send(_ eventMap: EventMap, in rootView: View) {
         if let inputterEvent = eventMap.sendableInputterEvent(with: cutAction, .x) {
             if let viewer = rootView.at(inputterEvent.rootLocation, Viewer.self),
-                let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+                let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
+                let version = viewer.withSelfAndAllParents(with: Versionable.self)?.version {
                 
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
-                let copiedViewables = receiver.copiedViewables(at: p)
-                if !copiedViewables.isEmpty {
-                    receiver.delete(for: p)
-                    viewer.push(copiedViewables: copiedViewables)
+                let copiedObjects = receiver.copiedObjects(at: p)
+                if !copiedObjects.isEmpty {
+                    receiver.delete(for: p, version)
+                    viewer.push(copiedObjects, to: version)
                 }
             }
         }
         if let inputterEvent = eventMap.sendableInputterEvent(with: copyAction, .c) {
             if let viewer = rootView.at(inputterEvent.rootLocation, Viewer.self),
-                let receiver = rootView.at(inputterEvent.rootLocation, CopyReceiver.self) {
+                let receiver = rootView.at(inputterEvent.rootLocation, CopyReceiver.self),
+                let version = viewer.withSelfAndAllParents(with: Versionable.self)?.version {
                 
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
-                let copiedViewables = receiver.copiedViewables(at: p)
-                if !copiedViewables.isEmpty {
-                    viewer.push(copiedViewables: copiedViewables)
+                let copiedObjects = receiver.copiedObjects(at: p)
+                if !copiedObjects.isEmpty {
+                    viewer.push(copiedObjects, to: version)
                 }
             }
         }
         if let inputterEvent = eventMap.sendableInputterEvent(with: pasteAction, .v) {
             if let viewer = rootView.at(inputterEvent.rootLocation, Viewer.self),
-                let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+                let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
+                let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
                 
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
-                receiver.paste(viewer.copiedViewables, for: p)
+                receiver.paste(viewer.model, for: p, version)
             }
         }
     }
 }
 
 protocol Newable {
-    func new(for p: Point)
+    func new(for p: Point, _ version: Version)
 }
 final class NewableActionManager: ActionManagable {
     typealias Receiver = View & Newable
@@ -955,16 +972,18 @@ final class NewableActionManager: ActionManagable {
     
     func send(_ eventMap: EventMap, in rootView: View) {
         if let inputterEvent = eventMap.sendableInputterEvent(with: newAction, .d) {
-            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
+                let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
-                receiver.new(for: p)
+                receiver.new(for: p, version)
             }
         }
     }
 }
 
 protocol Runnable {
-    func run(for p: Point)
+    func run(for p: Point, _ version: Version)
 }
 final class RunnableActionManager: ActionManagable {
     typealias Receiver = View & Runnable
@@ -977,24 +996,26 @@ final class RunnableActionManager: ActionManagable {
     
     func send(_ eventMap: EventMap, in rootView: View) {
         if let inputterEvent = eventMap.sendableInputterEvent(with: runAction, .click) {
-            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
+                let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
-                receiver.run(for: p)
+                receiver.run(for: p, version)
             }
         }
     }
 }
 
 protocol KeyInputtable {
-    func insert(_ string: String, for p: Point)
+    func insert(_ string: String, for p: Point, _ version: Version)
 }
 
 protocol Movable {
-    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase)
+    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version)
 }
 protocol Transformable: Movable {
-    func transform(for p: Point, pressure: Real, time: Second, _ phase: Phase)
-    func warp(for p: Point, pressure: Real, time: Second, _ phase: Phase)
+    func transform(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version)
+    func warp(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version)
 }
 final class TransformableActionManager: ActionManagable {
     typealias Receiver = View & Transformable
@@ -1083,8 +1104,8 @@ final class TransformableActionManager: ActionManagable {
 
 protocol Strokable {
     var viewScale: Real { get }
-    func stroke(for p: Point, pressure: Real, time: Second, _ phase: Phase)
-    func lassoErase(for p: Point, pressure: Real, time: Second, _ phase: Phase)
+    func stroke(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version)
+    func lassoErase(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version)
 }
 final class StrokableActionManager: ActionManagable {
     typealias Receiver = View & Strokable
@@ -1145,14 +1166,16 @@ final class StrokableActionManager: ActionManagable {
 }
 
 protocol PointMovable: class {
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase)
+    func movePoint(for p: Point, first fp: Point, pressure: Real,
+                   time: Second, _ phase: Phase, _ version: Version)
 }
 protocol VertexMovable: PointMovable {
-    func moveVertex(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase)
+    func moveVertex(for p: Point, first fp: Point, pressure: Real,
+                    time: Second, _ phase: Phase, _ version: Version)
 }
 protocol PointEditable: VertexMovable {
-    func insert(_ p: Point)
-    func removeNearestPoint(for p: Point)
+    func insert(_ p: Point, _ version: Version)
+    func removeNearestPoint(for p: Point, _ version: Version)
 }
 final class PointEditableActionManager: ActionManagable {
     typealias Receiver = View & PointEditable
@@ -1423,13 +1446,13 @@ final class QuasimodeView: View {
     }
     
     var isSizeToFit: Bool
-    var textView: TextView
+    var textView: TextFormView
     
     init(quasimode: Quasimode, isSizeToFit: Bool = true) {
         self.quasimode = quasimode
         self.isSizeToFit = isSizeToFit
-        textView = TextView(text: quasimode.displayText,
-                            font: Font(monospacedSize: 10), frameAlignment: .right)
+        textView = TextFormView(text: quasimode.displayText,
+                                font: Font(monospacedSize: 10), frameAlignment: .right)
         
         super.init()
         if isSizeToFit {
@@ -1458,7 +1481,7 @@ extension QuasimodeView: Queryable {
     static let referenceableType: Referenceable.Type = Quasimode.self
 }
 extension QuasimodeView: Copiable {
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [quasimode]
     }
 }
@@ -1471,11 +1494,11 @@ final class ActionView: View {
         }
     }
     
-    var nameView: TextView, quasimodeView: QuasimodeView
+    var nameView: TextFormView, quasimodeView: QuasimodeView
     
     init(action: Action, frame: Rect) {
         self.action = action
-        nameView = TextView(text: action.name)
+        nameView = TextFormView(text: action.name)
         quasimodeView = QuasimodeView(quasimode: action.quasimode)
         
         super.init()
@@ -1501,7 +1524,7 @@ extension ActionView: Queryable {
     static let referenceableType: Referenceable.Type = Action.self
 }
 extension ActionView: Copiable {
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [action]
     }
 }
@@ -1542,7 +1565,7 @@ final class ActionManagableView: View {
 final class SenderView: View {
     var sender = Sender()
     
-    let classNameView = TextView(text: Sender.name, font: .bold)
+    let classNameView = TextFormView(text: Sender.name, font: .bold)
     var actionManagableViews = [ActionManagableView]()
     
     override init() {

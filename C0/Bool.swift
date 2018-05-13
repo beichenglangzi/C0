@@ -20,12 +20,16 @@
 extension Bool: Referenceable {
     static let name = Text(english: "Bool", japanese: "ブール値")
 }
-extension Bool: Thumbnailable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return (self ? "true" : "false").view(withBounds: bounds, sizeType)
+extension Bool: ObjectProtocol {
+    var object: Object {
+        return .bool(self)
     }
 }
-extension Bool: CompactViewable {}
+extension Bool: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return (self ? "true" : "false").thumbnailView(withBounds: bounds, sizeType)
+    }
+}
 
 struct BoolOption {
     struct Info {
@@ -57,9 +61,9 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
     
     var option: ModelOption {
         didSet {
-            parentTextView.model = option.name
-            parentTrueNameView.model = option.info.trueName
-            parentFalseNameView.model = option.info.falseName
+            parentTextView.text = option.name
+            parentTrueNameView.text = option.info.trueName
+            parentFalseNameView.text = option.info.falseName
             updateWithModel()
         }
     }
@@ -87,7 +91,6 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
         knobView = View.discreteKnob()
         
         super.init()
-        isLiteral = true
         children = [parentTextView, knobView, parentTrueNameView, parentFalseNameView]
         self.frame = frame
     }
@@ -118,8 +121,8 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
         parentTrueNameView.fillColor = model ? .knob : .background
         parentFalseNameView.lineColor = model ? .subContent : .knob
         parentTrueNameView.lineColor = model ? .knob : .subContent
-        parentFalseNameView.textFrame.color = model ? .subLocked : .locked
-        parentTrueNameView.textFrame.color = model ? .locked : .subLocked
+        parentFalseNameView.textMaterial.color = model ? .subLocked : .locked
+        parentTrueNameView.textMaterial.color = model ? .locked : .subLocked
     }
     
     var knobLineColor: Color {
@@ -135,36 +138,42 @@ extension BoolView: Queryable {
     }
 }
 extension BoolView: Assignable {
-    func delete(for p: Point) {
-        let model = option.defaultModel
-        push(model)
+    func delete(for p: Point, _ version: Version) {
+        push(option.defaultModel, to: version)
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
-        return [model]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [model.object]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point, _ version: Version) {
         for object in objects {
-            if let model = object as? Model {
-                push(model)
+            switch object {
+            case .bool(let model):
+                push(model, to: version)
                 return
-            } else if let string = object as? String, let model = Model(string) {
-                push(model)
+            case .int(let int):
+                let model = int > 0
+                push(model, to: version)
+                return
+            case .real(let real):
+                let model = real > 0
+                push(model, to: version)
                 return
             }
         }
     }
 }
 extension BoolView: Runnable {
-    func run(for p: Point) {
+    func run(for p: Point, _ version: Version) {
         let model = self.model(at: p)
-        push(model)
+        push(model, to: version)
     }
 }
 extension BoolView: PointMovable {
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func movePoint(for p: Point, first fp: Point, pressure: Real,
+                   time: Second, _ phase: Phase, _ version: Version) {
         switch phase {
         case .began:
-            capture(model)
+            capture(model, to: version)
             knobView.fillColor = .editing
             model = self.model(at: p)
         case .changed:

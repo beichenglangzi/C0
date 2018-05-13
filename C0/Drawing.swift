@@ -127,8 +127,8 @@ struct Drawing: Codable, Equatable {
 extension Drawing: Referenceable {
     static let name = Text(english: "Drawing", japanese: "ドローイング")
 }
-extension Drawing: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
+extension Drawing: MiniViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
         thumbnailView.bounds = bounds
         return thumbnailView
@@ -156,7 +156,7 @@ final class DrawingView: View {
     let draftLinesView = ArrayCountView<Line>()
     
     var sizeType: SizeType
-    let classNameView: TextView
+    let classNameView: TextFormView
     let classDraftLinesNameView = TextView(text: Text(english: "Draft Lines:", japanese: "下書き線:"))
     let changeToDraftView = ClosureView(name: Text(english: "Change to Draft", japanese: "下書き化"))
     let exchangeWithDraftView = ClosureView(name: Text(english: "Exchange with Draft",
@@ -239,10 +239,10 @@ extension DrawingView: Assignable {
     func delete(for p: Point) {
         push(Drawing())
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [drawing.copied]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         for object in objects {
             if let drawing = object as? Drawing {
                 push(drawing.copied)

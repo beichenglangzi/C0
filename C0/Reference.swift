@@ -21,7 +21,6 @@ protocol Referenceable {
     static var uninheritanceName: Text { get }
     static var name: Text { get }
     static var classDescription: Text { get }
-    static var reference: Reference { get }
 }
 extension Referenceable {
     static var uninheritanceName: Text {
@@ -30,57 +29,81 @@ extension Referenceable {
     static var classDescription: Text {
         return Text(english: "None", japanese: "なし")
     }
-    static var reference: Reference {
-        return Reference(name: name, classDescription: classDescription)
-    }
 }
 
 /**
  Issue: リファレンス表示の具体化
  */
 struct Reference {
-    var name: Text, classDescription: Text, viewDescription: Text
-    
-    init(name: Text = "",
-         classDescription: Text = "",
-         viewDescription: Text = "") {
-        
-        self.name = name
-        self.classDescription = classDescription
-        self.viewDescription = viewDescription
+    let name: Text, classDescription: Text, viewDescription: Text
+}
+extension Reference {
+    static func displayText(with keyPath: PartialKeyPath<Reference>) -> Text {
+        switch keyPath {
+        case \Reference.classDescription:
+            return Text(english: "Class Description", japanese: "クラス説明")
+        case \Reference.classDescription:
+            return Text(english: "Class Description", japanese: "クラス説明")
+        case \Reference.viewDescription:
+            return Text(english: "View Description", japanese: "表示説明")
+        default: fatalError("No case")
+        }
     }
 }
 extension Reference: Referenceable {
     static let name = Text(english: "Reference", japanese: "リファレンス")
 }
-extension Reference: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return name.view(withBounds: bounds, sizeType)
+extension Reference: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return name//.thumbnailView(withBounds: bounds, sizeType)
     }
 }
+extension Reference: MiniViewable {}
 
-final class ReferenceView: View {
-    var reference = Reference() {
-        didSet { updateWithReference() }
+final class ReferenceView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = Reference
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
     }
     
-    let classNameView = TextView(text: Reference.name, font: .bold)
-    let nameView = TextView()
-    let classClassDescriptionView = TextView(text: Text(english: "Class Description:",
-                                                        japanese: "クラス説明:"), font: .small)
-    let classDescriptionView = TextView()
-    let classViewDescriptionView = TextView(text: Text(english: "View Description:",
-                                                       japanese: "表示説明:"), font: .small)
-    let viewDescriptionView = TextView()
+    let classNameView: TextFormView
+    let nameView: TextGetterView<Binder>
+    let classClassDescriptionView: TextFormView
+    let classDescriptionView: TextGetterView<Binder>
+    let classViewDescriptionView: TextFormView
+    let viewDescriptionView: TextGetterView<Binder>
     
-    init(reference: Reference = Reference(), viewDescription: Text = Text()) {
-        self.reference = reference
+    init(binder: Binder, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        classNameView = TextFormView(text: Reference.name, font: .bold)
+        
+        let ntKeyPath = keyPath.appending(path: \Reference.name)
+        nameView = TextGetterView(binder: binder, keyPath: ntKeyPath)
+        
+        let cdt = Reference.displayText(with: \Reference.classDescription)
+        classClassDescriptionView = TextFormView(text: cdt, font: .small)
+        let cdtKeyPath = keyPath.appending(path: \Reference.classDescription)
+        classDescriptionView = TextGetterView(binder: binder, keyPath: cdtKeyPath)
+        
+        let vdt = Reference.displayText(with: \Reference.viewDescription)
+        classViewDescriptionView = TextFormView(text: vdt, font: .small)
+        let vdtKeyPath = keyPath.appending(path: \Reference.viewDescription)
+        viewDescriptionView = TextGetterView(binder: binder, keyPath: vdtKeyPath)
+        
         super.init()
         isClipped = true
         children = [classNameView, nameView,
                     classClassDescriptionView, classDescriptionView,
                     classViewDescriptionView, viewDescriptionView]
-        updateWithReference()
+        updateWithModel()
     }
     
     override func updateLayout() {
@@ -92,9 +115,16 @@ final class ReferenceView: View {
         classDescriptionView.textFrame.frameWidth = frameWidth
         viewDescriptionView.textFrame.frameWidth = frameWidth
         
+        updateWithModel()
+    }
+    func updateWithModel() {
+        nameView.updateWithModel()
+        classDescriptionView.updateWithModel()
+        viewDescriptionView.updateWithModel()
+        
+        let padding = Layout.basicPadding
         var y = bounds.height - nameView.frame.height - padding
-        nameView.frame.origin = Point(x: classNameView.frame.maxX + padding,
-                                      y: y)
+        nameView.frame.origin = Point(x: classNameView.frame.maxX + padding, y: y)
         y = bounds.height - classNameView.frame.height - padding
         y -= classClassDescriptionView.frame.height
         classClassDescriptionView.frame.origin = Point(x: padding, y: y)
@@ -105,13 +135,9 @@ final class ReferenceView: View {
         y -= viewDescriptionView.frame.height
         viewDescriptionView.frame.origin = Point(x: padding, y: y)
     }
-    private func updateWithReference() {
-        nameView.text = reference.name
-        classDescriptionView.text = reference.classDescription
-        viewDescriptionView.text = reference.viewDescription
-        updateLayout()
-    }
 }
 extension ReferenceView: Queryable {
-    static let referenceableType: Referenceable.Type = Reference.self
+    static var referenceableType: Referenceable.Type {
+        return Reference.self
+    }
 }

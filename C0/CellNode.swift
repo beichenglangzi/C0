@@ -1186,8 +1186,8 @@ struct CellGroup: Codable, TreeNode, Equatable, Namable {
 extension CellGroup: Referenceable {
     static let name = Text(english: "CellGroup", japanese: "ノード")
 }
-extension CellGroup: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
+extension CellGroup: MiniViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return name.view(withBounds: bounds, sizeType)
     }
 }
@@ -1233,7 +1233,7 @@ final class CellGroupView: View {
     }
     
     var sizeType: SizeType
-    private let classNameView: TextView
+    private let classNameView: TextFormView
     private let isHiddenView: BoolView
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
@@ -1288,7 +1288,7 @@ extension CellGroupView: Queryable {
     static let referenceableType: Referenceable.Type = CellGroup.self
 }
 extension CellGroupView: Copiable {
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [node]
     }
 }

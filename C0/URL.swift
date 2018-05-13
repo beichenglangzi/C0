@@ -43,9 +43,9 @@ extension URL {
 extension URL: Referenceable {
     static let name = Text("URL")
 }
-extension URL: Thumbnailable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
+extension URL: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return lastPathComponent.view(withBounds: bounds, sizeType)
     }
 }
-extension URL: CompactViewable {}
+extension URL: MiniViewable {}

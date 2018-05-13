@@ -270,69 +270,21 @@ extension Keyframe: Referenceable {
         return Text(english: "Keyframe", japanese: "キーフレーム") + "<" + Value.name + ">"
     }
 }
-extension Keyframe: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return timing.interpolation.displayText.thumbnail(withBounds: bounds, sizeType)
+extension Keyframe: MiniViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return timing.interpolation.displayText.thumbnailView(withBounds: bounds, sizeType)
     }
 }
 
 struct KeyframeTiming: Codable, Hashable {
     enum Interpolation: Int8, Codable {
         case spline, bound, linear, step
-        
-        var displayText: Text {
-            switch self {
-            case .spline:
-                return Text(english: "Spline", japanese: "スプライン")
-            case .bound:
-                return Text(english: "Bound", japanese: "バウンド")
-            case .linear:
-                return Text(english: "Linear", japanese: "リニア")
-            case .step:
-                return Text(english: "Step", japanese: "ステップ")
-            }
-        }
-        static var displayTexts: [Text] {
-            return [spline.displayText,
-                    bound.displayText,
-                    linear.displayText,
-                    step.displayText]
-        }
     }
     enum Loop: Int8, Codable {
         case none, began, ended
-        
-        var displayText: Text {
-            switch self {
-            case .none:
-                return Text(english: "None", japanese: "なし")
-            case .began:
-                return Text(english: "Began", japanese: "開始")
-            case .ended:
-                return Text(english: "Ended", japanese: "終了")
-            }
-        }
-        static var displayTexts: [Text] {
-            return [none.displayText,
-                    began.displayText,
-                    ended.displayText]
-        }
     }
     enum Label: Int8, Codable {
         case main, sub
-        
-        var displayText: Text {
-            switch self {
-            case .main:
-                return Text(english: "Main", japanese: "メイン")
-            case .sub:
-                return Text(english: "Sub", japanese: "サブ")
-            }
-        }
-        static var displayTexts: [Text] {
-            return [main.displayText,
-                    sub.displayText]
-        }
     }
     
     var time = Beat(0)
@@ -342,9 +294,9 @@ struct KeyframeTiming: Codable, Hashable {
 extension KeyframeTiming: Referenceable {
     static let name = Text(english: "Keyframe Timing", japanese: "キーフレームタイミング")
 }
-extension KeyframeTiming: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return interpolation.displayText.thumbnail(withBounds: bounds, sizeType)
+extension KeyframeTiming: MiniViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return interpolation.displayText.thumbnailView(withBounds: bounds, sizeType)
     }
 }
 extension KeyframeTiming.Interpolation: Referenceable {
@@ -353,19 +305,58 @@ extension KeyframeTiming.Interpolation: Referenceable {
     static let classDescription = Text(english: "\"Bound\": Uses \"Spline\" without interpolation on previous, Not previous and next: Use \"Linear\"",
                                        japanese: "バウンド: 前方側の補間をしないスプライン補間, 前後が足りない場合: リニア補間を使用")
 }
-extension KeyframeTiming.Interpolation: CompactViewableWithDisplayText {}
+extension KeyframeTiming.Interpolation: DisplayableText {
+    var displayText: Text {
+        switch self {
+        case .spline: return Text(english: "Spline", japanese: "スプライン")
+        case .bound: return Text(english: "Bound", japanese: "バウンド")
+        case .linear: return Text(english: "Linear", japanese: "リニア")
+        case .step: return Text(english: "Step", japanese: "ステップ")
+        }
+    }
+    static var displayTexts: [Text] {
+        return [spline.displayText,
+                bound.displayText,
+                linear.displayText,
+                step.displayText]
+    }
+}
 extension KeyframeTiming.Loop: Referenceable {
     static let uninheritanceName = Text(english: "Loop", japanese: "ループ")
     static let name = KeyframeTiming.name.spacedUnion(uninheritanceName)
     static let classDescription = Text(english: "Loop from \"Began Loop\" keyframe to \"Ended Loop\" keyframe on \"Ended Loop\" keyframe",
                                        japanese: "「ループ開始」キーフレームから「ループ終了」キーフレームの間を「ループ終了」キーフレーム上でループ")
 }
-extension KeyframeTiming.Loop: CompactViewableWithDisplayText {}
+extension KeyframeTiming.Loop: DisplayableText {
+    var displayText: Text {
+        switch self {
+        case .none: return Text(english: "None", japanese: "なし")
+        case .began: return Text(english: "Began", japanese: "開始")
+        case .ended: return Text(english: "Ended", japanese: "終了")
+        }
+    }
+    static var displayTexts: [Text] {
+        return [none.displayText,
+                began.displayText,
+                ended.displayText]
+    }
+}
 extension KeyframeTiming.Label: Referenceable {
     static let uninheritanceName = Text(english: "Label", japanese: "ラベル")
     static let name = KeyframeTiming.name.spacedUnion(uninheritanceName)
 }
-extension KeyframeTiming.Label: CompactViewableWithDisplayText {}
+extension KeyframeTiming.Label: DisplayableText {
+    var displayText: Text {
+        switch self {
+        case .main: return Text(english: "Main", japanese: "メイン")
+        case .sub: return Text(english: "Sub", japanese: "サブ")
+        }
+    }
+    static var displayTexts: [Text] {
+        return [main.displayText,
+                sub.displayText]
+    }
+}
 
 struct KeyframeTimingCollection: RandomAccessCollection {
     let keyframes: [KeyframeTimingProtocol]
@@ -411,7 +402,7 @@ final class KeyframeTimingView: View {
     let easingView: EasingView
     
     var sizeType: SizeType
-    let classNameView: TextView
+    let classNameView: TextFormView
     
     init(sizeType: SizeType = .regular) {
         classNameView = TextView(text: Keyframe<Value>.name, font: Font.bold(with: sizeType))
@@ -480,10 +471,10 @@ extension KeyframeView: Assignable {
         } ()
         push(keyframe, old: self.keyframe)
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [keyframe]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         for object in objects {
             if let keyframe = object as? Keyframe<Value> {
                 push(keyframe, old: self.keyframe)

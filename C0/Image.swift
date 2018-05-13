@@ -25,12 +25,9 @@ struct Image {
         case png, jpeg, tiff
         fileprivate var cfUTType: CFString {
             switch self {
-            case .png:
-                return kUTTypePNG
-            case .jpeg:
-                return kUTTypeJPEG
-            case .tiff:
-                return kUTTypeTIFF
+            case .png: return kUTTypePNG
+            case .jpeg: return kUTTypeJPEG
+            case .tiff: return kUTTypeTIFF
             }
         }
         var utType: String {
@@ -141,7 +138,8 @@ final class ImageView<T: BinderProtocol>: View, BindableReceiver, Movable {
     }
     private var dragType = DragType.move, downPosition = Point(), oldFrame = Rect()
     private var resizeWidth = 10.0.cg, ratio = 1.0.cg
-    func move(for point: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func move(for point: Point, pressure: Real,
+              time: Second, _ phase: Phase, _ version: Version) {
         guard let parent = parent else { return }
         let p = parent.convert(point, from: self), ip = point
         switch phase {

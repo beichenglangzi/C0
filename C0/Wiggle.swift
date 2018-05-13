@@ -74,9 +74,9 @@ extension Wiggle: Referenceable {
     static let name = Text(english: "Wiggle", japanese: "振動")
 }
 extension Wiggle: KeyframeValue {}
-extension Wiggle: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return View(isForm: true)
+extension Wiggle: MiniViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return View(isLocked: true)
     }
 }
 
@@ -225,7 +225,7 @@ final class WiggleView: View {
         }
     }
     
-    let classNameView: TextView
+    let classNameView: TextFormView
     let classAmplitudeNameView: TextView
     let amplitudeView: DiscreteRealView
     let classFrequencyNameView: TextView
@@ -318,10 +318,10 @@ extension WiggleView: Assignable {
     func delete(for p: Point) {
         push(Wiggle())
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [wiggle]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         for object in objects {
             if let wiggle = object as? Wiggle {
                 if wiggle != self.wiggle {

@@ -49,13 +49,11 @@ extension Int: Referenceable {
     static let name = Text(english: "Integer (\(MemoryLayout<Int>.size * 8)bit)",
                            japanese: "整数 (\(MemoryLayout<Int>.size * 8)bit)")
 }
-extension Int: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return String(self).view(withBounds: bounds, sizeType)
+extension Int: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return String(self).thumbnailView(withFrame: frame, sizeType)
     }
 }
-
-extension Int: Object1D {}
 
 struct IntGetterOption: GetterOption {
     typealias Model = Int

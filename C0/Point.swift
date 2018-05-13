@@ -276,11 +276,12 @@ extension Point: Interpolatable {
 extension Point: Referenceable {
     static let name = Text(english: "Point", japanese: "ポイント")
 }
-extension Point: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
+extension Point: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return (jsonString ?? "").view(withBounds: bounds, sizeType)
     }
 }
+extension Point: MiniViewable {}
 
 extension Array where Element == Point {
     var convexHull: [Point] {

@@ -19,27 +19,27 @@
 
 import Foundation
 
-enum BlendType: Int8, Codable, Equatable, Hashable {
+enum BlendType: Int8, Codable, Hashable {
     case normal, addition, subtract
-    
+}
+extension BlendType {
     var blendMode: CGBlendMode {
         switch self {
-        case .normal:
-            return .normal
-        case .addition:
-            return .plusLighter
-        case .subtract:
-            return .plusDarker
+        case .normal: return .normal
+        case .addition: return .plusLighter
+        case .subtract: return .plusDarker
         }
     }
+}
+extension BlendType: Referenceable {
+    static let name = Text(english: "Blend Type", japanese: "ブレンドタイプ")
+}
+extension BlendType: DisplayableText {
     var displayText: Text {
         switch self {
-        case .normal:
-            return Text(english: "Normal", japanese: "通常")
-        case .addition:
-            return Text(english: "Addition", japanese: "加算")
-        case .subtract:
-            return Text(english: "Subtract", japanese: "減算")
+        case .normal: return Text(english: "Normal", japanese: "通常")
+        case .addition: return Text(english: "Addition", japanese: "加算")
+        case .subtract: return Text(english: "Subtract", japanese: "減算")
         }
     }
     static var displayTexts: [Text] {
@@ -48,32 +48,25 @@ enum BlendType: Int8, Codable, Equatable, Hashable {
                 subtract.displayText]
     }
 }
-extension BlendType: Referenceable {
-    static let name = Text(english: "Blend Type", japanese: "ブレンドタイプ")
-}
-extension BlendType: CompactViewableWithDisplayText {}
 
-struct Effect: Codable, Equatable, Hashable {
+struct Effect: Codable, Hashable {
     var blendType = BlendType.normal, blurRadius = 0.0.cg, opacity = 1.0.cg
-    
-    static let minBlurRadius = 0.0.cg, maxBlurRadius = 1000.0.cg
-    static let minOpacity = 0.0.cg, maxOpacity = 1.0.cg
     
     var isEmpty: Bool {
         return self == Effect()
     }
+    
+    //option
+    static let minBlurRadius = 0.0.cg, maxBlurRadius = 1000.0.cg
+    static let minOpacity = 0.0.cg, maxOpacity = 1.0.cg
 }
 extension Effect {
     static func displayText(with keyPath: PartialKeyPath<Effect>) -> Text {
         switch keyPath {
-        case \Effect.blendType:
-            return Text(english: "Blend Type", japanese: "ブレンドタイプ")
-        case \Effect.blurRadius:
-            return Text(english: "Blur Radius", japanese: "ブラー半径")
-        case \Effect.opacity:
-            return Text(english: "Opacity", japanese: "不透明度")
-        default:
-            fatalError("No case")
+        case \Effect.blendType: return Text(english: "Blend Type", japanese: "ブレンドタイプ")
+        case \Effect.blurRadius: return Text(english: "Blur Radius", japanese: "ブラー半径")
+        case \Effect.opacity: return Text(english: "Opacity", japanese: "不透明度")
+        default: fatalError("No case")
         }
     }
 }
@@ -112,9 +105,9 @@ extension Effect: Interpolatable {
 }
 extension Effect: Initializable {}
 extension Effect: KeyframeValue {}
-extension Effect: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return blendType.displayText.thumbnail(withBounds: bounds, sizeType)
+extension Effect: MiniViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return blendType.displayText.thumbnailView(withBounds: bounds, sizeType)
     }
 }
 
@@ -140,7 +133,7 @@ final class EffectView<T: BinderProtocol>: View, BindableReceiver {
     let opacityView: SlidableNumberView
     
     var sizeType: SizeType
-    let classNameView: TextView
+    let classNameView: TextFormView
     let classBlurNameView: TextView
     
     init(binder: T, keyPath: ReferenceWritableKeyPath<T, Effect>, sizeType: SizeType = .regular) {
@@ -207,10 +200,10 @@ extension EffectView: Assignable {
     func delete(for p: Point) {
         push(Effect())
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [model]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         for object in objects {
             if let effect = object as? Effect {
                 push(effect)

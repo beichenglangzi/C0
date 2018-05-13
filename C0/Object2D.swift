@@ -23,9 +23,9 @@ struct Ratio2D {
     var x = 0.0.cg, y = 0.0.cg
 }
 
-protocol Object2D: Viewable {
-    associatedtype XModel: Viewable
-    associatedtype YModel: Viewable
+protocol Object2D: ObjectProtocol & Referenceable {
+    associatedtype XModel: MiniViewable
+    associatedtype YModel: MiniViewable
     init(xModel: XModel, yModel: YModel)
     var xModel: XModel { get set }
     var yModel: YModel { get set }
@@ -106,8 +106,8 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
     var interval = 1.5.cg, minDelta = 5.0.cg
     let knobView = View.discreteKnob()
     let boundsView: View
-    let xNameView: TextView
-    let yNameView: TextView
+    let xNameView: TextFormView
+    let yNameView: TextFormView
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
          xyOrientation: Orientation.XY = .horizontal(.leftToRight),
@@ -121,10 +121,10 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
         boundsPadding = Layout.padding(with: sizeType)
         boundsView.lineColor = .formBorder
         let font = Font.default(with: .small)
-        xNameView = TextView(text: "x:", font: font)
+        xNameView = TextFormView(text: "x:", font: font)
         xView = Assignable1DView(binder: binder, keyPath: keyPath.appending(path: \Model.xModel),
                                  option: option.xOption, sizeType: .small)
-        yNameView = TextView(text: "y:", font: font)
+        yNameView = TextFormView(text: "y:", font: font)
         yView = Assignable1DView(binder: binder, keyPath: keyPath.appending(path: \Model.yModel),
                                  option: option.yOption, sizeType: .small)
         
@@ -194,10 +194,10 @@ extension Discrete2DView: Assignable {
     func delete(for p: Point) {
         push(option.defaultModel)
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [model]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         for object in objects {
             if let model = object as? Model {
                 push(option.clippedModel(model))
@@ -210,7 +210,7 @@ extension Discrete2DView: Assignable {
     }
 }
 extension Discrete2DView: PointMovable {
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
         switch phase {
         case .began:
             isMovable = boundsView.contains(p)
@@ -287,34 +287,35 @@ extension Slidable2DView: Queryable {
     }
 }
 extension Slidable2DView: Assignable {
-    func delete(for p: Point) {
-        push(option.defaultModel)
+    func delete(for p: Point, _ version: Version) {
+        push(option.defaultModel, to: version)
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [model]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point, _ version: Version) {
         for object in objects {
             if let model = object as? Model {
-                push(option.clippedModel(model))
+                push(option.clippedModel(model), to: version)
                 return
             } else if let string = object as? String, let model = option.model(with: string) {
-                push(option.clippedModel(model))
+                push(option.clippedModel(model), to: version)
                 return
             }
         }
     }
 }
 extension Slidable2DView: Runnable {
-    func run(for p: Point) {
-        push(option.clippedModel(model(at: p)))
+    func run(for p: Point, _ version: Version) {
+        push(option.clippedModel(model(at: p)), to: version)
     }
 }
 extension Slidable2DView: PointMovable {
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func movePoint(for p: Point, first fp: Point, pressure: Real,
+                   time: Second, _ phase: Phase, _ version: Version) {
         switch phase {
         case .began:
-            capture(model)
+            capture(model, to: version)
             knobView.fillColor = .editing
             model = option.clippedModel(model(at: p))
         case .changed:

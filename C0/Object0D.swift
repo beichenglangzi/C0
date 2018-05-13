@@ -19,7 +19,7 @@
 
 import struct Foundation.Locale
 
-typealias Object0D = Viewable
+typealias Object0D = ObjectProtocol & Referenceable
 
 protocol GetterOption {
     associatedtype Model: Object0D
@@ -43,8 +43,7 @@ final class GetterView<T: GetterOption, U: BinderProtocol>: View, BindableGetter
     }
     
     var sizeType: SizeType
-    let classPropertyNameView: TextView?
-    let optionTextView: TextView
+    let optionTextView: TextFormView
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
@@ -54,9 +53,9 @@ final class GetterView<T: GetterOption, U: BinderProtocol>: View, BindableGetter
         self.option = option
         
         self.sizeType = sizeType
-        optionTextView = TextView(text: option.text(with: model),
-                                  font: Font.default(with: sizeType),
-                                  frameAlignment: .right, alignment: .right)
+        optionTextView = TextFormView(text: option.text(with: model),
+                                      font: Font.default(with: sizeType),
+                                      frameAlignment: .right, alignment: .right)
         
         super.init()
         noIndicatedLineColor = .getBorder
@@ -87,12 +86,12 @@ extension GetterView: Queryable {
     }
 }
 extension GetterView: Copiable {
-    func copiedViewables(at p: Point) -> [Viewable] {
-        return [model]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [model.object]
     }
 }
 
-final class CompactView<T: Object0D, U: BinderProtocol>: View, BindableGetterReceiver {
+final class MiniView<T: Object0D, U: BinderProtocol>: View, BindableGetterReceiver {
     typealias Model = T
     typealias Binder = U
     var binder: Binder {
@@ -105,7 +104,7 @@ final class CompactView<T: Object0D, U: BinderProtocol>: View, BindableGetterRec
     var sizeType: SizeType {
         didSet { updateWithModel() }
     }
-    let classNameView: TextView
+    let classNameView: TextFormView
     var thumbnailView: View {
         didSet {
             children = [classNameView, thumbnailView]
@@ -119,15 +118,7 @@ final class CompactView<T: Object0D, U: BinderProtocol>: View, BindableGetterRec
         self.keyPath = keyPath
         
         self.sizeType = sizeType
-        classNameView = TextView(text: Model.name, font: Font.bold(with: sizeType))
-        
-        
-        let thumbnailFrame = self.thumbnailFrame(withBounds: Rect(origin: Point(), size: frame.size))
-        if let compactViewable = model as? CompactViewable {
-            thumbnailView = compactViewable.thumbnail(withBounds: thumbnailFrame, sizeType)
-        } else {
-            thumbnailView = View(isForm: true)
-        }
+        classNameView = TextFormView(text: Model.name, font: Font.bold(with: sizeType))
         
         super.init()
         children = [classNameView, thumbnailView]
@@ -142,8 +133,8 @@ final class CompactView<T: Object0D, U: BinderProtocol>: View, BindableGetterRec
     }
     override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType)
-        let width = max(CompactView.defaultMinWidth,
-                        classNameView.frame.width + CompactView.defaultThumbnailWidth)
+        let width = max(MiniView.defaultMinWidth,
+                        classNameView.frame.width + MiniView.defaultThumbnailWidth)
         return Rect(x: 0, y: 0, width: width, height: classNameView.frame.height + padding * 2)
     }
     func thumbnailFrame(withBounds bounds: Rect) -> Rect {
@@ -160,26 +151,29 @@ final class CompactView<T: Object0D, U: BinderProtocol>: View, BindableGetterRec
         thumbnailView.frame = thumbnailFrame(withBounds: bounds)
     }
     func updateWithModel() {
-        if let compactViewable = model as? CompactViewable {
-            let thumbnailFrame = self.thumbnailFrame(withBounds: bounds)
-            thumbnailView = compactViewable.thumbnail(withBounds: thumbnailFrame, sizeType)
+        let thumbnailFrame = self.thumbnailFrame(withBounds: bounds)
+        if let thumbnailViewable = model as? ThumbnailViewable {
+            thumbnailView = thumbnailViewable.thumbnailView(withFrame: thumbnailFrame, sizeType)
         } else {
-            thumbnailView = View(isForm: true)
+            let view = View(isLocked: true)
+            view.frame = thumbnailFrame
+            view.lineColor = .formBorder
+            thumbnailView = view
         }
     }
 }
-extension CompactView: Localizable {
+extension MiniView: Localizable {
     func update(with locale: Locale) {
         updateLayout()
     }
 }
-extension CompactView: Queryable {
+extension MiniView: Queryable {
     static var referenceableType: Referenceable.Type {
         return Model.self
     }
 }
-extension CompactView: Copiable {
-    func copiedViewables(at p: Point) -> [Viewable] {
-        return  [model]
+extension MiniView: Copiable {
+    func copiedObjects(at p: Point) -> [Object] {
+        return [model.object]
     }
 }

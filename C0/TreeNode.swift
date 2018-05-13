@@ -91,7 +91,7 @@ extension TreeNode where Element: Namable {
     var unduplicatedIndexName: Text {
         var minIndex: Int?
         for node in self {
-            guard let i = node.name.currentString.suffixNumber else { continue }
+            guard let i = node.name.suffixNumber else { continue }
             if let minI = minIndex {
                 if i > minI {
                     minIndex = i

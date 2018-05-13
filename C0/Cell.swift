@@ -347,8 +347,8 @@ struct Cell: Codable, Equatable, TreeNode {
 extension Cell: Referenceable {
     static let name = Text(english: "Cell", japanese: "セル")
 }
-extension Cell: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
+extension Cell: MiniViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
         thumbnailView.bounds = bounds
         return thumbnailView
@@ -381,7 +381,7 @@ final class CellView: View {
     private let isLockedView: BoolView
     
     var sizeType: SizeType
-    private let classNameView: TextView
+    private let classNameView: TextFormView
     
     init(sizeType: SizeType = .regular) {
         isLockedView = BoolView(cationBool: true,
@@ -439,7 +439,7 @@ extension CellView: Localizable {
     }
 }
 extension CellView: Copiable {
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [cell]
     }
 }

@@ -17,14 +17,16 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-protocol BinderProtocol: class {}
+protocol BinderProtocol: class {
+    associatedtype Model
+    var rootModel: Model { get set }
+    init(rootModel: Model)
+}
 
 final class BasicBinder<Model>: BinderProtocol {
-    var model: Model
-    var version: Version
-    init(model: Model, version: Version = Version()) {
-        self.model = model
-        self.version = version
+    var rootModel: Model
+    init(rootModel: Model) {
+        self.rootModel = rootModel
     }
 }
 
@@ -36,7 +38,8 @@ protocol BindableReceiver: class {
     var binder: Binder { get set }
     var keyPath: BinderKeyPath { get set }
     func updateWithModel()
-    func push(_ model: Model)
+    func push(_ model: Model, to version: Version)
+    func capture(_ model: Model, to version: Version)
 }
 extension BindableReceiver {
     typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
@@ -50,12 +53,16 @@ extension BindableReceiver {
         }
     }
     
-    func push(_ model: Model) {
-        binder.version.registerUndo(withTarget: self) { [oldModel = model] in $0.push(oldModel) }
+    func push(_ model: Model, to version: Version) {
+        version.registerUndo(withTarget: self) { [oldModel = model, unowned version] in
+            $0.push(oldModel, to: version)
+        }
         self.model = model
     }
-    func capture(_ model: Model) {
-        binder.version.registerUndo(withTarget: self) { [oldModel = model] in $0.push(oldModel) }
+    func capture(_ model: Model, to version: Version) {
+        version.registerUndo(withTarget: self) { [oldModel = model, unowned version] in
+            $0.push(oldModel, to: version)
+        }
     }
 }
 

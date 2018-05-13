@@ -20,7 +20,7 @@
 import CoreGraphics
 
 /**
- Issue: Core Graphicsとの置き換え
+ Issue: Core Graphicsと置き換え
  */
 struct _Size: Equatable {
     var width = 0.0.cg, height = 0.0.cg
@@ -71,11 +71,12 @@ extension Size {
 extension Size: Referenceable {
     static let name = Text(english: "Size", japanese: "サイズ")
 }
-extension Size: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
+extension Size: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return (jsonString ?? "").view(withBounds: bounds, sizeType)
     }
 }
+extension Size: MiniViewable {}
 
 extension Size: Object2D {
     typealias XModel = Real

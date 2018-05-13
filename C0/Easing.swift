@@ -60,8 +60,8 @@ struct Easing: Codable, Hashable {
 extension Easing: Referenceable {
     static let name = Text(english: "Easing", japanese: "イージング")
 }
-extension Easing: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
+extension Easing: MiniViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
         thumbnailView.bounds = bounds
         return thumbnailView
@@ -201,10 +201,10 @@ extension EasingView: Assignable {
     func delete(for p: Point) {
         push(Easing())
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [easing]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         for object in objects {
             if let easing = object as? Easing {
                 push(easing)

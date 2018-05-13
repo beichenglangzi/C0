@@ -20,7 +20,7 @@
 import struct Foundation.Locale
 import CoreGraphics
 
-typealias Object1D = Viewable
+typealias Object1D = ObjectProtocol & Referenceable
 
 protocol Object1DOption: GetterOption {
     var defaultModel: Model { get }
@@ -50,8 +50,7 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
     }
     
     var sizeType: SizeType
-    let classPropertyNameView: TextView?
-    let optionTextView: TextView
+    let optionTextView: TextFormView
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
@@ -61,9 +60,9 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
         self.option = option
         
         self.sizeType = sizeType
-        optionTextView = TextView(text: option.text(with: model),
-                                  font: Font.default(with: sizeType),
-                                  frameAlignment: .right, alignment: .right)
+        optionTextView = TextFormView(text: option.text(with: model),
+                                      font: Font.default(with: sizeType),
+                                      frameAlignment: .right, alignment: .right)
         
         super.init()
         noIndicatedLineColor = .getBorder
@@ -100,10 +99,10 @@ extension Assignable1DView: Assignable {
     func delete(for p: Point) {
         push(option.defaultModel)
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [model]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         for object in objects {
             if let model = object as? Model {
                 push(option.clippedModel(model))
@@ -147,11 +146,11 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
     let labelPaddingX: Real, knobPadding: Real
     let knobView = View.discreteKnob(Size(width: 6, height: 4), lineWidth: 1)
     let linePathView: View = {
-        let linePathView = View(isForm: true)
+        let linePathView = View(isLocked: true)
         linePathView.lineColor = .content
         return linePathView
     } ()
-    let optionTextView: TextView
+    let optionTextView: TextFormView
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
          xyOrientation: Orientation.XY = .horizontal(.leftToRight),
@@ -165,8 +164,8 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
         self.xyOrientation = xyOrientation
         knobPadding = sizeType == .small ? 2 : 3
         labelPaddingX = Layout.padding(with: sizeType)
-        optionTextView = TextView(font: Font.default(with: sizeType),
-                                  frameAlignment: .right, alignment: .right)
+        optionTextView = TextFormView(font: Font.default(with: sizeType),
+                                      frameAlignment: .right, alignment: .right)
         
         super.init()
         isClipped = true
@@ -231,10 +230,10 @@ extension Discrete1DView: Assignable {
     func delete(for p: Point) {
         push(option.defaultModel)
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [model]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         for object in objects {
             if let model = object as? Model {
                 push(option.clippedModel(model))
@@ -247,7 +246,7 @@ extension Discrete1DView: Assignable {
     }
 }
 extension Discrete1DView: PointMovable {
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
         switch phase {
         case .began:
             self.pointMovableOldModel = model
@@ -360,10 +359,10 @@ extension Slidable1DView: Assignable {
     func delete(for p: Point) {
         push(option.defaultModel)
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [model]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         for object in objects {
             if let model = object as? Model {
                 push(model)
@@ -376,12 +375,12 @@ extension Slidable1DView: Assignable {
     }
 }
 extension Slidable1DView: Runnable {
-    func run(for p: Point) {
-        push(option.clippedModel(model(at: p)))
+    func run(for p: Point, _ version: Version) {
+        push(option.clippedModel(model(at: p)), to: version)
     }
 }
 extension Slidable1DView: PointMovable {
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
         switch phase {
         case .began:
             capture(model)
@@ -446,7 +445,7 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
         self.width = width
         knobView = sizeType == .small ? View.knob(radius: 4) : View.knob()
         
-        super.init(path: CGMutablePath(), isForm: false)
+        super.init(path: CGMutablePath(), isLocked: false)
         fillColor = nil
         lineWidth = 0.5
         append(child: knobView)
@@ -489,41 +488,40 @@ extension Circular1DView: ViewQueryable {
     }
 }
 extension Circular1DView: Assignable {
-    func delete(for p: Point) {
-        push(option.defaultModel)
+    func delete(for p: Point, _ version: Version) {
+        push(option.defaultModel, to: version)
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point, _ version: Version) -> [Viewable] {
         return [model]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point, _ version: Version) {
         for object in objects {
             if let model = object as? Model {
-                push(option.clippedModel(model))
+                push(option.clippedModel(model), to: version)
                 return
             } else if let string = object as? String, let model = option.model(with: string) {
-                push(option.clippedModel(model))
+                push(option.clippedModel(model), to: version)
                 return
             }
         }
     }
 }
 extension Circular1DView: Runnable {
-    func run(for p: Point) {
-        push(option.clippedModel(model(at: p)))
+    func run(for p: Point, _ version: Version) {
+        push(option.clippedModel(model(at: p)), to: version)
     }
 }
 extension Circular1DView: PointMovable {
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func capturePoint(for p: Point, to version: Version) {
+        capture(model, to: version)
+    }
+    func movePoint(for p: Point, first fp: Point, pressure: Real,
+                   time: Second, _ phase: Phase, _ version: Version) {
         switch phase {
-        case .began:
-            capture(model)
-            knobView.fillColor = .editing
-            model = option.clippedModel(model(at: p))
-        case .changed:
-            model = option.clippedModel(model(at: p))
-        case .ended:
-            model = option.clippedModel(model(at: p))
-            knobView.fillColor = .knob
+        case .began: knobView.fillColor = .editing
+        case .changed: break
+        case .ended: knobView.fillColor = .knob
         }
+        model = option.clippedModel(model(at: p))
     }
 }

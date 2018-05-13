@@ -78,9 +78,10 @@ extension Array: Viewable where Element: Viewable {
     }
 }
 
-// CompactViewablesView
-final class ViewablesView<T: BinderProtocol>: View, BindableReceiver {
-    typealias Model = [Viewable]
+//extension Array: 
+
+final class MiniViewablesView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = [MiniViewable]
     typealias Binder = T
     var binder: Binder {
         didSet { updateWithModel() }
@@ -104,18 +105,18 @@ final class ViewablesView<T: BinderProtocol>: View, BindableReceiver {
 private struct _Viewables: Referenceable {
     static let name = Text(english: "Array", japanese: "配列")
 }
-extension ViewablesView: Queryable {
+extension MiniViewablesView: Queryable {
     static var referenceableType: Referenceable.Type {
         return _Viewables.self
     }
 }
-extension ViewablesView: Copiable {
-    func copiedViewables(at p: Point) -> [Viewable] {
-        return model
+extension MiniViewablesView: Copiable {
+    func copiedObjects(at p: Point) -> [Model] {
+        return [model]
     }
 }
 
-final class ArrayView<T: BinderProtocol, U: AbstractElement>: View, BindableReceiver {
+final class AbstractViewablesView<T: BinderProtocol, U: AbstractElement>: View, BindableReceiver {
     typealias Element = U
     typealias Model = [U]
     typealias Binder = T
@@ -149,18 +150,18 @@ final class ArrayView<T: BinderProtocol, U: AbstractElement>: View, BindableRece
     }
     
     func append(_ element: Element) {
-        let keyPath = self.keyPath.appending(path: \Model.[model.count - 1])
-        let view = element.abstractViewWith(binder: binder, keyPath: keyPath, frame: Rect(), sizeType)
+//        let keyPath = self.keyPath.appending(path: \Model.[model.count - 1])
+//        let view = element.abstractViewWith(binder: binder, keyPath: keyPath, frame: Rect(), sizeType)
         
     }
 }
-extension ArrayView: Queryable {
+extension AbstractViewablesView: Queryable {
     static var referenceableType: Referenceable.Type {
         return [Model].self
     }
 }
-extension ArrayView: Copiable {
-    func copiedViewables(at p: Point) -> [Viewable] {
+extension AbstractViewablesView: Copiable {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [model]
     }
 }
@@ -183,8 +184,8 @@ final class ArrayCountView<T: BinderProtocol, U: AbstractElement>: View, Bindabl
     var width = 40.0.cg {
         didSet { updateLayout() }
     }
-    let classNameView: TextView
-    let countNameView: TextView
+    let classNameView: TextFormView
+    let countNameView: TextFormView
     
     init(binder: Binder, keyPath: BinderKeyPath,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
@@ -196,7 +197,7 @@ final class ArrayCountView<T: BinderProtocol, U: AbstractElement>: View, Bindabl
         classNameView = TextView(text: Model.name, font: Font.bold(with: sizeType))
         countNameView = TextView(text: Text(english: "Count:", japanese: "個数:"),
                                  font: Font.default(with: sizeType))
-        countView = IntGetterView(binder: binder, keyPath: keyPath.appending(path: \Model.capacity),
+        countView = IntGetterView(binder: binder, keyPath: keyPath.appending(path: \Model.count),
                                   option: IntGetterOption(unit: ""), sizeType: sizeType)
         
         super.init()
@@ -234,7 +235,7 @@ extension ArrayCountView: Queryable {
     }
 }
 extension ArrayCountView: Copiable {
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [model]
     }
 }

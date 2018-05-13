@@ -331,18 +331,12 @@ struct HSV {
         let hi = Int(h6)
         let nh = h6 - Real(hi)
         switch (hi) {
-        case 0:
-            return RGB(r: v, g: v * (1 - s * (1 - nh)), b: v * (1 - s))
-        case 1:
-            return RGB(r: v * (1 - s * nh), g: v, b: v * (1 - s))
-        case 2:
-            return RGB(r: v * (1 - s), g: v, b: v * (1 - s * (1 - nh)))
-        case 3:
-            return RGB(r: v * (1 - s), g: v * (1 - s * nh), b: v)
-        case 4:
-            return RGB(r: v * (1 - s * (1 - nh)), g: v * (1 - s), b: v)
-        default:
-            return RGB(r: v, g: v * (1 - s), b: v * (1 - s * nh))
+        case 0: return RGB(r: v, g: v * (1 - s * (1 - nh)), b: v * (1 - s))
+        case 1: return RGB(r: v * (1 - s * nh), g: v, b: v * (1 - s))
+        case 2: return RGB(r: v * (1 - s), g: v, b: v * (1 - s * (1 - nh)))
+        case 3: return RGB(r: v * (1 - s), g: v * (1 - s * nh), b: v)
+        case 4: return RGB(r: v * (1 - s * (1 - nh)), g: v * (1 - s), b: v)
+        default: return RGB(r: v, g: v * (1 - s), b: v * (1 - s * nh))
         }
     }
 }
@@ -362,17 +356,21 @@ extension HSV: Codable {
     }
 }
 
-enum ColorSpace: Int8, Codable, Equatable, Hashable {
+enum ColorSpace: Int8, Codable, Hashable {
     case sRGB, displayP3
-    
+}
+extension ColorSpace: Referenceable {
+    static let name = Text(english: "Color space", japanese: "色空間")
+}
+extension ColorSpace: CustomStringConvertible {
     var description: String {
         switch self {
-        case .sRGB:
-            return "sRGB"
-        case .displayP3:
-            return "Display P3"
+        case .sRGB: return "sRGB"
+        case .displayP3: return "Display P3"
         }
     }
+}
+extension ColorSpace: DisplayableText {
     var displayText: Text {
         return Text(description)
     }
@@ -380,10 +378,6 @@ enum ColorSpace: Int8, Codable, Equatable, Hashable {
         return [sRGB.displayText, displayP3.displayText]
     }
 }
-extension ColorSpace: Referenceable {
-    static let name = Text(english: "Color space", japanese: "色空間")
-}
-extension ColorSpace: CompactViewableWithDisplayText {}
 
 extension Color {
     init(_ cgColor: CGColor) {
@@ -426,9 +420,9 @@ extension Color {
         return CGColor.with(rgb: rgb, alpha: alpha, colorSpace: CGColorSpace.with(colorSpace))
     }
 }
-extension Color: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        let view = View(isForm: true)
+extension Color: MiniViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        let view = View(isLocked: true)
         view.bounds = bounds
         view.fillColor = self
         return view
@@ -722,10 +716,10 @@ extension ColorView: Assignable {
     func delete(for p: Point) {
         push(Color())
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [color]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         for object in objects {
             if let color = object as? Color {
                 push(color)

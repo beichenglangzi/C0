@@ -154,9 +154,9 @@ extension Real: Referenceable {
     static let name = Text(english: "Real Number (\(MemoryLayout<Real>.size * 8)bit)",
                            japanese: "実数 (\(MemoryLayout<Real>.size * 8)bit)")
 }
-extension Real: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return String(self).view(withBounds: bounds, sizeType)
+extension Real: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return String(self).thumbnailView(withFrame: frame, sizeType)
     }
 }
 extension Real {
@@ -179,7 +179,7 @@ extension String {
     }
 }
 
-struct RealGetterOption: Object0DOption {
+struct RealGetterOption: GetterOption {
     typealias Model = Real
     
     var numberOfDigits: Int
@@ -200,7 +200,7 @@ struct RealGetterOption: Object0DOption {
         }
     }
 }
-typealias RealGetterView<Binder: BinderProtocol> = Object0DView<RealGetterOption, Binder>
+typealias RealGetterView<Binder: BinderProtocol> = GetterView<RealGetterOption, Binder>
 
 struct RealOption: Object1DOption {
     typealias Model = Real

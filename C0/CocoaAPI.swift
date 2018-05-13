@@ -370,10 +370,10 @@ final class C0Document: NSDocument, NSWindowDelegate {
         window.acceptsMouseMovedEvents = true
         c0View = windowController.contentViewController!.view as! C0View
         
-        if let desktopDataModel = rootDataModel.children[c0View.desktopView.binder.dataModelKey] {
-            view.desktopView.binder.dataModel = desktopDataModel
+        if let desktopDataModel = rootDataModel.children[c0View.desktopBinder.dataModelKey] {
+            view.desktopBinder.dataModel = desktopDataModel
         } else {
-            rootDataModel.insert(c0View.desktopView.binder.dataModel)
+            rootDataModel.insert(c0View.desktopBinder.dataModel)
         }
         
         if preference.windowFrame.isEmpty, let frame = NSScreen.main?.frame {
@@ -391,13 +391,12 @@ final class C0Document: NSDocument, NSWindowDelegate {
                 self.updateChangeCount(.changeDone)
             }
         }
-        c0View.desktopView.binder.diffDesktopDataModel.didChangeIsWriteClosure = isWriteClosure
-        c0View.desktopView.sceneView.binder.diffSceneDataModel.didChangeIsWriteClosure = isWriteClosure
+        c0View.desktopBinder.diffDesktopDataModel.didChangeIsWriteClosure = isWriteClosure
         preferenceDataModel.didChangeIsWriteClosure = isWriteClosure
         
-        c0View.desktopView.push(copiedViewables: NSPasteboard.general.copiedViewables)
-        c0View.desktopView.desktop.copiedViewablesBinding = { [unowned self] _ in
-            self.didSetCopiedViewables()
+        c0View.desktopView.push(copiedObjects: NSPasteboard.general.copiedObjects)
+        c0View.desktopView.desktop.copiedObjectsBinding = { [unowned self] _ in
+            self.didSetCopiedObjects()
         }
     }
     private func setupWindow(with preference: C0Preference) {
@@ -433,25 +432,25 @@ final class C0Document: NSDocument, NSWindowDelegate {
         preferenceDataModel.isWrite = true
     }
     
-    func didSetCopiedViewables() {
-        changeCountWithCopiedViewables += 1
+    func didSetCopiedObjects() {
+        changeCountWithCopiedObjects += 1
     }
-    var changeCountWithCopiedViewables = 0
-    var oldChangeCountWithCopiedViewables = 0
+    var changeCountWithCopiedObjects = 0
+    var oldChangeCountWithCopiedObjects = 0
     var oldChangeCountWithPsteboard = NSPasteboard.general.changeCount
     func windowDidBecomeMain(_ notification: Notification) {
         let pasteboard = NSPasteboard.general
         if pasteboard.changeCount != oldChangeCountWithPsteboard {
             oldChangeCountWithPsteboard = pasteboard.changeCount
-            c0View.desktopView.push(copiedViewables: pasteboard.copiedViewables)
-            oldChangeCountWithCopiedViewables = changeCountWithCopiedViewables
+            c0View.desktopView.push(copiedObjects: pasteboard.copiedObjects)
+            oldChangeCountWithCopiedObjects = changeCountWithCopiedObjects
         }
     }
     func windowDidResignMain(_ notification: Notification) {
-        if oldChangeCountWithCopiedViewables != changeCountWithCopiedViewables {
-            oldChangeCountWithCopiedViewables = changeCountWithCopiedViewables
+        if oldChangeCountWithCopiedObjects != changeCountWithCopiedObjects {
+            oldChangeCountWithCopiedObjects = changeCountWithCopiedObjects
             let pasteboard = NSPasteboard.general
-            pasteboard.set(copiedViewables: desktop.copiedViewables)
+            pasteboard.set(copiedObjects: desktop.copiedObjects)
             oldChangeCountWithPsteboard = pasteboard.changeCount
         }
     }
@@ -462,27 +461,27 @@ final class C0Document: NSDocument, NSWindowDelegate {
 }
 
 extension NSPasteboard {
-    var copiedViewables: [Viewable] {
-        var copiedViewables = [Viewable]()
+    var copiedObjects: [Object] {
+        var copiedObjects = [Object]()
         func append(with data: Data, type: NSPasteboard.PasteboardType) {
             let object = C0Coder.decode(from: data, forKey: type.rawValue)
             if let object = object as? [Line] {
-                copiedViewables.append(object)
-            } else if let object = object as? Viewable {
-                copiedViewables.append(object)
+                copiedObjects.append(object)
+            } else if let object = object as? Object {
+                copiedObjects.append(object)
             }
         }
         if let urls = readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
-            urls.forEach { copiedViewables.append($0) }
+            urls.forEach { copiedObjects.append($0) }
         }
         if let string = string(forType: .string) {
-            copiedViewables.append(string)
+            copiedObjects.append(string)
         } else if let types = types {
             for type in types {
                 if let data = data(forType: type) {
                     append(with: data, type: type)
                 } else if let string = string(forType: .string) {
-                    copiedViewables.append(string)
+                    copiedObjects.append(string)
                 }
             }
         } else if let items = pasteboardItems {
@@ -491,21 +490,21 @@ extension NSPasteboard {
                     if let data = item.data(forType: type) {
                         append(with: data, type: type)
                     } else if let string = item.string(forType: .string) {
-                        copiedViewables.append(string)
+                        copiedObjects.append(string)
                     }
                 }
             }
         }
-        return copiedViewables
+        return copiedObjects
     }
-    func set(copiedViewables: [Viewable]) {
-        guard !copiedViewables.isEmpty else {
+    func set(copiedObjects: [Object]) {
+        guard !copiedObjects.isEmpty else {
             clearContents()
             return
         }
         var strings = [String]()
         var typesAndDatas = [(type: NSPasteboard.PasteboardType, data: Data)]()
-        for object in copiedViewables {
+        for object in copiedObjects {
             if let string = object as? String {
                 strings.append(string)
             } else {
@@ -545,6 +544,7 @@ extension NSPasteboard {
  */
 final class C0View: NSView, NSTextInputClient {
     let sender: Sender
+    let desktopBinder = DesktopBinder()
     let desktopView = DesktopView()
     
     private let isHiddenActionManagerKey = "isHiddenActionManagerKey"
@@ -654,15 +654,15 @@ final class C0View: NSView, NSTextInputClient {
         return convertFromLayer(window.convertToScreen(convert(r, to: nil)))
     }
     
-    func draggerEventWith(pointing nsEvent: NSEvent, _ phase: Phase) -> Dragger.Event {
+    func draggerEventWith(pointing nsEvent: NSEvent, _ phase: Phase, _ version: Version) -> Dragger.Event {
         return Dragger.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
                              pressure: 1, phase: phase)
     }
-    func draggerEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Dragger.Event {
+    func draggerEventWith(_ nsEvent: NSEvent, _ phase: Phase, _ version: Version) -> Dragger.Event {
         return Dragger.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
                              pressure: Real(nsEvent.pressure), phase: phase)
     }
-    func scrollerEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Scroller.Event {
+    func scrollerEventWith(_ nsEvent: NSEvent, _ phase: Phase, _ version: Version) -> Scroller.Event {
         var scrollMomentumPhase: Phase? {
             if nsEvent.momentumPhase.contains(.began) {
                 return .began
@@ -681,15 +681,15 @@ final class C0View: NSView, NSTextInputClient {
                               phase: phase,
                               momentumPhase: scrollMomentumPhase)
     }
-    func pincherEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Pincher.Event {
+    func pincherEventWith(_ nsEvent: NSEvent, _ phase: Phase, _ version: Version) -> Pincher.Event {
         return Pincher.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
                              magnification: nsEvent.magnification, phase: phase)
     }
-    func rotaterEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Rotater.Event {
+    func rotaterEventWith(_ nsEvent: NSEvent, _ phase: Phase, _ version: Version) -> Rotater.Event {
         return Rotater.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
                              rotationQuantity: Real(nsEvent.rotation), phase: phase)
     }
-    func inputterEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Inputter.Event {
+    func inputterEventWith(_ nsEvent: NSEvent, _ phase: Phase, _ version: Version) -> Inputter.Event {
         return Inputter.Event(rootLocation: cursorPoint, time: nsEvent.timestamp.cg,
                               pressure: 1, phase: phase)
     }
@@ -779,7 +779,7 @@ final class C0View: NSView, NSTextInputClient {
                 sender.send(beginDragger)
                 sender.send(endDragger)
             } else {
-                func clickInputterWith(_ dragger: Dragger, _ phase: Phase) -> Inputter {
+                func clickInputterWith(_ dragger: Dragger, _ phase: Phase, _ version: Version) -> Inputter {
                     return Inputter(type: .click,
                                     event: Inputter.Event(rootLocation: dragger.event.rootLocation,
                                                           time: dragger.event.time,

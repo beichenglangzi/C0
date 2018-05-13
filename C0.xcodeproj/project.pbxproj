@@ -63,6 +63,8 @@
 		23C031E620A5BFC000F46E48 /* Object2D.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C031E520A5BFC000F46E48 /* Object2D.swift */; };
 		23C0F2FA1FA22AA400A6F4A2 /* Expression.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C0F2F91FA22AA400A6F4A2 /* Expression.swift */; };
 		23C59309204E44B700B5B753 /* Subtitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C59308204E44B700B5B753 /* Subtitle.swift */; };
+		23CA143220A817DE007191E4 /* Object.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23CA143120A817DE007191E4 /* Object.swift */; };
+		23CA143420A88302007191E4 /* String.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23CA143320A88302007191E4 /* String.swift */; };
 		23CB0D7D209424E700E12418 /* Tempo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23CB0D7C209424E700E12418 /* Tempo.swift */; };
 		23DC482A1F89AA8100793F64 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 23DC482C1F89AA8100793F64 /* Main.storyboard */; };
 		23DC48301F8B4ED100793F64 /* Closure.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23DC482F1F8B4ED100793F64 /* Closure.swift */; };
@@ -132,6 +134,8 @@
 		23C031E520A5BFC000F46E48 /* Object2D.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Object2D.swift; sourceTree = "<group>"; };
 		23C0F2F91FA22AA400A6F4A2 /* Expression.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Expression.swift; sourceTree = "<group>"; };
 		23C59308204E44B700B5B753 /* Subtitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Subtitle.swift; sourceTree = "<group>"; };
+		23CA143120A817DE007191E4 /* Object.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Object.swift; sourceTree = "<group>"; };
+		23CA143320A88302007191E4 /* String.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = String.swift; sourceTree = "<group>"; };
 		23CB0D7C209424E700E12418 /* Tempo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tempo.swift; sourceTree = "<group>"; };
 		23DC482B1F89AA8100793F64 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		23DC482E1F89AA9B00793F64 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/Main.strings; sourceTree = "<group>"; };
@@ -215,6 +219,7 @@
 				23DC482F1F8B4ED100793F64 /* Closure.swift */,
 				23E99631204958AF001BA2B7 /* Reference.swift */,
 				234A96DF1EDE880F00A841C6 /* Text.swift */,
+				23CA143320A88302007191E4 /* String.swift */,
 				2343B28C209F0E93007326D9 /* TextFrame.swift */,
 				2316E135209CA5F100B4B3FA /* TreeNode.swift */,
 				230E6F992045646100612687 /* Array.swift */,
@@ -224,6 +229,7 @@
 				230E6F9B204567CF00612687 /* Version.swift */,
 				23C031D920A5521A00F46E48 /* Binder.swift */,
 				235E86BA1F8140B8009AC966 /* Action.swift */,
+				23CA143120A817DE007191E4 /* Object.swift */,
 				239059EA2079F13700BE4A2E /* Layout.swift */,
 				234A96F31EDE899200A841C6 /* View.swift */,
 				23FEB3531FD66AA400372DF9 /* DataModel.swift */,
@@ -337,6 +343,7 @@
 				2343B289209EB89A007326D9 /* Real.swift in Sources */,
 				234A96F01EDE894F00A841C6 /* Color.swift in Sources */,
 				230E6F9A2045646100612687 /* Array.swift in Sources */,
+				23CA143220A817DE007191E4 /* Object.swift in Sources */,
 				23BBFA8D1FB2D65200E05B5B /* Player.swift in Sources */,
 				230E6F9C204567CF00612687 /* Version.swift in Sources */,
 				23C031DA20A5521A00F46E48 /* Binder.swift in Sources */,
@@ -370,6 +377,7 @@
 				23FEB3541FD66AA400372DF9 /* DataModel.swift in Sources */,
 				239059EB2079F13700BE4A2E /* Layout.swift in Sources */,
 				23B58F011FFF2828008574FF /* Sound.swift in Sources */,
+				23CA143420A88302007191E4 /* String.swift in Sources */,
 				234A96DE1EDE87E800A841C6 /* Desktop.swift in Sources */,
 				23607F741F81293300A671B0 /* Material.swift in Sources */,
 				234A96E41EDE886100A841C6 /* Renderer.swift in Sources */,

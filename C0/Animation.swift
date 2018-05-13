@@ -372,13 +372,14 @@ extension Animation: Referenceable {
         return Text(english: "Animation", japanese: "アニメーション") + "<" + Value.name + ">"
     }
 }
-extension Animation: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
+extension Animation: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         let text = Text(english: "\(keyframes.count) Keyframes",
                         japanese: "\(keyframes.count)キーフレーム")
-        return text.thumbnail(withBounds: bounds, sizeType)
+        return text.thumbnailView(withBounds: bounds, sizeType)
     }
 }
+extension Animation: MiniViewable {}
 
 final class AnimationView<Value: KeyframeValue, T: BinderProtocol>:
 View, Indicatable, Selectable, Assignable, Newable, Movable {
@@ -469,14 +470,14 @@ View, Indicatable, Selectable, Assignable, Newable, Movable {
     var knobColorClosure: ((Int) -> (Color)) = { _ in .knob }
     private var knobViews = [View]()
     let editView: View = {
-        let view = View(isForm: true)
+        let view = View(isLocked: true)
         view.fillColor = .selected
         view.lineColor = nil
         view.isHidden = true
         return view
     } ()
     let indicatedView: View = {
-        let view = View(isForm: true)
+        let view = View(isLocked: true)
         view.fillColor = .subIndicated
         view.lineColor = nil
         view.isHidden = true
@@ -576,7 +577,7 @@ View, Indicatable, Selectable, Assignable, Newable, Movable {
         let maxX = self.x(withTime: animation.duration)
 
         if sizeType == .small {
-            let keyLineView = View(isForm: true)
+            let keyLineView = View(isLocked: true)
             keyLineView.frame = Rect(x: 0, y: midY - 0.5, width: maxX, height: 1)
             keyLineView.fillColor = smallLineColorClosure()
             keyLineView.lineColor = nil
@@ -864,10 +865,10 @@ View, Indicatable, Selectable, Assignable, Newable, Movable {
         }
         set(keyframes, old: animation.keyframes)
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [animation]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         //        for object in objects {
         //            if let animation = object as? Animation {
         //                if keyframe.equalOption(other: self.keyframe) {
@@ -986,7 +987,8 @@ View, Indicatable, Selectable, Assignable, Newable, Movable {
     }
 
     private var dragObject = DragObject()
-    func move(for point: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func move(for point: Point, pressure: Real,
+              time: Second, _ phase: Phase, _ version: Version) {
         let p = point
         switch phase {
         case .began:
@@ -1012,7 +1014,7 @@ View, Indicatable, Selectable, Assignable, Newable, Movable {
             }
         }
     }
-    func move(withDeltaTime deltaTime: Rational, keyframeIndex: Int?, _ phase: Phase) {
+    func move(withDeltaTime deltaTime: Rational, keyframeIndex: Int?, _ phase: Phase, _ version: Version) {
         if let keyframeIndex = keyframeIndex, keyframeIndex < animation.keyframes.count {
             moveKeyframe(withDeltaTime: deltaTime,
                          keyframeIndex: keyframeIndex, phase: phase)
@@ -1021,7 +1023,7 @@ View, Indicatable, Selectable, Assignable, Newable, Movable {
         }
     }
     func moveKeyframe(withDeltaTime deltaTime: Rational,
-                      keyframeIndex: Int, phase: Phase) {
+                      keyframeIndex: Int, phase: Phase, _ version: Version) {
         switch phase {
         case .began:
             editingKeyframeIndex = keyframeIndex
@@ -1092,7 +1094,7 @@ View, Indicatable, Selectable, Assignable, Newable, Movable {
             dragObject = DragObject()
         }
     }
-    func moveDuration(withDeltaTime deltaTime: Rational, _ phase: Phase) {
+    func moveDuration(withDeltaTime deltaTime: Rational, _ phase: Phase, _ version: Version) {
         switch phase {
         case .began:
             editingKeyframeIndex = animation.keyframes.count
@@ -1199,16 +1201,16 @@ View, Indicatable, Selectable, Assignable, Newable, Movable {
         updateChildren()
     }
 
-    func select(from rect: Rect, _ phase: Phase) {
+    func select(from rect: Rect, _ phase: Phase, _ version: Version) {
         select(from: rect, phase, isDeselect: false)
     }
-    func selectAll() {
+    func selectAll(_ version: Version) {
         selectAll(isDeselect: false)
     }
-    func deselect(from rect: Rect, _ phase: Phase) {
+    func deselect(from rect: Rect, _ phase: Phase, _ version: Version) {
         select(from: rect, phase, isDeselect: true)
     }
-    func deselectAll() {
+    func deselectAll(_ version: Version) {
         selectAll(isDeselect: true)
     }
     var selectionView: View? {
@@ -1327,5 +1329,7 @@ View, Indicatable, Selectable, Assignable, Newable, Movable {
     }
 }
 extension AnimationView: Queryable {
-    static let referenceableType: Referenceable.Type = Animation.self
+    static var referenceableType: Referenceable.Type {
+        return Animation.self
+    }
 }

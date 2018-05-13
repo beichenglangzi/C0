@@ -514,8 +514,8 @@ extension SceneView: Versionable {
 }
 
 //final class ProgressNumberView: View {
-//    let barView = View(isForm: true)
-//    let barBackgroundView = View(isForm: true)
+//    let barView = View(isLocked: true)
+//    let barBackgroundView = View(isLocked: true)
 //    let nameView: TextView
 //    let stopView = ClosureView(name: Text(english: "Stop", japanese: "中止"))
 //

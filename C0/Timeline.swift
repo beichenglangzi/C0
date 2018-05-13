@@ -403,20 +403,20 @@ final class TimelineView: View, Scrollable, Zoomable {
 //                                                                    numberOfDigits: 0, unit: " bpm"),
 //                                           frame: Rect(x: 0, y: 0,
 //                                                         width: leftWidth, height: Layout.basicHeight))
-    let tempoAnimationClipView = View(isForm: true)
+    let tempoAnimationClipView = View(isLocked: true)
     let tempoAnimationView = AnimationView(height: defaultSumKeyTimesHeight)
     let soundWaveformView = SoundWaveformView()
-    let cutViewsView = View(isForm: true)
+    let cutViewsView = View(isLocked: true)
     let classSumAnimationNameView = TextView(text: Text(english: "Sum:", japanese: "合計:"),
                                              font: .small)
-    let sumKeyTimesClipView = View(isForm: true)
+    let sumKeyTimesClipView = View(isLocked: true)
     let sumKeyTimesView = AnimationView(height: defaultSumKeyTimesHeight)
 
     let nodeTreeView = NodeTreeManager()
     let tracksManager = TracksManager()
 
     let timeView: View = {
-        let view = View(isForm: true)
+        let view = View(isLocked: true)
         view.fillColor = .editing
         view.lineColor = nil
         return view
@@ -1680,10 +1680,10 @@ extension TimelineView: Assignable {
         //        let cutIndex = self.cutIndex(withLocalX: localX)
         //        removeCut(at: cutIndex)
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return []
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         //        for object in objects {
         //            if let cut = object as? Cut {
         //                let localX = convertToLocalX(p.x)
@@ -1707,7 +1707,7 @@ extension TimelineView: Newable {
 
 final class RulerView: View {
     private let scrollView: View = {
-        let view = View(isForm: true)
+        let view = View(isLocked: true)
         view.lineColor = nil
         return view
     } ()

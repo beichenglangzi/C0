@@ -31,96 +31,6 @@ extension NSAttributedStringKey {
         String(kCTParagraphStyleAttributeName))
 }
 extension NSAttributedString {
-    static func with(string: String, font: Font?, color: Color?,
-                     alignment: CTTextAlignment? = nil) -> NSAttributedString {
-        var attributes = [NSAttributedStringKey: Any]()
-        if let font = font {
-            attributes[.ctFont] = font.ctFont
-        }
-        if let color = color {
-            attributes[.ctForegroundColor] = color.cg
-        }
-        if var alignment = alignment {
-            let settings = [CTParagraphStyleSetting(spec: .alignment,
-                                                    valueSize: MemoryLayout<CTTextAlignment>.size,
-                                                    value: &alignment)]
-            let style = CTParagraphStyleCreate(settings, settings.count)
-            attributes[.ctParagraphStyle] = style
-        }
-        return NSAttributedString(string: string, attributes: attributes)
-    }
-    var font: Font? {
-        if length == 0 {
-            return nil
-        } else if let obj = attribute(.ctFont, at: 0, effectiveRange: nil) {
-            return Font(obj as! CTFont)
-        } else {
-            return nil
-        }
-    }
-    func with(_ font: Font?) -> NSAttributedString {
-        guard length > 0 else {
-            return NSAttributedString()
-        }
-        let attString = NSMutableAttributedString(attributedString: self)
-        attString.removeAttribute(.ctFont, range: NSRange(location: 0, length: length))
-        if let font = font {
-            attString.addAttribute(.ctFont, value: font.ctFont,
-                                   range: NSRange(location: 0, length: length))
-        }
-        return attString
-    }
-    var color: Color? {
-        if length == 0 {
-            return nil
-        } else if let obj = attribute(.ctForegroundColor, at: 0, effectiveRange: nil) {
-            return Color(obj as! CGColor)
-        } else {
-            return nil
-        }
-    }
-    func with(_ color: Color?) -> NSAttributedString {
-        guard length > 0 else {
-            return NSAttributedString()
-        }
-        let attString = NSMutableAttributedString(attributedString: self)
-        attString.removeAttribute(.ctForegroundColor, range: NSRange(location: 0, length: length))
-        if let color = color {
-            attString.addAttribute(.ctForegroundColor, value: color.cg,
-                                   range: NSRange(location: 0, length: length))
-        }
-        return attString
-    }
-    var alignment: CTTextAlignment? {
-        if length == 0 {
-            return nil
-        } else if let obj = attribute(.ctParagraphStyle, at: 0, effectiveRange: nil) {
-            var alignment = CTTextAlignment.natural
-            CTParagraphStyleGetValueForSpecifier(obj as! CTParagraphStyle,
-                                                 CTParagraphStyleSpecifier.alignment,
-                                                 MemoryLayout<CTTextAlignment>.size,
-                                                 &alignment)
-            return alignment
-        } else {
-            return nil
-        }
-    }
-    func with(_ alignment: CTTextAlignment?) -> NSAttributedString {
-        guard length > 0 else {
-            return NSAttributedString()
-        }
-        let attString = NSMutableAttributedString(attributedString: self)
-        attString.removeAttribute(.ctParagraphStyle, range: NSRange(location: 0, length: length))
-        if var alignment = alignment {
-            let settings = [CTParagraphStyleSetting(spec: .alignment,
-                                                    valueSize: MemoryLayout<CTTextAlignment>.size,
-                                                    value: &alignment)]
-            let style = CTParagraphStyleCreate(settings, settings.count)
-            attString.addAttribute(.ctParagraphStyle, value: style,
-                                   range: NSRange(location: 0, length: length))
-        }
-        return attString
-    }
     static func attributesWith(font: Font, color: Color,
                                alignment: CTTextAlignment = .natural) -> [NSAttributedStringKey: Any] {
         var alignment = alignment
@@ -134,74 +44,72 @@ extension NSAttributedString {
     }
 }
 
-struct TextFrame {
-    var baseFont: Font
+struct TextMaterial {
+    var font = Font.default, color = Color.locked
+    var frameAlignment = CTTextAlignment.left, alignment = CTTextAlignment.natural
     
-    var attributedString = NSAttributedString() {
+    func fitFrameWith(defaultBounds: Rect, frame: Rect) -> Rect {
+        let size = defaultBounds.size
+        let y = frame.maxY - size.height
+        let origin = frameAlignment == .right ?
+            Point(x: frame.maxX - size.width, y: y) :
+            Point(x: frame.origin.x, y: y)
+        return Rect(origin: origin, size: size)
+    }
+}
+
+struct TextFrame {
+    var attributedString = NSMutableAttributedString() {
         didSet {
             self.lines = TextFrame.lineWith(attributedString: attributedString,
                                             frameWidth: frameWidth)
+            
+            if let firstLine = lines.first, let lastLine = lines.last {
+                baselineDelta = -lastLine.origin.y - baseFont.descent
+                height = firstLine.origin.y + baseFont.ascent
+            } else {
+                baselineDelta = -baseFont.descent
+                height = baseFont.ascent
+            }
         }
     }
-    var string: String {
-        get {
-            return attributedString.string
-        }
-        set(string) {
-            self.attributedString = .with(string: string,
-                                          font: font, color: color, alignment: alignment)
-        }
-    }
-    var font: Font? {
-        get {
-            return attributedString.font
-        }
-        set(font) {
-            self.attributedString = attributedString.with(font)
-        }
-    }
-    var color: Color? {
-        get {
-            return attributedString.color
-        }
-        set(color) {
-            self.attributedString = attributedString.with(color)
-        }
-    }
-    var alignment: CTTextAlignment? {
-        get {
-            return attributedString.alignment
-        }
-        set(alignment) {
-            self.attributedString = attributedString.with(alignment)
-        }
-    }
-    private(set) var typographicBounds = Rect()
-    var pathBounds: Rect {
-        return typographicBounds
-    }
+    
+    var baseFont: Font
+    var baselineDelta: Real, height: Real
     
     var frameWidth: Real? {
         didSet {
-            self.lines = TextFrame.lineWith(attributedString: attributedString,
-                                            frameWidth: frameWidth)
+            guard frameWidth != oldValue else { return }
+            lines = TextFrame.lineWith(attributedString: attributedString, frameWidth: frameWidth)
         }
     }
     
-    init(attributedString: NSAttributedString, frameWidth: Real? = nil) {
+    private(set) var typographicBounds = Rect()
+    
+    init(attributedString: NSMutableAttributedString, baseFont: Font, frameWidth: Real? = nil) {
         self.attributedString = attributedString
+        self.baseFont = baseFont
         self.frameWidth = frameWidth
-        self.lines = TextFrame.lineWith(attributedString: attributedString,
-                                        frameWidth: frameWidth)
-        self.typographicBounds = TextFrame.typographicBounds(with: lines)
+        lines = TextFrame.lineWith(attributedString: attributedString, frameWidth: frameWidth)
+        typographicBounds = TextFrame.typographicBounds(with: lines)
     }
-    init(string: String = "",
-         font: Font = .default, color: Color = .font, alignment: CTTextAlignment = .natural,
-         frameWidth: Real? = nil) {
-        
-        let attributedString = NSAttributedString.with(string: string, font: font, color: color,
-                                                       alignment: alignment)
-        self.init(attributedString: attributedString, frameWidth: frameWidth)
+    init(string: String = "", textMaterial: TextMaterial, frameWidth: Real? = nil) {
+        let attributes = NSAttributedString.attributesWith(font: textMaterial.font,
+                                                           color: textMaterial.color,
+                                                           alignment: textMaterial.alignment)
+        let attributedString = NSMutableAttributedString(string: string, attributes: attributes)
+        self.init(attributedString: attributedString,
+                  baseFont: textMaterial.font, frameWidth: frameWidth)
+    }
+    init(text: Text, textMaterial: TextMaterial, frameWidth: Real? = nil) {
+        self.init(string: text.currentString, textMaterial: textMaterial, frameWidth: frameWidth)
+    }
+    
+    func bounds(padding: Real) -> Rect {
+        let w = frameWidth ?? ceil(typographicBounds.width)
+        return Rect(x: 0, y: 0,
+                    width: max(w + padding * 2, 5),
+                    height: ceil(height + baselineDelta) + padding * 2)
     }
     
     var lines = [TextLine]() {
@@ -318,7 +226,7 @@ struct TextFrame {
         return 0.0
     }
     
-    func draw(in bounds: Rect, baseFont: Font, in ctx: CGContext) {
+    func draw(in bounds: Rect, in ctx: CGContext) {
         guard let firstLine = lines.first else { return }
         ctx.saveGState()
         let height = firstLine.origin.y + baseFont.ascent

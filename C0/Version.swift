@@ -106,7 +106,7 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
     var sizeType: SizeType {
         didSet { updateLayout() }
     }
-    let classNameView = TextView(text: Version.name, font: .bold)
+    let classNameView: TextFormView
     
     init(binder: Binder, keyPath: BinderKeyPath,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
@@ -115,12 +115,13 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
         self.keyPath = keyPath
         
         self.sizeType = sizeType
+        classNameView = TextFormView(text: Version.name, font: Font.bold(with: sizeType))
         indexView = IntGetterView(binder: binder,
-                                     keyPath: keyPath.appending(path: \Model.index),
-                                     option: IntGetterOption(unit: ""))
+                                  keyPath: keyPath.appending(path: \Model.index),
+                                  option: IntGetterOption(unit: ""), sizeType: sizeType)
         undoedDiffCountView = IntGetterView(binder: binder,
-                                      keyPath: keyPath.appending(path: \Model.undoedDiffCount),
-                                      option: IntGetterOption(unit: ""))
+                                            keyPath: keyPath.appending(path: \Model.undoedDiffCount),
+                                            option: IntGetterOption(unit: ""), sizeType: sizeType)
         
         super.init()
         isClipped = true
@@ -149,20 +150,18 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
         if model.undoedIndex < model.index {
             indexView.updateWithModel()
             undoedDiffCountView.updateWithModel()
-            indexView.bounds = Rect(origin: Point(), size: indexView.optionTextView.fitSize)
-            undoedDiffCountView.bounds = Rect(origin: Point(),
-                                              size: undoedDiffCountView.optionTextView.fitSize)
-            undoedDiffCountView.optionTextView.textFrame.color = .warning
+            indexView.bounds = indexView.optionTextView.defaultBounds
+            undoedDiffCountView.bounds = undoedDiffCountView.optionTextView.defaultBounds
+            undoedDiffCountView.optionTextView.textMaterial.color = .warning
             if undoedDiffCountView.parent == nil {
                 children = [classNameView, indexView, undoedDiffCountView]
                 updateLayout()
             }
         } else {
             indexView.updateWithModel()
-            indexView.bounds = Rect(origin: Point(), size: indexView.optionTextView.fitSize)
-            undoedDiffCountView.bounds = Rect(origin: Point(),
-                                              size: undoedDiffCountView.optionTextView.fitSize)
-            undoedDiffCountView.optionTextView.textFrame.color = .warning
+            indexView.bounds = indexView.optionTextView.defaultBounds
+            undoedDiffCountView.bounds = undoedDiffCountView.optionTextView.defaultBounds
+            undoedDiffCountView.optionTextView.textMaterial.color = .warning
             if undoedDiffCountView.parent != nil {
                 children = [classNameView, indexView]
                 updateLayout()

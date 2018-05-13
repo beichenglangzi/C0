@@ -20,7 +20,7 @@
 import CoreGraphics
 
 /**
- Issue: Core Graphicsとの置き換え
+ Issue: Core Graphicsと置き換え
  */
 struct _Rect: Equatable {
     var origin = _Point(), size = _Size()

@@ -19,37 +19,36 @@
 
 import Foundation
 
-struct Desktop {
-    var copiedViewables = [Viewable]() {
+struct Desktop: Codable {
+    var copiedObjects = [Viewable]() {
         didSet {
-            copiedViewablesBinding?(copiedViewables)
+            copiedObjectsBinding?(copiedObjects)
         }
     }
-    var copiedViewablesBinding: (([Viewable]) -> ())?
+    var copiedObjectsBinding: (([Viewable]) -> ())?
     
     var isHiddenActionManager = false
     var isSimpleReference = false
     var reference = Reference()
-    var sender = Sender()
     var objects = [Codable]()
     
-    private enum CodingKeys: String, CodingKey {
-        case isSimpleReference, isHiddenActionManager
-    }
+//    private enum CodingKeys: String, CodingKey {
+//        case isSimpleReference, isHiddenActionManager
+//    }
 }
-extension Desktop: Codable {
-    init(from decoder: Decoder) throws {
-        self.init()
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        isSimpleReference = try values.decode(Bool.self, forKey: .isSimpleReference)
-        isHiddenActionManager = try values.decode(Bool.self, forKey: .isHiddenActionManager)
-    }
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(isSimpleReference, forKey: .isSimpleReference)
-        try container.encode(isHiddenActionManager, forKey: .isHiddenActionManager)
-    }
-}
+//extension Desktop: Codable {
+//    init(from decoder: Decoder) throws {
+//        self.init()
+//        let values = try decoder.container(keyedBy: CodingKeys.self)
+//        isSimpleReference = try values.decode(Bool.self, forKey: .isSimpleReference)
+//        isHiddenActionManager = try values.decode(Bool.self, forKey: .isHiddenActionManager)
+//    }
+//    func encode(to encoder: Encoder) throws {
+//        var container = encoder.container(keyedBy: CodingKeys.self)
+//        try container.encode(isSimpleReference, forKey: .isSimpleReference)
+//        try container.encode(isHiddenActionManager, forKey: .isHiddenActionManager)
+//    }
+//}
 extension Desktop: Referenceable {
     static let name = Text(english: "Desktop", japanese: "デスクトップ")
 }
@@ -114,7 +113,17 @@ final class DesktopBinder: BinderProtocol {
 /**
  Issue: sceneViewを取り除く
  */
-final class DesktopView: View {
+final class DesktopView<T: BinderProtocol>: View, BindableReciver {
+    typealias Model = Bool
+    typealias ModelOption = BoolOption
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    
     var desktop: Desktop {
         get {
             return desktopBinder[keyPath: keyPath]
@@ -148,8 +157,8 @@ final class DesktopView: View {
         }
     }
     let versionView = VersionView()
-    let classCopiedViewablesNameView = TextView(text: Text(english: "Copied:", japanese: "コピー済み:"))
-    let copiedViewablesView = AnyArrayView()
+    let classCopiedObjectsNameView = TextView(text: Text(english: "Copied:", japanese: "コピー済み:"))
+    let copiedObjectsView = AnyArrayView()
     let isHiddenActionManagerView = BoolView(name: Text(english: "Action Manager",
                                                         japanese: "アクション管理"),
                                              boolInfo: BoolInfo.hidden)
@@ -163,7 +172,9 @@ final class DesktopView: View {
     let objectsView = AnyArrayView()
     let sceneView: SceneView
     
-    override init() {
+    init(binder: Binder, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
         sceneView = SceneView(desktopBinder.sceneBinder, keyPath: \SceneBinder.scene)
         
         super.init()
@@ -171,7 +182,7 @@ final class DesktopView: View {
         versionView.version = desktopBinder.version
         
         objectsView.children = [sceneView]
-        children = [versionView, classCopiedViewablesNameView, copiedViewablesView,
+        children = [versionView, classCopiedObjectsNameView, copiedObjectsView,
                     isHiddenActionManagerView, isSimpleReferenceView,
                     actionManagerView, infoView, objectsView]
         
@@ -211,14 +222,14 @@ final class DesktopView: View {
         let headerY = bounds.height - topViewsHeight - padding
         versionView.frame = Rect(x: padding, y: headerY,
                                  width: versionWidth, height: topViewsHeight)
-        classCopiedViewablesNameView.frame.origin = Point(x: versionView.frame.maxX + padding, y: headerY + padding)
-        let cw = max(bounds.width - actionWidth - versionWidth - isrw - ihamvw - classCopiedViewablesNameView.frame.width - padding * 3, 0)
-        copiedViewablesView.frame = Rect(x: classCopiedViewablesNameView.frame.maxX,
+        classCopiedObjectsNameView.frame.origin = Point(x: versionView.frame.maxX + padding, y: headerY + padding)
+        let cw = max(bounds.width - actionWidth - versionWidth - isrw - ihamvw - classCopiedObjectsNameView.frame.width - padding * 3, 0)
+        copiedObjectsView.frame = Rect(x: classCopiedObjectsNameView.frame.maxX,
                                          y: headerY,
                                          width: cw,
                                          height: topViewsHeight)
         updateCopiedObjectViewPositions()
-        isSimpleReferenceView.frame = Rect(x: copiedViewablesView.frame.maxX,
+        isSimpleReferenceView.frame = Rect(x: copiedObjectsView.frame.maxX,
                                            y: headerY,
                                            width: isrw,
                                            height: topViewsHeight)
@@ -281,24 +292,24 @@ final class DesktopView: View {
     
     var objectViewWidth = 80.0.cg
     private func updateCopiedObjectViews() {
-        copiedViewablesView.array = desktop.copiedViewables
+        copiedObjectsView.array = desktop.copiedObjects
         let padding = Layout.smallPadding
         let bounds = Rect(x: 0,
                           y: 0,
                           width: objectViewWidth,
-                          height: copiedViewablesView.bounds.height - padding * 2)
-        copiedViewablesView.children = desktop.copiedViewables.map {
+                          height: copiedObjectsView.bounds.height - padding * 2)
+        copiedObjectsView.children = desktop.copiedObjects.map {
             $0.view(withBounds: bounds, .small)
         }
         updateCopiedObjectViewPositions()
     }
     private func updateCopiedObjectViewPositions() {
         let padding = Layout.smallPadding
-        _ = Layout.leftAlignment(copiedViewablesView.children, minX: padding, y: padding)
+        _ = Layout.leftAlignment(copiedObjectsView.children, minX: padding, y: padding)
     }
 }
-extension DesktopView: QueryableViewer {
-    var info: Info {
+extension DesktopView: ReferenceViewer {
+    var reference: Reference {
         get {
             return infoView.info
         }
@@ -321,15 +332,15 @@ extension DesktopView: Versionable {
         return desktopBinder
     }
 }
-extension DesktopView: CopiedViewablesViewer {
-    var copiedViewables: [Viewable] {
-        return desktop.copiedViewables
+extension DesktopView: CopiedObjectsViewer {
+    var copiedObjects: [Object] {
+        return desktop.copiedObjects
     }
-    func push(copiedViewables: [Viewable]) {
-        //        undoManager?.registerUndo(withTarget: self) { [oldCopiedViewables = desktop.copiedViewables] in
-        //            $0.push(copiedViewables: oldCopiedViewables)
+    func push(copiedObjects: [Object]) {
+        //        undoManager?.registerUndo(withTarget: self) { [oldCopiedObjects = desktop.copiedObjects] in
+        //            $0.push(copiedObjects: oldCopiedObjects)
         //        }
-        desktop.copiedViewables = copiedViewables
+        desktop.copiedObjects = copiedObjects
         updateCopiedObjectViews()
     }
 }

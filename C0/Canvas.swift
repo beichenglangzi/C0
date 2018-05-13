@@ -161,7 +161,7 @@ final class CanvasView: View, Indicatable, Selectable, Zoomable, Rotatable, Stro
     init(canvas: Canvas = Canvas()) {
         self.canvas = canvas
         
-        super.init(drawClosure: { $1.draw(in: $0) }, isForm: false)
+        super.init(drawClosure: { $1.draw(in: $0) }, isLocked: false)
     }
 
     var screenTransform = CGAffineTransform.identity
@@ -322,16 +322,16 @@ final class CanvasView: View, Indicatable, Selectable, Zoomable, Rotatable, Stro
         updateEditView(with: convertToCurrentLocal(point))
     }
 
-    func select(from rect: Rect, _ phase: Phase) {
+    func select(from rect: Rect, _ phase: Phase, _ version: Version) {
         select(from: rect, phase, isDeselect: false)
     }
-    func selectAll() {
+    func selectAll(_ version: Version) {
         selectAll(isDeselect: false)
     }
-    func deselect(from rect: Rect, _ phase: Phase) {
+    func deselect(from rect: Rect, _ phase: Phase, _ version: Version) {
         select(from: rect, phase, isDeselect: true)
     }
-    func deselectAll() {
+    func deselectAll(_ version: Version) {
         selectAll(isDeselect: true)
     }
     private struct SelectOption {
@@ -612,7 +612,7 @@ final class CanvasView: View, Indicatable, Selectable, Zoomable, Rotatable, Stro
         }
     }
     private var stroker = Stroker()
-    func stroke(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func stroke(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
         stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: true)
     }
     func stroke(for point: Point, pressure: Real, time: Second, _ phase: Phase,
@@ -710,7 +710,7 @@ final class CanvasView: View, Indicatable, Selectable, Zoomable, Rotatable, Stro
         stroker.oldLastBounds = lastBounds
     }
 
-    func lassoErase(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func lassoErase(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
         _ = stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: false)
         switch phase {
         case .began:
@@ -924,10 +924,10 @@ final class CanvasView: View, Indicatable, Selectable, Zoomable, Rotatable, Stro
 //    private weak var movePointNode: CellGroup?
 //    private let snapPointSnapDistance = 8.0.cg
 //    private var bezierSortedResult: CellGroup.Nearest.BezierSortedResult?
-    func movePoint(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func movePoint(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
         movePoint(for: p, pressure: pressure, time: time, phase, isVertex: false)
     }
-    func moveVertex(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func moveVertex(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
         movePoint(for: p, pressure: pressure, time: time, phase, isVertex: true)
     }
     func movePoint(for point: Point, pressure: Real, time: Second, _ phase: Phase,
@@ -1385,7 +1385,7 @@ final class CanvasView: View, Indicatable, Selectable, Zoomable, Rotatable, Stro
 //    private var moveZCellTuple: (indexes: [Int], parent: Cell, oldChildren: [Cell])?
 //    private var moveZMinDeltaIndex = 0, moveZMaxDeltaIndex = 0
 //    private weak var moveZOldCell: Cell?, moveZNode: CellGroup?
-//    func moveZ(for point: Point, pressure: Real, time: Second, _ phase: Phase) {
+//    func moveZ(for point: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
 //        let p = convertToCurrentLocal(point)
 //        switch phase {
 //        case .began:
@@ -1488,13 +1488,13 @@ final class CanvasView: View, Indicatable, Selectable, Zoomable, Rotatable, Stro
     enum TransformEditType {
         case move, warp, transform
     }
-    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
         move(for: p, pressure: pressure, time: time, phase, type: .move)
     }
-    func transform(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func transform(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
         move(for: p, pressure: pressure, time: time, phase, type: .transform)
     }
-    func warp(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func warp(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
         move(for: p, pressure: pressure, time: time, phase, type: .warp)
     }
 //    let moveTransformAngleTime = Second(0.1)
@@ -1679,7 +1679,7 @@ final class CanvasView: View, Indicatable, Selectable, Zoomable, Rotatable, Stro
     }
 
 //    private var minWarpDistance = 0.0.cg, maxWarpDistance = 0.0.cg
-//    func distanceWarp(for point: Point, pressure: Real, time: Second, _ phase: Phase) {
+//    func distanceWarp(for point: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
 //        let p = convertToCurrentLocal(point)
 //        switch phase {
 //        case .began:
@@ -1789,7 +1789,7 @@ final class CanvasView: View, Indicatable, Selectable, Zoomable, Rotatable, Stro
     var minScale = 0.00001.cg, blockScale = 1.0.cg, maxScale = 64.0.cg
     var correctionScale = 1.28.cg, correctionRotation = 1.0.cg / (4.2 * .pi)
     private var isBlockScale = false, oldScale = 0.0.cg
-    func zoom(for p: Point, time: Second, magnification: Real, _ phase: Phase) {
+    func zoom(for p: Point, time: Second, magnification: Real, _ phase: Phase, _ version: Version) {
         let scale = viewTransform.scale.x
         switch phase {
         case .began:
@@ -1816,7 +1816,7 @@ final class CanvasView: View, Indicatable, Selectable, Zoomable, Rotatable, Stro
     }
     var blockRotations: [Real] = [-.pi, 0.0, .pi]
     private var isBlockRotation = false, blockRotation = 0.0.cg, oldRotation = 0.0.cg
-    func rotate(for p: Point, time: Second, rotationQuantity: Real, _ phase: Phase) {
+    func rotate(for p: Point, time: Second, rotationQuantity: Real, _ phase: Phase, _ version: Version) {
         let rotation = viewTransform.rotation
         switch phase {
         case .began:
@@ -1968,7 +1968,7 @@ extension CanvasView: Assignable {
     //        return false
     //    }
     //
-    func copiedViewables(at point: Point) -> [Viewable] {
+    func copiedObjects(at point: Point) -> [Viewable] {
         //        let p = convertToCurrentLocal(point)
         //        let ict = cut.currentNode.indicatedCellsTuple(with: p, reciprocalScale: scene.reciprocalScale)
         //        switch ict.type {
@@ -2000,7 +2000,7 @@ extension CanvasView: Assignable {
     //        let cell = cut.currentNode.rootCell.intersection(cells, isNewID: true)
     //        return [cell]
     //    }
-    func paste(_ objects: [Any], for point: Point) {
+    func paste(_ objects: [Object], for point: Point) {
         //        for object in objects {
         //            if let color = object as? Color, paste(color, for: point) {
         //                return

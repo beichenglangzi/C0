@@ -156,8 +156,8 @@ extension Sound: Interpolatable {
     }
 }
 extension Sound: KeyframeValue {}
-extension Sound: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
+extension Sound: MiniViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return name.view(withBounds: bounds, sizeType)
     }
 }
@@ -299,14 +299,14 @@ final class SoundView: View {
     }
     
     var sizeType: SizeType
-    let classNameView: TextView
-    let nameView: TextView
+    let classNameView: TextFormView
+    let nameView: TextView<Binder>
     
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
-        classNameView = TextView(text: Sound.name, font: Font.bold(with: sizeType))
+        classNameView = TextFormView(text: Sound.name, font: Font.bold(with: sizeType))
         nameView = TextView(text: "", font: Font.default(with: sizeType),
-                            isSizeToFit: false, isForm: false)
+                            isSizeToFit: false, isLocked: false)
         
         super.init()
         isClipped = true
@@ -345,18 +345,18 @@ extension SoundView: Assignable {
     func delete(for p: Point) {
         push(Sound())
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         guard let url = sound.url else {
             return [sound]
         }
         return [sound, url]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         for object in objects {
             if let sound = object as? Sound {
                 push(sound)
                 return
-            } else if let url = object as? URL, url.isConforms(uti: kUTTypeAudio as String) {
+            } else if let url = object as? URL, url.isConforms(type: kUTTypeAudio as String) {
                 var sound = Sound()
                 sound.url = url
                 push(sound)

@@ -19,7 +19,7 @@
 
 import struct Foundation.Locale
 
-typealias EnumType = RawRepresentable & Referenceable & Viewable & Equatable
+typealias EnumType = RawRepresentable & ObjectProtocol & Referenceable & Equatable
 
 struct EnumOption<Model: EnumType> {
     var defaultModel: Model
@@ -58,8 +58,8 @@ final class EnumView<T: EnumType, U: BinderProtocol>: View, BindableReceiver {
     var sizeType: SizeType {
         didSet { updateLayout() }
     }
-    let classNameView: TextView
-    let nameViews: [TextView]
+    let classNameView: TextFormView
+    let nameViews: [TextFormView]
     let knobView: View
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
@@ -70,8 +70,8 @@ final class EnumView<T: EnumType, U: BinderProtocol>: View, BindableReceiver {
         self.option = option
         
         self.sizeType = sizeType
-        classNameView = TextView(text: Model.uninheritanceName, font: Font.bold(with: sizeType))
-        nameViews = option.names.map { TextView(text: $0, font: Font.default(with: sizeType)) }
+        classNameView = TextFormView(text: Model.uninheritanceName, font: Font.bold(with: sizeType))
+        nameViews = option.names.map { TextFormView(text: $0, font: Font.default(with: sizeType)) }
         knobView = sizeType == .small ?
             View.discreteKnob(Size(square: 6), lineWidth: 1) :
             View.discreteKnob(Size(square: 8), lineWidth: 1)
@@ -121,7 +121,7 @@ final class EnumView<T: EnumType, U: BinderProtocol>: View, BindableReceiver {
         nameViews[index].fillColor = .knob
         nameViews[index].lineColor = .knob
         nameViews.enumerated().forEach {
-            $0.element.textFrame.color = $0.offset == index ? .locked : .subLocked
+            $0.element.textMaterial.color = $0.offset == index ? .locked : .subLocked
         }
     }
     
@@ -151,37 +151,36 @@ extension EnumView: Queryable {
     }
 }
 extension EnumView: Assignable {
-    func delete(for p: Point) {
-        let model = option.defaultModel
-        push(model)
+    func delete(for p: Point, _ version: Version) {
+        push(option.defaultModel, to:  version)
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [model]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point, _ version: Version) {
         for object in objects {
             if let model = object as? Model {
-                push(model)
+                push(model, to: version)
                 return
             } else if let string = object as? String, let index = Int(string) {
                 let model = option.model(at: index)
-                push(model)
+                push(model, to: version)
                 return
             }
         }
     }
 }
 extension EnumView: Runnable {
-    func run(for p: Point) {
-        let model = self.model(at: p)
-        push(model)
+    func run(for p: Point, _ version: Version) {
+        push(model(at: p), to: version)
     }
 }
 extension EnumView: PointMovable {
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+    func movePoint(for p: Point, first fp: Point, pressure: Real,
+                   time: Second, _ phase: Phase, _ version: Version) {
         switch phase {
         case .began:
-            capture(model)
+            capture(model, to: version)
             knobView.fillColor = .editing
             model = self.model(at: p)
         case .changed:

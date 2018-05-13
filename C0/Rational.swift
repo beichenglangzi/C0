@@ -155,18 +155,16 @@ extension Rational: Referenceable {
     static let name = Text(english: "Rational Number (\(MemoryLayout<Rational>.size * 8)bit)",
                            japanese: "有理数 (\(MemoryLayout<Rational>.size * 8)bit)")
 }
-extension Rational: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return description.view(withBounds: bounds, sizeType)
+extension Rational: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return description.thumbnailView(withFrame: frame, sizeType)
     }
 }
 extension Rational: CustomStringConvertible {
     var description: String {
         switch q {
-        case 1:
-            return "\(p)"
-        default:
-            return "\(p)/\(q)"
+        case 1: return "\(p)"
+        default: return "\(p)/\(q)"
         }
     }
 }

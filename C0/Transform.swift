@@ -167,9 +167,9 @@ extension Transform: Referenceable {
     static let name = Text(english: "Transform", japanese: "トランスフォーム")
 }
 extension Transform: KeyframeValue {}
-extension Transform: CompactViewable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return View(isForm: true)
+extension Transform: MiniViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return View(isLocked: true)
     }
 }
 
@@ -298,10 +298,10 @@ extension TransformView: Assignable {
     func delete(for p: Point) {
         push(Transform())
     }
-    func copiedViewables(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Viewable] {
         return [transform]
     }
-    func paste(_ objects: [Any], for p: Point) {
+    func paste(_ objects: [Object], for p: Point) {
         for object in objects {
             if let transform = object as? Transform {
                 push(transform)

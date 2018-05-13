@@ -27,9 +27,9 @@ struct Variable: Codable, Hashable {
 extension Variable: Referenceable {
     static let name = Text(english: "Variable", japanese: "変数")
 }
-extension Variable: Viewable {
-    func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return rawValue.view(withBounds: bounds, sizeType)
+extension Variable: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return rawValue.thumbnailView(withFrame: frame, sizeType)
     }
 }
 
@@ -56,28 +56,20 @@ indirect enum Expression: Hashable {
     }
     var displayString: String {
         switch self {
-        case .number(let value):
-            return value.rawValue
-        case .int(let value):
-            return "\(value)"
-        case .rational(let value):
-            return "\(value)"
-        case .real(let value):
-            return "\(value)"
-        case .addition(let lhs, let rhs):
-            return lhs.displayString + " + " + rhs.displayString
-        case .subtraction(let lhs, let rhs):
-            return lhs.displayString + " - " + rhs.displayString
-        case .multiplication(let lhs, let rhs):
-            return lhs.displayString + " * " + rhs.displayString
-        case .division(let lhs, let rhs):
-            return lhs.displayString + " / " + rhs.displayString
+        case .number(let value): return value.rawValue
+        case .int(let value): return "\(value)"
+        case .rational(let value): return "\(value)"
+        case .real(let value): return "\(value)"
+        case .addition(let lhs, let rhs): return lhs.displayString + " + " + rhs.displayString
+        case .subtraction(let lhs, let rhs): return lhs.displayString + " - " + rhs.displayString
+        case .multiplication(let lhs, let rhs): return lhs.displayString + " * " + rhs.displayString
+        case .division(let lhs, let rhs): return lhs.displayString + " / " + rhs.displayString
         }
     }
 }
-extension Expression: Viewable {
-    func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return displayString.view(withBounds: bounds, sizeType)
+extension Expression: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return displayString.thumbnailView(withFrame: frame, sizeType)
     }
 }
 extension Expression: Referenceable {
@@ -110,7 +102,7 @@ final class ExpressionView<T: BinderProtocol>: View, BindableReceiver {
         self.frame = frame
     }
     func updateWithModel() {
-        children = [TextView(text: Text(model.displayString))]
+        children = [TextFormView(text: Text(model.displayString))]
     }
 }
 extension ExpressionView: Queryable {

@@ -32,19 +32,19 @@ struct Screen {
  */
 class View {
     static var selection: View {
-        let view = View(isForm: true)
+        let view = View(isLocked: true)
         view.fillColor = .select
         view.lineColor = .selectBorder
         return view
     }
     static var deselection: View {
-        let view = View(isForm: true)
+        let view = View(isLocked: true)
         view.fillColor = .deselect
         view.lineColor = .deselectBorder
         return view
     }
     static func knob(radius: Real = 5, lineWidth: Real = 1) -> View {
-        let view = View(isForm: true)
+        let view = View(isLocked: true)
         view.fillColor = .knob
         view.lineColor = .getSetBorder
         view.lineWidth = lineWidth
@@ -52,7 +52,7 @@ class View {
         return view
     }
     static func discreteKnob(_ size: Size = Size(width: 10, height: 10), lineWidth: Real = 1) -> View {
-        let view = View(isForm: true)
+        let view = View(isLocked: true)
         view.fillColor = .knob
         view.lineColor = .getSetBorder
         view.lineWidth = lineWidth
@@ -64,13 +64,13 @@ class View {
     init() {
         caLayer = CALayer.interface()
     }
-    init(isForm: Bool) {
-        self.isForm = isForm
+    init(isLocked: Bool) {
+        self.isLocked = isLocked
         caLayer = CALayer.interface()
     }
     
-    init(gradient: Gradient, isForm: Bool = true) {
-        self.isForm = isForm
+    init(gradient: Gradient, isLocked: Bool = true) {
+        self.isLocked = isLocked
         var actions = CALayer.disabledAnimationActions
         actions["colors"] = NSNull()
         actions["locations"] = NSNull()
@@ -102,8 +102,8 @@ class View {
         caGradientLayer.endPoint = gradient.endPoint
     }
     
-    init(path: CGPath, isForm: Bool = true) {
-        self.isForm = isForm
+    init(path: CGPath, isLocked: Bool = true) {
+        self.isLocked = isLocked
         let caShapeLayer = CAShapeLayer()
         var actions = CALayer.disabledAnimationActions
         actions["fillColor"] = NSNull()
@@ -130,9 +130,9 @@ class View {
     }
     
     init(drawClosure: ((CGContext, View) -> ())?,
-         fillColor: Color? = .background, lineColor: Color? = .getSetBorder, isForm: Bool = true) {
+         fillColor: Color? = .background, lineColor: Color? = .getSetBorder, isLocked: Bool = true) {
         
-        self.isForm = isForm
+        self.isLocked = isLocked
         let caDrawLayer = C0DrawLayer()
         caLayer = caDrawLayer
         self.fillColor = fillColor
@@ -268,7 +268,7 @@ class View {
     
     var changedFrame: ((Rect) -> ())?
     func changed(_ frame: Rect) {
-        guard !isForm else { return }
+        guard !isLocked else { return }
         changedFrame?(frame)
         if let parent = parent {
             parent.changed(convert(frame, to: parent))
@@ -407,6 +407,8 @@ class View {
         }
     }
     
+    var isLocked = false
+    
     func containsPath(_ p: Point) -> Bool {
         if let path = path {
             return path.contains(p)
@@ -415,10 +417,10 @@ class View {
         }
     }
     func contains(_ p: Point) -> Bool {
-        return !isForm && !isHidden && containsPath(p)
+        return !isLocked && !isHidden && containsPath(p)
     }
     func at(_ p: Point) -> View? {
-        guard !(isForm && _children.isEmpty) else {
+        guard !(isLocked && _children.isEmpty) else {
             return nil
         }
         guard containsPath(p) && !isHidden else {
@@ -430,7 +432,7 @@ class View {
                 return view
             }
         }
-        return isForm ? nil : self
+        return isLocked ? nil : self
     }
     func at<T>(_ p: Point, _ type: T.Type) -> T? {
         return at(p)?.withSelfAndAllParents(with: type)
@@ -438,7 +440,7 @@ class View {
     func withSelfAndAllParents<T>(with type: T.Type) -> T? {
         var t: T?
         selfAndAllParents { (view, stop) in
-            if !view.isForm, let at = view as? T {
+            if !view.isLocked, let at = view as? T {
                 t = at
                 stop = true
             }
@@ -493,19 +495,13 @@ class View {
     }
     
     var isIndicated = false {
-        didSet {
-            updateLineColorWithIsIndicated()
-        }
+        didSet { updateLineColorWithIsIndicated() }
     }
     var noIndicatedLineColor: Color? = .getSetBorder {
-        didSet {
-            updateLineColorWithIsIndicated()
-        }
+        didSet { updateLineColorWithIsIndicated() }
     }
     var indicatedLineColor: Color? = .indicated {
-        didSet {
-            updateLineColorWithIsIndicated()
-        }
+        didSet { updateLineColorWithIsIndicated() }
     }
     private func updateLineColorWithIsIndicated() {
         lineColor = isIndicated ? indicatedLineColor : noIndicatedLineColor
@@ -517,8 +513,6 @@ class View {
         closure(self)
         (subIndicatedParent ?? parent)?.allSubIndicatedParentsAndSelf(closure: closure)
     }
-    
-    var isForm = false, isLiteral = false
 }
 extension View: Equatable {
     static func ==(lhs: View, rhs: View) -> Bool {
@@ -729,79 +723,18 @@ protocol ConcreteViewable {
     func concreteViewWith<T: BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Self>,
                                              frame: Rect, _ sizeType: SizeType) -> View
 }
-
 protocol AbstractViewable {
     func abstractViewWith<T: BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Self>,
                                              frame: Rect, _ sizeType: SizeType) -> View
 }
-
-protocol Thumbnailable {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View
-}
-protocol CompactViewable {
-    func compactViewWith<T: BinderProtocol>(binder: T, keyPath: KeyPath<T, Self>,
-                                            frame: Rect, _ sizeType: SizeType) -> View
-}
-extension CompactViewable where Self: Thumbnailable {
-    func compactViewWith<T: BinderProtocol>(binder: T, keyPath: KeyPath<T, Self>,
-                                            frame: Rect, _ sizeType: SizeType) -> View {
-        let thumbnailView = thumbnail(withBounds: <#T##Rect#>, <#T##sizeType: SizeType##SizeType#>)
-        
-    }
+protocol ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View
 }
 protocol DisplayableText {
     var displayText: Text { get }
 }
-extension CompactViewable where Self: DisplayableText {
-    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return displayText.thumbnail(withBounds: bounds, sizeType)
-    }
-}
-//protocol CompactViewableWithDisplayText: CompactViewable {
-//    var displayText: Text { get }
-//}
-//extension CompactViewableWithDisplayText {
-//    func thumbnail(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-//        return displayText.thumbnail(withBounds: bounds, sizeType)
-//    }
-//}
-
-struct Coder {
-    static func decode(from data: Data, forKey key: String) -> Any? {
-        if let object = NSKeyedUnarchiver.unarchiveObject(with: data) {
-            return object
-        }
-        
-        let decoder = JSONDecoder()
-        switch key {
-        case typeKey(from: KeyframeTiming.self):
-            return try? decoder.decode(KeyframeTiming.self, from: data)
-        case typeKey(from: Easing.self):
-            return try? decoder.decode(Easing.self, from: data)
-        case typeKey(from: Transform.self):
-            return try? decoder.decode(Transform.self, from: data)
-        case typeKey(from: Wiggle.self):
-            return try? decoder.decode(Wiggle.self, from: data)
-        case typeKey(from: Effect.self):
-            return try? decoder.decode(Effect.self, from: data)
-        case typeKey(from: Line.self):
-            return try? decoder.decode(Line.self, from: data)
-        case typeKey(from: Color.self):
-            return try? decoder.decode(Color.self, from: data)
-        case typeKey(from: URL.self):
-            return try? decoder.decode(URL.self, from: data)
-        case typeKey(from: Real.self):
-            return try? decoder.decode(URL.self, from: data)
-        case typeKey(from: Size.self):
-            return try? decoder.decode(URL.self, from: data)
-        case typeKey(from: Point.self):
-            return try? decoder.decode(URL.self, from: data)
-        case typeKey(from: Bool.self):
-            return try? decoder.decode(URL.self, from: data)
-        case typeKey(from: [Line].self):
-            return try? decoder.decode([Line].self, from: data)
-        default:
-            return nil
-        }
+extension ThumbnailViewable where Self: DisplayableText {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return displayText.thumbnailView(withFrame: frame, sizeType)
     }
 }
