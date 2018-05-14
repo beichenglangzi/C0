@@ -420,10 +420,10 @@ extension Color {
         return CGColor.with(rgb: rgb, alpha: alpha, colorSpace: CGColorSpace.with(colorSpace))
     }
 }
-extension Color: MiniViewable {
+extension Color: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         let view = View(isLocked: true)
-        view.bounds = bounds
+        view.frame = frame
         view.fillColor = self
         return view
     }
@@ -446,10 +446,8 @@ extension CGColorSpace {
     }
     static func with(_ colorSpace: ColorSpace) -> CGColorSpace? {
         switch colorSpace {
-        case .sRGB:
-            return CGColorSpace(name: CGColorSpace.sRGB)
-        case .displayP3:
-            return CGColorSpace(name: CGColorSpace.displayP3)
+        case .sRGB: return CGColorSpace(name: CGColorSpace.sRGB)
+        case .displayP3: return CGColorSpace(name: CGColorSpace.displayP3)
         }
     }
 }
@@ -537,20 +535,16 @@ struct HueCircle {
     func draw(in ctx: CGContext) {
         let outR = radius
         let inR = outR - lineWidth, deltaAngle = 1 / outR
-        let splitCount = Int(ceil(2 * (.pi) * outR))
+        let splitCount = Int(ceil(2 * .pi * outR))
         let inChord = 2 + inR / outR, outChord = 2.0.cg
-        let points = [
-            Point(x: inR, y: inChord / 2), Point(x: outR, y: outChord / 2),
-            Point(x: outR, y: -outChord / 2), Point(x: inR, y: -inChord / 2)
-        ]
+        let points = [Point(x: inR, y: inChord / 2), Point(x: outR, y: outChord / 2),
+                      Point(x: outR, y: -outChord / 2), Point(x: inR, y: -inChord / 2)]
         ctx.saveGState()
         ctx.translateBy(x: bounds.midX, y: bounds.midY)
         ctx.rotate(by: .pi / 6 - deltaAngle / 2)
         for i in 0..<splitCount {
-            let color = Color(hue: revisionHue(withHue: Real(i) / Real(splitCount)),
-                              saturation: 1,
-                              brightness: 1,
-                              colorSpace: colorSpace)
+            let hue = revisionHue(withHue: Real(i) / Real(splitCount))
+            let color = Color(hue: hue, saturation: 1, brightness: 1, colorSpace: colorSpace)
             ctx.setFillColor(color.cg)
             ctx.addLines(between: points)
             ctx.fillPath()
@@ -560,20 +554,20 @@ struct HueCircle {
     }
 }
 
-final class ColorView: View {
-    var color = Color() {
-        didSet {
-            updateWithColor()
-            if color.colorSpace != oldValue.colorSpace {
-                updateWithColorSpace()
-            }
-        }
+final class ColorView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = Color
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
     }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var defaultModel = Color()
     
-    let hueView: CircularNumberView
-    let slView = PointView()
+    let hueView: CircularRealView<Binder>
+    let slView: SlidablePointView<Binder>
     
-    let hueDrawView = View(drawClosure: { _, _ in })
     var hueLineWidth: Real {
         didSet {
             hueCircle.lineWidth = hueLineWidth
@@ -585,50 +579,56 @@ final class ColorView: View {
         }
     }
     var slRatio = 0.82.cg {
-        didSet {
-            updateLayout()
-        }
+        didSet { updateLayout() }
     }
-    let slColorGradientView = View(gradient: Gradient(colors: [], locations: [],
-                                                      startPoint: Point(x: 0, y: 0),
-                                                      endPoint: Point(x: 1, y: 0)))
-    let slBlackWhiteGradientView = View(gradient: Gradient(colors: [Color(white: 0, alpha: 1),
-                                                                    Color(white: 0, alpha: 0),
-                                                                    Color(white: 1, alpha: 0),
-                                                                    Color(white: 1, alpha: 1)],
-                                                           locations: [],
-                                                           startPoint: Point(x: 0, y: 0),
-                                                           endPoint: Point(x: 0, y: 1)))
+    let hueDrawView = View(drawClosure: { _, _ in })
+    let slColorGradientView: View
+    let slBlackWhiteGradientView: View
     
-    init(frame: Rect = Rect(),
-         hLineWidth: Real = 2.5, hWidth: Real = 16, slPadding: Real? = nil,
-         sizeType: SizeType = .regular) {
+    init(binder: Binder, keyPath: BinderKeyPath,
+         hLineWidth: Real = 2.5, hWidth: Real = 16, slPadding: Real? = nil, slRatio: Real = 0.82,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
-        hueView = CircularNumberView(width: hWidth)
+        self.binder = binder
+        self.keyPath = keyPath
         
-        if let slPadding = slPadding {
-            slView.padding = slPadding
-        }
+        let valueOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1,
+                                     modelInterval: 0, exp: 1, numberOfDigits: 0, unit: "")
+        hueView = CircularRealView(binder: binder, keyPath: keyPath.appending(path: \Color.hue),
+                                   option: valueOption, width: hWidth)
+        let slOption = PointOption(xOption: valueOption, yOption: valueOption)
+        slView = SlidablePointView(binder: binder, keyPath: keyPath.appending(path: \Color.sl),
+                                   option: slOption)
+        
         if sizeType == .small {
             slView.knobView.radius = 4
             hueView.knobView.radius = 4
         }
-        self.hueLineWidth = hLineWidth
+        if let slPadding = slPadding {
+            slView.padding = slPadding
+        }
         hueView.width = hWidth
+        self.hueLineWidth = hLineWidth
+        self.slRatio = slRatio
+        slColorGradientView = View(gradient: Gradient(values: [],
+                                                      startPoint: Point(x: 0, y: 0),
+                                                      endPoint: Point(x: 1, y: 0)))
+        let slgValues = [Gradient.Value(color: Color(white: 0, alpha: 1), location: 0),
+                         Gradient.Value(color: Color(white: 0, alpha: 0), location: 0.5),
+                         Gradient.Value(color: Color(white: 1, alpha: 0), location: 0.5),
+                         Gradient.Value(color: Color(white: 1, alpha: 1), location: 1)]
+        slBlackWhiteGradientView = View(gradient: Gradient(values: slgValues,
+                                                           startPoint: Point(x: 0, y: 0),
+                                                           endPoint: Point(x: 0, y: 1)))
         
         super.init()
         hueDrawView.fillColor = nil
         hueDrawView.lineColor = nil
-        hueDrawView.drawClosure = { [unowned self] ctx, _ in
-            self.hueCircle.draw(in: ctx)
-        }
+        hueDrawView.drawClosure = { [unowned self] ctx, _ in self.hueCircle.draw(in: ctx) }
         hueView.backgroundViews = [hueDrawView]
         slView.formBackgroundViews = [slColorGradientView, slBlackWhiteGradientView]
         children = [hueView, slView]
         self.frame = frame
-        
-        hueView.binding = { [unowned self] in self.setColor(with: $0) }
-        slView.binding = { [unowned self] in self.setColor(with: $0) }
     }
     
     override func updateLayout() {
@@ -650,79 +650,53 @@ final class ColorView: View {
         hueDrawView.frame = hueView.bounds.inset(by: ceil((hueView.width - hueLineWidth) / 2))
         hueCircle = HueCircle(lineWidth: hueLineWidth,
                               bounds: hueDrawView.bounds,
-                              colorSpace: color.colorSpace)
-        updateWithColor()
+                              colorSpace: model.colorSpace)
+        updateWithModel()
     }
-    private func updateWithColor() {
-        let y = Color.y(withHue: color.hue)
-        slColorGradientView.gradient?.colors = [Color(hue: color.hue, saturation: 0, brightness: y),
-                                                Color(hue: color.hue, saturation: 1, brightness: 1)]
+    func updateWithModel() {
+        if model.colorSpace != hueCircle.colorSpace {
+            updateWithColorSpace()
+        }
+        
+        let y = Color.y(withHue: model.hue)
+        slColorGradientView.gradient?.colors = [Color(hue: model.hue, saturation: 0, brightness: y),
+                                                Color(hue: model.hue, saturation: 1, brightness: 1)]
         slBlackWhiteGradientView.gradient?.locations = [0, y, y, 1]
-        hueView.number = hueCircle.angle(withHue: color.hue)
-        slView.point = Point(x: color.saturation, y: color.lightness)
+        
+        hueView.updateWithModel()
+        slView.updateWithModel()
     }
     private func updateWithColorSpace() {
-        let colors = [Color(white: 0, alpha: 1, colorSpace: color.colorSpace),
-                      Color(white: 0, alpha: 0, colorSpace: color.colorSpace),
-                      Color(white: 1, alpha: 0, colorSpace: color.colorSpace),
-                      Color(white: 1, alpha: 1, colorSpace: color.colorSpace)]
+        let colors = [Color(white: 0, alpha: 1, colorSpace: model.colorSpace),
+                      Color(white: 0, alpha: 0, colorSpace: model.colorSpace),
+                      Color(white: 1, alpha: 0, colorSpace: model.colorSpace),
+                      Color(white: 1, alpha: 1, colorSpace: model.colorSpace)]
         slBlackWhiteGradientView.gradient?.colors = colors
         hueCircle = HueCircle(lineWidth: hueLineWidth,
                               bounds: hueDrawView.bounds,
-                              colorSpace: color.colorSpace)
-    }
-    
-    struct Binding {
-        let colorView: ColorView, color: Color, oldColor: Color, phase: Phase
-    }
-    var setColorClosure: ((Binding) -> ())?
-    
-    private var oldColor = Color()
-    private func setColor(with obj: PointView.Binding) {
-        if obj.phase == .began {
-            oldColor = color
-            setColorClosure?(Binding(colorView: self,
-                                     color: oldColor, oldColor: oldColor, phase: .began))
-        } else {
-            color.sl = obj.point
-            setColorClosure?(Binding(colorView: self,
-                                     color: color, oldColor: oldColor, phase: obj.phase))
-        }
-    }
-    
-    private func setColor(with obj: CircularNumberView.Binding) {
-        if obj.phase == .began {
-            oldColor = color
-            setColorClosure?(Binding(colorView: self,
-                                     color: oldColor, oldColor: oldColor, phase: .began))
-        } else {
-            color.hue = hueCircle.hue(withAngle: obj.number)
-            setColorClosure?(Binding(colorView: self,
-                                     color: color, oldColor: oldColor, phase: obj.phase))
-        }
-    }
-    
-    private func push(_ color: Color) {
-//        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldColor, old: color) }
-        self.color = color
+                              colorSpace: model.colorSpace)
     }
 }
 extension ColorView: ViewQueryable {
-    static let referenceableType: Referenceable.Type = Color.self
-    static let viewDescription = Text(english: "Ring: Hue, Width: Saturation, Height: Luminance",
-                                      japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
+    static var viewDescription: Text {
+        return Text(english: "Ring: Hue, Width: Saturation, Height: Luminance",
+                    japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
+    }
 }
 extension ColorView: Assignable {
-    func delete(for p: Point) {
-        push(Color())
+    func delete(for p: Point, _ version: Version) {
+        push(defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Viewable] {
-        return [color]
+        return [model]
     }
-    func paste(_ objects: [Object], for p: Point) {
+    func paste(_ objects: [Object], for p: Point, _ version: Version) {
         for object in objects {
-            if let color = object as? Color {
-                push(color)
+            if let model = object as? Model {
+                push(model, to: version)
                 return
             }
         }

@@ -73,7 +73,7 @@ final class SceneVideoEncoder: VideoEncoder {
                                          rotation: 0)
         drawView.bounds.size = size
         drawView.drawClosure = { [unowned self] ctx, _ in
-            ctx.concatenate(scene.canvas.viewTransform.affineTransform)
+            ctx.concatenate(scene.canvas.transform.affineTransform)
             self.scene.timeline.canvas.draw(viewType: .preview, in: ctx)
         }
     }

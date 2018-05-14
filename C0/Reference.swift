@@ -34,7 +34,7 @@ extension Referenceable {
 /**
  Issue: リファレンス表示の具体化
  */
-struct Reference {
+struct Reference: Codable {
     let name: Text, classDescription: Text, viewDescription: Text
 }
 extension Reference {
@@ -55,10 +55,9 @@ extension Reference: Referenceable {
 }
 extension Reference: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return name//.thumbnailView(withBounds: bounds, sizeType)
+        return name.thumbnailView(withFrame: frame, sizeType)
     }
 }
-extension Reference: MiniViewable {}
 
 final class ReferenceView<T: BinderProtocol>: View, BindableReceiver {
     typealias Model = Reference

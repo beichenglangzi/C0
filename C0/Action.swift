@@ -570,7 +570,7 @@ final class IndicatableActionManager: ActionManagable {
 }
 
 protocol Selectable {
-    func captureSelect(to version: Version)
+    func captureSelections(to version: Version)
     func select(from rect: Rect, _ phase: Phase)
     func deselect(from rect: Rect, _ phase: Phase)
     func selectAll()
@@ -601,24 +601,27 @@ final class SelectableActionManager: ActionManagable {
         var selectionView: View?
         weak var receiver: Receiver?
         private var startPoint = Point(), startRootPoint = Point(), oldIsDeselect = false
-        func send(_ event: Dragger.Event, _ phase: Phase, _ version: Version,
-                  in rootView: View, isDeselect: Bool) {
+        func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View, isDeselect: Bool) {
             switch phase {
             case .began:
                 let selectionView = isDeselect ? View.deselection : View.selection
                 rootView.append(child: selectionView)
                 selectionView.frame = Rect(origin: event.rootLocation, size: Size())
                 self.selectionView = selectionView
-                if let receiver = rootView.at(event.rootLocation, Receiver.self) {
+                if let receiver = rootView.at(event.rootLocation, Receiver.self),
+                    let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                    
                     startRootPoint = event.rootLocation
                     startPoint = receiver.convertFromRoot(event.rootLocation)
                     self.receiver = receiver
                     
+                    receiver.captureSelections(to: version)
+                    
                     let rect = Rect(origin: startPoint, size: Size())
                     if isDeselect {
-                        receiver.deselect(from: rect, phase, version)
+                        receiver.deselect(from: rect, phase)
                     } else {
-                        receiver.select(from: rect, phase, version)
+                        receiver.select(from: rect, phase)
                     }
                     oldIsDeselect = isDeselect
                 }
@@ -638,9 +641,9 @@ final class SelectableActionManager: ActionManagable {
                                 minY: min(startPoint.y, p.y), maxY: max(startPoint.y, p.y))
                 let rect = aabb.rect
                 if isDeselect {
-                    receiver.deselect(from: rect, phase, version)
+                    receiver.deselect(from: rect, phase)
                 } else {
-                    receiver.select(from: rect, phase, version)
+                    receiver.select(from: rect, phase)
                 }
                 
                 if phase == .ended {
@@ -654,17 +657,15 @@ final class SelectableActionManager: ActionManagable {
     private var selector = Selector()
     
     func send(_ eventMap: EventMap, in rootView: View) {
-        if let sendableTuple = eventMap.sendableTuple(with: [selectAction, deselectAction], .drag),
-            let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
-            
-            selector.send(sendableTuple.draggerEvent, sendableTuple.phase, version, in: rootView,
+        if let sendableTuple = eventMap.sendableTuple(with: [selectAction, deselectAction], .drag) {
+            selector.send(sendableTuple.draggerEvent, sendableTuple.phase, in: rootView,
                           isDeselect: sendableTuple.mainActionEvent.action == deselectAction)
         }
         if let inputterEvent = eventMap.sendableInputterEvent(with: selectAllAction, .a) {
             if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
                 let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
                 
-                receiver.capture(to: version)
+                receiver.captureSelections(to: version)
                 receiver.selectAll()
             }
         }
@@ -672,14 +673,15 @@ final class SelectableActionManager: ActionManagable {
             if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
                 let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
                 
-                receiver.deselectAll(version)
+                receiver.captureSelections(to: version)
+                receiver.deselectAll()
             }
         }
     }
 }
 
 protocol Editable {
-    func edit(for p: Point)
+    func edit(for p: Point, _ verison: Version)
 }
 final class EditableActionManager: ActionManagable {
     typealias Receiver = View & Editable
@@ -692,15 +694,18 @@ final class EditableActionManager: ActionManagable {
     
     func send(_ eventMap: EventMap, in rootView: View) {
         if let inputterEvent = eventMap.sendableInputterEvent(with: editAction, .subClick) {
-            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
+                let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
-                receiver.edit(for: p)
+                receiver.edit(for: p, version)
             }
         }
     }
 }
 
 protocol Scrollable {
+    func captureScrollPosition(to version: Version)
     func scroll(for p: Point, time: Second, scrollDeltaPoint: Point,
                 phase: Phase, momentumPhase: Phase?)
 }
@@ -717,8 +722,11 @@ final class ScrollableActionManager: ActionManagable {
         weak var receiver: Receiver?
         func send(_ event: Scroller.Event, _ phase: Phase, in rootView: View) {
             if phase == .began {
-                if let receiver = rootView.at(event.rootLocation, Receiver.self) {
+                if let receiver = rootView.at(event.rootLocation, Receiver.self),
+                    let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                    
                     self.receiver = receiver
+                    receiver.captureScrollPosition(to: version)
                 }
             }
             guard let receiver = receiver else { return }
@@ -737,8 +745,9 @@ final class ScrollableActionManager: ActionManagable {
 }
 
 protocol Zoomable {
-    func zoom(for p: Point, time: Second, magnification: Real, _ phase: Phase, _ version: Version)
-    func resetView(for p: Point)
+    func captureScale(to version: Version)
+    func zoom(for p: Point, time: Second, magnification: Real, _ phase: Phase)
+    func resetView(for p: Point, _ version: Version)
 }
 final class ZoomableActionManager: ActionManagable {
     typealias Receiver = View & Zoomable
@@ -756,8 +765,11 @@ final class ZoomableActionManager: ActionManagable {
         weak var receiver: Receiver?
         func send(_ event: Pincher.Event, _ phase: Phase, in rootView: View) {
             if phase == .began {
-                if let receiver = rootView.at(event.rootLocation, Receiver.self) {
+                if let receiver = rootView.at(event.rootLocation, Receiver.self),
+                    let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                    
                     self.receiver = receiver
+                    receiver.captureScale(to: version)
                 }
             }
             guard let receiver = receiver else { return }
@@ -775,16 +787,19 @@ final class ZoomableActionManager: ActionManagable {
             zoomer.send(pincherEvent, phase, in: rootView)
         }
         if let inputterEvent = eventMap.sendableInputterEvent(with: resetViewAction, .b) {
-            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
+                let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
-                receiver.resetView(for: p)
+                receiver.resetView(for: p, version)
             }
         }
     }
 }
 
 protocol Rotatable {
-    func rotate(for p: Point, time: Second, rotationQuantity: Real, _ phase: Phase, _ version: Version)
+    func captureRotation(to version: Version)
+    func rotate(for p: Point, time: Second, rotationQuantity: Real, _ phase: Phase)
 }
 final class RotatableActionManager: ActionManagable {
     typealias Receiver = View & Rotatable
@@ -799,8 +814,11 @@ final class RotatableActionManager: ActionManagable {
         weak var receiver: Receiver?
         func send(_ event: Rotater.Event, _ phase: Phase, in rootView: View) {
             if phase == .began {
-                if let receiver = rootView.at(event.rootLocation, Receiver.self) {
+                if let receiver = rootView.at(event.rootLocation, Receiver.self),
+                    let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                    
                     self.receiver = receiver
+                    receiver.captureRotation(to: version)
                 }
             }
             guard let receiver = receiver else { return }
@@ -822,7 +840,7 @@ final class RotatableActionManager: ActionManagable {
 
 protocol ReferenceViewer: class {
     var model: Reference { get }
-    func push(_ model: [Reference], to version: Version)
+    func push(_ model: Reference, to version: Version)
 }
 protocol Queryable {
     static var referenceableType: Referenceable.Type { get }
@@ -844,16 +862,19 @@ final class QueryableActionManager: ActionManagable {
     func send(_ eventMap: EventMap, in rootView: View) {
         if let inputterEvent = eventMap.sendableInputterEvent(with: lookUpAction, .tap) {
             guard let viewer = rootView.at(inputterEvent.rootLocation, Viewer.self) else { return }
-            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
+                let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                
                 let r = type(of: receiver).referenceableType
                 let viewDescription: Text
-                if let receiver = rootView.at(inputterEvent.rootLocation, ViewReceiver.self) {
-                    viewDescription = type(of: receiver).viewDescription
+                if let viewReceiver = rootView.at(inputterEvent.rootLocation, ViewReceiver.self) {
+                    viewDescription = type(of: viewReceiver).viewDescription
                 } else {
                     viewDescription = Text(english: "None", japanese: "なし")
                 }
-                viewer.reference = Reference(name: r.name, classDescription: r.classDescription,
-                                             viewDescription: viewDescription)
+                let reference = Reference(name: r.name, classDescription: r.classDescription,
+                                          viewDescription: viewDescription)
+                viewer.push(reference, to: version)
             }
         }
     }
@@ -1011,11 +1032,12 @@ protocol KeyInputtable {
 }
 
 protocol Movable {
-    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version)
+    func captureWillMoveObject(to version: Version)
+    func move(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase)
 }
 protocol Transformable: Movable {
-    func transform(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version)
-    func warp(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version)
+    func transform(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase)
+    func warp(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase)
 }
 final class TransformableActionManager: ActionManagable {
     typealias Receiver = View & Transformable
@@ -1036,16 +1058,20 @@ final class TransformableActionManager: ActionManagable {
     
     private final class Mover {
         weak var receiver: MoveReceiver?
+        var fp = Point()
         func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View) {
             if phase == .began {
-                if let receiver = rootView.at(event.rootLocation, MoveReceiver.self) {
+                if let receiver = rootView.at(event.rootLocation, MoveReceiver.self),
+                    let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                    
                     self.receiver = receiver
+                    fp = receiver.convertFromRoot(event.rootLocation)
+                    receiver.captureWillMoveObject(to: version)
                 }
             }
             guard let receiver = receiver else { return }
             let p = receiver.convertFromRoot(event.rootLocation)
-            receiver.move(for: p, pressure: event.pressure,
-                          time: event.time, phase)
+            receiver.move(for: p, first: fp, pressure: event.pressure, time: event.time, phase)
             if phase == .ended {
                 self.receiver = nil
             }
@@ -1055,15 +1081,20 @@ final class TransformableActionManager: ActionManagable {
     
     private final class TransformEditor {
         weak var receiver: Receiver?
+        var fp = Point()
         func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View) {
             if phase == .began {
-                if let receiver = rootView.at(event.rootLocation, Receiver.self) {
+                if let receiver = rootView.at(event.rootLocation, Receiver.self),
+                    let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                    
                     self.receiver = receiver
+                    fp = receiver.convertFromRoot(event.rootLocation)
+                    receiver.captureWillMoveObject(to: version)
                 }
             }
             guard let receiver = receiver else { return }
             let p = receiver.convertFromRoot(event.rootLocation)
-            receiver.transform(for: p, pressure: event.pressure, time: event.time, phase)
+            receiver.transform(for: p, first: fp, pressure: event.pressure, time: event.time, phase)
             if phase == .ended {
                 self.receiver = nil
             }
@@ -1073,15 +1104,20 @@ final class TransformableActionManager: ActionManagable {
     
     private final class WarpEditor {
         weak var receiver: Receiver?
+        var fp = Point()
         func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View) {
             if phase == .began {
-                if let receiver = rootView.at(event.rootLocation, Receiver.self) {
+                if let receiver = rootView.at(event.rootLocation, Receiver.self),
+                    let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                    
                     self.receiver = receiver
+                    fp = receiver.convertFromRoot(event.rootLocation)
+                    receiver.captureWillMoveObject(to: version)
                 }
             }
             guard let receiver = receiver else { return }
             let p = receiver.convertFromRoot(event.rootLocation)
-            receiver.warp(for: p, pressure: event.pressure, time: event.time, phase)
+            receiver.warp(for: p, first: fp, pressure: event.pressure, time: event.time, phase)
             if phase == .ended {
                 self.receiver = nil
             }
@@ -1104,8 +1140,10 @@ final class TransformableActionManager: ActionManagable {
 
 protocol Strokable {
     var viewScale: Real { get }
-    func stroke(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version)
-    func lassoErase(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version)
+    func insertWillStorkeObject(at p: Point, _ version: Version)
+    func stroke(for p: Point, pressure: Real, time: Second, _ phase: Phase)
+    func captureWillEraseObject(to version: Version)
+    func lassoErase(for p: Point, pressure: Real, time: Second, _ phase: Phase)
 }
 final class StrokableActionManager: ActionManagable {
     typealias Receiver = View & Strokable
@@ -1123,8 +1161,12 @@ final class StrokableActionManager: ActionManagable {
         weak var receiver: Receiver?
         func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View) {
             if phase == .began {
-                if let receiver = rootView.at(event.rootLocation, Receiver.self) {
+                if let receiver = rootView.at(event.rootLocation, Receiver.self),
+                    let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                    
                     self.receiver = receiver
+                    let p = receiver.convertFromRoot(event.rootLocation)
+                    receiver.insertWillStorkeObject(at: p, version)
                 }
             }
             guard let receiver = receiver else { return }
@@ -1141,8 +1183,11 @@ final class StrokableActionManager: ActionManagable {
         weak var receiver: Receiver?
         func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View) {
             if phase == .began {
-                if let receiver = rootView.at(event.rootLocation, Receiver.self) {
+                if let receiver = rootView.at(event.rootLocation, Receiver.self),
+                    let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                    
                     self.receiver = receiver
+                    receiver.captureWillEraseObject(to: version)
                 }
             }
             guard let receiver = receiver else { return }
@@ -1166,12 +1211,11 @@ final class StrokableActionManager: ActionManagable {
 }
 
 protocol PointMovable: class {
-    func movePoint(for p: Point, first fp: Point, pressure: Real,
-                   time: Second, _ phase: Phase, _ version: Version)
+    func captureWillMovePoint(at p: Point, to version: Version)
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase)
 }
 protocol VertexMovable: PointMovable {
-    func moveVertex(for p: Point, first fp: Point, pressure: Real,
-                    time: Second, _ phase: Phase, _ version: Version)
+    func moveVertex(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase)
 }
 protocol PointEditable: VertexMovable {
     func insert(_ p: Point, _ version: Version)
@@ -1207,9 +1251,12 @@ final class PointEditableActionManager: ActionManagable {
         var fp = Point()
         func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View) {
             if phase == .began {
-                if let receiver = rootView.at(event.rootLocation, Receiver.self) {
+                if let receiver = rootView.at(event.rootLocation, Receiver.self),
+                    let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                    
                     self.receiver = receiver
                     fp = receiver.convertFromRoot(event.rootLocation)
+                    receiver.captureWillMovePoint(at: fp, to: version)
                 }
             }
             guard let receiver = receiver else { return }
@@ -1227,9 +1274,12 @@ final class PointEditableActionManager: ActionManagable {
         var fp = Point()
         func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View) {
             if phase == .began {
-                if let receiver = rootView.at(event.rootLocation, Receiver.self) {
+                if let receiver = rootView.at(event.rootLocation, Receiver.self),
+                    let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                    
                     self.receiver = receiver
                     fp = receiver.convertFromRoot(event.rootLocation)
+                    receiver.captureWillMovePoint(at: fp, to: version)
                 }
             }
             guard let receiver = receiver else { return }
@@ -1244,15 +1294,19 @@ final class PointEditableActionManager: ActionManagable {
     
     func send(_ eventMap: EventMap, in rootView: View) {
         if let inputterEvent = eventMap.sendableInputterEvent(with: removeEditPointAction, .x) {
-            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
+                let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
-                receiver.removeNearestPoint(for: p)
+                receiver.removeNearestPoint(for: p, version)
             }
         }
         if let inputterEvent = eventMap.sendableInputterEvent(with: insertEditPointAction, .d) {
-            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self) {
+            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
+                let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
-                receiver.insert(p)
+                receiver.insert(p, version)
             }
         }
         if let (draggerEvent, phase) = eventMap.sendableTuple(with: moveEditPointAction, .drag) {
@@ -1480,11 +1534,6 @@ extension QuasimodeView: Localizable {
 extension QuasimodeView: Queryable {
     static let referenceableType: Referenceable.Type = Quasimode.self
 }
-extension QuasimodeView: Copiable {
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [quasimode]
-    }
-}
 
 final class ActionView: View {
     var action: Action {
@@ -1522,11 +1571,6 @@ final class ActionView: View {
 }
 extension ActionView: Queryable {
     static let referenceableType: Referenceable.Type = Action.self
-}
-extension ActionView: Copiable {
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [action]
-    }
 }
 
 final class ActionManagableView: View {

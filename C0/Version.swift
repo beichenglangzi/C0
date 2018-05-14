@@ -36,6 +36,9 @@ final class Version: UndoManager {
         let nc = NotificationCenter.default
         
         let undoGroupClosure: (Notification) -> () = { [unowned self] in
+            if !self.disabledUndoRegistrationKeys.isEmpty {
+                self.disabledUndoRegistrationKeys = []
+            }
             if let undoManager = $0.object as? UndoManager, undoManager == self {
                 if undoManager.groupingLevel == 0 {
                     self.undoedIndex += 1

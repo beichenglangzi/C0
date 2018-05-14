@@ -154,6 +154,11 @@ extension Real: Referenceable {
     static let name = Text(english: "Real Number (\(MemoryLayout<Real>.size * 8)bit)",
                            japanese: "実数 (\(MemoryLayout<Real>.size * 8)bit)")
 }
+extension Real: ObjectProtocol {
+    var object: Object {
+        return .real(self)
+    }
+}
 extension Real: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return String(self).thumbnailView(withFrame: frame, sizeType)
@@ -208,7 +213,7 @@ struct RealOption: Object1DOption {
     var defaultModel: Model
     var minModel: Model
     var maxModel: Model
-    var modelInterval: Model
+    var modelInterval = 0.0.cg
     
     var exp = 1.0.cg
     var numberOfDigits: Int

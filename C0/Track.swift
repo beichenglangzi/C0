@@ -165,9 +165,14 @@ enum AlgebraicTrackItem: Track {
     case transform(TransformTrack)
     case wiggle(WiggleTrack)
     var tempoTrack: TempoTrack? {
-        switch self {
-        case .tempo(let track): return track
-        default: return nil
+        get {
+            switch self {
+            case .tempo(let track): return track
+            default: return nil
+            }
+        }
+        set {
+            
         }
     }
 }
@@ -211,8 +216,6 @@ final class TrackItemView<T: BinderProtocol>: View {
                                 keyPath: \SceneBinder.scene.canvas.editingCellGroup.effect,
                                 sizeType: .small)
         super.init()
-        
-        self[keyPath: newKey] = []
     }
 }
 
@@ -251,8 +254,9 @@ extension SumKeyframeValue: Referenceable {
 struct LinesKeyframeValue: KeyframeValue {
     var drawing = Drawing()
     var geometries = [Geometry]()
-    
-    //previousNextview
+}
+extension LinesKeyframeValue {
+    //view
     //    func drawPreviousNext(lineWidth: Real,
     //                          isHiddenPrevious: Bool, isHiddenNext: Bool, index: Int, in ctx: CGContext) {
     //        if !isHiddenPrevious && index - 1 >= 0 {

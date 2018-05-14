@@ -27,7 +27,14 @@ extension Bool: ObjectProtocol {
 }
 extension Bool: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return (self ? "true" : "false").thumbnailView(withBounds: bounds, sizeType)
+        return (self ? "true" : "false").thumbnailView(withFrame: frame, sizeType)
+    }
+}
+extension Bool: AbstractViewable {
+    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Bool>,
+                             frame: Rect, _ sizeType: SizeType) -> View where T : BinderProtocol {
+        return BoolView(binder: binder, keyPath: keyPath, option: BoolOption(),
+                        frame: frame, sizeType: sizeType)
     }
 }
 

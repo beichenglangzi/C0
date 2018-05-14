@@ -72,16 +72,17 @@ extension Array: Referenceable where Element: Referenceable {
         return "[" + Element.name + "]"
     }
 }
-extension Array: Viewable where Element: Viewable {
-    func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-        return ObjectView(object: self, thumbnailView: nil, minFrame: bounds, sizeType)
-    }
-}
+
+//extension Array: Viewable where Element: Viewable {
+//    func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
+//        return ObjectView(object: self, thumbnailView: nil, minFrame: bounds, sizeType)
+//    }
+//}
 
 //extension Array: 
 
 final class MiniViewablesView<T: BinderProtocol>: View, BindableReceiver {
-    typealias Model = [MiniViewable]
+    typealias Model = [Object]
     typealias Binder = T
     var binder: Binder {
         didSet { updateWithModel() }
@@ -194,9 +195,9 @@ final class ArrayCountView<T: BinderProtocol, U: AbstractElement>: View, Bindabl
         self.keyPath = keyPath
         
         self.sizeType = sizeType
-        classNameView = TextView(text: Model.name, font: Font.bold(with: sizeType))
-        countNameView = TextView(text: Text(english: "Count:", japanese: "個数:"),
-                                 font: Font.default(with: sizeType))
+        classNameView = TextFormView(text: Model.name, font: Font.bold(with: sizeType))
+        countNameView = TextFormView(text: Text(english: "Count:", japanese: "個数:"),
+                                     font: Font.default(with: sizeType))
         countView = IntGetterView(binder: binder, keyPath: keyPath.appending(path: \Model.count),
                                   option: IntGetterOption(unit: ""), sizeType: sizeType)
         

@@ -123,16 +123,22 @@ extension Scene: Referenceable {
 }
 
 final class SceneBinder: BinderProtocol {
+    var rootModel: Scene
+    
+    init(rootModel: Scene) {
+        self.rootModel = rootModel
+    }
+    
     var scene: Scene
     var version: Version
     init(_ scene: Scene = Scene(), version: Version = Version()) {
         self.scene = scene
         self.version = version
         
-//        diffSceneDataModel = DataModel(key: diffSceneDataModelKey)
-//        dataModel = DataModel(key: dataModelKey,
-//                              directoryWith: [diffSceneDataModel, scene.cutTrack.diffDataModel])
-//        diffSceneDataModel.dataClosure = { [unowned self] in self.scene.diffData }
+        diffSceneDataModel = DataModel(key: diffSceneDataModelKey)
+        dataModel = DataModel(key: dataModelKey,
+                              directoryWith: [diffSceneDataModel, scene.cutTrack.diffDataModel])
+        diffSceneDataModel.dataClosure = { [unowned self] in self.scene.diffData }
     }
     
     let dataModelKey = "scene"
@@ -144,13 +150,13 @@ final class SceneBinder: BinderProtocol {
                 dataModel.insert(diffSceneDataModel)
             }
 
-//            if let dCutTrackDataModel = dataModel.children[scene.cutTrack.diffDataModelKey] {
-//                scene.cutTrack.diffDataModel = dCutTrackDataModel
-//            } else {
-//                dataModel.insert(scene.cutTrack.diffDataModel)
-//            }
+            if let dCutTrackDataModel = dataModel.children[scene.cutTrack.diffDataModelKey] {
+                scene.cutTrack.diffDataModel = dCutTrackDataModel
+            } else {
+                dataModel.insert(scene.cutTrack.diffDataModel)
+            }
 
-////            updateWithScene()
+            updateWithScene()
         }
     }
     let diffSceneDataModelKey = "diffScene"
@@ -203,7 +209,7 @@ final class SceneView: View {
         }
     }
     
-    let versionView = VersionView()
+    let versionView: VersionView<Binder>
     
     let sizeView = DiscreteSizeView(sizeType: .small)
     
@@ -212,13 +218,13 @@ final class SceneView: View {
                           frame: Layout.valueFrame(with: .small), sizeType: .small)
     let isHiddenSubtitlesView = BoolView(cationBool: true,
                                          name: Text(english: "Subtitles", japanese: "字幕"),
-                                         boolInfo: BoolInfo.hidden, sizeType: .small)
+                                         boolInfo: BoolOption.Info.hidden, sizeType: .small)
     let isHiddenPreviousView = BoolView(defaultBool: true, cationBool: false,
                                         name: Text(english: "Previous", japanese: "前"),
-                                        boolInfo: BoolInfo.hidden)
+                                        boolInfo: BoolOption.Info.hidden)
     let isHiddenNextView = BoolView(defaultBool: true, cationBool: false,
                                     name: Text(english: "Next", japanese: "次"),
-                                    boolInfo: BoolInfo.hidden)
+                                    boolInfo: BoolOption.Info.hidden)
     let timelineView = TimelineView()
     let canvasView = CanvasView()
     let playManagerView = PlayManagerView()
@@ -230,7 +236,7 @@ final class SceneView: View {
     
     static let versionWidth = 120.0.cg, propertyWidth = 200.0.cg
     static let canvasSize = Size(width: 730, height: 480), timelineHeight = 190.0.cg
-    let classNameView = TextView(text: Scene.name, font: .bold)
+    let classNameView = TextFormView(text: Scene.name, font: .bold)
     var rendingContentScale = 1.0.cg
     var renderQueue = OperationQueue()
     var bars = [ProgressNumberView]()
@@ -240,6 +246,7 @@ final class SceneView: View {
         self.sceneBinder = sceneBinder
         self.keyPath = keyPath
         
+        versionView
         versionView.version = sceneBinder.version
         
         super.init()
@@ -279,9 +286,9 @@ final class SceneView: View {
 //            self.playManagerView.maxTime = self.scene.secondTime(withBeatTime: $1)
 //        }
         
-        exportSubtitlesView.closure = { [unowned self] in self.exportSubtitles() }
-        exportImageView.closure = { [unowned self] in self.exportImage() }
-        exportMovieView.closure = { [unowned self] in self.exportMovie() }
+        exportSubtitlesView.model = { [unowned self] in self.exportSubtitles() }
+        exportImageView.model = { [unowned self] in self.exportImage() }
+        exportMovieView.model = { [unowned self] in self.exportMovie() }
         
         updateWithScene()
         updateLayout()
@@ -346,8 +353,8 @@ final class SceneView: View {
         let sph = sh + Layout.smallPadding * 2
         py -= sph
         sizeView.frame = Rect(x: px, y: py, width: sizeView.defaultBounds.width, height: sph)
-        frameRateView.frame = Rect(x: sizeView.frame.maxX, y: py,
-                                   width: Layout.valueWidth(with: .small), height: sph)
+//        frameRateView.frame = Rect(x: sizeView.frame.maxX, y: py,
+//                                   width: Layout.valueWidth(with: .small), height: sph)
         renderingVerticalResolutionView.frame
             = Rect(x: frameRateView.frame.maxX, y: py,
                                                      width: bounds.width - frameRateView.frame.maxX - padding,
@@ -363,7 +370,7 @@ final class SceneView: View {
     }
     
     func exportMovie() {
-        let size = scene.frame.size, p = scene.renderingVerticalResolution
+        let size = scene.canvas.frame.size, p = scene.renderingVerticalResolution
         let newSize = Size(width: floor((size.width * Real(p)) / size.height), height: Real(p))
         let sizeString = "w: \(Int(newSize.width)) px, h: \(Int(newSize.height)) px"
         let message = Text(english: "Export Movie(\(sizeString))",
@@ -409,7 +416,7 @@ final class SceneView: View {
                     } catch {
                         OperationQueue.main.addOperation() {
                             progressView.state = Text(english: "Error", japanese: "エラー")
-                            progressView.nameView.textFrame.color = .warning
+                            progressView.nameView.textMaterial.color = .warning
                         }
                     }
                 }
@@ -420,7 +427,7 @@ final class SceneView: View {
                 } catch {
                     OperationQueue.main.addOperation() {
                         progressView.state = Text(english: "Error", japanese: "エラー")
-                        progressView.nameView.textFrame.color = .warning
+                        progressView.nameView.textMaterial.color = .warning
                     }
                 }
             }
@@ -429,7 +436,7 @@ final class SceneView: View {
     }
     
     func exportImage() {
-        let size = scene.frame.size, p = scene.renderingVerticalResolution
+        let size = scene.canvas.frame.size, p = scene.renderingVerticalResolution
         let newSize = Size(width: floor((size.width * Real(p)) / size.height), height: Real(p))
         let sizeString = "w: \(Int(newSize.width)) px, h: \(Int(newSize.height)) px"
         let message = Text(english: "Export Image(\(sizeString))",
@@ -494,7 +501,7 @@ final class SceneView: View {
         let progressNumberView = ProgressNumberView()
         progressNumberView.name = name
         progressNumberView.state = Text(english: "Error", japanese: "エラー")
-        progressNumberView.nameView.textFrame.color = .warning
+        progressNumberView.nameView.textMaterial.color = .warning
         progressNumberView.deleteClosure = { [unowned self] in self.endProgress($0) }
         beginProgress(progressNumberView)
     }
@@ -508,125 +515,125 @@ extension SceneView: Queryable {
     static let referenceableType: Referenceable.Type = Scene.self
 }
 extension SceneView: Versionable {
-    var binder: BinderProtocol {
-        return sceneBinder
+    var version: Version {
+        return versionView.version
     }
 }
 
-//final class ProgressNumberView: View {
-//    let barView = View(isLocked: true)
-//    let barBackgroundView = View(isLocked: true)
-//    let nameView: TextView
-//    let stopView = ClosureView(name: Text(english: "Stop", japanese: "中止"))
-//
-//    init(frame: Rect = Rect(), backgroundColor: Color = .background,
-//         name: Text = "", type: Text = "", state: Text? = nil) {
-//
-//        self.name = name
-//        self.type = type
-//        self.state = state
-//        nameView = TextView()
-//        nameView.frame.origin = Point(x: Layout.basicPadding,
-//                                      y: round((frame.height - nameView.frame.height) / 2))
-//        barView.frame = Rect(x: 0, y: 0, width: 0, height: frame.height)
-//        barBackgroundView.fillColor = .editing
-//        barView.fillColor = .content
-//
-//        super.init()
-//        stopView.model = { [unowned self] in self.stop() }
-//        self.frame = frame
-//        isClipped = true
-//        children = [nameView, barBackgroundView, barView, stopView]
-//        updateLayout()
-//    }
-//
-//    var value = 0.0.cg {
-//        didSet {
-//            updateLayout()
-//        }
-//    }
-//    func begin() {
-//        startDate = Date()
-//    }
-//    func end() {}
-//    var startDate: Date?
-//    var remainingTime: Real? {
-//        didSet {
-//            updateText()
-//        }
-//    }
-//    var computationTime = 5.0
-//    var name = Text() {
-//        didSet {
-//            updateText()
-//        }
-//    }
-//    var type = Text() {
-//        didSet {
-//            updateText()
-//        }
-//    }
-//    var state: Text? {
-//        didSet {
-//            updateText()
-//        }
-//    }
-//
-//    override func updateLayout() {
-//        let padding = Layout.basicPadding
-//        let db = stopView.defaultBounds
-//        let w = bounds.width - db.width - padding
-//        stopView.frame = Rect(x: w, y: padding,
-//                              width: db.width, height: bounds.height - padding * 2)
-//
-//        barBackgroundView.frame = Rect(x: padding, y: padding - 1,
-//                                       width: (w - padding * 2), height: 1)
-//        barView.frame = Rect(x: padding, y: padding - 1,
-//                             width: floor((w - padding * 2) * value), height: 1)
-//        updateText()
-//    }
-//    private func updateText() {
-//        var text = Text()
-//        if let state = state {
-//            text += state
-//        } else if let remainingTime = remainingTime {
-//            let minutes = Int(ceil(remainingTime)) / 60
-//            let seconds = Int(ceil(remainingTime)) - minutes * 60
-//            let ss = String(seconds)
-//            if minutes == 0 {
-//                let timeText = Text(english: String(format: "%@sec left", ss),
-//                                    japanese: String(format: "あと%@秒", ss))
-//                text += (text.isEmpty ? "" : " ") + timeText
-//            } else {
-//                let ms = String(minutes)
-//                let timeText = Text(english: String(format: "%@min %@sec left", ms, ss),
-//                                    japanese: String(format: "あと%@分%@秒", ms, ss))
-//                text += (text.isEmpty ? "" : " ") + timeText
-//            }
-//        }
-//        let t = text + (text.isEmpty ? "" : ", ") + Text("\(Int(value * 100)) %")
-//        nameView.text = type + "(" + name + "), " + t
-//        nameView.frame.origin = Point(x: Layout.basicPadding,
-//                                      y: round((frame.height - nameView.frame.height) / 2))
-//    }
-//
-//    var deleteClosure: ((ProgressNumberView) -> ())?
-//    weak var operation: Operation?
-//    func stop() {
-//        if let operation = operation {
-//            operation.cancel()
-//        }
-//        deleteClosure?(self)
-//    }
-//}
-//extension ProgressNumberView: Localizable {
-//    func update(with locale: Locale) {
-//        updateLayout()
-//    }
-//}
-//extension ProgressNumberView: ViewQueryable {
-//    static let referenceableType: Referenceable.Type = Real.self
-//    static let viewDescription = Text(english: "Stop: Send \"Cut\" action",
-//                                      japanese: "停止: \"カット\"アクションを送信")
-//}
+final class ProgressNumberView: View {
+    let barView = View(isLocked: true)
+    let barBackgroundView = View(isLocked: true)
+    let nameView: TextFormView
+    let stopView = ClosureView(name: Text(english: "Stop", japanese: "中止"))
+
+    init(frame: Rect = Rect(), backgroundColor: Color = .background,
+         name: Text = "", type: Text = "", state: Text? = nil) {
+
+        self.name = name
+        self.type = type
+        self.state = state
+        nameView = TextFormView()
+        nameView.frame.origin = Point(x: Layout.basicPadding,
+                                      y: round((frame.height - nameView.frame.height) / 2))
+        barView.frame = Rect(x: 0, y: 0, width: 0, height: frame.height)
+        barBackgroundView.fillColor = .editing
+        barView.fillColor = .content
+
+        super.init()
+        stopView.model = { [unowned self] in self.stop() }
+        self.frame = frame
+        isClipped = true
+        children = [nameView, barBackgroundView, barView, stopView]
+        updateLayout()
+    }
+
+    var value = 0.0.cg {
+        didSet {
+            updateLayout()
+        }
+    }
+    func begin() {
+        startDate = Date()
+    }
+    func end() {}
+    var startDate: Date?
+    var remainingTime: Real? {
+        didSet {
+            updateText()
+        }
+    }
+    var computationTime = 5.0
+    var name = Text() {
+        didSet {
+            updateText()
+        }
+    }
+    var type = Text() {
+        didSet {
+            updateText()
+        }
+    }
+    var state: Text? {
+        didSet {
+            updateText()
+        }
+    }
+
+    override func updateLayout() {
+        let padding = Layout.basicPadding
+        let db = stopView.defaultBounds
+        let w = bounds.width - db.width - padding
+        stopView.frame = Rect(x: w, y: padding,
+                              width: db.width, height: bounds.height - padding * 2)
+
+        barBackgroundView.frame = Rect(x: padding, y: padding - 1,
+                                       width: (w - padding * 2), height: 1)
+        barView.frame = Rect(x: padding, y: padding - 1,
+                             width: floor((w - padding * 2) * value), height: 1)
+        updateText()
+    }
+    private func updateText() {
+        var text = Text()
+        if let state = state {
+            text += state
+        } else if let remainingTime = remainingTime {
+            let minutes = Int(ceil(remainingTime)) / 60
+            let seconds = Int(ceil(remainingTime)) - minutes * 60
+            let ss = String(seconds)
+            if minutes == 0 {
+                let timeText = Text(english: String(format: "%@sec left", ss),
+                                    japanese: String(format: "あと%@秒", ss))
+                text += (text.isEmpty ? "" : " ") + timeText
+            } else {
+                let ms = String(minutes)
+                let timeText = Text(english: String(format: "%@min %@sec left", ms, ss),
+                                    japanese: String(format: "あと%@分%@秒", ms, ss))
+                text += (text.isEmpty ? "" : " ") + timeText
+            }
+        }
+        let t = text + (text.isEmpty ? "" : ", ") + Text("\(Int(value * 100)) %")
+        nameView.text = type + "(" + name + "), " + t
+        nameView.frame.origin = Point(x: Layout.basicPadding,
+                                      y: round((frame.height - nameView.frame.height) / 2))
+    }
+
+    var deleteClosure: ((ProgressNumberView) -> ())?
+    weak var operation: Operation?
+    func stop() {
+        if let operation = operation {
+            operation.cancel()
+        }
+        deleteClosure?(self)
+    }
+}
+extension ProgressNumberView: Localizable {
+    func update(with locale: Locale) {
+        updateLayout()
+    }
+}
+extension ProgressNumberView: ViewQueryable {
+    static let referenceableType: Referenceable.Type = Real.self
+    static let viewDescription = Text(english: "Stop: Send \"Cut\" action",
+                                      japanese: "停止: \"カット\"アクションを送信")
+}
 

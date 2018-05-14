@@ -155,6 +155,11 @@ extension Rational: Referenceable {
     static let name = Text(english: "Rational Number (\(MemoryLayout<Rational>.size * 8)bit)",
                            japanese: "有理数 (\(MemoryLayout<Rational>.size * 8)bit)")
 }
+extension Rational: ObjectProtocol {
+    var object: Object {
+        return .rational(self)
+    }
+}
 extension Rational: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return description.thumbnailView(withFrame: frame, sizeType)

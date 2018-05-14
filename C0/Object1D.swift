@@ -96,19 +96,19 @@ extension Assignable1DView: ViewQueryable {
     }
 }
 extension Assignable1DView: Assignable {
-    func delete(for p: Point) {
-        push(option.defaultModel)
+    func delete(for p: Point, _ version: Version) {
+        push(option.defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Viewable] {
         return [model]
     }
-    func paste(_ objects: [Object], for p: Point) {
+    func paste(_ objects: [Object], for p: Point, _ version: Version) {
         for object in objects {
             if let model = object as? Model {
-                push(option.clippedModel(model))
+                push(option.clippedModel(model), to: version)
                 return
             } else if let string = object as? String, let model = option.model(with: string) {
-                push(option.clippedModel(model))
+                push(option.clippedModel(model), to: version)
                 return
             }
         }
@@ -227,41 +227,37 @@ extension Discrete1DView: ViewQueryable {
     }
 }
 extension Discrete1DView: Assignable {
-    func delete(for p: Point) {
-        push(option.defaultModel)
+    func delete(for p: Point, _ version: Version) {
+        push(option.defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Viewable] {
         return [model]
     }
-    func paste(_ objects: [Object], for p: Point) {
+    func paste(_ objects: [Object], for p: Point, _ version: Version) {
         for object in objects {
             if let model = object as? Model {
-                push(option.clippedModel(model))
+                push(option.clippedModel(model), to: version)
                 return
             } else if let string = object as? String, let model = option.model(with: string) {
-                push(option.clippedModel(model))
+                push(option.clippedModel(model), to: version)
                 return
             }
         }
     }
 }
 extension Discrete1DView: PointMovable {
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
+    func captureWillMovePoint(at p: Point, to version: Version) {
+        capture(model, to: version)
+        self.pointMovableOldModel = model
+    }
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        guard let oldModel = pointMovableOldModel else { return }
         switch phase {
-        case .began:
-            self.pointMovableOldModel = model
-            capture(model)
-            knobView.fillColor = .editing
-            guard let oldModel = pointMovableOldModel else { return }
-            model = option.clippedModel(model(at: p, first: fp, old: oldModel))
-        case .changed:
-            guard let oldModel = pointMovableOldModel else { return }
-            model = option.clippedModel(model(at: p, first: fp, old: oldModel))
-        case .ended:
-            guard let oldModel = pointMovableOldModel else { return }
-            model = option.clippedModel(model(at: p, first: fp, old: oldModel))
-            knobView.fillColor = .knob
+        case .began: knobView.fillColor = .editing
+        case .changed: break
+        case .ended: knobView.fillColor = .knob
         }
+        model = option.clippedModel(model(at: p, first: fp, old: oldModel))
     }
 }
 
@@ -356,20 +352,24 @@ extension Slidable1DView: ViewQueryable {
     }
 }
 extension Slidable1DView: Assignable {
-    func delete(for p: Point) {
-        push(option.defaultModel)
+    func delete(for p: Point, _ version: Version) {
+        push(option.defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Viewable] {
         return [model]
     }
-    func paste(_ objects: [Object], for p: Point) {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         for object in objects {
-            if let model = object as? Model {
-                push(model)
+            switch object {
+            case let model as Model:
+                push(model, to: version)
                 return
-            } else if let string = object as? String, let model = option.model(with: string) {
-                push(model)
-                return
+            case let string as String:
+                if let model = option.model(with: string) {
+                    push(model, to: version)
+                    return
+                }
+            default: break
             }
         }
     }
@@ -380,18 +380,16 @@ extension Slidable1DView: Runnable {
     }
 }
 extension Slidable1DView: PointMovable {
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
+    func captureWillMovePoint(at p: Point, to version: Version) {
+        capture(model, to: version)
+    }
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
-        case .began:
-            capture(model)
-            knobView.fillColor = .editing
-            model = option.clippedModel(model(at: p))
-        case .changed:
-            model = option.clippedModel(model(at: p))
-        case .ended:
-            model = option.clippedModel(model(at: p))
-            knobView.fillColor = .knob
+        case .began: knobView.fillColor = .editing
+        case .changed: break
+        case .ended: knobView.fillColor = .knob
         }
+        model = option.clippedModel(model(at: p))
     }
 }
 
@@ -512,11 +510,10 @@ extension Circular1DView: Runnable {
     }
 }
 extension Circular1DView: PointMovable {
-    func capturePoint(for p: Point, to version: Version) {
+    func captureWillMovePoint(at p: Point, to version: Version) {
         capture(model, to: version)
     }
-    func movePoint(for p: Point, first fp: Point, pressure: Real,
-                   time: Second, _ phase: Phase, _ version: Version) {
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
         case .began: knobView.fillColor = .editing
         case .changed: break

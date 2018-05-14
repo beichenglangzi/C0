@@ -129,12 +129,7 @@ final class TextFormView: View {
     var padding: Real {
         didSet { updateLayout() }
     }
-    var textFrame: TextFrame {
-        didSet {
-            if isSizeToFit { sizeToFit() }
-            draw()
-        }
-    }
+    private var textFrame: TextFrame
     
     init(text: Text = "",
          font: Font = .default, color: Color = .locked,
@@ -154,16 +149,19 @@ final class TextFormView: View {
         
         self.frame = frame
         if isSizeToFit { sizeToFit() }
+        draw()
     }
     
     override var defaultBounds: Rect {
         return textFrame.bounds(padding: padding)
     }
     override func updateLayout() {
-        textFrame.frameWidth = frameWidth
+        updateWithModel()
     }
     func updateWithModel() {
         textFrame = TextFrame(text: text, textMaterial: textMaterial, frameWidth: frameWidth)
+        if isSizeToFit { sizeToFit() }
+        draw()
     }
     func sizeToFit() {
         frame = textMaterial.fitFrameWith(defaultBounds: defaultBounds, frame: frame)

@@ -319,7 +319,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
     let preferenceDataModelKey = "preference"
     var preferenceDataModel: DataModel {
         didSet {
-            if let preference = preferenceDataModel.readObject(type: C0Preference.self) {
+            if let preference = preferenceDataModel.readObject(C0Preference.self) {
                 self.preference = preference
             }
             preferenceDataModel.didChangeIsWriteClosure = { [unowned self] (_, isWrite) in
@@ -654,15 +654,15 @@ final class C0View: NSView, NSTextInputClient {
         return convertFromLayer(window.convertToScreen(convert(r, to: nil)))
     }
     
-    func draggerEventWith(pointing nsEvent: NSEvent, _ phase: Phase, _ version: Version) -> Dragger.Event {
+    func draggerEventWith(pointing nsEvent: NSEvent, _ phase: Phase) -> Dragger.Event {
         return Dragger.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
                              pressure: 1, phase: phase)
     }
-    func draggerEventWith(_ nsEvent: NSEvent, _ phase: Phase, _ version: Version) -> Dragger.Event {
+    func draggerEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Dragger.Event {
         return Dragger.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
                              pressure: Real(nsEvent.pressure), phase: phase)
     }
-    func scrollerEventWith(_ nsEvent: NSEvent, _ phase: Phase, _ version: Version) -> Scroller.Event {
+    func scrollerEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Scroller.Event {
         var scrollMomentumPhase: Phase? {
             if nsEvent.momentumPhase.contains(.began) {
                 return .began
@@ -681,15 +681,15 @@ final class C0View: NSView, NSTextInputClient {
                               phase: phase,
                               momentumPhase: scrollMomentumPhase)
     }
-    func pincherEventWith(_ nsEvent: NSEvent, _ phase: Phase, _ version: Version) -> Pincher.Event {
+    func pincherEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Pincher.Event {
         return Pincher.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
                              magnification: nsEvent.magnification, phase: phase)
     }
-    func rotaterEventWith(_ nsEvent: NSEvent, _ phase: Phase, _ version: Version) -> Rotater.Event {
+    func rotaterEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Rotater.Event {
         return Rotater.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
                              rotationQuantity: Real(nsEvent.rotation), phase: phase)
     }
-    func inputterEventWith(_ nsEvent: NSEvent, _ phase: Phase, _ version: Version) -> Inputter.Event {
+    func inputterEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Inputter.Event {
         return Inputter.Event(rootLocation: cursorPoint, time: nsEvent.timestamp.cg,
                               pressure: 1, phase: phase)
     }
@@ -779,7 +779,7 @@ final class C0View: NSView, NSTextInputClient {
                 sender.send(beginDragger)
                 sender.send(endDragger)
             } else {
-                func clickInputterWith(_ dragger: Dragger, _ phase: Phase, _ version: Version) -> Inputter {
+                func clickInputterWith(_ dragger: Dragger, _ phase: Phase) -> Inputter {
                     return Inputter(type: .click,
                                     event: Inputter.Event(rootLocation: dragger.event.rootLocation,
                                                           time: dragger.event.time,

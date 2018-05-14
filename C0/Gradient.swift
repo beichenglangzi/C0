@@ -27,4 +27,25 @@ struct Gradient {
     
     var values = [Value]()
     var startPoint = Point(), endPoint = Point(x: 1, y: 0)
+    
+    var colors: [Color] {
+        get {
+            return values.map { $0.color }
+        }
+        set {
+            newValue.enumerated().forEach { (i, color) in
+                values[i].color = color
+            }
+        }
+    }
+    var locations: [Real] {
+        get {
+            return values.map { $0.location }
+        }
+        set {
+            newValue.enumerated().forEach { (i, location) in
+                values[i].location = location
+            }
+        }
+    }
 }

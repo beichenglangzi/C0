@@ -24,8 +24,8 @@ struct Ratio2D {
 }
 
 protocol Object2D: ObjectProtocol & Referenceable {
-    associatedtype XModel: MiniViewable
-    associatedtype YModel: MiniViewable
+    associatedtype XModel: ObjectProtocol & Referenceable
+    associatedtype YModel: ObjectProtocol & Referenceable
     init(xModel: XModel, yModel: YModel)
     var xModel: XModel { get set }
     var yModel: YModel { get set }
@@ -191,42 +191,37 @@ extension Discrete2DView: Queryable {
     }
 }
 extension Discrete2DView: Assignable {
-    func delete(for p: Point) {
-        push(option.defaultModel)
+    func delete(for p: Point, _ version: Version) {
+        push(option.defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Viewable] {
         return [model]
     }
-    func paste(_ objects: [Object], for p: Point) {
+    func paste(_ objects: [Object], for p: Point, _ version: Version) {
         for object in objects {
             if let model = object as? Model {
-                push(option.clippedModel(model))
+                push(option.clippedModel(model), to: version)
                 return
             } else if let string = object as? String, let model = option.model(with: string) {
-                push(option.clippedModel(model))
+                push(option.clippedModel(model), to: version)
                 return
             }
         }
     }
 }
 extension Discrete2DView: PointMovable {
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
+    func captureWillMovePoint(at p: Point, to version: Version) {
+        capture(model, to: version)
+        self.pointMovableOldModel = model
+    }
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        guard let oldModel = pointMovableOldModel else { return }
         switch phase {
-        case .began:
-            isMovable = boundsView.contains(p)
-            pointMovableOldModel = model
-            capture(model)
-            knobView.fillColor = .editing
-            guard isMovable, let oldModel = pointMovableOldModel else { return }
-            model = option.clippedModel(model(at: p, first: fp, old: oldModel))
-        case .changed:
-            guard isMovable, let oldModel = pointMovableOldModel else { return }
-            model = option.clippedModel(model(at: p, first: fp, old: oldModel))
-        case .ended:
-            guard isMovable, let oldModel = pointMovableOldModel else { return }
-            model = option.clippedModel(model(at: p, first: fp, old: oldModel))
-            knobView.fillColor = .knob
+        case .began: knobView.fillColor = .editing
+        case .changed: break
+        case .ended: knobView.fillColor = .knob
         }
+        model = option.clippedModel(model(at: p, first: fp, old: oldModel))
     }
 }
 
@@ -255,7 +250,13 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>: View, Slidable
     }
     let knobView = View.knob()
     
-    init(frame: Rect = Rect()) {
+    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
+         frame: Rect = Rect()) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        self.option = option
+        
         super.init()
         self.frame = frame
         append(child: knobView)
@@ -311,18 +312,15 @@ extension Slidable2DView: Runnable {
     }
 }
 extension Slidable2DView: PointMovable {
-    func movePoint(for p: Point, first fp: Point, pressure: Real,
-                   time: Second, _ phase: Phase, _ version: Version) {
+    func captureWillMovePoint(at p: Point, to version: Version) {
+        capture(model, to: version)
+    }
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
-        case .began:
-            capture(model, to: version)
-            knobView.fillColor = .editing
-            model = option.clippedModel(model(at: p))
-        case .changed:
-            model = option.clippedModel(model(at: p))
-        case .ended:
-            model = option.clippedModel(model(at: p))
-            knobView.fillColor = .knob
+        case .began: knobView.fillColor = .editing
+        case .changed: break
+        case .ended: knobView.fillColor = .knob
         }
+        model = option.clippedModel(model(at: p))
     }
 }

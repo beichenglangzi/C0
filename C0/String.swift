@@ -93,12 +93,7 @@ final class TextGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
     var padding: Real {
         didSet { updateLayout() }
     }
-    var textFrame: TextFrame {
-        didSet {
-            if isSizeToFit { sizeToFit() }
-            draw()
-        }
-    }
+    private var textFrame: TextFrame
     
     init(binder: Binder, keyPath: BinderKeyPath, textMaterial: TextMaterial = TextMaterial(),
          frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
@@ -124,10 +119,12 @@ final class TextGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
         return textFrame.bounds(padding: padding)
     }
     override func updateLayout() {
-        textFrame.frameWidth = frameWidth
+        updateWithModel()
     }
     func updateWithModel() {
         textFrame = TextFrame(text: model, textMaterial: textMaterial, frameWidth: frameWidth)
+        if isSizeToFit { sizeToFit() }
+        draw()
     }
     func sizeToFit() {
         frame = textMaterial.fitFrameWith(defaultBounds: defaultBounds, frame: frame)
@@ -190,12 +187,7 @@ final class TextView<T: BinderProtocol>: View, BindableReceiver {
     var padding: Real {
         didSet { updateLayout() }
     }
-    var textFrame: TextFrame {
-        didSet {
-            if isSizeToFit { sizeToFit() }
-            draw()
-        }
-    }
+    private var textFrame: TextFrame
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
          frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
@@ -218,20 +210,22 @@ final class TextView<T: BinderProtocol>: View, BindableReceiver {
         if isSizeToFit { sizeToFit() }
     }
     
-    func sizeToFit() {
-        frame = textMaterial.fitFrameWith(defaultBounds: defaultBounds, frame: frame)
-    }
-    
     override var defaultBounds: Rect {
         return textFrame.bounds(padding: padding)
     }
     override func updateLayout() {
-        textFrame.frameWidth = frameWidth
+        updateWithModel()
     }
     func updateWithModel() {
         textFrame = TextFrame(text: model, textMaterial: textMaterial, frameWidth: frameWidth)
+        if isSizeToFit { sizeToFit() }
+        draw()
+        
         //        unmarkText()
         TextInputContext.invalidateCharacterCoordinates()
+    }
+    func sizeToFit() {
+        frame = textMaterial.fitFrameWith(defaultBounds: defaultBounds, frame: frame)
     }
     
     var frameWidth: Real? {
@@ -279,10 +273,10 @@ extension TextView: Assignable {
     func paste(_ objects: [Object], for p: Point, _ version: Version) {
         for object in objects {
             if let model = object as? Text {
-                self.model = model//undo
+                push(model, to: version)
                 return
             } else if let string = object as? String {
-                self.model = Text(string)//undo
+                push(Text(string), to: version)
                 return
             }
         }

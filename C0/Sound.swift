@@ -156,9 +156,9 @@ extension Sound: Interpolatable {
     }
 }
 extension Sound: KeyframeValue {}
-extension Sound: MiniViewable {
+extension Sound: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return name.view(withBounds: bounds, sizeType)
+        return name.thumbnailView(withFrame: frame, sizeType)
     }
 }
 
@@ -184,23 +184,17 @@ final class SoundWaveformView: View {
         case normal, dBFS
     }
     var waveformType = WaveformType.dBFS {
-        didSet {
-            updateWaveform()
-        }
+        didSet { updateWaveform() }
     }
     
     var tempoTrack = TempoTrack()//delete
     
     static let defautBaseWidth = 6.0.cg
     var baseWidth = defautBaseWidth {
-        didSet {
-            updateWaveform()
-        }
+        didSet { updateWaveform() }
     }
     var baseTimeInterval = Beat(1, 24) {
-        didSet {
-            updateWaveform()
-        }
+        didSet { updateWaveform() }
     }
     
     func x(withDoubleBeatTime realBeatTime: RealBeat) -> Real {
