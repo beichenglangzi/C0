@@ -17,6 +17,8 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import struct Foundation.Locale
+
 protocol Referenceable {
     static var uninheritanceName: Text { get }
     static var name: Text { get }
@@ -70,11 +72,11 @@ final class ReferenceView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     let classNameView: TextFormView
-    let nameView: TextGetterView<Binder>
+    let nameView: StringGetterView<Binder>
     let classClassDescriptionView: TextFormView
-    let classDescriptionView: TextGetterView<Binder>
+    let classDescriptionView: StringGetterView<Binder>
     let classViewDescriptionView: TextFormView
-    let viewDescriptionView: TextGetterView<Binder>
+    let viewDescriptionView: StringGetterView<Binder>
     
     init(binder: Binder, keyPath: BinderKeyPath,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
@@ -84,18 +86,18 @@ final class ReferenceView<T: BinderProtocol>: View, BindableReceiver {
         
         classNameView = TextFormView(text: Reference.name, font: .bold)
         
-        let ntKeyPath = keyPath.appending(path: \Reference.name)
-        nameView = TextGetterView(binder: binder, keyPath: ntKeyPath)
+        let ntKeyPath = keyPath.appending(path: \Reference.name.currentString)
+        nameView = StringGetterView(binder: binder, keyPath: ntKeyPath)
         
         let cdt = Reference.displayText(with: \Reference.classDescription)
         classClassDescriptionView = TextFormView(text: cdt, font: .small)
-        let cdtKeyPath = keyPath.appending(path: \Reference.classDescription)
-        classDescriptionView = TextGetterView(binder: binder, keyPath: cdtKeyPath)
+        let cdtKeyPath = keyPath.appending(path: \Reference.classDescription.currentString)
+        classDescriptionView = StringGetterView(binder: binder, keyPath: cdtKeyPath)
         
         let vdt = Reference.displayText(with: \Reference.viewDescription)
         classViewDescriptionView = TextFormView(text: vdt, font: .small)
-        let vdtKeyPath = keyPath.appending(path: \Reference.viewDescription)
-        viewDescriptionView = TextGetterView(binder: binder, keyPath: vdtKeyPath)
+        let vdtKeyPath = keyPath.appending(path: \Reference.viewDescription.currentString)
+        viewDescriptionView = StringGetterView(binder: binder, keyPath: vdtKeyPath)
         
         super.init()
         isClipped = true
@@ -110,9 +112,9 @@ final class ReferenceView<T: BinderProtocol>: View, BindableReceiver {
         classNameView.frame.origin = Point(x: padding,
                                            y: bounds.height - classNameView.frame.height - padding)
         
-        let frameWidth = bounds.width - padding * 2
-        classDescriptionView.textFrame.frameWidth = frameWidth
-        viewDescriptionView.textFrame.frameWidth = frameWidth
+        let textFrameWidth = bounds.width
+        classDescriptionView.frame.size.width = textFrameWidth
+        viewDescriptionView.frame.size.width = textFrameWidth
         
         updateWithModel()
     }
@@ -133,6 +135,11 @@ final class ReferenceView<T: BinderProtocol>: View, BindableReceiver {
         classViewDescriptionView.frame.origin = Point(x: padding, y: y)
         y -= viewDescriptionView.frame.height
         viewDescriptionView.frame.origin = Point(x: padding, y: y)
+    }
+}
+extension ReferenceView: Localizable {
+    func update(with locale: Locale) {
+        updateWithModel()
     }
 }
 extension ReferenceView: Queryable {

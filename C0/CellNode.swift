@@ -1186,9 +1186,9 @@ struct CellGroup: Codable, TreeNode, Equatable, Namable {
 extension CellGroup: Referenceable {
     static let name = Text(english: "CellGroup", japanese: "ノード")
 }
-extension CellGroup: MiniViewable {
+extension CellGroup: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return name.view(withBounds: bounds, sizeType)
+        return name.view(withFrame: frame, sizeType)
     }
 }
 
@@ -1225,27 +1225,35 @@ extension CellGroupChildrenKeyframeValue: Referenceable {
                            japanese: "セルノード子キーフレーム値")
 }
 
-final class CellGroupView: View {
-    var node = CellGroup() {
-        didSet {
-            isHiddenView.bool = node.isHidden
-        }
+final class CellGroupView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = CellGroup
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
     }
     
-    var sizeType: SizeType
+    var sizeType: SizeType {
+        didSet { updateLayout() }
+    }
     private let classNameView: TextFormView
-    private let isHiddenView: BoolView
-    init(sizeType: SizeType = .regular) {
+    private let isHiddenView: BoolView<Binder>
+    init(binder: T, keyPath: BinderKeyPath, frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        self.binder = binder
+        self.keyPath = keyPath
+        
         self.sizeType = sizeType
-        classNameView = TextView(text: CellGroup.name, font: Font.bold(with: sizeType))
-        isHiddenView = BoolView(cationBool: true,
-                                boolInfo: BoolInfo.hidden,
+        classNameView = TextFormView(text: CellGroup.name, font: Font.bold(with: sizeType))
+        isHiddenView = BoolView(binder: binder, keyPath: keyPath.appending(path: \Model.isHidden),
+                                option: BoolOption(defaultModel: false, cationModel: true,
+                                                   name: "", info: .hidden),
                                 sizeType: sizeType)
         
         super.init()
         children = [classNameView, isHiddenView]
-        
-        isHiddenView.binding = { [unowned self] in self.setIsHidden(with: $0) }
+        self.frame = frame
     }
     
     override func updateLayout() {
@@ -1256,27 +1264,8 @@ final class CellGroupView: View {
                                   width: bounds.width - classNameView.frame.width - padding * 3,
                                   height: Layout.height(with: sizeType))
     }
-    func updateWithNode() {
-        isHiddenView.bool = node.isHidden
-    }
-    
-    struct Binding {
-        let nodeView: CellGroupView, isHidden: Bool, oldIsHidden: Bool
-        let inNode: CellGroup, phase: Phase
-    }
-    var setIsHiddenClosure: ((Binding) -> ())?
-    
-    private var oldNode = CellGroup()
-    
-    private func setIsHidden(with binding: BoolView.Binding) {
-        if binding.phase == .began {
-            oldNode = node
-        } else {
-            node.isHidden = binding.bool
-        }
-        setIsHiddenClosure?(Binding(nodeView: self, isHidden: binding.bool,
-                                    oldIsHidden: binding.oldBool, inNode: oldNode,
-                                    phase: binding.phase))
+    func updateWithModel() {
+        isHiddenView.updateWithModel()
     }
 }
 extension CellGroupView: Localizable {
@@ -1285,10 +1274,12 @@ extension CellGroupView: Localizable {
     }
 }
 extension CellGroupView: Queryable {
-    static let referenceableType: Referenceable.Type = CellGroup.self
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
 }
 extension CellGroupView: Copiable {
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [node]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
 }

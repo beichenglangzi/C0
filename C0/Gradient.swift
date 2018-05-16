@@ -17,8 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
-
 struct Gradient {
     struct Value {
         var color: Color

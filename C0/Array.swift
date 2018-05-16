@@ -19,7 +19,7 @@
 
 import struct Foundation.Locale
 
-typealias AbstractElement = Equatable & AbstractViewable & Referenceable
+typealias AbstractElement = Equatable & AbstractViewable & Codable & Referenceable
 
 struct ArrayIndex<T>: Codable, Hashable {
     var index = 0
@@ -117,10 +117,10 @@ extension MiniViewablesView: Copiable {
     }
 }
 
-final class AbstractViewablesView<T: BinderProtocol, U: AbstractElement>: View, BindableReceiver {
-    typealias Element = U
-    typealias Model = [U]
-    typealias Binder = T
+final class AbstractViewablesView<T: AbstractElement, U: BinderProtocol>: View, BindableReceiver {
+    typealias Element = T
+    typealias Model = [T]
+    typealias Binder = U
     var binder: Binder {
         didSet { updateWithModel() }
     }
@@ -162,14 +162,16 @@ extension AbstractViewablesView: Queryable {
     }
 }
 extension AbstractViewablesView: Copiable {
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [model]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
 }
 
-final class ArrayCountView<T: BinderProtocol, U: AbstractElement>: View, BindableReceiver {
-    typealias Model = [U]
-    typealias Binder = T
+typealias ArrayCountElement = Equatable & Codable & Referenceable
+
+final class ArrayCountView<T: ArrayCountElement, U: BinderProtocol>: View, BindableReceiver {
+    typealias Model = [T]
+    typealias Binder = U
     var binder: Binder {
         didSet { updateWithModel() }
     }
@@ -236,7 +238,7 @@ extension ArrayCountView: Queryable {
     }
 }
 extension ArrayCountView: Copiable {
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [model]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
 }

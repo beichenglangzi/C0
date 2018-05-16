@@ -539,6 +539,32 @@ extension NSPasteboard {
     }
 }
 
+protocol CocoaKeyInputtable {
+    var markedRange: NSRange { get }
+    var selectedRange: NSRange { get }
+    var attributedString: NSAttributedString { get }
+    var hasMarkedText: Bool { get }
+    func editingCharacterIndex(for p: Point) -> Int
+    func characterIndex(for p: Point) -> Int
+    func characterFraction(for p: Point) -> Real
+    func characterOffset(for p: Point) -> Real
+    func baselineDelta(at i: Int) -> Real
+    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> Rect
+    func definition(characterIndex: Int) -> String?
+    func insertNewline()
+    func insertTab()
+    func deleteBackward()
+    func deleteForward()
+    func moveLeft()
+    func moveRight()
+    func deleteCharacters(in range: NSRange)
+    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange)
+    func unmarkText()
+    func attributedSubstring(forProposedRange range: NSRange,
+                             actualRange: NSRangePointer?) -> NSAttributedString?
+    func insertText(_ string: Any, replacementRange: NSRange)
+}
+
 /**
  Issue: トラックパッドの環境設定を無効化
  */
@@ -695,8 +721,8 @@ final class C0View: NSView, NSTextInputClient {
     }
     
     func didSet(_ indicatedView: View?, oldIndicatedView: View?) {
-        if let editTextView = oldIndicatedView as? TextView {
-            editTextView.unmarkText()
+        if let editStringView = oldIndicatedView as? CocoaKeyInputtable {
+            editStringView.unmarkText()
         }
     }
     
@@ -872,64 +898,67 @@ final class C0View: NSView, NSTextInputClient {
             inputContext?.handleEvent(nsEvent)
         }
     }
-    var editTextView: TextView? {
-        return sender.indicatableActionManager.indicatedView as? TextView
+    var indicatedVView: View? {
+        return sender.indicatableActionManager.indicatedView
+    }
+    var editingStringView: CocoaKeyInputtable? {
+        return indicatedVView as? CocoaKeyInputtable
     }
     func hasMarkedText() -> Bool {
-        return editTextView?.hasMarkedText ?? false
+        return editingStringView?.hasMarkedText ?? false
     }
     func markedRange() -> NSRange {
-        return editTextView?.markedRange ?? NSRange(location: NSNotFound, length: 0)
+        return editingStringView?.markedRange ?? NSRange(location: NSNotFound, length: 0)
     }
     func selectedRange() -> NSRange {
-        return editTextView?.selectedRange ?? NSRange(location: NSNotFound, length: 0)
+        return editingStringView?.selectedRange ?? NSRange(location: NSNotFound, length: 0)
     }
     func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
-        editTextView?.setMarkedText(string, selectedRange: selectedRange,
+        editingStringView?.setMarkedText(string, selectedRange: selectedRange,
                                     replacementRange: replacementRange)
     }
     func unmarkText() {
-        editTextView?.unmarkText()
+        editingStringView?.unmarkText()
     }
     func validAttributesForMarkedText() -> [NSAttributedStringKey] {
         return [.markedClauseSegment, .glyphInfo]
     }
     func attributedSubstring(forProposedRange range: NSRange,
                              actualRange: NSRangePointer?) -> NSAttributedString? {
-        return editTextView?.attributedSubstring(forProposedRange: range, actualRange: actualRange)
+        return editingStringView?.attributedSubstring(forProposedRange: range, actualRange: actualRange)
     }
     func insertText(_ string: Any, replacementRange: NSRange) {
-        editTextView?.insertText(string, replacementRange: replacementRange)
+        editingStringView?.insertText(string, replacementRange: replacementRange)
     }
     func characterIndex(for point: NSPoint) -> Int {
-        if let editText = editTextView {
-            let p = editText.convertFromRoot(convertFromTopScreen(point))
-            return editText.editCharacterIndex(for: p)
+        if let indicatedVView = indicatedVView, let stringView = editingStringView {
+            let p = indicatedVView.convertFromRoot(convertFromTopScreen(point))
+            return stringView.editingCharacterIndex(for: p)
         } else {
             return 0
         }
     }
     func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
-        if let editText = editTextView {
-            let rect = editText.firstRect(forCharacterRange: range, actualRange: actualRange)
-            return convertToTopScreen(editText.convertToRoot(rect))
+        if let indicatedVView = indicatedVView, let stringView = editingStringView {
+            let rect = stringView.firstRect(forCharacterRange: range, actualRange: actualRange)
+            return convertToTopScreen(indicatedVView.convertToRoot(rect))
         } else {
             return NSRect()
         }
     }
     func attributedString() -> NSAttributedString {
-        return editTextView?.attributedString ?? NSAttributedString()
+        return editingStringView?.attributedString ?? NSAttributedString()
     }
     func fractionOfDistanceThroughGlyph(for point: NSPoint) -> Real {
-        if let editText = editTextView {
-            let p = editText.convertFromRoot(convertFromTopScreen(point))
-            return editText.characterFraction(for: p)
+        if let indicatedVView = indicatedVView, let stringView = editingStringView {
+            let p = indicatedVView.convertFromRoot(convertFromTopScreen(point))
+            return stringView.characterFraction(for: p)
         } else {
             return 0
         }
     }
     func baselineDeltaForCharacter(at anIndex: Int) -> Real {
-        return editTextView?.baselineDelta(at: anIndex) ?? 0
+        return editingStringView?.baselineDelta(at: anIndex) ?? 0
     }
     func windowLevel() -> Int {
         return window?.level.rawValue ?? 0
@@ -939,22 +968,22 @@ final class C0View: NSView, NSTextInputClient {
     }
     
     override func insertNewline(_ sender: Any?) {
-        editTextView?.insertNewline()
+        editingStringView?.insertNewline()
     }
     override func insertTab(_ sender: Any?) {
-        editTextView?.insertTab()
+        editingStringView?.insertTab()
     }
     override func deleteBackward(_ sender: Any?) {
-        editTextView?.deleteBackward()
+        editingStringView?.deleteBackward()
     }
     override func deleteForward(_ sender: Any?) {
-        editTextView?.deleteForward()
+        editingStringView?.deleteForward()
     }
     override func moveLeft(_ sender: Any?) {
-        editTextView?.moveLeft()
+        editingStringView?.moveLeft()
     }
     override func moveRight(_ sender: Any?) {
-        editTextView?.moveRight()
+        editingStringView?.moveRight()
     }
 }
 
@@ -988,128 +1017,67 @@ extension NSEvent {
     
     var key: Inputter.EventType? {
         switch keyCode {
-        case 0:
-            return .a
-        case 1:
-            return .s
-        case 2:
-            return .d
-        case 3:
-            return .f
-        case 4:
-            return .h
-        case 5:
-            return .g
-        case 6:
-            return .z
-        case 7:
-            return .x
-        case 8:
-            return .c
-        case 9:
-            return .v
-        case 11:
-            return .b
-        case 12:
-            return .q
-        case 13:
-            return .w
-        case 14:
-            return .e
-        case 15:
-            return .r
-        case 16:
-            return .y
-        case 17:
-            return .t
-        case 18:
-            return .no1
-        case 19:
-            return .no2
-        case 20:
-            return .no3
-        case 21:
-            return .no4
-        case 22:
-            return .no6
-        case 23:
-            return .no5
-        case 24:
-            return .equals
-        case 25:
-            return .no9
-        case 26:
-            return .no7
-        case 27:
-            return .minus
-        case 28:
-            return .no8
-        case 29:
-            return .no0
-        case 30:
-            return .rightBracket
-        case 31:
-            return .o
-        case 32:
-            return .u
-        case 33:
-            return .leftBracket
-        case 34:
-            return .i
-        case 35:
-            return .p
-        case 36:
-            return .return
-        case 37:
-            return .l
-        case 38:
-            return .j
-        case 39:
-            return .apostrophe
-        case 40:
-            return .k
-        case 41:
-            return .semicolon
-        case 42:
-            return .frontslash
-        case 43:
-            return .comma
-        case 44:
-            return .backslash
-        case 45:
-            return .n
-        case 46:
-            return .m
-        case 47:
-            return .period
-        case 48:
-            return .tab
-        case 49:
-            return .space
-        case 50:
-            return .backApostrophe
-        case 51:
-            return .delete
-        case 53:
-            return .escape
-        case 55:
-            return .command
-        case 56:
-            return .shift
-        case 58:
-            return .option
-        case 59:
-            return .control
-        case 123:
-            return .left
-        case 124:
-            return .right
-        case 125:
-            return .down
-        case 126:
-            return .up
-        default:
-            return nil
+        case 0: return .a
+        case 1: return .s
+        case 2: return .d
+        case 3: return .f
+        case 4: return .h
+        case 5: return .g
+        case 6: return .z
+        case 7: return .x
+        case 8: return .c
+        case 9: return .v
+        case 11: return .b
+        case 12: return .q
+        case 13: return .w
+        case 14: return .e
+        case 15: return .r
+        case 16: return .y
+        case 17: return .t
+        case 18: return .no1
+        case 19: return .no2
+        case 20: return .no3
+        case 21: return .no4
+        case 22: return .no6
+        case 23: return .no5
+        case 24: return .equals
+        case 25: return .no9
+        case 26: return .no7
+        case 27: return .minus
+        case 28: return .no8
+        case 29: return .no0
+        case 30: return .rightBracket
+        case 31: return .o
+        case 32: return .u
+        case 33: return .leftBracket
+        case 34: return .i
+        case 35: return .p
+        case 36: return .return
+        case 37: return .l
+        case 38: return .j
+        case 39: return .apostrophe
+        case 40: return .k
+        case 41: return .semicolon
+        case 42: return .frontslash
+        case 43: return .comma
+        case 44: return .backslash
+        case 45: return .n
+        case 46: return .m
+        case 47: return .period
+        case 48: return .tab
+        case 49: return .space
+        case 50: return .backApostrophe
+        case 51: return .delete
+        case 53: return .escape
+        case 55: return .command
+        case 56: return .shift
+        case 58: return .option
+        case 59: return .control
+        case 123: return .left
+        case 124: return .right
+        case 125: return .down
+        case 126: return .up
+        default: return nil
         }
     }
 }

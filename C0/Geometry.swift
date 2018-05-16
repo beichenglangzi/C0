@@ -416,7 +416,8 @@ struct Geometry: Equatable {
         }
         return false
     }
-    
+}
+extension Geometry {
     //view
     func clip(in ctx: CGContext, closure: () -> Void) {
         guard !path.isEmpty else { return }

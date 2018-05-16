@@ -30,6 +30,9 @@ extension Int {
             return self - t > scale / 2 ? t + scale : t
         }
     }
+    init(_ x: Rational) {
+        self = x.integralPart
+    }
 }
 extension Int: Interpolatable {
     static func linear(_ f0: Int, _ f1: Int, t: Real) -> Int {
@@ -49,11 +52,6 @@ extension Int: Referenceable {
     static let name = Text(english: "Integer (\(MemoryLayout<Int>.size * 8)bit)",
                            japanese: "整数 (\(MemoryLayout<Int>.size * 8)bit)")
 }
-extension Int: ObjectProtocol {
-    var object: Object {
-        return .int(self)
-    }
-}
 extension Int: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return String(self).thumbnailView(withFrame: frame, sizeType)
@@ -68,7 +66,7 @@ struct IntGetterOption: GetterOption {
     func string(with model: Model) -> String {
         return "\(model)"
     }
-    func text(with model: Model) -> Text {
+    func displayText(with model: Model) -> Text {
         return Text("\(model)\(unit)")
     }
 }
@@ -85,14 +83,20 @@ struct IntOption: Object1DOption {
     var exp = 1.0.cg
     var unit: String
     
-    func model(with string: String) -> Model? {
-        return Int(string)
+    func model(with object: Any) -> Model? {
+        switch object {
+        case let value as Model: return value
+        case let value as Rational: return Model(value)
+        case let value as Real: return Model(value)
+        case let value as String: return Model(value)
+        default: return nil
+        }
     }
     func string(with model: Model) -> String {
-        return "\(model)"
+        return model.description
     }
-    func text(with model: Model) -> Text {
-        return Text("\(model)\(unit)")
+    func displayText(with model: Model) -> Text {
+        return Text(model.description + "\(unit)")
     }
     func ratio(with model: Model) -> Real {
         return Real(model - minModel) / Real(maxModel - minModel)

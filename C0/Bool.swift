@@ -20,9 +20,20 @@
 extension Bool: Referenceable {
     static let name = Text(english: "Bool", japanese: "ブール値")
 }
-extension Bool: ObjectProtocol {
-    var object: Object {
-        return .bool(self)
+extension Bool: AnyInitializable {
+    init?(_ object: Any) {
+        switch object {
+        case let value as Bool: self = value
+        case let value as Int: self = value > 0
+        case let value as Real: self = value > 0
+        case let value as String:
+            if let model = Bool(value) {
+                self = model
+            } else {
+                return nil
+            }
+        default: return nil
+        }
     }
 }
 extension Bool: ThumbnailViewable {
@@ -68,7 +79,7 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
     
     var option: ModelOption {
         didSet {
-            parentTextView.text = option.name
+            parentStringView.text = option.name
             parentTrueNameView.text = option.info.trueName
             parentFalseNameView.text = option.info.falseName
             updateWithModel()
@@ -78,7 +89,7 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
     var sizeType: SizeType {
         didSet { updateLayout() }
     }
-    let parentTextView: TextFormView
+    let parentStringView: TextFormView
     let parentTrueNameView: TextFormView
     let parentFalseNameView: TextFormView
     let knobView: View
@@ -92,27 +103,27 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
         
         self.sizeType = sizeType
         let font = Font.default(with: sizeType)
-        parentTextView = TextFormView(text: option.name.isEmpty ? "" : option.name + ":", font: font)
+        parentStringView = TextFormView(text: option.name.isEmpty ? "" : option.name + ":", font: font)
         parentTrueNameView = TextFormView(text: option.info.trueName, font: font)
         parentFalseNameView = TextFormView(text: option.info.falseName, font: font)
         knobView = View.discreteKnob()
         
         super.init()
-        children = [parentTextView, knobView, parentTrueNameView, parentFalseNameView]
+        children = [parentStringView, knobView, parentTrueNameView, parentFalseNameView]
         self.frame = frame
     }
     
     override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType)
-        let width = parentTextView.frame.width
+        let width = parentStringView.frame.width
             + parentFalseNameView.frame.width + parentTrueNameView.frame.width + padding * 4
         return Rect(x: 0, y: 0,
-                    width: width, height: parentTextView.frame.height + padding * 2)
+                    width: width, height: parentStringView.frame.height + padding * 2)
     }
     override func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        parentTextView.frame.origin = Point(x: padding, y: padding)
-        parentFalseNameView.frame.origin = Point(x: parentTextView.frame.maxX + padding, y: padding)
+        parentStringView.frame.origin = Point(x: padding, y: padding)
+        parentFalseNameView.frame.origin = Point(x: parentStringView.frame.maxX + padding, y: padding)
         parentTrueNameView.frame.origin = Point(x: parentFalseNameView.frame.maxX + padding,
                                                 y: padding)
         updateWithModel()
@@ -149,20 +160,11 @@ extension BoolView: Assignable {
         push(option.defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {
-        return [model.object]
+        return [Object(model)]
     }
-    func paste(_ objects: [Object], for p: Point, _ version: Version) {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         for object in objects {
-            switch object {
-            case .bool(let model):
-                push(model, to: version)
-                return
-            case .int(let int):
-                let model = int > 0
-                push(model, to: version)
-                return
-            case .real(let real):
-                let model = real > 0
+            if let model = Model(object) {
                 push(model, to: version)
                 return
             }
@@ -176,18 +178,15 @@ extension BoolView: Runnable {
     }
 }
 extension BoolView: PointMovable {
-    func movePoint(for p: Point, first fp: Point, pressure: Real,
-                   time: Second, _ phase: Phase, _ version: Version) {
+    func captureWillMovePoint(at p: Point, to version: Version) {
+        capture(model, to: version)
+    }
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
-        case .began:
-            capture(model, to: version)
-            knobView.fillColor = .editing
-            model = self.model(at: p)
-        case .changed:
-            model = self.model(at: p)
-        case .ended:
-            model = self.model(at: p)
-            knobView.fillColor = knobLineColor
+        case .began: knobView.fillColor = .editing
+        case .changed: break
+        case .ended: knobView.fillColor = knobLineColor
         }
+        model = self.model(at: p)
     }
 }

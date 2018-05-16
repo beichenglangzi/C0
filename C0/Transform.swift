@@ -109,6 +109,10 @@ struct Transform: Codable, Initializable {//OrderedAfineTransform transformItems
     }
 }
 extension Transform {
+    static let translationValueOption = RealOption(defaultModel: 0,
+                                                   minModel: -1000000, maxModel: 1000000,
+                                                   modelInterval: 0.01, exp: 1,
+                                                   numberOfDigits: 2, unit: "")
     static let zOption = RealOption(defaultModel: 0, minModel: -20, maxModel: 20,
                                     modelInterval: 0.01, exp: 1,
                                     numberOfDigits: 2, unit: "")
@@ -167,7 +171,7 @@ extension Transform: Referenceable {
     static let name = Text(english: "Transform", japanese: "トランスフォーム")
 }
 extension Transform: KeyframeValue {}
-extension Transform: MiniViewable {
+extension Transform: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return View(isLocked: true)
     }
@@ -183,44 +187,64 @@ extension TransformTrack: Referenceable {
     static let name = Text(english: "Transform Track", japanese: "トランスフォームトラック")
 }
 
-final class TransformView: View {
-    var transform = Transform() {
-        didSet {
-            if transform != oldValue {
-                updateWithTransform()
-            }
-        }
+final class TransformView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = Transform
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
     }
-    
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var defaultModel = Model()
     var standardTranslation = Point(x: 1, y: 1)
     
-    let translationView = DiscretePointView(xInterval: 0.01, xNumberOfDigits: 2,
-                                            yInterval: 0.01, yNumberOfDigits: 2,
-                                            sizeType: .regular)
-    let zView = DiscreteRealView(model: 0, option: Transform.zOption,
-                                 frame: Layout.valueFrame(with: .regular))
-    let thetaView = DiscreteRealView(model: 0, option: Transform.thetaOption,
-                                     frame: Layout.valueFrame(with: .regular))
+    let translationView: DiscretePointView<Binder>
+    let zView: DiscreteRealView<Binder>
+    let rotationView: DiscreteRealView<Binder>
     
-    private let classNameView = TextView(text: Transform.name, font: .bold)
-    private let classZNameView = TextView(text: "z:")
-    private let classRotationNameView = TextView(text: "θ:")
+    var sizeType: SizeType {
+        didSet { updateLayout() }
+    }
+    let classNameView = TextFormView(text: Transform.name, font: .bold)
+    let classZNameView = TextFormView(text: "z:")
+    let classRotationNameView = TextFormView(text: "θ:")
     
-    override init() {
+    init(binder: Binder, keyPath: BinderKeyPath, standardAmplitude: Real = 1.0,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        translationView = DiscretePointView(binder: binder,
+                                            keyPath: keyPath.appending(path: \Model.translation),
+                                            option: PointOption(xOption: Model.translationValueOption,
+                                                                yOption: Model.translationValueOption),
+                                            sizeType: sizeType)
+        
+        zView = DiscreteRealView(binder: binder, keyPath: keyPath.appending(path: \Model.z),
+                                 option: Model.zOption,
+                                 frame: Layout.valueFrame(with: .regular), sizeType: sizeType)
+        
+        rotationView = DiscreteRealView(binder: binder,
+                                        keyPath: keyPath.appending(path: \Model.rotation),
+                                        option: Model.thetaOption,
+                                        frame: Layout.valueFrame(with: .regular), sizeType: sizeType)
+        
+        self.sizeType = sizeType
+        
         super.init()
         children = [classNameView,
                     translationView,
                     classZNameView, zView,
-                    classRotationNameView, thetaView]
+                    classRotationNameView, rotationView]
         
-        translationView.binding = { [unowned self] in self.setTransform(with: $0) }
-        zView.binding = { [unowned self] in self.setTransform(with: $0) }
-        thetaView.binding = { [unowned self] in self.setTransform(with: $0) }
+        self.frame = frame
     }
     
     override var defaultBounds: Rect {
         let padding = Layout.basicPadding
-        let w = MaterialView.defaultWidth + padding * 2
+        let w = Layout.propertyWidth + padding * 2
         let h = Layout.basicHeight * 2 + classNameView.frame.height + padding * 3
         return Rect(x: 0, y: 0, width: w, height: h)
     }
@@ -230,60 +254,16 @@ final class TransformView: View {
         classNameView.frame.origin = Point(x: padding, y: y)
         y -= Layout.basicHeight + Layout.basicPadding
         _ = Layout.leftAlignment([.view(classZNameView), .view(zView), .xPadding(padding),
-                                  .view(classRotationNameView), .view(thetaView)],
+                                  .view(classRotationNameView), .view(rotationView)],
                                  y: y, height: Layout.basicHeight)
         let tdb = translationView.defaultBounds
         translationView.frame = Rect(x: bounds.width - Layout.basicPadding - tdb.width, y: padding,
                                      width: tdb.width, height: tdb.height)
     }
-    private func updateWithTransform() {
-        translationView.point = transform.translation
-        zView.model = transform.z
+    func updateWithModel() {
+        translationView.updateWithModel()
+        zView.updateWithModel()
         thetaView.model = transform.rotation * 180 / (.pi)
-    }
-    
-    struct Binding {
-        let transformView: TransformView
-        let transform: Transform, oldTransform: Transform, phase: Phase
-    }
-    var binding: ((Binding) -> ())?
-    
-    private var oldTransform = Transform()
-    private func setTransform(with obj: DiscretePointView.Binding) {
-        if obj.phase == .began {
-            oldTransform = transform
-            binding?(Binding(transformView: self,
-                             transform: oldTransform, oldTransform: oldTransform, phase: .began))
-        } else {
-            transform.translation = obj.point
-            binding?(Binding(transformView: self,
-                             transform: transform, oldTransform: oldTransform, phase: obj.phase))
-        }
-    }
-    private func setTransform(with obj: DiscreteRealView.Binding<Real>) {
-        if obj.phase == .began {
-            oldTransform = transform
-            binding?(Binding(transformView: self,
-                             transform: oldTransform, oldTransform: oldTransform, phase: .began))
-        } else {
-            switch obj.view {
-            case zView:
-                transform.z = obj.model
-            case thetaView:
-                transform.rotation = obj.model * (.pi / 180)
-            default:
-                fatalError("No case")
-            }
-            binding?(Binding(transformView: self,
-                             transform: transform, oldTransform: oldTransform, phase: obj.phase))
-        }
-    }
-    
-    private func push(_ transform: Transform) {
-//        registeringUndoManager?.registerUndo(withTarget: self) {
-//            $0.set(oldTransform, oldTransform: transform)
-//        }
-        self.transform = transform
     }
 }
 extension TransformView: Localizable {
@@ -292,19 +272,21 @@ extension TransformView: Localizable {
     }
 }
 extension TransformView: Queryable {
-    static let referenceableType: Referenceable.Type = Transform.self
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
 }
 extension TransformView: Assignable {
-    func delete(for p: Point) {
-        push(Transform())
+    func delete(for p: Point, _ version: Version) {
+        push(defaultModel, to: version)
     }
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [transform]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
-    func paste(_ objects: [Object], for p: Point) {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         for object in objects {
-            if let transform = object as? Transform {
-                push(transform)
+            if let model = object as? Transform {
+                push(model, to: version)
                 return
             }
         }

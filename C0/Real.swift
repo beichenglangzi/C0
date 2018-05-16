@@ -154,11 +154,6 @@ extension Real: Referenceable {
     static let name = Text(english: "Real Number (\(MemoryLayout<Real>.size * 8)bit)",
                            japanese: "実数 (\(MemoryLayout<Real>.size * 8)bit)")
 }
-extension Real: ObjectProtocol {
-    var object: Object {
-        return .real(self)
-    }
-}
 extension Real: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return String(self).thumbnailView(withFrame: frame, sizeType)
@@ -171,6 +166,9 @@ extension Real {
         } else {
             return nil
         }
+    }
+    init(_ x: Rational) {
+        self = Real(x.p) / Real(x.q)
     }
 }
 extension Double {
@@ -193,7 +191,7 @@ struct RealGetterOption: GetterOption {
     func string(with model: Model) -> String {
         return "\(model)"
     }
-    func text(with model: Model) -> Text {
+    func displayText(with model: Model) -> Text {
         if numberOfDigits == 0 {
             let string = model - floor(model) > 0 ?
                 String(format: "%g", model) + "\(unit)" :
@@ -219,13 +217,19 @@ struct RealOption: Object1DOption {
     var numberOfDigits: Int
     var unit: String
     
-    func model(with string: String) -> Model? {
-        return Real(string)
+    func model(with object: Any) -> Real? {
+        switch object {
+        case let value as Model: return value
+        case let value as Int: return Model(value)
+        case let value as Rational: return Model(value)
+        case let value as String: return Model(value)
+        default: return nil
+        }
     }
     func string(with model: Model) -> String {
         return "\(model)"
     }
-    func text(with model: Model) -> Text {
+    func displayText(with model: Model) -> Text {
         if numberOfDigits == 0 {
             let string = model - floor(model) > 0 ?
                 String(format: "%g", model) + "\(unit)" :
@@ -273,6 +277,10 @@ struct RealOption: Object1DOption {
     func clippedModel(_ model: Model) -> Model {
         return model.clip(min: minModel, max: maxModel)
     }
+}
+extension RealOption {
+    static let opacity = RealOption(defaultModel: 1, minModel: 0, maxModel: 1,
+                                    modelInterval: 0, exp: 1, numberOfDigits: 0, unit: "")
 }
 typealias AssignableRealView<Binder: BinderProtocol> = Assignable1DView<RealOption, Binder>
 typealias DiscreteRealView<Binder: BinderProtocol> = Discrete1DView<RealOption, Binder>

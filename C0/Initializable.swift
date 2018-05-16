@@ -20,3 +20,7 @@
 protocol Initializable {
     init()
 }
+
+protocol AnyInitializable {
+    init?(_ object: Any)
+}

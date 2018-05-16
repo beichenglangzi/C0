@@ -155,14 +155,20 @@ extension Rational: Referenceable {
     static let name = Text(english: "Rational Number (\(MemoryLayout<Rational>.size * 8)bit)",
                            japanese: "有理数 (\(MemoryLayout<Rational>.size * 8)bit)")
 }
-extension Rational: ObjectProtocol {
-    var object: Object {
-        return .rational(self)
-    }
-}
 extension Rational: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return description.thumbnailView(withFrame: frame, sizeType)
+    }
+}
+extension Rational: LosslessStringConvertible {
+    init?(_ description: String) {
+        let values = description.components(separatedBy: "/")
+        if values.count == 2, let p = Int(values[0]), let q = Int(values[1]) {
+            self = Rational(p, q)
+        } else if let value = Int(description) {
+            self = Rational(value)
+        }
+        return nil
     }
 }
 extension Rational: CustomStringConvertible {
@@ -177,11 +183,6 @@ extension Rational: ExpressibleByIntegerLiteral {
     typealias IntegerLiteralType = Int
     init(integerLiteral value: Int) {
         self.init(value)
-    }
-}
-extension Real {
-    init(_ x: Rational) {
-        self = Real(x.p) / Real(x.q)
     }
 }
 func floor(_ x: Rational) -> Rational {
@@ -203,14 +204,20 @@ struct RationalOption: Object1DOption {
     var isInfinitesimal: Bool
     var unit: String
     
-    func model(with string: String) -> Model? {
-        return nil
+    func model(with object: Any) -> Model? {
+        switch object {
+        case let value as Model: return value
+        case let value as Int: return Model(value)
+        case let value as Real: return Model(value)
+        case let value as String: return Model(value)
+        default: return nil
+        }
     }
     func string(with model: Model) -> String {
-        return "\(model)"
+        return model.description
     }
-    func text(with model: Model) -> Text {
-        return Text("\(model)\(unit)")
+    func displayText(with model: Model) -> Text {
+        return Text(model.description + "\(unit)")
     }
     func ratio(with model: Model) -> Real {
         return Real((model - minModel) / (maxModel - minModel))

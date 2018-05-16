@@ -73,10 +73,9 @@ extension Size: Referenceable {
 }
 extension Size: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return (jsonString ?? "").view(withBounds: bounds, sizeType)
+        return (jsonString ?? "").thumbnailView(withFrame: frame, sizeType)
     }
 }
-extension Size: MiniViewable {}
 
 extension Size: Object2D {
     typealias XModel = Real
@@ -97,15 +96,19 @@ extension Size: Object2D {
 }
 
 struct SizeOption: Object2DOption {
-    typealias Model = Point
+    typealias Model = Size
     typealias XOption = RealOption
     typealias YOption = RealOption
     
     var xOption: XOption
     var yOption: YOption
     
-    func model(with string: String) -> Model? {
-        return Model(jsonString: string)
+    func model(with object: Any) -> Model? {
+        switch object {
+        case let value as Model: return value
+        case let value as String: return Model(jsonString: value)
+        default: return nil
+        }
     }
 }
 typealias SlidableSizeView<Binder: BinderProtocol> = Slidable2DView<SizeOption, Binder>

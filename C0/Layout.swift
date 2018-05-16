@@ -34,7 +34,7 @@ enum Orientation {
     case xy(XY), circular(Circular)
 }
 
-struct Layout {    
+enum Layout {
     static let smallPadding = 2.0.cg, basicPadding = 3.0.cg, basicLargePadding = 14.0.cg
     static let smallRatio = Font.small.size / Font.default.size
     static let basicTextHeight = Font.default.ceilHeight(withPadding: 1)

@@ -17,7 +17,8 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Locale
+import class CoreGraphics.CGContext
 
 struct Text: Codable, Equatable {
     var baseLanguageCode: String, base: String, values: [String: String]
@@ -105,7 +106,7 @@ extension Text: Referenceable {
 extension Text: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return TextFormView(text: self, font: Font.default(with: sizeType),
-                            frame: bounds, isSizeToFit: false)
+                            frame: frame, isSizeToFit: false)
     }
 }
 
@@ -133,7 +134,7 @@ final class TextFormView: View {
     
     init(text: Text = "",
          font: Font = .default, color: Color = .locked,
-         frameAlignment: CTTextAlignment = .left, alignment: CTTextAlignment = .natural,
+         frameAlignment: TextAlignment = .left, alignment: TextAlignment = .natural,
          frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
         
         self.text = text
@@ -141,7 +142,8 @@ final class TextFormView: View {
         self.padding = padding
         textMaterial = TextMaterial(font: font, color: color,
                                     frameAlignment: frameAlignment, alignment: alignment)
-        textFrame = TextFrame(text: text, textMaterial: textMaterial, frameWidth: frameWidth)
+        textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
+                              frameWidth: textFrameWidth)
         
         super.init(drawClosure: { $1.draw(in: $0) }, isLocked: true)
         noIndicatedLineColor = nil
@@ -149,7 +151,7 @@ final class TextFormView: View {
         
         self.frame = frame
         if isSizeToFit { sizeToFit() }
-        draw()
+        displayLinkDraw()
     }
     
     override var defaultBounds: Rect {
@@ -159,15 +161,16 @@ final class TextFormView: View {
         updateWithModel()
     }
     func updateWithModel() {
-        textFrame = TextFrame(text: text, textMaterial: textMaterial, frameWidth: frameWidth)
+        textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
+                              frameWidth: textFrameWidth)
         if isSizeToFit { sizeToFit() }
-        draw()
+        displayLinkDraw()
     }
     func sizeToFit() {
         frame = textMaterial.fitFrameWith(defaultBounds: defaultBounds, frame: frame)
     }
     
-    var frameWidth: Real? {
+    var textFrameWidth: Real? {
         return frame.width == 0 ? nil : frame.width - padding * 2
     }
     

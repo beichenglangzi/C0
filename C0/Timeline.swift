@@ -332,6 +332,10 @@ struct Timeline: Codable {
         return (second, frameTime - second)
     }
     
+    var soundTuples: [(sound: Sound, startFrameTime: FrameTime)] {
+        
+    }
+    
     var vtt: Data? {
         var subtitleTuples = [(time: Beat, duration: Beat, subtitle: Subtitle)]()
         cutTrack.keyCuts.enumerated().forEach { (i, cut) in
@@ -407,7 +411,7 @@ final class TimelineView: View, Scrollable, Zoomable {
     let tempoAnimationView = AnimationView(height: defaultSumKeyTimesHeight)
     let soundWaveformView = SoundWaveformView()
     let cutViewsView = View(isLocked: true)
-    let classSumAnimationNameView = TextView(text: Text(english: "Sum:", japanese: "合計:"),
+    let classSumAnimationNameView = StringView(text: Text(english: "Sum:", japanese: "合計:"),
                                              font: .small)
     let sumKeyTimesClipView = View(isLocked: true)
     let sumKeyTimesView = AnimationView(height: defaultSumKeyTimesHeight)
@@ -674,7 +678,7 @@ final class TimelineView: View, Scrollable, Zoomable {
 //            cutView.frame.origin = Point(x: x, y: 0)
 //
 //            cutView.subtitleAnimationView.frame.origin = Point(x: x, y: cutView.frame.height)
-//            _ = cutView.subtitleTextViews.reduce(x) {
+//            _ = cutView.subtitleStringViews.reduce(x) {
 //                $1.frame.size = Size(width: 100, height: Layout.basicHeight)
 //                $1.frame.origin = Point(x: $0, y: cutView.frame.height + cutView.subtitleAnimationView.frame.height)
 //                return $0 + $1.frame.width
@@ -748,10 +752,10 @@ final class TimelineView: View, Scrollable, Zoomable {
 //            }
 //        }
 //        cutView.subtitleKeyframeBinding = { [unowned self] _ in
-//            var subtitleTextViews = [View]()
-//            self.cutViews.forEach { subtitleTextViews += $0.subtitleTextViews as [View] }
+//            var subtitleStringViews = [View]()
+//            self.cutViews.forEach { subtitleStringViews += $0.subtitleStringViews as [View] }
 //            self.cutViewsView.children = self.cutViews.reversed() as [View]
-//                + self.cutViews.map { $0.subtitleAnimationView } as [View] + subtitleTextViews as [View] + [self.soundWaveformView] as [View]
+//                + self.cutViews.map { $0.subtitleAnimationView } as [View] + subtitleStringViews as [View] + [self.soundWaveformView] as [View]
 //            self.updateWithScrollPosition()
 //        }
 //        cutView.subtitleBinding = { [unowned self] _ in
@@ -795,11 +799,11 @@ final class TimelineView: View, Scrollable, Zoomable {
 //        let minSecond = Int(floor(scene.secondTime(withBeatTime: minTime)))
 //        let maxSecond = Int(ceil(scene.secondTime(withBeatTime: maxTime)))
 //        guard minSecond < maxSecond else {
-//            timeRulerView.scaleTextViews = []
+//            timeRulerView.scaleStringViews = []
 //            return
 //        }
 //        timeRulerView.scrollPosition.x = localDeltaX
-//        timeRulerView.scaleTextViews = (minSecond...maxSecond).compactMap {
+//        timeRulerView.scaleStringViews = (minSecond...maxSecond).compactMap {
 //            guard !(maxSecond - minSecond > Int(bounds.width / 40) && $0 % 5 != 0) else {
 //                return nil
 //            }
@@ -811,13 +815,13 @@ final class TimelineView: View, Scrollable, Zoomable {
 //            return timeView
 //        }
 //    }
-    static func timeView(withSecound i: Int) -> TextView {
+    static func timeView(withSecound i: Int) -> TextFormView {
         let minute = i / 60
         let second = i - minute * 60
         let string = second < 0 ?
             String(format: "-%d:%02d", minute, -second) :
             String(format: "%d:%02d", minute, second)
-        return TextView(text: Text(string), font: .small)
+        return TextFormView(text: Text(string), font: .small)
     }
 
 //    func updateSumKeyTimesView() {
@@ -1675,15 +1679,15 @@ extension TimelineView: ViewQueryable {
                                       japanese: "時間選択: 左右スクロール\nトラック選択: 上下スクロール")
 }
 extension TimelineView: Assignable {
-    func delete(for p: Point) {
+    func delete(for p: Point, _ version: Version) {
         //        let localX = convertToLocalX(p.x)
         //        let cutIndex = self.cutIndex(withLocalX: localX)
         //        removeCut(at: cutIndex)
     }
-    func copiedObjects(at p: Point) -> [Viewable] {
+    func copiedObjects(at p: Point) -> [Object] {
         return []
     }
-    func paste(_ objects: [Object], for p: Point) {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         //        for object in objects {
         //            if let cut = object as? Cut {
         //                let localX = convertToLocalX(p.x)
@@ -1695,7 +1699,7 @@ extension TimelineView: Assignable {
     }
 }
 extension TimelineView: Newable {
-    func new(for p: Point) {
+    func new(for p: Point, _ version: Version) {
         //        let localX = convertToLocalX(p.x)
         //        let cutIndex = self.cutIndex(withLocalX: localX)
         //        let cut = Cut()
@@ -1727,9 +1731,9 @@ final class RulerView: View {
     }
     var scrollFrame = Rect()
     
-    var scaleTextViews = [TextView]() {
+    var scaleStringViews = [TextFormView]() {
         didSet {
-            scrollView.children = scaleTextViews
+            scrollView.children = scaleStringViews
         }
     }
 }

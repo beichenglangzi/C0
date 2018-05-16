@@ -71,81 +71,82 @@ struct Canvas: Codable {
         drawView.render(in: ctx)
         return ctx.renderImage
     }
-    
+}
+extension Canvas {
     //view
     func draw(in ctx: CGContext) {
-    //        ctx.saveGState()
-    //        ctx.concatenate(screenTransform)
-    //        cut.draw(scene: scene, viewType: viewType, in: ctx)
-    //        if viewType != .preview {
-    //            let edit = CellGroup.Edit(indicatedGeometryItem: indicatedGeometryItem,
-    //                                 editMaterial: materialView.material,
-    //                                 editZ: editZ, editPoint: editPoint,
-    //                                 editTransform: editTransform, point: indicatedPoint)
-    //            ctx.concatenate(scene.viewTransform.affineTransform)
-    //            cut.currentNode.drawEdit(edit, scene: scene, viewType: viewType,
-    //                                  strokeLine: stroker.line,
-    //                                  strokeLineWidth: stroker.lineWidth,
-    //                                  strokeLineColor: stroker.lineColor,
-    //                                  reciprocalViewScale: scene.reciprocalViewScale,
-    //                                  scale: scene.scale, rotation: scene.viewTransform.rotation,
-    //                                  in: ctx)
-    //            ctx.restoreGState()
-    //            if let editZ = editZ {
-    //                let p = convertFromCurrentLocal(editZ.firstPoint)
-    //                cut.currentNode.drawEditZKnob(editZ, at: p, in: ctx)
+        //        ctx.saveGState()
+        //        ctx.concatenate(screenTransform)
+        //        cut.draw(scene: scene, viewType: viewType, in: ctx)
+        //        if viewType != .preview {
+        //            let edit = CellGroup.Edit(indicatedGeometryItem: indicatedGeometryItem,
+        //                                 editMaterial: materialView.material,
+        //                                 editZ: editZ, editPoint: editPoint,
+        //                                 editTransform: editTransform, point: indicatedPoint)
+        //            ctx.concatenate(scene.viewTransform.affineTransform)
+        //            cut.currentNode.drawEdit(edit, scene: scene, viewType: viewType,
+        //                                  strokeLine: stroker.line,
+        //                                  strokeLineWidth: stroker.lineWidth,
+        //                                  strokeLineColor: stroker.lineColor,
+        //                                  reciprocalViewScale: scene.reciprocalViewScale,
+        //                                  scale: scene.scale, rotation: scene.viewTransform.rotation,
+        //                                  in: ctx)
+        //            ctx.restoreGState()
+        //            if let editZ = editZ {
+        //                let p = convertFromCurrentLocal(editZ.firstPoint)
+        //                cut.currentNode.drawEditZKnob(editZ, at: p, in: ctx)
+        //            }
+        //            cut.drawCautionBorder(scene: scene, bounds: bounds, in: ctx)
+        //        } else {
+        //            ctx.restoreGState()
+        //        }
+    }
+    //    func draw(viewType: ViewQuasimode, in ctx: CGContext) {
+    //        if viewType == .preview {
+    //            ctx.saveGState()
+    //            rootCellGroup.draw(scene: self, viewType: viewType,
+    //                              scale: 1, rotation: 0,
+    //                              viewScale: 1, viewRotation: 0,
+    //                              in: ctx)
+    //            if !isHiddenSubtitles {
+    //                subtitleTrack.drawSubtitle.draw(bounds: scene.frame, in: ctx)
     //            }
-    //            cut.drawCautionBorder(scene: scene, bounds: bounds, in: ctx)
+    //            ctx.restoreGState()
     //        } else {
+    //            ctx.saveGState()
+    //            ctx.concatenate(viewTransform.affineTransform)
+    //            rootNode.draw(scene: self, viewType: viewType,
+    //                          scale: 1, rotation: 0,
+    //                          viewScale: scale, viewRotation: viewTransform.rotation,
+    //                          in: ctx)
     //            ctx.restoreGState()
     //        }
-    }
-//    func draw(viewType: ViewQuasimode, in ctx: CGContext) {
-//        if viewType == .preview {
-//            ctx.saveGState()
-//            rootCellGroup.draw(scene: self, viewType: viewType,
-//                              scale: 1, rotation: 0,
-//                              viewScale: 1, viewRotation: 0,
-//                              in: ctx)
-//            if !isHiddenSubtitles {
-//                subtitleTrack.drawSubtitle.draw(bounds: scene.frame, in: ctx)
-//            }
-//            ctx.restoreGState()
-//        } else {
-//            ctx.saveGState()
-//            ctx.concatenate(viewTransform.affineTransform)
-//            rootNode.draw(scene: self, viewType: viewType,
-//                          scale: 1, rotation: 0,
-//                          viewScale: scale, viewRotation: viewTransform.rotation,
-//                          in: ctx)
-//            ctx.restoreGState()
-//        }
-//    }
-//
-//    func drawCautionBorder(bounds: Rect, in ctx: CGContext) {
-//        func drawBorderWith(bounds: Rect, width: Real, color: Color, in ctx: CGContext) {
-//            ctx.setFillColor(color.cg)
-//            ctx.fill([Rect(x: bounds.minX, y: bounds.minY,
-//                           width: width, height: bounds.height),
-//                      Rect(x: bounds.minX + width, y: bounds.minY,
-//                           width: bounds.width - width * 2, height: width),
-//                      Rect(x: bounds.minX + width, y: bounds.maxY - width,
-//                           width: bounds.width - width * 2, height: width),
-//                      Rect(x: bounds.maxX - width, y: bounds.minY,
-//                           width: width, height: bounds.height)])
-//        }
-//        if viewTransform.rotation > .pi / 2 || viewTransform.rotation < -.pi / 2 {
-//            let borderWidth = 2.0.cg
-//            drawBorderWith(bounds: bounds, width: borderWidth * 2, color: .warning, in: ctx)
-//            let textLine = TextFrame(string: "\(Int(viewTransform.rotation * 180 / (.pi)))°",
-//                font: .bold, color: .warning)
-//            let sb = textLine.typographicBounds.insetBy(dx: -10, dy: -2).integral
-//            textLine.draw(in: Rect(x: bounds.minX + (bounds.width - sb.width) / 2,
-//                                   y: bounds.minY + bounds.height - sb.height - borderWidth,
-//                                   width: sb.width, height: sb.height), baseFont: .bold,
-//                                                                        in: ctx)
-//        }
-//    }
+    //    }
+    //
+    //    func drawCautionBorder(bounds: Rect, in ctx: CGContext) {
+    //        func drawBorderWith(bounds: Rect, width: Real, color: Color, in ctx: CGContext) {
+    //            ctx.setFillColor(color.cg)
+    //            ctx.fill([Rect(x: bounds.minX, y: bounds.minY,
+    //                           width: width, height: bounds.height),
+    //                      Rect(x: bounds.minX + width, y: bounds.minY,
+    //                           width: bounds.width - width * 2, height: width),
+    //                      Rect(x: bounds.minX + width, y: bounds.maxY - width,
+    //                           width: bounds.width - width * 2, height: width),
+    //                      Rect(x: bounds.maxX - width, y: bounds.minY,
+    //                           width: width, height: bounds.height)])
+    //        }
+    //        if viewTransform.rotation > .pi / 2 || viewTransform.rotation < -.pi / 2 {
+    //            let borderWidth = 2.0.cg
+    //            drawBorderWith(bounds: bounds, width: borderWidth * 2, color: .warning, in: ctx)
+    //            let textLine = TextFrame(string: "\(Int(viewTransform.rotation * 180 / (.pi)))°",
+    //                font: .bold, color: .warning)
+    //            let sb = textLine.typographicBounds.insetBy(dx: -10, dy: -2).integral
+    //            textLine.draw(in: Rect(x: bounds.minX + (bounds.width - sb.width) / 2,
+    //                                   y: bounds.minY + bounds.height - sb.height - borderWidth,
+    //                                   width: sb.width, height: sb.height), baseFont: .bold,
+    //                                                                        in: ctx)
+    //        }
+    //    }
 }
 extension Canvas: Referenceable {
     static let name = Text(english: "Canvas", japanese: "キャンバス")
@@ -312,10 +313,10 @@ final class CanvasView: View, Indicatable, Selectable, Zoomable, Rotatable, Stro
         return transform.isIdentity ? p : p.applying(transform)
     }
     func setNeedsDisplay() {
-        draw()
+        displayLinkDraw()
     }
     func setNeedsDisplay(inCurrentLocalBounds rect: Rect) {
-        draw(convertFromCurrentLocal(rect))
+        displayLinkDraw(convertFromCurrentLocal(rect))
     }
     
     func indicate(at point: Point) {
@@ -2000,7 +2001,7 @@ extension CanvasView: Assignable {
     //        let cell = cut.currentNode.rootCell.intersection(cells, isNewID: true)
     //        return [cell]
     //    }
-    func paste(_ objects: [Object], for point: Point) {
+    func paste(_ objects: [Any], for point: Point) {
         //        for object in objects {
         //            if let color = object as? Color, paste(color, for: point) {
         //                return

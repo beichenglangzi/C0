@@ -19,7 +19,7 @@
 
 import struct Foundation.Locale
 
-typealias EnumType = RawRepresentable & ObjectProtocol & Referenceable & Equatable
+typealias EnumType = RawRepresentable & Codable & Referenceable & Equatable
 
 struct EnumOption<Model: EnumType> {
     var defaultModel: Model
@@ -28,6 +28,15 @@ struct EnumOption<Model: EnumType> {
     let rawValueClosure: ((Int) -> (Model.RawValue?))
     let names: [Text]
     
+    func model(with object: Any) -> Model? {
+        if let model = object as? Model {
+            return model
+        } else if let string = object as? String, let index = Int(string) {
+            return model(at: index)
+        } else {
+            return nil
+        }
+    }
     func index(with model: Model) -> Int {
         return indexClosure(model.rawValue)
     }
@@ -154,16 +163,12 @@ extension EnumView: Assignable {
     func delete(for p: Point, _ version: Version) {
         push(option.defaultModel, to:  version)
     }
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [model]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
-    func paste(_ objects: [Object], for p: Point, _ version: Version) {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         for object in objects {
-            if let model = object as? Model {
-                push(model, to: version)
-                return
-            } else if let string = object as? String, let index = Int(string) {
-                let model = option.model(at: index)
+            if let model = option.model(with: object) {
                 push(model, to: version)
                 return
             }
@@ -176,18 +181,15 @@ extension EnumView: Runnable {
     }
 }
 extension EnumView: PointMovable {
-    func movePoint(for p: Point, first fp: Point, pressure: Real,
-                   time: Second, _ phase: Phase, _ version: Version) {
+    func captureWillMovePoint(at p: Point, to version: Version) {
+        capture(model, to: version)
+    }
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
         switch phase {
-        case .began:
-            capture(model, to: version)
-            knobView.fillColor = .editing
-            model = self.model(at: p)
-        case .changed:
-            model = self.model(at: p)
-        case .ended:
-            model = self.model(at: p)
-            knobView.fillColor = knobLineColor
+        case .began: knobView.fillColor = .editing
+        case .changed: break
+        case .ended: knobView.fillColor = knobLineColor
         }
+        model = self.model(at: p)
     }
 }

@@ -60,10 +60,10 @@ struct Easing: Codable, Hashable {
 extension Easing: Referenceable {
     static let name = Text(english: "Easing", japanese: "イージング")
 }
-extension Easing: MiniViewable {
+extension Easing: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
-        thumbnailView.bounds = bounds
+        thumbnailView.frame = frame
         return thumbnailView
     }
     func draw(with bounds: Rect, in ctx: CGContext) {
@@ -78,23 +78,28 @@ extension Easing: MiniViewable {
 /**
  Issue: 前後キーフレームからの傾斜スナップ
  */
-final class EasingView: View {
-    var easing = Easing() {
-        didSet {
-            if easing != oldValue {
-                updateWithEasing()
-            }
-        }
+final class EasingView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = Easing
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
     }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var defaultModel = Model()
     
     let cp0View = PointView(), cp1View = PointView()
     
+    var sizeType: SizeType {
+        didSet { updateLayout() }
+    }
     var padding = Layout.basicPadding {
         didSet {
             updateLayout()
         }
     }
-    private let classXNameView: TextView, classYNameView: TextView
+    private let classXNameView: TextFormView, classYNameView: TextFormView
     private let controlLinePathView: View = {
         let controlLine = View(path: CGMutablePath())
         controlLine.lineColor = .content
@@ -114,16 +119,17 @@ final class EasingView: View {
         return axisPathView
     } ()
     
-    init(frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        classXNameView = TextView(text: "t", font: Font.italic(with: sizeType))
-        classYNameView = TextView(text: "t'", font: Font.italic(with: sizeType))
+    init(binder: T, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
+        self.sizeType = sizeType
+        classXNameView = TextFormView(text: "t", font: Font.italic(with: sizeType))
+        classYNameView = TextFormView(text: "t'", font: Font.italic(with: sizeType))
+        
         super.init()
         children = [classXNameView, classYNameView,
                     controlLinePathView, easingLinePathView, axisPathView, cp0View, cp1View]
         self.frame = frame
-        
-        cp0View.binding = { [unowned self] in self.setEasing(with: $0) }
-        cp1View.binding = { [unowned self] in self.setEasing(with: $0) }
     }
     
     override func updateLayout() {
@@ -148,14 +154,14 @@ final class EasingView: View {
                                             y: padding)
         classYNameView.frame.origin = Point(x: padding,
                                             y: bounds.height - padding - classYNameView.frame.height)
-        updateWithEasing()
+        updateWithModel()
     }
-    private func updateWithEasing() {
+    func updateWithModel() {
         guard !bounds.isEmpty else { return }
         cp0View.point = easing.cp0
         cp1View.point = easing.cp1
-        easingLinePathView.path = easing.path(in: bounds.insetBy(dx: padding + cp0View.padding,
-                                                                 dy: padding + cp0View.padding))
+        easingLinePathView.path = model.path(in: bounds.insetBy(dx: padding + cp0View.padding,
+                                                                dy: padding + cp0View.padding))
         let knobLinePath = CGMutablePath()
         knobLinePath.addLines(between: [Point(x: cp0View.frame.minX + cp0View.padding,
                                               y: cp0View.frame.minY + cp0View.padding),
@@ -165,49 +171,27 @@ final class EasingView: View {
                                         cp1View.knobView.position + cp1View.frame.origin])
         controlLinePathView.path = knobLinePath
     }
-    
-    struct Binding {
-        let view: EasingView, easing: Easing, oldEasing: Easing, phase: Phase
-    }
-    var binding: ((Binding) -> ())?
-    
-    private var oldEasing = Easing()
-    
-    private func setEasing(with obj: PointView.Binding) {
-        if obj.phase == .began {
-            oldEasing = easing
-            binding?(Binding(view: self, easing: oldEasing, oldEasing: oldEasing, phase: .began))
-        } else {
-            if obj.view == cp0View {
-                easing.cp0 = obj.point
-            } else {
-                easing.cp1 = obj.point
-            }
-            binding?(Binding(view: self, easing: easing, oldEasing: oldEasing, phase: obj.phase))
-        }
-    }
-    
-    private func push(_ easing: Easing) {
-        //        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldEasing, old: easing) }
-        self.easing = easing
-    }
 }
 extension EasingView: ViewQueryable {
-    static let referenceableType: Referenceable.Type = Easing.self
-    static let viewDescription = Text(english: "Ring: Hue, Width: Saturation, Height: Luminance",
-                                      japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
+    static var viewDescription: Text {
+        return Text(english: "Ring: Hue, Width: Saturation, Height: Luminance",
+                    japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
+    }
 }
 extension EasingView: Assignable {
-    func delete(for p: Point) {
-        push(Easing())
+    func delete(for p: Point, _ version: Version) {
+        push(defaultModel, to: version)
     }
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [easing]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
-    func paste(_ objects: [Object], for p: Point) {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         for object in objects {
-            if let easing = object as? Easing {
-                push(easing)
+            if let model = object as? Model {
+                push(model, to: version)
                 return
             }
         }

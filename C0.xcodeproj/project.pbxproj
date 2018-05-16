@@ -21,7 +21,7 @@
 		234A96DE1EDE87E800A841C6 /* Desktop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96DD1EDE87E800A841C6 /* Desktop.swift */; };
 		234A96E01EDE880F00A841C6 /* Text.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96DF1EDE880F00A841C6 /* Text.swift */; };
 		234A96E21EDE883600A841C6 /* Scene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96E11EDE883600A841C6 /* Scene.swift */; };
-		234A96E41EDE886100A841C6 /* Renderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96E31EDE886100A841C6 /* Renderer.swift */; };
+		234A96E41EDE886100A841C6 /* MediaEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96E31EDE886100A841C6 /* MediaEncoder.swift */; };
 		234A96E61EDE888700A841C6 /* Timeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96E51EDE888700A841C6 /* Timeline.swift */; };
 		234A96E81EDE88B200A841C6 /* Canvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96E71EDE88B200A841C6 /* Canvas.swift */; };
 		234A96EC1EDE890900A841C6 /* Cell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96EB1EDE890900A841C6 /* Cell.swift */; };
@@ -90,7 +90,7 @@
 		234A96DD1EDE87E800A841C6 /* Desktop.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Desktop.swift; sourceTree = "<group>"; };
 		234A96DF1EDE880F00A841C6 /* Text.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Text.swift; sourceTree = "<group>"; };
 		234A96E11EDE883600A841C6 /* Scene.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Scene.swift; sourceTree = "<group>"; };
-		234A96E31EDE886100A841C6 /* Renderer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Renderer.swift; sourceTree = "<group>"; };
+		234A96E31EDE886100A841C6 /* MediaEncoder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MediaEncoder.swift; sourceTree = "<group>"; };
 		234A96E51EDE888700A841C6 /* Timeline.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Timeline.swift; sourceTree = "<group>"; };
 		234A96E71EDE88B200A841C6 /* Canvas.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Canvas.swift; sourceTree = "<group>"; };
 		234A96EB1EDE890900A841C6 /* Cell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Cell.swift; sourceTree = "<group>"; };
@@ -181,13 +181,12 @@
 			children = (
 				234A96DD1EDE87E800A841C6 /* Desktop.swift */,
 				234A96E11EDE883600A841C6 /* Scene.swift */,
-				234A96E31EDE886100A841C6 /* Renderer.swift */,
+				234A96E31EDE886100A841C6 /* MediaEncoder.swift */,
 				23BBFA8C1FB2D65200E05B5B /* Player.swift */,
 				234A96E51EDE888700A841C6 /* Timeline.swift */,
 				23243BC820A2E17D000F429A /* Track.swift */,
 				23CB0D7C209424E700E12418 /* Tempo.swift */,
 				23B58F001FFF2828008574FF /* Sound.swift */,
-				239059E4207889DA00BE4A2E /* Wiggle.swift */,
 				23C59308204E44B700B5B753 /* Subtitle.swift */,
 				234A96E71EDE88B200A841C6 /* Canvas.swift */,
 				23B731AF1FA6BEE400CD9D4C /* CellNode.swift */,
@@ -200,6 +199,7 @@
 				23C031DD20A5801E00F46E48 /* Gradient.swift */,
 				234A96EF1EDE894F00A841C6 /* Color.swift */,
 				23B9DA2D1FF7A927004BAA40 /* Transform.swift */,
+				239059E4207889DA00BE4A2E /* Wiggle.swift */,
 				239059E82078B73700BE4A2E /* Image.swift */,
 				2377466B207B45F800037921 /* URL.swift */,
 				235E86BC1F83D9D7009AC966 /* Animation.swift */,
@@ -380,7 +380,7 @@
 				23CA143420A88302007191E4 /* String.swift in Sources */,
 				234A96DE1EDE87E800A841C6 /* Desktop.swift in Sources */,
 				23607F741F81293300A671B0 /* Material.swift in Sources */,
-				234A96E41EDE886100A841C6 /* Renderer.swift in Sources */,
+				234A96E41EDE886100A841C6 /* MediaEncoder.swift in Sources */,
 				23C031E420A59D9C00F46E48 /* AdditiveGroup.swift in Sources */,
 				23C031DC20A552C100F46E48 /* Timer.swift in Sources */,
 				23DC48301F8B4ED100793F64 /* Closure.swift in Sources */,

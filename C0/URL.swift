@@ -45,7 +45,6 @@ extension URL: Referenceable {
 }
 extension URL: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return lastPathComponent.view(withBounds: bounds, sizeType)
+        return lastPathComponent.thumbnailView(withFrame: frame, sizeType)
     }
 }
-extension URL: MiniViewable {}

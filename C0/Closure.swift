@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-typealias Closure = (() -> ())
+typealias Closure = ((Version) -> ())
 
 final class ClosureView: View {
     typealias Model = Closure
@@ -28,7 +28,7 @@ final class ClosureView: View {
     }
     let nameView: TextFormView
     
-    init(model: @escaping Model = {}, name: Text = "",
+    init(model: @escaping Model = { _ in }, name: Text = "",
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
         self.model = model
@@ -59,6 +59,6 @@ extension ClosureView: Queryable {
 }
 extension ClosureView: Runnable {
     func run(for p: Point, _ version: Version) {
-        model()
+        model(version)
     }
 }

@@ -17,15 +17,14 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import func CoreGraphics.log
+import func CoreGraphics.exp
 
 struct TempoTrack: Track, Codable {
     static let defaultTempo = BPM(60)
     
     private(set) var animation = Animation<BPM>() {
-        didSet {
-            updateKeySeconds()
-        }
+        didSet { updateKeySeconds() }
     }
     var animatable: Animatable {
         return animation

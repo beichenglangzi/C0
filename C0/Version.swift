@@ -153,18 +153,18 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
         if model.undoedIndex < model.index {
             indexView.updateWithModel()
             undoedDiffCountView.updateWithModel()
-            indexView.bounds = indexView.optionTextView.defaultBounds
-            undoedDiffCountView.bounds = undoedDiffCountView.optionTextView.defaultBounds
-            undoedDiffCountView.optionTextView.textMaterial.color = .warning
+            indexView.bounds = indexView.optionStringView.defaultBounds
+            undoedDiffCountView.bounds = undoedDiffCountView.optionStringView.defaultBounds
+            undoedDiffCountView.optionStringView.textMaterial.color = .warning
             if undoedDiffCountView.parent == nil {
                 children = [classNameView, indexView, undoedDiffCountView]
                 updateLayout()
             }
         } else {
             indexView.updateWithModel()
-            indexView.bounds = indexView.optionTextView.defaultBounds
-            undoedDiffCountView.bounds = undoedDiffCountView.optionTextView.defaultBounds
-            undoedDiffCountView.optionTextView.textMaterial.color = .warning
+            indexView.bounds = indexView.optionStringView.defaultBounds
+            undoedDiffCountView.bounds = undoedDiffCountView.optionStringView.defaultBounds
+            undoedDiffCountView.optionStringView.textMaterial.color = .warning
             if undoedDiffCountView.parent != nil {
                 children = [classNameView, indexView]
                 updateLayout()

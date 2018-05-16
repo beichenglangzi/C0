@@ -138,8 +138,9 @@ final class ImageView<T: BinderProtocol>: View, BindableReceiver, Movable {
     }
     private var dragType = DragType.move, downPosition = Point(), oldFrame = Rect()
     private var resizeWidth = 10.0.cg, ratio = 1.0.cg
-    func move(for point: Point, pressure: Real,
-              time: Second, _ phase: Phase, _ version: Version) {
+    func captureWillMoveObject(to version: Version) {}
+    func move(for point: Point, first fp: Point, pressure: Real,
+              time: Second, _ phase: Phase) {
         guard let parent = parent else { return }
         let p = parent.convert(point, from: self), ip = point
         switch phase {
@@ -190,6 +191,6 @@ final class ImageView<T: BinderProtocol>: View, BindableReceiver, Movable {
 }
 extension ImageView: Queryable {
     static var referenceableType: Referenceable.Type {
-        return Image.self
+        return Model.self
     }
 }

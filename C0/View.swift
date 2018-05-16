@@ -64,9 +64,12 @@ class View {
     init() {
         caLayer = CALayer.interface()
     }
-    init(isLocked: Bool) {
+    
+    init(frame: Rect = Rect(), fillColor: Color? = nil, isLocked: Bool) {
         self.isLocked = isLocked
         caLayer = CALayer.interface()
+        self.fillColor = fillColor
+        self.frame = frame
     }
     
     init(gradient: Gradient, isLocked: Bool = true) {
@@ -150,10 +153,10 @@ class View {
             }
         }
     }
-    func draw() {
+    func displayLinkDraw() {
         caLayer.setNeedsDisplay()
     }
-    func draw(_ rect: Rect) {
+    func displayLinkDraw(_ rect: Rect) {
         caLayer.setNeedsDisplay(rect)
     }
     func draw(in ctx: CGContext) {
@@ -706,6 +709,60 @@ extension CGContext {
                        in: ctx.boundingBoxOfClipPath,
                        from: Rect(origin: Point(), size: image.size))
         }
+    }
+}
+
+final class DisplayLink {
+    var closure: (() -> ())?
+    
+    var isRunning: Bool {
+        return CVDisplayLinkIsRunning(cv)
+    }
+    
+    private let cv: CVDisplayLink
+    private let source: DispatchSourceUserDataAdd
+    
+    init?(queue: DispatchQueue = DispatchQueue.main) {
+        source = DispatchSource.makeUserDataAddSource(queue: queue)
+        let acv: CVDisplayLink?
+        var success = CVDisplayLinkCreateWithActiveCGDisplays(&acv)
+        guard let cv = acv else {
+            return nil
+        }
+        func callback(displayLink: CVDisplayLink,
+                      inNow: UnsafePointer<CVTimeStamp>, inOutputTime: UnsafePointer<CVTimeStamp>,
+                      flagsIn: CVOptionFlags, flagsOut: UnsafeMutablePointer<CVOptionFlags>,
+                      displayLinkContext: UnsafeMutableRawPointer?) -> CVReturn {
+            guard let displayLinkContext = displayLinkContext else { return kCVReturnError }
+            let unmanaged = Unmanaged<DispatchSourceUserDataAdd>.fromOpaque(displayLinkContext)
+            unmanaged.takeUnretainedValue().add(data: 1)
+            return kCVReturnSuccess
+        }
+        success = CVDisplayLinkSetOutputCallback(cv, callback,
+                                                 Unmanaged.passUnretained(source).toOpaque())
+        guard success == kCVReturnSuccess else {
+            return nil
+        }
+        success = CVDisplayLinkSetCurrentCGDisplay(cv, CGMainDisplayID())
+        guard success == kCVReturnSuccess else {
+            return nil
+        }
+        self.cv = cv
+        source.setEventHandler { [weak self] in self?.closure?() }
+    }
+    deinit {
+        if isRunning { stop() }
+    }
+    
+    func start() {
+        guard !isRunning else { return }
+        CVDisplayLinkStart(cv)
+        source.resume()
+    }
+    func stop() {
+        guard isRunning else { return }
+        CVDisplayLinkStop(cv)
+        source.cancel()
     }
 }
 

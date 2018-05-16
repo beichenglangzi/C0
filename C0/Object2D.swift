@@ -19,16 +19,16 @@
 
 import struct Foundation.Locale
 
-struct Ratio2D {
-    var x = 0.0.cg, y = 0.0.cg
-}
-
-protocol Object2D: ObjectProtocol & Referenceable {
-    associatedtype XModel: ObjectProtocol & Referenceable
-    associatedtype YModel: ObjectProtocol & Referenceable
+protocol Object2D: Codable & Referenceable {
+    associatedtype XModel: Codable & Referenceable
+    associatedtype YModel: Codable & Referenceable
     init(xModel: XModel, yModel: YModel)
     var xModel: XModel { get set }
     var yModel: YModel { get set }
+}
+
+struct Ratio2D {
+    var x = 0.0.cg, y = 0.0.cg
 }
 protocol Object2DOption {
     associatedtype Model: Object2D
@@ -40,7 +40,7 @@ protocol Object2DOption {
     var defaultModel: Model { get }
     var minModel: Model { get }
     var maxModel: Model { get }
-    func model(with string: String) -> Model?
+    func model(with object: Any) -> Model?
     func ratio2D(with model: Model) -> Ratio2D
     func ratio2DFromDefaultModel(with model: Model) -> Ratio2D
     func model(withDelta delta: Ratio2D, oldModel: Model) -> Model
@@ -194,15 +194,12 @@ extension Discrete2DView: Assignable {
     func delete(for p: Point, _ version: Version) {
         push(option.defaultModel, to: version)
     }
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [model]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
-    func paste(_ objects: [Object], for p: Point, _ version: Version) {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         for object in objects {
-            if let model = object as? Model {
-                push(option.clippedModel(model), to: version)
-                return
-            } else if let string = object as? String, let model = option.model(with: string) {
+            if let model = option.model(with: object) {
                 push(option.clippedModel(model), to: version)
                 return
             }
@@ -291,15 +288,12 @@ extension Slidable2DView: Assignable {
     func delete(for p: Point, _ version: Version) {
         push(option.defaultModel, to: version)
     }
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [model]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
-    func paste(_ objects: [Object], for p: Point, _ version: Version) {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         for object in objects {
-            if let model = object as? Model {
-                push(option.clippedModel(model), to: version)
-                return
-            } else if let string = object as? String, let model = option.model(with: string) {
+            if let model = option.model(with: object) {
                 push(option.clippedModel(model), to: version)
                 return
             }

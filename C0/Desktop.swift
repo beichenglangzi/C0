@@ -33,7 +33,7 @@ extension Desktop: Referenceable {
 final class DesktopBinder: BinderProtocol {
     var rootModel: Desktop {
         didSet {
-            dataModel.isWrite = true
+//            dataModel.isWrite = true
         }
     }
     
@@ -43,48 +43,54 @@ final class DesktopBinder: BinderProtocol {
     init(rootModel: Desktop) {
         self.rootModel = rootModel
         
-        diffDesktopDataModel = DataModel(key: diffDesktopDataModelKey)
-        objectsDataModel = DataModel(key: objectsDataModelKey,
-                                     directoryWith: [sceneBinder.dataModel])
-        dataModel = DataModel(key: dataModelKey,
-                              directoryWith: [diffDesktopDataModel, objectsDataModel])
-        
-        diffDesktopDataModel.dataClosure = { [unowned self] in self.rootModel.jsonData }
+//        diffDesktopDataModel = DataModel(key: diffDesktopDataModelKey)
+//        objectsDataModel = DataModel(key: objectsDataModelKey,
+//                                     directoryWith: [sceneBinder.dataModel])
+//        dataModel = DataModel(key: dataModelKey,
+//                              directoryWith: [diffDesktopDataModel, objectsDataModel])
+//
+//        diffDesktopDataModel.dataClosure = { [unowned self] in self.rootModel.jsonData }
     }
     
-    let dataModelKey = "desktop"
-    var dataModel: DataModel {
-        didSet {
-            if let objectsDataModel = dataModel.children[objectsDataModelKey] {
-                self.objectsDataModel = objectsDataModel
-            } else {
-                dataModel.insert(objectsDataModel)
-            }
-            
-            if let dDesktopDataModel = dataModel.children[diffDesktopDataModelKey] {
-                self.diffDesktopDataModel = dDesktopDataModel
-            } else {
-                dataModel.insert(diffDesktopDataModel)
-            }
-            
-            if let sceneDataModel = objectsDataModel.children[sceneBinder.dataModelKey] {
-                sceneBinder.dataModel = sceneDataModel
-            } else {
-                objectsDataModel.insert(sceneBinder.dataModel)
-            }
-        }
-    }
-    let diffDesktopDataModelKey = "diffDesktop"
-    var diffDesktopDataModel: DataModel {
-        didSet {
-            if let desktop = diffDesktopDataModel.readObject(Desktop.self) {
-                self.rootModel = desktop
-            }
-            diffDesktopDataModel.dataClosure = { [unowned self] in self.rootModel.jsonData }
-        }
-    }
-    let objectsDataModelKey = "objects"
-    var objectsDataModel: DataModel
+//    let dataModelKey = "desktop"
+//    var dataModel: DataModel {
+//        didSet {
+//            if let objectsDataModel = dataModel.children[objectsDataModelKey] {
+//                self.objectsDataModel = objectsDataModel
+//            } else {
+//                dataModel.insert(objectsDataModel)
+//            }
+//
+//            if let dDesktopDataModel = dataModel.children[diffDesktopDataModelKey] {
+//                self.diffDesktopDataModel = dDesktopDataModel
+//            } else {
+//                dataModel.insert(diffDesktopDataModel)
+//            }
+//
+//            if let sceneDataModel = objectsDataModel.children[sceneBinder.dataModelKey] {
+//                sceneBinder.dataModel = sceneDataModel
+//            } else {
+//                objectsDataModel.insert(sceneBinder.dataModel)
+//            }
+//        }
+//    }
+//    let diffDesktopDataModelKey = "diffDesktop"
+//    var diffDesktopDataModel: DataModel {
+//        didSet {
+//            if let desktop = diffDesktopDataModel.readObject(Desktop.self) {
+//                self.rootModel = desktop
+//            }
+//            diffDesktopDataModel.dataClosure = { [unowned self] in self.rootModel.jsonData }
+//        }
+//    }
+//    let objectsDataModelKey = "objects"
+//    var objectsDataModel: DataModel
+}
+extension Desktop {
+    static let isHiddenActionManagerOption = BoolOption(defaultModel: false, cationModel: nil,
+                                                        name: Text(english: "Action Manager",
+                                                                   japanese: "アクション管理"),
+                                                        info: .hidden)
 }
 
 /**
@@ -100,33 +106,22 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         didSet { updateWithModel() }
     }
 
-    let versionView = VersionView()
-    let copiedObjectsNameView = TextFormView(text: Text(english: "Copied:",
-                                                        japanese: "コピー済み:"))
-    let copiedObjectsView = AnyArrayView()
-    let isHiddenActionManagerView = BoolView(name: Text(english: "Action Manager",
-                                                        japanese: "アクション管理"),
-                                             boolInfo: BoolInfo.hidden)
-    let isSimpleReferenceView = BoolView(name: Text(english: "Reference", japanese: "情報"),
-                                         boolInfo: BoolInfo(trueName: Text(english: "Outline",
-                                                                           japanese: "概略"),
-                                                            falseName: Text(english: "detail",
-                                                                            japanese: "詳細")))
-    let infoView = InfoView()
+    let versionView: VersionView
+    let copiedObjectsNameView = TextFormView(text: Text(english: "Copied:", japanese: "コピー済み:"))
+    let copiedObjectsView: AnyArrayView
+    let isHiddenActionManagerView: BoolView<Binder>
+    let isSimpleReferenceView: BoolView<Binder>
+    let infoView: ReferenceView<Binder>
     let actionManagerView = SenderView()
-    let objectsView = AnyArrayView()
-    let sceneView: SceneView
+    let objectsView: AnyArrayView
+    let sceneView: SceneView<Binder>
 
     var versionWidth = 120.0.cg
     var actionWidth = ActionManagableView.defaultWidth {
-        didSet {
-            updateLayout()
-        }
+        didSet { updateLayout() }
     }
     var topViewsHeight = Layout.basicHeight {
-        didSet {
-            updateLayout()
-        }
+        didSet { updateLayout() }
     }
 
     init(binder: Binder, keyPath: BinderKeyPath,
@@ -135,29 +130,32 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         self.binder = binder
         self.keyPath = keyPath
         
-        sceneView = SceneView(binder.sceneBinder, keyPath: \SceneBinder.scene)
-
+        versionView.version = desktopBinder.version
+        
+        let ihamKeyPath = keyPath.appending(path: \Model.isHiddenActionManager)
+        isHiddenActionManagerView = BoolView(binder: binder, keyPath: ihamKeyPath,
+                                             option: Model.isHiddenActionManagerOption,
+                                             sizeType: sizeType)
+        
+        isSimpleReferenceView = (name: Text(english: "Reference", japanese: "情報"),
+                                 boolInfo: BoolInfo(trueName: Text(english: "Outline",
+                                                                   japanese: "概略"),
+                                                    falseName: Text(english: "detail",
+                                                                    japanese: "詳細")))
+        
+        sceneView = SceneView(binder: binder, keyPath: \Model.objects)
+        
         super.init()
         fillColor = .background
-        versionView.version = desktopBinder.version
-
+        
         objectsView.children = [sceneView]
         children = [versionView, copiedObjectsNameView, copiedObjectsView,
                     isHiddenActionManagerView, isSimpleReferenceView,
                     actionManagerView, infoView, objectsView]
-
-        isHiddenActionManagerView.binding = { [unowned self] in
-            self.update(withIsHiddenActionManager: $0.bool)
-            self.isHiddenActionManagerBinding?($0.bool)
-        }
-        isSimpleReferenceView.binding = { [unowned self] in
-            self.update(withIsSimpleReference: $0.bool)
-            self.isSimpleReferenceBinding?($0.bool)
-        }
     }
 
-    var isHiddenActionManagerBinding: ((Bool) -> (Void))? = nil
-    var isSimpleReferenceBinding: ((Bool) -> (Void))? = nil
+    var isHiddenActionManagerBinding: ((Bool) -> ())?
+    var isSimpleReferenceBinding: ((Bool) -> ())?
 
     var locale = Locale.current {
         didSet {
@@ -182,26 +180,19 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         let headerY = bounds.height - topViewsHeight - padding
         versionView.frame = Rect(x: padding, y: headerY,
                                  width: versionWidth, height: topViewsHeight)
-        copiedObjectsNameView.frame.origin = Point(x: versionView.frame.maxX + padding, y: headerY + padding)
+        copiedObjectsNameView.frame.origin = Point(x: versionView.frame.maxX + padding,
+                                                   y: headerY + padding)
         let cw = max(bounds.width - actionWidth - versionWidth - isrw - ihamvw - copiedObjectsNameView.frame.width - padding * 3, 0)
-        copiedObjectsView.frame = Rect(x: copiedObjectsNameView.frame.maxX,
-                                         y: headerY,
-                                         width: cw,
-                                         height: topViewsHeight)
+        copiedObjectsView.frame = Rect(x: copiedObjectsNameView.frame.maxX, y: headerY,
+                                       width: cw, height: topViewsHeight)
         updateCopiedObjectViewPositions()
-        isSimpleReferenceView.frame = Rect(x: copiedObjectsView.frame.maxX,
-                                           y: headerY,
-                                           width: isrw,
-                                           height: topViewsHeight)
-        isHiddenActionManagerView.frame = Rect(x: isSimpleReferenceView.frame.maxX,
-                                               y: headerY,
-                                               width: ihamvw,
-                                               height: topViewsHeight)
+        isSimpleReferenceView.frame = Rect(x: copiedObjectsView.frame.maxX, y: headerY,
+                                           width: isrw, height: topViewsHeight)
+        isHiddenActionManagerView.frame = Rect(x: isSimpleReferenceView.frame.maxX, y: headerY,
+                                               width: ihamvw, height: topViewsHeight)
         if model.isSimpleReference {
-            infoView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
-                                  y: headerY,
-                                  width: actionWidth,
-                                  height: topViewsHeight)
+            infoView.frame = Rect(x: isHiddenActionManagerView.frame.maxX, y: headerY,
+                                  width: actionWidth, height: topViewsHeight)
         } else {
             let h = model.isHiddenActionManager ? bounds.height - padding * 2 : referenceHeight
             infoView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
@@ -232,33 +223,23 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
                                           y: -round((objectsView.frame.height / 2)))
         sceneView.frame.origin = Point(x: -round(sceneView.frame.width / 2),
                                        y: -round(sceneView.frame.height / 2))
+        
+        updateWithModel()
     }
     func updateWithModel() {
-        actionManagerView.sender = desktop.sender
-        isSimpleReferenceView.bool = desktop.isSimpleReference
-        isHiddenActionManagerView.bool = desktop.isHiddenActionManager
-        updateLayout()
-    }
-
-    func update(withIsHiddenActionManager isHiddenActionManager: Bool) {
-        actionManagerView.isHidden = isHiddenActionManager
-        desktop.isHiddenActionManager = isHiddenActionManager
-        updateLayout()
-    }
-    func update(withIsSimpleReference isSimpleReference: Bool) {
-        desktop.isSimpleReference = isSimpleReference
-        updateLayout()
+        isSimpleReferenceView.updateWithModel()
+        isHiddenActionManagerView.updateWithModel()
     }
 
     var objectViewWidth = 80.0.cg
     private func updateCopiedObjectViews() {
-        copiedObjectsView.array = desktop.copiedObjects
+        copiedObjectsView.array = model.copiedObjects
         let padding = Layout.smallPadding
         let bounds = Rect(x: 0,
                           y: 0,
                           width: objectViewWidth,
                           height: copiedObjectsView.bounds.height - padding * 2)
-        copiedObjectsView.children = desktop.copiedObjects.map {
+        copiedObjectsView.children = model.copiedObjects.map {
             $0.view(withBounds: bounds, .small)
         }
         updateCopiedObjectViewPositions()
@@ -290,7 +271,7 @@ extension DesktopView: Versionable {
 }
 extension DesktopView: CopiedObjectsViewer {
     var copiedObjects: [Object] {
-        return desktop.copiedObjects
+        return model.copiedObjects
     }
     func push(copiedObjects: [Object]) {
         //        undoManager?.registerUndo(withTarget: self) { [oldCopiedObjects = desktop.copiedObjects] in

@@ -270,9 +270,9 @@ extension Keyframe: Referenceable {
         return Text(english: "Keyframe", japanese: "キーフレーム") + "<" + Value.name + ">"
     }
 }
-extension Keyframe: MiniViewable {
+extension Keyframe: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return timing.interpolation.displayText.thumbnailView(withBounds: bounds, sizeType)
+        return timing.interpolation.displayText.thumbnailView(withFrame: frame, sizeType)
     }
 }
 
@@ -294,9 +294,9 @@ struct KeyframeTiming: Codable, Hashable {
 extension KeyframeTiming: Referenceable {
     static let name = Text(english: "Keyframe Timing", japanese: "キーフレームタイミング")
 }
-extension KeyframeTiming: MiniViewable {
+extension KeyframeTiming: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return interpolation.displayText.thumbnailView(withBounds: bounds, sizeType)
+        return interpolation.displayText.thumbnailView(withFrame: frame, sizeType)
     }
 }
 extension KeyframeTiming.Interpolation: Referenceable {
@@ -357,6 +357,23 @@ extension KeyframeTiming.Label: DisplayableText {
                 sub.displayText]
     }
 }
+extension KeyframeTiming {
+    static let labelOption = EnumOption(defaultModel: Label.main,
+                                        cationModels: [],
+                                        indexClosure: { Int($0) },
+                                        rawValueClosure: { Label.RawValue($0) },
+                                        names: Label.displayTexts)
+    static let loopOption = EnumOption(defaultModel: Loop.none,
+                                       cationModels: [],
+                                       indexClosure: { Int($0) },
+                                       rawValueClosure: { Loop.RawValue($0) },
+                                       names: Loop.displayTexts)
+    static let interpolationOption = EnumOption(defaultModel: Interpolation.spline,
+                                                cationModels: [],
+                                                indexClosure: { Int($0) },
+                                                rawValueClosure: { Interpolation.RawValue($0) },
+                                                names: Interpolation.displayTexts)
+}
 
 struct KeyframeTimingCollection: RandomAccessCollection {
     let keyframes: [KeyframeTimingProtocol]
@@ -377,59 +394,95 @@ struct KeyframeTimingCollection: RandomAccessCollection {
     }
 }
 
-final class KeyframeView<Value: KeyframeValue>: View {
-    var keyframe = Keyframe<Value>() {
-        didSet {
-            if keyframe.timing != oldValue.timing {
-                updateWithKeyframeOption()
+final class KeyframeView<Value: KeyframeValue, T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = Keyframe<Value>
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var defaultModel = Model()
+    
+    override init() {
+        
+    }
+    
+    func updateWithModel() {
+        
+    }
+}
+extension KeyframeView: Queryable {
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
+}
+extension KeyframeView: Assignable {
+    func delete(for p: Point, _ version: Version) {
+        var model = Model()
+        model.timing.time = self.model.timing.time
+        push(model, to: version)
+    }
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
+    }
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
+        for object in objects {
+            if let model = object as? Model {
+                push(model, to: version)
+                return
             }
         }
     }
 }
 
-final class KeyframeTimingView: View {
-    var keyframeTiming = KeyframeTiming() {
-        didSet {
-            if keyframeTiming != oldValue {
-                updateWithKeyframeTiming()
-            }
-        }
+final class KeyframeTimingView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = KeyframeTiming
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
     }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var defaultModel = Model()
     
-    let labelView: EnumView<KeyframeTiming.Label>
-    let loopView: EnumView<KeyframeTiming.Loop>
-    let interpolationView: EnumView<KeyframeTiming.Interpolation>
-    let easingView: EasingView
+    let labelView: EnumView<KeyframeTiming.Label, Binder>
+    let loopView: EnumView<KeyframeTiming.Loop, Binder>
+    let interpolationView: EnumView<KeyframeTiming.Interpolation, Binder>
+    let easingView: EasingView<Binder>
     
-    var sizeType: SizeType
+    var sizeType: SizeType {
+        didSet { updateLayout() }
+    }
     let classNameView: TextFormView
     
-    init(sizeType: SizeType = .regular) {
-        classNameView = TextView(text: Keyframe<Value>.name, font: Font.bold(with: sizeType))
-        easingView = EasingView(sizeType: sizeType)
-        interpolationView = EnumView(enumeratedType: .spline,
-                                     indexClosure: { Int($0) },
-                                     rawValueClosure: { KeyframeTiming.Interpolation.RawValue($0) },
-                                     names: KeyframeTiming.Interpolation.displayTexts,
-                                     sizeType: sizeType)
-        loopView = EnumView(enumeratedType: .none,
-                            indexClosure: { Int($0) },
-                            rawValueClosure: { KeyframeTiming.Loop.RawValue($0) },
-                            names: KeyframeTiming.Loop.displayTexts,
-                            sizeType: sizeType)
-        labelView = EnumView(enumeratedType: .main,
-                             indexClosure: { Int($0) },
-                             rawValueClosure: { KeyframeTiming.Label.RawValue($0) },
-                             names: KeyframeTiming.Label.displayTexts,
-                             sizeType: sizeType)
+    init(binder: Binder, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        labelView = EnumView(binder: binder,
+                             keyPath: keyPath.appending(path: \Model.label),
+                             option: Model.labelOption, sizeType: sizeType)
+        loopView = EnumView(binder: binder,
+                            keyPath: keyPath.appending(path: \Model.loop),
+                            option: Model.loopOption, sizeType: sizeType)
+        interpolationView = EnumView(binder: binder,
+                                     keyPath: keyPath.appending(path: \Model.interpolation),
+                                     option: Model.interpolationOption, sizeType: sizeType)
+        easingView = EasingView(binder: binder,
+                                keyPath: keyPath.appending(path: \Model.easing),
+                                sizeType: sizeType)
+        
         self.sizeType = sizeType
+        classNameView = TextFormView(text: Model.name, font: Font.bold(with: sizeType))
         
         super.init()
-//        children = [classNameView, easingView, interpolationView, loopView, labelView]
-//        interpolationView.binding = { [unowned self] in self.setKeyframe(with: $0) }
-//        loopView.binding = { [unowned self] in self.setKeyframe(with: $0) }
-//        labelView.binding = { [unowned self] in self.setKeyframe(with: $0) }
-//        easingView.binding = { [unowned self] in self.setKeyframe(with: $0) }
+        children = [labelView, loopView, interpolationView, easingView]
+        self.frame = frame
     }
     
     override func updateLayout() {
@@ -445,39 +498,29 @@ final class KeyframeTimingView: View {
         loopView.frame = Rect(x: padding, y: y, width: w, height: h)
         easingView.frame = Rect(x: padding, y: padding, width: w, height: y - padding)
     }
-    private func updateWithKeyframeTiming() {
-        labelView.enumeratedType = keyframeTiming.label
-        loopView.enumeratedType = keyframeTiming.loop
-        interpolationView.enumeratedType = keyframe.timing.interpolation
-        easingView.easing = keyframe.timing.easing
-    }
-    
-    private func push(_ keyframe: Keyframe<Value>, old oldKeyframe: Keyframe<Value>) {
-//        registeringUndoManager?.registerUndo(withTarget: self) { $0.set(oldKeyframe, old: keyframe) }
-        self.keyframe = keyframe
+    func updateWithModel() {
+        labelView.updateWithModel()
+        loopView.updateWithModel()
+        interpolationView.updateWithModel()
+        easingView.updateWithModel()
     }
 }
-extension KeyframeView: Queryable {
+extension KeyframeTimingView: Queryable {
     static var referenceableType: Referenceable.Type {
-        return Keyframe<Value>.self
+        return Model.self
     }
 }
-extension KeyframeView: Assignable {
-    func delete(for p: Point) {
-        let keyframe: Keyframe<Value> = {
-            var keyframe = Keyframe<Value>()
-            keyframe.timing.time = self.keyframe.timing.time
-            return keyframe
-        } ()
-        push(keyframe, old: self.keyframe)
+extension KeyframeTimingView: Assignable {
+    func delete(for p: Point, _ version: Version) {
+        push(defaultModel, to: version)
     }
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [keyframe]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
-    func paste(_ objects: [Object], for p: Point) {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         for object in objects {
-            if let keyframe = object as? Keyframe<Value> {
-                push(keyframe, old: self.keyframe)
+            if let keyframe = object as? Model {
+                push(keyframe, to: version)
                 return
             }
         }

@@ -376,10 +376,9 @@ extension Animation: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         let text = Text(english: "\(keyframes.count) Keyframes",
                         japanese: "\(keyframes.count)キーフレーム")
-        return text.thumbnailView(withBounds: bounds, sizeType)
+        return text.thumbnailView(withFrame: frame, sizeType)
     }
 }
-extension Animation: MiniViewable {}
 
 final class AnimationView<Value: KeyframeValue, T: BinderProtocol>:
 View, Indicatable, Selectable, Assignable, Newable, Movable {
@@ -619,19 +618,13 @@ View, Indicatable, Selectable, Assignable, Newable, Movable {
     }
 
     var height: Real {
-        didSet {
-            updateWithHeight()
-        }
+        didSet { updateWithHeight() }
     }
     var smallHeight: Real {
-        didSet {
-            updateWithHeight()
-        }
+        didSet { updateWithHeight() }
     }
     var sizeType = SizeType.small {
-        didSet {
-            updateWithHeight()
-        }
+        didSet { updateWithHeight() }
     }
     private func updateWithHeight() {
         frame.size.height = sizeType == .small ? smallHeight : height
@@ -655,9 +648,7 @@ View, Indicatable, Selectable, Assignable, Newable, Movable {
         }
     }
     var indicatedKeyframeIndex: Int? {
-        didSet {
-            updateIndicatedView()
-        }
+        didSet { updateIndicatedView() }
     }
     func updateIndicatedView() {
         if let indicatedKeyframeIndex = indicatedKeyframeIndex {
@@ -868,7 +859,7 @@ View, Indicatable, Selectable, Assignable, Newable, Movable {
     func copiedObjects(at p: Point) -> [Viewable] {
         return [animation]
     }
-    func paste(_ objects: [Object], for p: Point) {
+    func paste(_ objects: [Any], for p: Point) {
         //        for object in objects {
         //            if let animation = object as? Animation {
         //                if keyframe.equalOption(other: self.keyframe) {

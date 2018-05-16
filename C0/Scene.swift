@@ -69,7 +69,6 @@ extension Color {
     static let cutBorder = Color(red: 0.3, green: 0.46, blue: 0.7, alpha: 0.5)
     static let cutSubBorder = background.multiply(alpha: 0.5)
     
-    static let playBorder = Color(white: 0.4)
     static let subtitleBorder = Color(white: 0)
     static let subtitleFill = white
 }
@@ -106,6 +105,10 @@ struct Scene: Codable {
         return timeline.duration
     }
     
+    func canvas(atTime time: Beat) -> Canvas {
+        
+    }
+    
     static let isEncodeLineKey = CodingUserInfoKey(rawValue: "isEncodeLineKey")!
     var diffData: Data? {
         let encoder = JSONEncoder()
@@ -117,6 +120,15 @@ extension Scene {
     static let renderingVerticalResolutionOption = IntOption(defaultModel: 1080,
                                                              minModel: 1, maxModel: 10000,
                                                              modelInterval: 1, exp: 1, unit: " p")
+    static let isHiddenSubtitlesOption = BoolOption(defaultModel: false, cationModel: true,
+                                                    name: Text(english: "Subtitles", japanese: "字幕"),
+                                                    info: .hidden)
+    static let isHiddenPreviousOption = BoolOption(defaultModel: true, cationModel: false,
+                                                   name: Text(english: "Previous", japanese: "前"),
+                                                   info: .hidden)
+    static let isHiddenNextOption = BoolOption(defaultModel: true, cationModel: false,
+                                                   name: Text(english: "Next", japanese: "次"),
+                                                   info: .hidden)
 }
 extension Scene: Referenceable {
     static let name = Text(english: "Scene", japanese: "シーン")
@@ -130,124 +142,91 @@ final class SceneBinder: BinderProtocol {
     }
     
     var scene: Scene
-    var version: Version
-    init(_ scene: Scene = Scene(), version: Version = Version()) {
-        self.scene = scene
-        self.version = version
-        
-        diffSceneDataModel = DataModel(key: diffSceneDataModelKey)
-        dataModel = DataModel(key: dataModelKey,
-                              directoryWith: [diffSceneDataModel, scene.cutTrack.diffDataModel])
-        diffSceneDataModel.dataClosure = { [unowned self] in self.scene.diffData }
-    }
+    var version = Version()
     
-    let dataModelKey = "scene"
-    var dataModel: DataModel {
-        didSet {
-            if let dSceneDataModel = dataModel.children[diffSceneDataModelKey] {
-                self.diffSceneDataModel = dSceneDataModel
-            } else {
-                dataModel.insert(diffSceneDataModel)
-            }
-
-            if let dCutTrackDataModel = dataModel.children[scene.cutTrack.diffDataModelKey] {
-                scene.cutTrack.diffDataModel = dCutTrackDataModel
-            } else {
-                dataModel.insert(scene.cutTrack.diffDataModel)
-            }
-
-            updateWithScene()
-        }
-    }
-    let diffSceneDataModelKey = "diffScene"
-    var diffSceneDataModel: DataModel {
-        didSet {
-            if let scene = diffSceneDataModel.readObject(Scene.self) {
-                self.scene = scene
-            }
-            diffSceneDataModel.dataClosure = { [unowned self] in self.scene.diffData }
-        }
+    init(_ scene: Scene = Scene()) {
+        self.scene = scene
     }
 }
-struct NodeDiff: Codable {
-    var trackDiffs = [UUID: MultipleTrackDiff]()
-}
-struct MultipleTrackDiff: Codable {
-    var drawing = Drawing(), keyDrawings = [Drawing]()
-    var cellDiffs = [UUID: CellDiff]()
-}
-struct CellDiff: Codable {
-    var geometry = Geometry(), keyGeometries = [Geometry]()
-}
 
-final class SceneBinderView: View {
+final class SceneBinderView: View {}
+
+struct SceneLayout {
+    static let versionWidth = 120.0.cg, propertyWidth = 200.0.cg
+    static let canvasSize = Size(width: 730, height: 480), timelineHeight = 190.0.cg
 }
 
 /**
  Issue: セルをキャンバス外にペースト
  Issue: Display P3サポート
  */
-final class SceneView: View {
-    var scene: Scene {
-        get {
-            return sceneBinder[keyPath: keyPath]
-        }
-        set {
-            sceneBinder[keyPath: keyPath] = newValue
-            updateWithScene()
-        }
+final class SceneView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = Scene
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
     }
-    var sceneBinder: SceneBinder {
-        didSet {
-            versionView.version = sceneBinder.version
-            updateWithScene()
-        }
-    }
-    var keyPath: WritableKeyPath<SceneBinder, Scene> {
-        didSet {
-            updateWithScene()
-        }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
     }
     
     let versionView: VersionView<Binder>
     
-    let sizeView = DiscreteSizeView(sizeType: .small)
-    
-    let renderingVerticalResolutionView
-        = DiscreteIntView(model: 1, option: Scene.renderingVerticalResolutionOption,
-                          frame: Layout.valueFrame(with: .small), sizeType: .small)
-    let isHiddenSubtitlesView = BoolView(cationBool: true,
-                                         name: Text(english: "Subtitles", japanese: "字幕"),
-                                         boolInfo: BoolOption.Info.hidden, sizeType: .small)
-    let isHiddenPreviousView = BoolView(defaultBool: true, cationBool: false,
-                                        name: Text(english: "Previous", japanese: "前"),
-                                        boolInfo: BoolOption.Info.hidden)
-    let isHiddenNextView = BoolView(defaultBool: true, cationBool: false,
-                                    name: Text(english: "Next", japanese: "次"),
-                                    boolInfo: BoolOption.Info.hidden)
-    let timelineView = TimelineView()
-    let canvasView = CanvasView()
-    let playManagerView = PlayManagerView()
+    let sizeView: DiscreteSizeView<Binder>
+    let renderingVerticalResolutionView: DiscreteIntView<Binder>
+    let isHiddenSubtitlesView: BoolView<Binder>
+    let isHiddenPreviousView: BoolView<Binder>
+    let isHiddenNextView: BoolView<Binder>
+    let timelineView: TimelineView
+    let canvasView: CanvasView
+    let playManagerView: PlayManagerView
     
     let exportSubtitlesView = ClosureView(name: Text(english: "Export Subtitles",
                                                      japanese: "字幕を書き出す"))
     let exportImageView = ClosureView(name: Text(english: "Export Image", japanese: "画像を書き出す"))
     let exportMovieView = ClosureView(name: Text(english: "Export Movie", japanese: "動画を書き出す"))
     
-    static let versionWidth = 120.0.cg, propertyWidth = 200.0.cg
-    static let canvasSize = Size(width: 730, height: 480), timelineHeight = 190.0.cg
     let classNameView = TextFormView(text: Scene.name, font: .bold)
-    var rendingContentScale = 1.0.cg
-    var renderQueue = OperationQueue()
-    var bars = [ProgressNumberView]()
-    private let progressWidth = 200.0.cg
     
-    init(_ sceneBinder: SceneBinder, keyPath: WritableKeyPath<SceneBinder, Scene>) {
-        self.sceneBinder = sceneBinder
+    var encodingQueue = OperationQueue()
+    var encoderViews = [View]()
+    private let encoderWidth = 200.0.cg
+    
+    init(binder: Binder, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
+        self.binder = binder
         self.keyPath = keyPath
         
-        versionView
-        versionView.version = sceneBinder.version
+        versionView = VersionView(binder: binder, keyPath: <#T##ReferenceWritableKeyPath<_, VersionView.Model>#>)
+        
+        let defaultSize = model.canvas.frame.size
+        let sizeWidthOption = RealOption(defaultModel: defaultSize.width,
+                                         minModel: 1, maxModel: 100000, modelInterval: 1, exp: 1,
+                                         numberOfDigits: 0, unit: "")
+        let sizeHeightOption = RealOption(defaultModel: defaultSize.height,
+                                         minModel: 1, maxModel: 100000, modelInterval: 1, exp: 1,
+                                         numberOfDigits: 0, unit: "")
+        sizeView = DiscreteSizeView(binder: binder,
+                                    keyPath: keyPath.appending(path: \Scene.canvas.frame.size),
+                                    option: SizeOption(xOption: sizeWidthOption,
+                                                       yOption: sizeHeightOption),
+                                    sizeType: .small)
+        
+        renderingVerticalResolutionView
+            = DiscreteIntView(binder: binder,
+                              keyPath: keyPath.appending(path: \Scene.renderingVerticalResolution),
+                              option: Scene.renderingVerticalResolutionOption,
+                              frame: Layout.valueFrame(with: .small), sizeType: .small)
+        isHiddenSubtitlesView = BoolView(binder: binder,
+                                         keyPath: keyPath.appending(path: \Scene.isHiddenSubtitles),
+                                         option: Scene.isHiddenSubtitlesOption, sizeType: .small)
+        isHiddenPreviousView = BoolView(binder: binder,
+                                        keyPath: keyPath.appending(path: \Scene.isHiddenPrevious),
+                                        option: Scene.isHiddenPreviousOption)
+        isHiddenNextView = BoolView(binder: binder,
+                                    keyPath: keyPath.appending(path: \Scene.isHiddenNext),
+                                    option: Scene.isHiddenNextOption)
         
         super.init()
         bounds = defaultBounds
@@ -266,17 +245,12 @@ final class SceneView: View {
 //            self.transformView.standardTranslation = sp
 //            self.wiggleXView.standardAmplitude = $0.size.width
 //            self.wiggleYView.standardAmplitude = $0.size.height
-//            if $0.phase == .ended && $0.size != $0.oldSize {
-//                self.binder.diffSceneDataModel.isWrite = true
-//            }
 //        }
 
 //        soundView.setSoundClosure = { [unowned self] in
 //            self.scene.sound = $0.sound
 //            self.timelineView.soundWaveformView.sound = $0.sound
-//            if $0.phase == .ended && $0.sound != $0.oldSound {
-//                self.diffSceneDataModel.isWrite = true
-//            }
+        
 ////            if self.scene.sound.url == nil && self.canvasView.playerView.audioPlayer?.isPlaying ?? false {
 ////                self.canvasView.playerView.audioPlayer?.stop()
 ////            }
@@ -290,18 +264,18 @@ final class SceneView: View {
         exportImageView.model = { [unowned self] in self.exportImage() }
         exportMovieView.model = { [unowned self] in self.exportMovie() }
         
-        updateWithScene()
+        updateWithModel()
         updateLayout()
     }
     deinit {
-        renderQueue.cancelAllOperations()
+        encodingQueue.cancelAllOperations()
     }
     
     override var defaultBounds: Rect {
         let padding = Layout.basicPadding, buttonH = Layout.basicHeight
         let h = buttonH + padding * 2
-        let cs = SceneView.canvasSize, th = SceneView.timelineHeight
-        let inWidth = cs.width + padding + SceneView.propertyWidth
+        let cs = SceneLayout.canvasSize, th = SceneLayout.timelineHeight
+        let inWidth = cs.width + padding + SceneLayout.propertyWidth
         let width = inWidth + padding * 2
         let height = th + cs.height + h + buttonH + padding * 2
         return Rect(x: 0, y: 0, width: width, height: height)
@@ -309,10 +283,9 @@ final class SceneView: View {
     override func updateLayout() {
         let padding = Layout.basicPadding, sPadding = Layout.smallPadding, buttonH = Layout.basicHeight
         let h = buttonH + padding * 2
-        let cs = SceneView.canvasSize, th = SceneView.timelineHeight
-        let pw = SceneView.propertyWidth
+        let cs = SceneLayout.canvasSize, th = SceneLayout.timelineHeight
+        let pw = SceneLayout.propertyWidth
         let y = bounds.height - buttonH - padding
-        
         let kh = 120.0.cg
         
         classNameView.frame.origin = Point(x: padding,
@@ -337,7 +310,7 @@ final class SceneView: View {
         topX -= tiw
         timelineView.baseTimeIntervalView.frame = Rect(x: topX, y: topY, width: tiw, height: buttonH)
         topX = classNameView.frame.maxX + padding
-        versionView.frame = Rect(x: topX, y: y, width: SceneView.versionWidth, height: buttonH)
+        versionView.frame = Rect(x: topX, y: y, width: SceneLayout.versionWidth, height: buttonH)
         
         var ty = y
         ty -= th
@@ -353,24 +326,39 @@ final class SceneView: View {
         let sph = sh + Layout.smallPadding * 2
         py -= sph
         sizeView.frame = Rect(x: px, y: py, width: sizeView.defaultBounds.width, height: sph)
-//        frameRateView.frame = Rect(x: sizeView.frame.maxX, y: py,
-//                                   width: Layout.valueWidth(with: .small), height: sph)
-        renderingVerticalResolutionView.frame
-            = Rect(x: frameRateView.frame.maxX, y: py,
-                                                     width: bounds.width - frameRateView.frame.maxX - padding,
-                                                     height: sph)
         py -= sh
         isHiddenSubtitlesView.frame = Rect(x: px, y: py, width: pw / 2, height: sh)
     }
-    private func updateWithScene() {
-        renderingVerticalResolutionView.model = scene.renderingVerticalResolution
-        isHiddenSubtitlesView.bool = scene.isHiddenSubtitles
-        isHiddenPreviousView.bool = scene.isHiddenPrevious
-        isHiddenNextView.bool = scene.isHiddenNext
+    func updateWithModel() {
+        renderingVerticalResolutionView.updateWithModel()
+        isHiddenSubtitlesView.updateWithModel()
+        isHiddenPreviousView.updateWithModel()
+        isHiddenNextView.updateWithModel()
+    }
+    
+    private func updateEncoderPositions() {
+        _ = encoderViews.reduce(Point(x: frame.origin.x, y: frame.maxY)) {
+            $1.frame.origin = $0
+            return Point(x: $0.x + encoderWidth, y: $0.y)
+        }
+    }
+    private func beganEncode<T: MediaEncoder>(_ view: MediaEncoderView<T>) {
+        view.stoppedClosure = { [unowned self] in self.endedEncode($0) }
+        view.endedClosure = { [unowned self] in self.endedEncode($0) }
+        encoderViews.append(view)
+        parent?.append(child: view)
+        updateEncoderPositions()
+    }
+    private func endedEncode<T: MediaEncoder>(_ view: MediaEncoderView<T>) {
+        if let index = encoderViews.index(of: view) {
+            encoderViews.remove(at: index)
+        }
+        view.removeFromParent()
+        updateEncoderPositions()
     }
     
     func exportMovie() {
-        let size = scene.canvas.frame.size, p = scene.renderingVerticalResolution
+        let size = model.canvas.frame.size, p = model.renderingVerticalResolution
         let newSize = Size(width: floor((size.width * Real(p)) / size.height), height: Real(p))
         let sizeString = "w: \(Int(newSize.width)) px, h: \(Int(newSize.height)) px"
         let message = Text(english: "Export Movie(\(sizeString))",
@@ -380,63 +368,14 @@ final class SceneView: View {
     func exportMovie(message: Text?, name: Text? = nil, size: Size,
                      videoType: VideoType = .mp4, codec: VideoCodec = .h264) {
         URL.file(message: message, name: nil, fileTypes: [videoType]) { [unowned self] e in
-            let encoder = SceneVideoEncoder(scene: self.scene, size: size,
+            let encoder = SceneVideoEncoder(scene: self.model, size: size,
                                             videoType: videoType, codec: codec)
-            let name = Text(e.url.deletingPathExtension().lastPathComponent)
-            let type = Text(e.url.pathExtension.uppercased())
-            let progressView = self.madeProgressNumberView(name: name, type: type)
-            let operation = BlockOperation()
-            progressView.operation = operation
-            progressView.deleteClosure = { [unowned self] in self.endProgress($0) }
-            self.beginProgress(progressView)
-            
-            operation.addExecutionBlock() { [unowned operation] in
-                let progressClosure: (Real, inout Bool) -> () = { (totalProgress, stop) in
-                    if operation.isCancelled {
-                        stop = true
-                    } else {
-                        OperationQueue.main.addOperation() {
-                            progressView.value = totalProgress
-                        }
-                    }
-                }
-                let completionClosure: (Error?) -> () = { error in
-                    do {
-                        if let error = error {
-                            throw error
-                        }
-                        OperationQueue.main.addOperation() {
-                            progressView.value = 1
-                        }
-                        try FileManager.default.setAttributes([.extensionHidden: e.isExtensionHidden],
-                                                              ofItemAtPath: e.url.path)
-                        OperationQueue.main.addOperation() {
-                            self.endProgress(progressView)
-                        }
-                    } catch {
-                        OperationQueue.main.addOperation() {
-                            progressView.state = Text(english: "Error", japanese: "エラー")
-                            progressView.nameView.textMaterial.color = .warning
-                        }
-                    }
-                }
-                do {
-                    try encoder.writeVideo(to: e.url,
-                                           progressClosure: progressClosure,
-                                           completionClosure: completionClosure)
-                } catch {
-                    OperationQueue.main.addOperation() {
-                        progressView.state = Text(english: "Error", japanese: "エラー")
-                        progressView.nameView.textMaterial.color = .warning
-                    }
-                }
-            }
-            self.renderQueue.addOperation(operation)
+            self.beganEncode(SceneVideoEncoderView(encoder: encoder))
         }
     }
     
     func exportImage() {
-        let size = scene.canvas.frame.size, p = scene.renderingVerticalResolution
+        let size = model.canvas.frame.size, p = model.renderingVerticalResolution
         let newSize = Size(width: floor((size.width * Real(p)) / size.height), height: Real(p))
         let sizeString = "w: \(Int(newSize.width)) px, h: \(Int(newSize.height)) px"
         let message = Text(english: "Export Image(\(sizeString))",
@@ -445,65 +384,21 @@ final class SceneView: View {
     }
     func exportImage(message: Text?, size: Size, fileType: Image.FileType = .png) {
         URL.file(message: message, fileTypes: [fileType]) { [unowned self] e in
-            let image = self.scene.canvas.image(with: size)
-            do {
-                try image?.write(fileType, to: e.url)
-                try FileManager.default.setAttributes([.extensionHidden: e.isExtensionHidden],
-                                                      ofItemAtPath: e.url.path)
-            } catch {
-                self.showError(withName: e.name)
-            }
+            let encoder = SceneImageEncoder(canvas: self.model.canvas,
+                                            size: size, fileType: fileType)
+            self.beganEncode(SceneImageEncoderView(encoder: encoder))
         }
     }
     
-    func exportSubtitles(fileType: Subtitle.FileType = .vtt) {
+    func exportSubtitles() {
         let message = Text(english: "Export Subtitles", japanese: "字幕として書き出す")
+        exportSubtitles(message: message)
+    }
+    func exportSubtitles(message: Text?, fileType: Subtitle.FileType = .vtt) {
         URL.file(message: message, fileTypes: [fileType]) { [unowned self] e in
-            let vttData = self.scene.timeline.vtt
-            do {
-                try vttData?.write(to: e.url)
-                try FileManager.default.setAttributes([.extensionHidden: e.isExtensionHidden],
-                                                      ofItemAtPath: e.url.path)
-            } catch {
-                self.showError(withName: e.name)
-            }
+            let encoder = SceneSubtitlesEncoder(timeline: self.model.timeline, fileType: fileType)
+            self.beganEncode(SceneSubtitlesEncoderView(encoder: encoder))
         }
-    }
-    
-    private func madeProgressNumberView(name: Text, type: Text) -> ProgressNumberView {
-        return ProgressNumberView(frame: Rect(x: 0, y: 0,
-                                              width: self.progressWidth, height: Layout.basicHeight),
-                                  name: name, type: type,
-                                  state: Text(english: "Exporting", japanese: "書き出し中"))
-    }
-    private func updateProgressPositions() {
-        _ = bars.reduce(Point(x: frame.origin.x, y: frame.maxY)) {
-            $1.frame.origin = $0
-            return Point(x: $0.x + progressWidth, y: $0.y)
-        }
-    }
-    private func beginProgress(_ progressNumberView: ProgressNumberView) {
-        bars.append(progressNumberView)
-        parent?.append(child: progressNumberView)
-        progressNumberView.begin()
-        updateProgressPositions()
-    }
-    private func endProgress(_ progressNumberView: ProgressNumberView) {
-        progressNumberView.end()
-        if let index = bars.index(where: { $0 === progressNumberView }) {
-            bars[index].removeFromParent()
-            bars.remove(at: index)
-            updateProgressPositions()
-        }
-    }
-    
-    private func showError(withName name: Text) {
-        let progressNumberView = ProgressNumberView()
-        progressNumberView.name = name
-        progressNumberView.state = Text(english: "Error", japanese: "エラー")
-        progressNumberView.nameView.textMaterial.color = .warning
-        progressNumberView.deleteClosure = { [unowned self] in self.endProgress($0) }
-        beginProgress(progressNumberView)
     }
 }
 extension SceneView: Localizable {
@@ -512,128 +407,12 @@ extension SceneView: Localizable {
     }
 }
 extension SceneView: Queryable {
-    static let referenceableType: Referenceable.Type = Scene.self
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
 }
 extension SceneView: Versionable {
     var version: Version {
-        return versionView.version
+        return versionView.model
     }
 }
-
-final class ProgressNumberView: View {
-    let barView = View(isLocked: true)
-    let barBackgroundView = View(isLocked: true)
-    let nameView: TextFormView
-    let stopView = ClosureView(name: Text(english: "Stop", japanese: "中止"))
-
-    init(frame: Rect = Rect(), backgroundColor: Color = .background,
-         name: Text = "", type: Text = "", state: Text? = nil) {
-
-        self.name = name
-        self.type = type
-        self.state = state
-        nameView = TextFormView()
-        nameView.frame.origin = Point(x: Layout.basicPadding,
-                                      y: round((frame.height - nameView.frame.height) / 2))
-        barView.frame = Rect(x: 0, y: 0, width: 0, height: frame.height)
-        barBackgroundView.fillColor = .editing
-        barView.fillColor = .content
-
-        super.init()
-        stopView.model = { [unowned self] in self.stop() }
-        self.frame = frame
-        isClipped = true
-        children = [nameView, barBackgroundView, barView, stopView]
-        updateLayout()
-    }
-
-    var value = 0.0.cg {
-        didSet {
-            updateLayout()
-        }
-    }
-    func begin() {
-        startDate = Date()
-    }
-    func end() {}
-    var startDate: Date?
-    var remainingTime: Real? {
-        didSet {
-            updateText()
-        }
-    }
-    var computationTime = 5.0
-    var name = Text() {
-        didSet {
-            updateText()
-        }
-    }
-    var type = Text() {
-        didSet {
-            updateText()
-        }
-    }
-    var state: Text? {
-        didSet {
-            updateText()
-        }
-    }
-
-    override func updateLayout() {
-        let padding = Layout.basicPadding
-        let db = stopView.defaultBounds
-        let w = bounds.width - db.width - padding
-        stopView.frame = Rect(x: w, y: padding,
-                              width: db.width, height: bounds.height - padding * 2)
-
-        barBackgroundView.frame = Rect(x: padding, y: padding - 1,
-                                       width: (w - padding * 2), height: 1)
-        barView.frame = Rect(x: padding, y: padding - 1,
-                             width: floor((w - padding * 2) * value), height: 1)
-        updateText()
-    }
-    private func updateText() {
-        var text = Text()
-        if let state = state {
-            text += state
-        } else if let remainingTime = remainingTime {
-            let minutes = Int(ceil(remainingTime)) / 60
-            let seconds = Int(ceil(remainingTime)) - minutes * 60
-            let ss = String(seconds)
-            if minutes == 0 {
-                let timeText = Text(english: String(format: "%@sec left", ss),
-                                    japanese: String(format: "あと%@秒", ss))
-                text += (text.isEmpty ? "" : " ") + timeText
-            } else {
-                let ms = String(minutes)
-                let timeText = Text(english: String(format: "%@min %@sec left", ms, ss),
-                                    japanese: String(format: "あと%@分%@秒", ms, ss))
-                text += (text.isEmpty ? "" : " ") + timeText
-            }
-        }
-        let t = text + (text.isEmpty ? "" : ", ") + Text("\(Int(value * 100)) %")
-        nameView.text = type + "(" + name + "), " + t
-        nameView.frame.origin = Point(x: Layout.basicPadding,
-                                      y: round((frame.height - nameView.frame.height) / 2))
-    }
-
-    var deleteClosure: ((ProgressNumberView) -> ())?
-    weak var operation: Operation?
-    func stop() {
-        if let operation = operation {
-            operation.cancel()
-        }
-        deleteClosure?(self)
-    }
-}
-extension ProgressNumberView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
-    }
-}
-extension ProgressNumberView: ViewQueryable {
-    static let referenceableType: Referenceable.Type = Real.self
-    static let viewDescription = Text(english: "Stop: Send \"Cut\" action",
-                                      japanese: "停止: \"カット\"アクションを送信")
-}
-

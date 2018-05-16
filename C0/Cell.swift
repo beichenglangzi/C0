@@ -192,7 +192,8 @@ struct Cell: Codable, Equatable, TreeNode {
     func isSnapped(_ other: Geometry) -> Bool {
         return isEditable && geometry.isSnapped(other)
     }
-    
+}
+extension Cell {
     //view
     func colorAndLineColor(withIsEdit isEdit: Bool,
                            isIndicated: Bool,
@@ -208,7 +209,7 @@ struct Cell: Codable, Equatable, TreeNode {
         let color = isInterpolated ? Color.linear(mColor, .red, t: 0.5) : mColor
         let lineColor = isInterpolated ? Color.linear(mLineColor, .red, t: 0.5) : mLineColor
         
-        let aColor = material.type == .add || material.type == .luster ?
+        let aColor = material.type == .addition || material.type == .luster ?
             color.multiply(alpha: 0.5) : color.multiply(white: 0.8)
         let aLineColor = isLocked ?
             lineColor.multiply(white: 0.5) : lineColor
@@ -234,9 +235,7 @@ struct Cell: Codable, Equatable, TreeNode {
         }
         let geometry = !isEdit || isEditAndUseDraw ? drawGeometry : self.geometry
         let isInterpolated = isEditAndUseDraw
-        guard !isHidden, !geometry.isEmpty else {
-            return
-        }
+        guard !isHidden, !geometry.isEmpty else { return }
         let isEditUnlocked = isEdit && !isLocked
         if material.opacity < 1 {
             ctx.saveGState()
@@ -338,7 +337,9 @@ struct Cell: Codable, Equatable, TreeNode {
     private func drawID(in ctx: CGContext, _ i: inout Int) {
         children.forEach {
             $0.drawID(in: ctx)
-            let textFrame = TextFrame(string: "\(i)", font: .small)
+            var textMaterial = TextMaterial()
+            textMaterial.font = .small
+            let textFrame = TextFrame(string: "\(i)", textMaterial: textMaterial)
             textFrame.drawWithCenterOfImageBounds(in: imageBounds, in: ctx)
             i += 1
         }
@@ -347,10 +348,10 @@ struct Cell: Codable, Equatable, TreeNode {
 extension Cell: Referenceable {
     static let name = Text(english: "Cell", japanese: "セル")
 }
-extension Cell: MiniViewable {
+extension Cell: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
-        thumbnailView.bounds = bounds
+        thumbnailView.frame = frame
         return thumbnailView
     }
     func draw(with bounds: Rect, in ctx: CGContext) {
@@ -371,29 +372,38 @@ extension Cell: MiniViewable {
     }
 }
 
-final class CellView: View {
-    var cell = Cell() {
-        didSet {
-            isLockedView.bool = cell.isLocked
-        }
+final class CellView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = Cell
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
     }
     
-    private let isLockedView: BoolView
+    private let isLockedView: BoolView<Binder>
     
-    var sizeType: SizeType
+    var sizeType: SizeType {
+        didSet { updateLayout() }
+    }
     private let classNameView: TextFormView
     
-    init(sizeType: SizeType = .regular) {
-        isLockedView = BoolView(cationBool: true,
-                                boolInfo: BoolInfo.locked,
+    init(binder: T, keyPath: BinderKeyPath, frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        isLockedView = BoolView(binder: binder, keyPath: keyPath.appending(path: \Model.isLocked),
+                                option: BoolOption(defaultModel: false, cationModel: true,
+                                                   name: "", info: .locked),
                                 sizeType: sizeType)
         
         self.sizeType = sizeType
-        classNameView = TextView(text: Cell.name, font: Font.bold(with: sizeType))
+        classNameView = TextFormView(text: Cell.name, font: Font.bold(with: sizeType))
         
         super.init()
         children = [classNameView, isLockedView]
-        isLockedView.binding = { [unowned self] in self.setIsLocked(with: $0) }
+        self.frame = frame
     }
     
     override var defaultBounds: Rect {
@@ -409,28 +419,8 @@ final class CellView: View {
         isLockedView.frame = Rect(x: classNameView.frame.maxX + padding, y: padding,
                                   width: tlw, height: h)
     }
-    private func updateWithCell() {
-        isLockedView.bool = !cell.isLocked
-    }
-    
-    struct Binding {
-        let cellView: CellView
-        let isLocked: Bool, oldIsLocked: Bool, inCell: Cell, phase: Phase
-    }
-    var setIsLockedClosure: ((Binding) -> ())?
-    
-    private var oldCell = Cell()
-    private func setIsLocked(with binding: BoolView.Binding) {
-        if binding.phase == .began {
-            oldCell = cell
-        } else {
-            cell.isLocked = binding.bool
-        }
-        setIsLockedClosure?(Binding(cellView: self,
-                                    isLocked: binding.bool,
-                                    oldIsLocked: binding.oldBool,
-                                    inCell: oldCell,
-                                    phase: binding.phase))
+    func updateWithModel() {
+        isLockedView.updateWithModel()
     }
 }
 extension CellView: Localizable {
@@ -439,10 +429,12 @@ extension CellView: Localizable {
     }
 }
 extension CellView: Copiable {
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [cell]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
 }
 extension CellView: Queryable {
-    static let referenceableType: Referenceable.Type = Cell.self
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
 }

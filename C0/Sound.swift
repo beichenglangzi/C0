@@ -17,7 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
 import AudioToolbox
 
 struct Sound {
@@ -26,8 +25,8 @@ struct Sound {
     var url: URL? {
         didSet {
             if let url = url {
-                self.bookmark = try? url.bookmarkData()
-                self.name = url.lastPathComponent
+                bookmark = try? url.bookmarkData()
+                name = url.lastPathComponent
             }
         }
     }
@@ -35,6 +34,16 @@ struct Sound {
     var name = ""
     var volume = 1.0
     var isHidden = false
+    
+    init() {}
+    init?(url: URL) {
+        guard url.isConforms(type: kUTTypeAudio as String) else {
+            return nil
+        }
+        self.url = url
+        bookmark = try? url.bookmarkData()
+        name = url.lastPathComponent
+    }
     
     private enum CodingKeys: String, CodingKey {
         case bookmark, name,volume, isHidden
@@ -285,22 +294,28 @@ final class SoundWaveformView: View {
  Issue: 効果音編集
  Issue: シーケンサー
  */
-final class SoundView: View {
-    var sound = Sound() {
-        didSet {
-            nameView.text = sound.url != nil ? Text(sound.name) : ""
-        }
+final class SoundView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = Sound
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
     }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var defaultModel = Sound()
     
     var sizeType: SizeType
     let classNameView: TextFormView
-    let nameView: TextView<Binder>
+    let nameView: StringView<Binder>
     
     init(sizeType: SizeType = .regular) {
         self.sizeType = sizeType
         classNameView = TextFormView(text: Sound.name, font: Font.bold(with: sizeType))
-        nameView = TextView(text: "", font: Font.default(with: sizeType),
-                            isSizeToFit: false, isLocked: false)
+        var textMaterial = TextMaterial()
+        textMaterial.font = Font.default(with: sizeType)
+        nameView = StringView(binder: binder, keyPath: keyPath.appending(path: \Model.name),
+                              textMaterial: textMaterial, isSizeToFit: false)
         
         super.init()
         isClipped = true
@@ -316,15 +331,8 @@ final class SoundView: View {
                                 width: bounds.width - classNameView.frame.maxX - padding * 2,
                                 height: bounds.height - padding * 2)
     }
-    
-    struct Binding {
-        let soundView: SoundView, sound: Sound, oldSound: Sound, phase: Phase
-    }
-    var setSoundClosure: ((Binding) -> ())?
-    
-    func push(_ sound: Sound) {
-        //        registeringUndoManager?.registerUndo(withTarget: self) { [old =]$0.set(oldSound, old: sound) }
-        self.sound = sound
+    func updateWithModel() {
+        nameView.model = model.url != nil ? model.name : ""
     }
 }
 extension SoundView: Localizable {
@@ -333,27 +341,27 @@ extension SoundView: Localizable {
     }
 }
 extension SoundView: Queryable {
-    static let referenceableType: Referenceable.Type = Sound.self
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
 }
 extension SoundView: Assignable {
-    func delete(for p: Point) {
-        push(Sound())
+    func delete(for p: Point, _ version: Version) {
+        push(defaultModel, to: version)
     }
-    func copiedObjects(at p: Point) -> [Viewable] {
-        guard let url = sound.url else {
-            return [sound]
+    func copiedObjects(at p: Point) -> [Object] {
+        guard let url = model.url else {
+            return [Object(model)]
         }
-        return [sound, url]
+        return [Object(model), Object(url)]
     }
-    func paste(_ objects: [Object], for p: Point) {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         for object in objects {
-            if let sound = object as? Sound {
-                push(sound)
+            if let model = object as? Model {
+                push(model, to: version)
                 return
-            } else if let url = object as? URL, url.isConforms(type: kUTTypeAudio as String) {
-                var sound = Sound()
-                sound.url = url
-                push(sound)
+            } else if let url = object as? URL, let model = Model(url: url) {
+                push(model, to: version)
                 return
             }
         }

@@ -88,64 +88,6 @@ struct TrackTree<Value: KeyframeValue>: Track, Codable, TreeNode {
         }
         return maxDuration
     }
-    
-    //    var diffDataModel: DataModel {
-    //        didSet {
-    //            diffDataModel.dataClosure = { [unowned self] in self.diff.jsonData }
-    //        }
-    //    }
-    //    func read() {
-    //        if !diffDataModel.isRead,
-    //            let diff: NodeDiff = diffDataModel.readObject() {
-    //
-    //            self.diff = diff
-    //        }
-    //    }
-    //    var diff: NodeDiff {
-    //        get {
-    //            let trackDiffs = tracks.reduce(into: [UUID: MultipleTrackDiff]()) { trackDiffs, track in
-    //                let cellDiffs = track.geometryItems.enumerated().reduce(into: [UUID: CellDiff]()) {
-    //                    $0[$1.element.id] = CellDiff(geometry: track.cells[$1.offset].geometry,
-    //                                                 keyGeometries: $1.element.keyGeometries)
-    //                }
-    //                trackDiffs[track.id] = MultipleTrackDiff(drawing: track.drawing,
-    //                                                         keyDrawings: track.drawingItem.keyDrawings,
-    //                                                         cellDiffs: cellDiffs)
-    //            }
-    //            return NodeDiff(trackDiffs: trackDiffs)
-    //        }
-    //        set {
-    //            tracks.forEach { track in
-    //                guard let td = newValue.trackDiffs[track.id] else {
-    //                    return
-    //                }
-    //                track.drawing = td.drawing
-    //                if track.drawingItem.keyDrawings.count == td.keyDrawings.count {
-    //                    track.set(td.keyDrawings)
-    //                } else {
-    //                    let count = min(track.drawingItem.keyDrawings.count, td.keyDrawings.count)
-    //                    var keyDrawings = track.drawingItem.keyDrawings
-    //                    (0..<count).forEach { keyDrawings[$0] = td.keyDrawings[$0] }
-    //                    track.set(keyDrawings)
-    //                }
-    //
-    //                track.geometryItems.enumerated().forEach { (i, geometryItem) in
-    //                    guard let gs = td.cellDiffs[geometryItem.id] else {
-    //                        return
-    //                    }
-    //                    track.cells[i].geometry = gs.geometry
-    //                    if geometryItem.keyGeometries.count == gs.keyGeometries.count {
-    //                        track.set(gs.keyGeometries, in: geometryItem, isSetGeometryInCell: false)
-    //                    } else {
-    //                        let count = min(geometryItem.keyGeometries.count, gs.keyGeometries.count)
-    //                        var keyGeometries = geometryItem.keyGeometries
-    //                        (0..<count).forEach { keyGeometries[$0] = gs.keyGeometries[$0] }
-    //                        track.set(keyGeometries, in: geometryItem, isSetGeometryInCell: false)
-    //                    }
-    //                }
-    //            }
-    //        }
-    //    }
 }
 
 /**
@@ -185,17 +127,28 @@ extension AlgebraicTrackItem: Codable {
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        if let track = try? values.decode(TempoTrack.self, forKey: .tempo) {
-            self = .tempo(track)
-        } else if let track = try? values.decode(SubtitleTrack.self, forKey: .subtitle) {
-            self = .subtitle(track)
-        } else if let track = try? values.decode(TransformTrack.self, forKey: .transform) {
-            self = .transform(track)
-        } else if let track = try? values.decode(WiggleTrack.self, forKey: .wiggle) {
-            self = .wiggle(track)
-        } else {
+        guard let key = values.allKeys.first else {
             throw CodingError.decoding("\(dump(values))")
         }
+        switch key {
+        case .tempo:
+            if let track = try? values.decode(TempoTrack.self, forKey: key) {
+                self = .tempo(track)
+            }
+        case .subtitle:
+            if let track = try? values.decode(SubtitleTrack.self, forKey: key) {
+                self = .subtitle(track)
+            }
+        case .transform:
+            if let track = try? values.decode(TransformTrack.self, forKey: key) {
+                self = .transform(track)
+            }
+        case .wiggle:
+            if let track = try? values.decode(WiggleTrack.self, forKey: key) {
+                self = .wiggle(track)
+            }
+        }
+        throw CodingError.decoding("\(dump(values))")
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)

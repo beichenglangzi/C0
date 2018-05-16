@@ -19,12 +19,12 @@
 
 import struct Foundation.Locale
 
-typealias Object0D = ObjectProtocol & Referenceable
+typealias Object0D = Codable & Referenceable
 
 protocol GetterOption {
     associatedtype Model: Object0D
     func string(with model: Model) -> String
-    func text(with model: Model) -> Text
+    func displayText(with model: Model) -> Text
 }
 
 final class GetterView<T: GetterOption, U: BinderProtocol>: View, BindableGetterReceiver {
@@ -43,7 +43,7 @@ final class GetterView<T: GetterOption, U: BinderProtocol>: View, BindableGetter
     }
     
     var sizeType: SizeType
-    let optionTextView: TextFormView
+    let optionStringView: TextFormView
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
@@ -53,31 +53,31 @@ final class GetterView<T: GetterOption, U: BinderProtocol>: View, BindableGetter
         self.option = option
         
         self.sizeType = sizeType
-        optionTextView = TextFormView(text: option.text(with: model),
-                                      font: Font.default(with: sizeType),
-                                      frameAlignment: .right, alignment: .right)
+        optionStringView = TextFormView(text: option.displayText(with: model),
+                                        font: Font.default(with: sizeType),
+                                        frameAlignment: .right, alignment: .right)
         
         super.init()
         noIndicatedLineColor = .getBorder
         indicatedLineColor = .indicated
         isClipped = true
-        children = [optionTextView]
+        children = [optionStringView]
         self.frame = frame
     }
     
     override var defaultBounds: Rect {
-        return optionTextView.defaultBounds
+        return optionStringView.defaultBounds
     }
     override func updateLayout() {
-        optionTextView.frame.origin = Point(x: bounds.width - optionTextView.frame.width,
-                                            y: bounds.height - optionTextView.frame.height)
+        optionStringView.frame.origin = Point(x: bounds.width - optionStringView.frame.width,
+                                            y: bounds.height - optionStringView.frame.height)
         updateWithModel()
     }
     func updateWithModel() {
         updateString()
     }
     private func updateString() {
-        optionTextView.text = option.text(with: model)
+        optionStringView.text = option.displayText(with: model)
     }
 }
 extension GetterView: Queryable {
@@ -87,7 +87,7 @@ extension GetterView: Queryable {
 }
 extension GetterView: Copiable {
     func copiedObjects(at p: Point) -> [Object] {
-        return [model.object]
+        return [Object(model)]
     }
 }
 
@@ -174,6 +174,6 @@ extension MiniView: Queryable {
 }
 extension MiniView: Copiable {
     func copiedObjects(at p: Point) -> [Object] {
-        return [model.object]
+        return [Object(model)]
     }
 }

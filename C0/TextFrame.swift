@@ -23,6 +23,19 @@ import class Foundation.NSAttributedString
 import class Foundation.NSMutableAttributedString
 import CoreText
 
+enum TextAlignment {
+    case left, center, right, natural, justified
+    fileprivate var ct: CTTextAlignment {
+        switch self {
+        case .left: return .left
+        case .center: return .center
+        case .right: return .right
+        case .natural: return .natural
+        case .justified: return .justified
+        }
+    }
+}
+
 extension NSAttributedStringKey {
     static let ctFont = NSAttributedStringKey(rawValue: String(kCTFontAttributeName))
     static let ctForegroundColor = NSAttributedStringKey(rawValue:
@@ -32,8 +45,8 @@ extension NSAttributedStringKey {
 }
 extension NSAttributedString {
     static func attributesWith(font: Font, color: Color,
-                               alignment: CTTextAlignment = .natural) -> [NSAttributedStringKey: Any] {
-        var alignment = alignment
+                               alignment: TextAlignment = .natural) -> [NSAttributedStringKey: Any] {
+        var alignment = alignment.ct
         let settings = [CTParagraphStyleSetting(spec: .alignment,
                                                 valueSize: MemoryLayout<CTTextAlignment>.size,
                                                 value: &alignment)]
@@ -46,7 +59,7 @@ extension NSAttributedString {
 
 struct TextMaterial {
     var font = Font.default, color = Color.locked
-    var frameAlignment = CTTextAlignment.left, alignment = CTTextAlignment.natural
+    var frameAlignment = TextAlignment.left, alignment = TextAlignment.natural
     
     func fitFrameWith(defaultBounds: Rect, frame: Rect) -> Rect {
         let size = defaultBounds.size
@@ -100,9 +113,6 @@ struct TextFrame {
         let attributedString = NSMutableAttributedString(string: string, attributes: attributes)
         self.init(attributedString: attributedString,
                   baseFont: textMaterial.font, frameWidth: frameWidth)
-    }
-    init(text: Text, textMaterial: TextMaterial, frameWidth: Real? = nil) {
-        self.init(string: text.currentString, textMaterial: textMaterial, frameWidth: frameWidth)
     }
     
     func bounds(padding: Real) -> Rect {

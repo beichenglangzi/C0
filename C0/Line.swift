@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import CoreGraphics
 
 /**
  Issue: 線の描画の品質改善
@@ -681,7 +681,8 @@ struct Line: Codable {
                 || intersects(Bezier2.linear(x0y1, x0y0))
         }
     }
-    
+}
+extension Line {
     //View
     static func drawMainPointsWith(lines: [Line], inColor: Color = .controlEditPointIn,
                                    outColor: Color = .controlPointOut,
@@ -896,10 +897,10 @@ extension Line: Interpolatable {
         }
     }
 }
-extension Line: MiniViewable {
+extension Line: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
-        thumbnailView.bounds = bounds
+        thumbnailView.frame = frame
         return thumbnailView
     }
     func draw(with bounds: Rect, in ctx: CGContext) {

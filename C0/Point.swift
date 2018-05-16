@@ -278,10 +278,9 @@ extension Point: Referenceable {
 }
 extension Point: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return (jsonString ?? "").view(withBounds: bounds, sizeType)
+        return (jsonString ?? "").thumbnailView(withFrame: frame, sizeType)
     }
 }
-extension Point: MiniViewable {}
 
 extension Array where Element == Point {
     var convexHull: [Point] {
@@ -338,8 +337,12 @@ struct PointOption: Object2DOption {
     var xOption: XOption
     var yOption: YOption
     
-    func model(with string: String) -> Model? {
-        return Model(jsonString: string)
+    func model(with object: Any) -> Model? {
+        switch object {
+        case let value as Model: return value
+        case let value as String: return Model(jsonString: value)
+        default: return nil
+        }
     }
 }
 typealias SlidablePointView<Binder: BinderProtocol> = Slidable2DView<PointOption, Binder>

@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import CoreGraphics
 
 /**
  Issue: Lab色空間ベースのカラーピッカー及びカラー補間
@@ -422,10 +422,7 @@ extension Color {
 }
 extension Color: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        let view = View(isLocked: true)
-        view.frame = frame
-        view.fillColor = self
-        return view
+        return View(frame: frame, fillColor: self, isLocked: true)
     }
 }
 
@@ -563,7 +560,7 @@ final class ColorView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var defaultModel = Color()
+    var defaultModel = Model()
     
     let hueView: CircularRealView<Binder>
     let slView: SlidablePointView<Binder>
@@ -575,7 +572,7 @@ final class ColorView<T: BinderProtocol>: View, BindableReceiver {
     }
     var hueCircle = HueCircle() {
         didSet {
-            hueDrawView.draw()
+            hueDrawView.displayLinkDraw()
         }
     }
     var slRatio = 0.82.cg {
@@ -690,10 +687,10 @@ extension ColorView: Assignable {
     func delete(for p: Point, _ version: Version) {
         push(defaultModel, to: version)
     }
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [model]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
-    func paste(_ objects: [Object], for p: Point, _ version: Version) {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         for object in objects {
             if let model = object as? Model {
                 push(model, to: version)

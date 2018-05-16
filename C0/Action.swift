@@ -281,7 +281,6 @@ struct EventMap {
         }
         
         actionEvents = newActionEvents
-        //        print(draggers.map { $0.event.phase }, "N", newActionEvents.map { $0.phase })
     }
     mutating func removeEndedActionEvent() {
         actionEvents = actionEvents.filter { $0.phase != .ended }
@@ -920,7 +919,7 @@ protocol Copiable {
 }
 protocol Assignable: Copiable {
     func delete(for p: Point, _ version: Version)
-    func paste(_ objects: [Object], for p: Point, _ version: Version)
+    func paste(_ objects: [Any], for p: Point, _ version: Version)
 }
 final class AssignableActionManager: ActionManagable {
     typealias Viewer = View & CopiedObjectsViewer

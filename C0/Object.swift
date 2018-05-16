@@ -20,59 +20,79 @@
 /**
  Issue: Protocolから静的に決定可能な代数的データ型のコードを自動生成
  */
-enum Object {
-    case bool(Bool)
-    case int(Int)
-    case rational(Rational)
-    case real(Real)
-    case string(String)
-    case array([Bool])
+struct Object {
+    var value: Codable & Referenceable
+    init(_ value: Codable & Referenceable) {
+        self.value = value
+    }
+//    case bool(Bool)
+//    case int(Int)
+//    case rational(Rational)
+//    case real(Real)
+//    case point(Point)
+//    case size(Size)
+//    case string(String)
+//    case array([Bool])
     
-    var bool: Bool {
-        get {
-            switch self {
-            case .bool(let value): return value
-            default: return Bool()
-            }
-        }
-        set {
-            self = .bool(newValue)
-        }
+//    var value: Codable & Referenceable {
+//        switch self {
+//        case .bool(let value): return value
+//        case .int(let value): return value
+//        default: return nil
+//        }
+//    }
+    
+    private var bool: Bool {
+        get { return value as! Bool }
+        set { value = newValue }
     }
-    var int: Int? {
-        switch self {
-        case .int(let value): return value
-        default: return nil
-        }
-    }
-    var real: Real? {
-        switch self {
-        case .real(let value): return value
-        default: return nil
-        }
-    }
-    var string: String? {
-        switch self {
-        case .string(let value): return value
-        default: return nil
-        }
+//    var int: Int? {
+//        switch self {
+//        case .int(let value): return value
+//        default: return nil
+//        }
+//    }
+//    var real: Real? {
+//        switch self {
+//        case .real(let value): return value
+//        default: return nil
+//        }
+//    }
+//    var string: String? {
+//        switch self {
+//        case .string(let value): return value
+//        default: return nil
+//        }
+//    }
+    
+    private enum CodingKeys: CodingKey {
+        case bookmark, name,volume, isHidden
     }
 }
 extension Object: Decodable {
     init(from decoder: Decoder) throws {
         
+        let key = ""
+        switch key {
+        case String(describing: Bool.self):
+            
+        default:
+            <#code#>
+        }
     }
 }
 extension Object: Encodable {
     func encode(to encoder: Encoder) throws {
+//        let t = type(of: value)
+//        let s = String(describing: t)
         
     }
 }
 extension Object: AbstractViewable {
     func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
                              frame: Rect, _ sizeType: SizeType) -> View where T : BinderProtocol {
-        switch self {
-        case .bool(let value):
+        switch value {
+        case (let value as Bool):
             return value.abstractViewWith(binder: binder,
                                           keyPath: keyPath.appending(path: \Object.bool),
                                           frame: frame, sizeType)

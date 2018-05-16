@@ -71,12 +71,12 @@ extension Wiggle: Interpolatable {
     }
 }
 extension Wiggle: Referenceable {
-    static let name = Text(english: "Wiggle", japanese: "振動")
+    static let name = Text(english: "Sine Wave", japanese: "サイン波")
 }
 extension Wiggle: KeyframeValue {}
-extension Wiggle: MiniViewable {
+extension Wiggle: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return View(isLocked: true)
+        return View(frame: frame, isLocked: true)
     }
 }
 
@@ -216,43 +216,56 @@ struct WiggleTrack: Track, Codable {
 }
 
 
-final class WiggleView: View {
-    var wiggle = Wiggle() {
-        didSet {
-            if wiggle != oldValue {
-                updateWithWiggle()
-            }
-        }
+final class WiggleView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = Wiggle
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
     }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var defaultModel = Model()
     
+    let amplitudeView: DiscreteRealView<Binder>
+    let frequencyView: DiscreteRealView<Binder>
+    
+    var standardAmplitude: Real
     let classNameView: TextFormView
-    let classAmplitudeNameView: TextView
-    let amplitudeView: DiscreteRealView
-    let classFrequencyNameView: TextView
-    let frequencyView: DiscreteRealView
+    let classAmplitudeNameView: TextFormView
+    let classFrequencyNameView: TextFormView
     
-    init(sizeType: SizeType = .regular) {
-        classNameView = TextView(text: Wiggle.name, font: Font.bold(with: sizeType))
-        classAmplitudeNameView = TextView(text: "A:", font: Font.default(with: sizeType))
-        amplitudeView = DiscreteRealView(model: wiggle.amplitude, option: Wiggle.amplitudeOption,
+    init(binder: Binder, keyPath: BinderKeyPath, standardAmplitude: Real = 1.0,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        amplitudeView = DiscreteRealView(binder: binder,
+                                         keyPath: keyPath.appending(path: \Wiggle.amplitude),
+                                         option: Wiggle.amplitudeOption,
                                          frame: Layout.valueFrame(with: sizeType),
                                          sizeType: sizeType)
-        classFrequencyNameView = TextView(text: "ƒ:")
-        frequencyView = DiscreteRealView(model: wiggle.frequency, option: Wiggle.frequencyOption,
+        frequencyView = DiscreteRealView(binder: binder,
+                                         keyPath: keyPath.appending(path: \Wiggle.frequency),
+                                         option: Wiggle.frequencyOption,
                                          frame: Layout.valueFrame(with: sizeType),
                                          sizeType: sizeType)
+        
+        self.standardAmplitude = standardAmplitude
+        classNameView = TextFormView(text: Wiggle.name, font: Font.bold(with: sizeType))
+        classAmplitudeNameView = TextFormView(text: "A:", font: Font.default(with: sizeType))
+        classFrequencyNameView = TextFormView(text: "ƒ:")
         
         super.init()
         children = [classNameView,
                     classAmplitudeNameView, amplitudeView,
                     classFrequencyNameView, frequencyView]
-        
-        amplitudeView.binding = { [unowned self] in self.setWiggle(with: $0) }
-        frequencyView.binding = { [unowned self] in self.setWiggle(with: $0) }
+        self.frame = frame
     }
     
     override var defaultBounds: Rect {
-        let w = MaterialView.defaultWidth + Layout.basicPadding * 2
+        let w = Layout.propertyWidth + Layout.basicPadding * 2
         let h = Layout.basicHeight * 2 + Layout.basicPadding * 2
         return Rect(x: 0, y: 0, width: w, height: h)
     }
@@ -266,44 +279,9 @@ final class WiggleView: View {
         classFrequencyNameView.frame.origin.x
             = frequencyView.frame.minX - classFrequencyNameView.frame.width
     }
-    private func updateWithWiggle() {
+    func updateWithModel() {
         amplitudeView.model = 10 * wiggle.amplitude / standardAmplitude
-        frequencyView.model = wiggle.frequency
-    }
-    
-    var standardAmplitude = 1.0.cg
-    
-    struct Binding {
-        let wiggleView: WiggleView
-        let wiggle: Wiggle, oldWiggle: Wiggle, phase: Phase
-    }
-    var binding: ((Binding) -> ())?
-    
-    private var oldWiggle = Wiggle()
-    private func setWiggle(with obj: DiscreteRealView.Binding<Real>) {
-        if obj.phase == .began {
-            oldWiggle = wiggle
-            binding?(Binding(wiggleView: self,
-                             wiggle: oldWiggle, oldWiggle: oldWiggle, phase: .began))
-        } else {
-            switch obj.view {
-            case amplitudeView:
-                wiggle.amplitude = obj.model * standardAmplitude / 10
-            case frequencyView:
-                wiggle.frequency = obj.model
-            default:
-                fatalError("No case")
-            }
-            binding?(Binding(wiggleView: self,
-                             wiggle: wiggle, oldWiggle: oldWiggle, phase: obj.phase))
-        }
-    }
-    
-    func push(_ wiggle: Wiggle) {
-//        registeringUndoManager?.registerUndo(withTarget: self) {
-//            $0.set(oldWiggle, oldWiggle: wiggle)
-//        }
-        self.wiggle = wiggle
+        frequencyView.updateWithModel()
     }
 }
 extension WiggleView: Localizable {
@@ -312,22 +290,22 @@ extension WiggleView: Localizable {
     }
 }
 extension WiggleView: Queryable {
-    static let referenceableType: Referenceable.Type = Wiggle.self
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
 }
 extension WiggleView: Assignable {
-    func delete(for p: Point) {
-        push(Wiggle())
+    func delete(for p: Point, _ version: Version) {
+        push(defaultModel, to: version)
     }
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [wiggle]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
-    func paste(_ objects: [Object], for p: Point) {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         for object in objects {
-            if let wiggle = object as? Wiggle {
-                if wiggle != self.wiggle {
-                    push(wiggle)
-                    return
-                }
+            if let model = object as? Model {
+                push(model, to: version)
+                return
             }
         }
     }

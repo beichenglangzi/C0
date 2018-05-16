@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import CoreGraphics
 
 struct Drawing: Codable, Equatable {
     static let defaultLineWidth = 1.0.cg
@@ -94,7 +94,8 @@ struct Drawing: Codable, Equatable {
     var imageBounds: Rect {
         return imageBounds(withLineWidth: lineWidth)
     }
-    
+}
+extension Drawing {
     //view
     func drawEdit(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
         drawEdit(lineWidth: lineWidth * reciprocalScale, lineColor: lineColor, in: ctx)
@@ -127,10 +128,10 @@ struct Drawing: Codable, Equatable {
 extension Drawing: Referenceable {
     static let name = Text(english: "Drawing", japanese: "ドローイング")
 }
-extension Drawing: MiniViewable {
+extension Drawing: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
-        thumbnailView.bounds = bounds
+        thumbnailView.frame = frame
         return thumbnailView
     }
     func draw(with bounds: Rect, in ctx: CGContext) {
@@ -145,33 +146,40 @@ extension Drawing: MiniViewable {
 /**
  Issue: DraftArray、下書き化などのコマンドを排除
  */
-final class DrawingView: View {
-    var drawing = Drawing() {
-        didSet {
-            updateWithDrawing()
-        }
+final class DrawingView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = Drawing
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
     }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var defaultModel = Model()
     
-    let linesView = ArrayCountView<Line>()
-    let draftLinesView = ArrayCountView<Line>()
+    let linesView: ArrayCountView<Line, Binder>
+    let draftLinesView: ArrayCountView<Line, Binder>
     
     var sizeType: SizeType
     let classNameView: TextFormView
-    let classDraftLinesNameView = TextView(text: Text(english: "Draft Lines:", japanese: "下書き線:"))
+    let draftLinesNameView = TextFormView(text: Text(english: "Draft Lines:", japanese: "下書き線:"))
     let changeToDraftView = ClosureView(name: Text(english: "Change to Draft", japanese: "下書き化"))
     let exchangeWithDraftView = ClosureView(name: Text(english: "Exchange with Draft",
                                                        japanese: "下書きと交換"))
     
-    init(drawing: Drawing = Drawing(), sizeType: SizeType = .regular) {
+    init(binder: T, keyPath: BinderKeyPath, frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        self.binder = binder
+        self.keyPath = keyPath
+        
         self.sizeType = sizeType
-        classNameView = TextView(text: Drawing.name, font: Font.bold(with: sizeType))
+        classNameView = TextFormView(text: Model.name, font: Font.bold(with: sizeType))
         
         super.init()
-        changeToDraftView.closure = { [unowned self] in self.changeToDraft() }
-        exchangeWithDraftView.closure = { [unowned self] in self.exchangeWithDraft() }
+        changeToDraftView.model = { [unowned self] in self.changeToDraft($0) }
+        exchangeWithDraftView.model = { [unowned self] in self.exchangeWithDraft($0) }
         children = [classNameView,
                     linesView,
-                    classDraftLinesNameView, draftLinesView,
+                    draftLinesNameView, draftLinesView,
                     changeToDraftView, exchangeWithDraftView]
     }
     
@@ -194,58 +202,47 @@ final class DrawingView: View {
         py -= lsdb.height
         draftLinesView.frame = Rect(x: bounds.maxX - lsdb.width - padding, y: py,
                                       width: lsdb.width, height: lsdb.height)
-        let fcdlnvw = classDraftLinesNameView.frame.width
-        classDraftLinesNameView.frame.origin = Point(x: draftLinesView.frame.minX - fcdlnvw,
+        let fcdlnvw = draftLinesNameView.frame.width
+        draftLinesNameView.frame.origin = Point(x: draftLinesView.frame.minX - fcdlnvw,
                                                            y: py + padding)
         py -= buttonH
         changeToDraftView.frame = Rect(x: px, y: py, width: pw, height: buttonH)
         py -= buttonH
         exchangeWithDraftView.frame = Rect(x: px, y: py, width: pw, height: buttonH)
     }
-    private func updateWithDrawing() {
-        linesView.array = drawing.lines
-        draftLinesView.array = drawing.draftLines
+    func updateWithModel() {
+        linesView.updateWithModel()
+        draftLinesView.updateWithModel()
     }
     
-    struct Binding {
-        let view: DrawingView
-        let drawing: Drawing, oldDrawing: Drawing, phase: Phase
+    func changeToDraft(_ version: Version) {
+        capture(model, to: version)
+        model.draftLines = model.lines
+        model.lines = []
     }
-    var binding: ((Binding) -> ())?
-    
-    func changeToDraft() {
-        //register() { $0.drawing = drawing }
-        drawing.draftLines = drawing.lines
-        drawing.lines = []
-    }
-    func exchangeWithDraft() {
-        //r
-        let lines = drawing.lines
-        drawing.lines = drawing.draftLines
-        drawing.draftLines = lines
-    }
-    
-    private func push(_ drawing: Drawing) {
-//        registeringUndoManager?.registerUndo(withTarget: self) {
-//            $0.set(oldDrawing, old: drawing)
-//        }
-        self.drawing = drawing
+    func exchangeWithDraft(_ version: Version) {
+        capture(model, to: version)
+        let lines = model.lines
+        model.lines = model.draftLines
+        model.draftLines = lines
     }
 }
 extension DrawingView: Queryable {
-    static let referenceableType: Referenceable.Type = Drawing.self
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
 }
 extension DrawingView: Assignable {
-    func delete(for p: Point) {
-        push(Drawing())
+    func delete(for p: Point, _ version: Version) {
+        push(defaultModel, to: version)
     }
-    func copiedObjects(at p: Point) -> [Viewable] {
-        return [drawing.copied]
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
-    func paste(_ objects: [Object], for p: Point) {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         for object in objects {
-            if let drawing = object as? Drawing {
-                push(drawing.copied)
+            if let model = object as? Model {
+                push(model, to: version)
                 return
             }
         }
