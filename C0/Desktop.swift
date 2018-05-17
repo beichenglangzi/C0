@@ -91,6 +91,11 @@ extension Desktop {
                                                         name: Text(english: "Action Manager",
                                                                    japanese: "アクション管理"),
                                                         info: .hidden)
+    private static let isrInfo = BoolOption.Info(trueName: Text(english: "Outline",  japanese: "概略"),
+                                                 falseName: Text(english: "detail", japanese: "詳細"))
+    static let isSimpleReferenceOption = BoolOption(defaultModel: false, cationModel: nil,
+                                                    name: Text(english: "Reference", japanese: "情報"),
+                                                    info: isrInfo)
 }
 
 /**
@@ -106,12 +111,12 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         didSet { updateWithModel() }
     }
 
-    let versionView: VersionView
+    let versionView: VersionView<Binder>
     let copiedObjectsNameView = TextFormView(text: Text(english: "Copied:", japanese: "コピー済み:"))
-    let copiedObjectsView: AnyArrayView
+    let copiedObjectsView: MiniViewablesView<Binder>
     let isHiddenActionManagerView: BoolView<Binder>
     let isSimpleReferenceView: BoolView<Binder>
-    let infoView: ReferenceView<Binder>
+    let referenceView: ReferenceView<Binder>
     let actionManagerView = SenderView()
     let objectsView: AnyArrayView
     let sceneView: SceneView<Binder>
@@ -130,18 +135,15 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         self.binder = binder
         self.keyPath = keyPath
         
-        versionView.version = desktopBinder.version
-        
         let ihamKeyPath = keyPath.appending(path: \Model.isHiddenActionManager)
         isHiddenActionManagerView = BoolView(binder: binder, keyPath: ihamKeyPath,
                                              option: Model.isHiddenActionManagerOption,
                                              sizeType: sizeType)
         
-        isSimpleReferenceView = (name: Text(english: "Reference", japanese: "情報"),
-                                 boolInfo: BoolInfo(trueName: Text(english: "Outline",
-                                                                   japanese: "概略"),
-                                                    falseName: Text(english: "detail",
-                                                                    japanese: "詳細")))
+        let isrKeyPath = keyPath.appending(path: \Model.isSimpleReference)
+        isSimpleReferenceView = BoolView(binder: binder, keyPath: isrKeyPath,
+                                         option: Model.isSimpleReferenceOption,
+                                         sizeType: sizeType)
         
         sceneView = SceneView(binder: binder, keyPath: \Model.objects)
         
@@ -151,7 +153,7 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         objectsView.children = [sceneView]
         children = [versionView, copiedObjectsNameView, copiedObjectsView,
                     isHiddenActionManagerView, isSimpleReferenceView,
-                    actionManagerView, infoView, objectsView]
+                    actionManagerView, referenceView, objectsView]
     }
 
     var isHiddenActionManagerBinding: ((Bool) -> ())?
@@ -191,11 +193,11 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         isHiddenActionManagerView.frame = Rect(x: isSimpleReferenceView.frame.maxX, y: headerY,
                                                width: ihamvw, height: topViewsHeight)
         if model.isSimpleReference {
-            infoView.frame = Rect(x: isHiddenActionManagerView.frame.maxX, y: headerY,
+            referenceView.frame = Rect(x: isHiddenActionManagerView.frame.maxX, y: headerY,
                                   width: actionWidth, height: topViewsHeight)
         } else {
             let h = model.isHiddenActionManager ? bounds.height - padding * 2 : referenceHeight
-            infoView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
+            referenceView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
                                   y: bounds.height - h - padding,
                                   width: actionWidth,
                                   height: h)
@@ -233,7 +235,7 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
 
     var objectViewWidth = 80.0.cg
     private func updateCopiedObjectViews() {
-        copiedObjectsView.array = model.copiedObjects
+        copiedObjectsView.updateWithModel()
         let padding = Layout.smallPadding
         let bounds = Rect(x: 0,
                           y: 0,
@@ -246,17 +248,21 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
     }
     private func updateCopiedObjectViewPositions() {
         let padding = Layout.smallPadding
-        _ = Layout.leftAlignment(copiedObjectsView.children, minX: padding, y: padding)
+        _ = Layout.leftAlignment(copiedObjectsView.children.map { .view($0) },
+                                 minX: padding, y: padding)
     }
 }
 extension DesktopView: ReferenceViewer {
     var reference: Reference {
         get {
-            return infoView.info
+            return referenceView.model
         }
         set {
-            push(newValue)
+            referenceView.model = newValue
         }
+    }
+    func push(_ reference: Reference, to version: Version) {
+        referenceView.push(reference, to: version)
     }
 }
 extension DesktopView: Queryable {
@@ -266,18 +272,19 @@ extension DesktopView: Queryable {
 }
 extension DesktopView: Versionable {
     var version: Version {
-        return binder.version
+        return versionView.model
     }
 }
 extension DesktopView: CopiedObjectsViewer {
     var copiedObjects: [Object] {
-        return model.copiedObjects
+        get {
+            return copiedObjectsView.model
+        }
+        set {
+            copiedObjectsView.model = newValue
+        }
     }
-    func push(copiedObjects: [Object]) {
-        //        undoManager?.registerUndo(withTarget: self) { [oldCopiedObjects = desktop.copiedObjects] in
-        //            $0.push(copiedObjects: oldCopiedObjects)
-        //        }
-        desktop.copiedObjects = copiedObjects
-        updateCopiedObjectViews()
+    func push(_ copiedObjects: [Object], to version: Version) {
+        copiedObjectsView.push(copiedObjects, to: version)
     }
 }

@@ -177,9 +177,9 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
     let isHiddenSubtitlesView: BoolView<Binder>
     let isHiddenPreviousView: BoolView<Binder>
     let isHiddenNextView: BoolView<Binder>
-    let timelineView: TimelineView
-    let canvasView: CanvasView
-    let playManagerView: PlayManagerView
+    let timelineView: TimelineView<Binder>
+    let canvasView: CanvasView<Binder>
+    let playerView: ScenePlayerView<Binder>
     
     let exportSubtitlesView = ClosureView(name: Text(english: "Export Subtitles",
                                                      japanese: "字幕を書き出す"))
@@ -187,7 +187,6 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
     let exportMovieView = ClosureView(name: Text(english: "Export Movie", japanese: "動画を書き出す"))
     
     let classNameView = TextFormView(text: Scene.name, font: .bold)
-    
     var encodingQueue = OperationQueue()
     var encoderViews = [View]()
     private let encoderWidth = 200.0.cg
@@ -260,9 +259,9 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
 //            self.playManagerView.maxTime = self.scene.secondTime(withBeatTime: $1)
 //        }
         
-        exportSubtitlesView.model = { [unowned self] in self.exportSubtitles() }
-        exportImageView.model = { [unowned self] in self.exportImage() }
-        exportMovieView.model = { [unowned self] in self.exportMovie() }
+        exportSubtitlesView.model = { [unowned self] _ in self.exportSubtitles() }
+        exportImageView.model = { [unowned self] _ in self.exportImage() }
+        exportMovieView.model = { [unowned self] _ in self.exportMovie() }
         
         updateWithModel()
         updateLayout()

@@ -23,6 +23,7 @@ typealias Object0D = Codable & Referenceable
 
 protocol GetterOption {
     associatedtype Model: Object0D
+    var reverseTransformedModel: ((Model) -> (Model)) { get }
     func string(with model: Model) -> String
     func displayText(with model: Model) -> Text
 }
@@ -36,6 +37,10 @@ final class GetterView<T: GetterOption, U: BinderProtocol>: View, BindableGetter
     }
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
+    }
+    
+    var model: Model {
+        return option.reverseTransformedModel(binder[keyPath: keyPath])
     }
     
     var option: ModelOption {

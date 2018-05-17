@@ -73,51 +73,7 @@ extension Array: Referenceable where Element: Referenceable {
     }
 }
 
-//extension Array: Viewable where Element: Viewable {
-//    func view(withBounds bounds: Rect, _ sizeType: SizeType) -> View {
-//        return ObjectView(object: self, thumbnailView: nil, minFrame: bounds, sizeType)
-//    }
-//}
-
-//extension Array: 
-
-final class MiniViewablesView<T: BinderProtocol>: View, BindableReceiver {
-    typealias Model = [Object]
-    typealias Binder = T
-    var binder: Binder {
-        didSet { updateWithModel() }
-    }
-    var keyPath: BinderKeyPath {
-        didSet { updateWithModel() }
-    }
-    
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
-        super.init()
-        isClipped = true
-        //children
-        self.frame = frame
-    }
-    func updateWithModel() {
-        
-    }
-}
-private struct _Viewables: Referenceable {
-    static let name = Text(english: "Array", japanese: "配列")
-}
-extension MiniViewablesView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return _Viewables.self
-    }
-}
-extension MiniViewablesView: Copiable {
-    func copiedObjects(at p: Point) -> [Model] {
-        return [model]
-    }
-}
-
-final class AbstractViewablesView<T: AbstractElement, U: BinderProtocol>: View, BindableReceiver {
+final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableReceiver {
     typealias Element = T
     typealias Model = [T]
     typealias Binder = U
@@ -131,6 +87,8 @@ final class AbstractViewablesView<T: AbstractElement, U: BinderProtocol>: View, 
     var sizeType: SizeType {
         didSet { updateLayout() }
     }
+    
+    var modelViews: [View]
     
     init(binder: Binder, keyPath: BinderKeyPath,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
@@ -156,12 +114,12 @@ final class AbstractViewablesView<T: AbstractElement, U: BinderProtocol>: View, 
         
     }
 }
-extension AbstractViewablesView: Queryable {
+extension ObjectsView: Queryable {
     static var referenceableType: Referenceable.Type {
         return [Model].self
     }
 }
-extension AbstractViewablesView: Copiable {
+extension ObjectsView: Copiable {
     func copiedObjects(at p: Point) -> [Object] {
         return [Object(model)]
     }

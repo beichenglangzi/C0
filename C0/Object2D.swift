@@ -191,7 +191,7 @@ extension Discrete2DView: Queryable {
     }
 }
 extension Discrete2DView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         push(option.defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {
@@ -285,7 +285,7 @@ extension Slidable2DView: Queryable {
     }
 }
 extension Slidable2DView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         push(option.defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {

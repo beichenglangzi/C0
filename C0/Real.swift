@@ -185,8 +185,17 @@ extension String {
 struct RealGetterOption: GetterOption {
     typealias Model = Real
     
+    var reverseTransformedModel: ((Model) -> (Model))
     var numberOfDigits: Int
     var unit: String
+    
+    init(reverseTransformedModel: @escaping ((Model) -> (Model)) = { $0 },
+         numberOfDigits: Int = 0, unit: String = "") {
+        
+        self.reverseTransformedModel = reverseTransformedModel
+        self.numberOfDigits = numberOfDigits
+        self.unit = unit
+    }
     
     func string(with model: Model) -> String {
         return "\(model)"
@@ -211,11 +220,28 @@ struct RealOption: Object1DOption {
     var defaultModel: Model
     var minModel: Model
     var maxModel: Model
-    var modelInterval = 0.0.cg
-    
-    var exp = 1.0.cg
+    var transformedModel: ((Model) -> (Model))
+    var reverseTransformedModel: ((Model) -> (Model))
+    var modelInterval: Model
+    var exp: Real
     var numberOfDigits: Int
     var unit: String
+    
+    init(defaultModel: Model, minModel: Model, maxModel: Model,
+         transformedModel: @escaping ((Model) -> (Model)) = { $0 },
+         reverseTransformedModel: @escaping ((Model) -> (Model)) = { $0 },
+         modelInterval: Model = 0, exp: Real = 1, numberOfDigits: Int = 0, unit: String = "") {
+        
+        self.defaultModel = defaultModel
+        self.minModel = minModel
+        self.maxModel = maxModel
+        self.transformedModel = transformedModel
+        self.reverseTransformedModel = reverseTransformedModel
+        self.modelInterval = modelInterval
+        self.exp = exp
+        self.numberOfDigits = numberOfDigits
+        self.unit = unit
+    }
     
     func model(with object: Any) -> Real? {
         switch object {
@@ -279,8 +305,7 @@ struct RealOption: Object1DOption {
     }
 }
 extension RealOption {
-    static let opacity = RealOption(defaultModel: 1, minModel: 0, maxModel: 1,
-                                    modelInterval: 0, exp: 1, numberOfDigits: 0, unit: "")
+    static let opacity = RealOption(defaultModel: 1, minModel: 0, maxModel: 1)
 }
 typealias AssignableRealView<Binder: BinderProtocol> = Assignable1DView<RealOption, Binder>
 typealias DiscreteRealView<Binder: BinderProtocol> = Discrete1DView<RealOption, Binder>

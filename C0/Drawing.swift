@@ -233,7 +233,7 @@ extension DrawingView: Queryable {
     }
 }
 extension DrawingView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         push(defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {

@@ -108,19 +108,6 @@ struct Transform: Codable, Initializable {//OrderedAfineTransform transformItems
         return translation == Point() && scale == Point(x: 1, y: 1) && rotation == 0
     }
 }
-extension Transform {
-    static let translationValueOption = RealOption(defaultModel: 0,
-                                                   minModel: -1000000, maxModel: 1000000,
-                                                   modelInterval: 0.01, exp: 1,
-                                                   numberOfDigits: 2, unit: "")
-    static let zOption = RealOption(defaultModel: 0, minModel: -20, maxModel: 20,
-                                    modelInterval: 0.01, exp: 1,
-                                    numberOfDigits: 2, unit: "")
-    static let thetaOption = RealOption(defaultModel: 0,
-                                        minModel: -10000, maxModel: 10000,
-                                        modelInterval: 0.5, exp: 1,
-                                        numberOfDigits: 1, unit: "°")
-}
 extension Transform: Equatable {
     static func ==(lhs: Transform, rhs: Transform) -> Bool {
         return lhs.translation == rhs.translation
@@ -187,8 +174,37 @@ extension TransformTrack: Referenceable {
     static let name = Text(english: "Transform Track", japanese: "トランスフォームトラック")
 }
 
+struct TransformOption {
+    var defaultModel = Transform()
+    
+    var standardTranslationValue = 1.0.cg {
+        didSet {
+            translationValueOption.transformedModel = { [standardTranslationValue] in
+                $0 * standardTranslationValue
+            }
+            translationValueOption.reverseTransformedModel = { [standardTranslationValue] in
+                $0 / standardTranslationValue
+            }
+        }
+    }
+    
+    var translationValueOption = RealOption(defaultModel: 0, minModel: -1000000, maxModel: 1000000,
+                                            modelInterval: 0.01, numberOfDigits: 2)
+    var zOption = RealOption(defaultModel: 0, minModel: -20, maxModel: 20,
+                             modelInterval: 0.01, numberOfDigits: 2)
+    var rotationOption = RealOption(defaultModel: 0, minModel: -10000, maxModel: 10000,
+                                    transformedModel: { $0 * .pi / 180 },
+                                    reverseTransformedModel: { $0 * 180 / .pi },
+                                    modelInterval: 0.5, numberOfDigits: 1)
+    
+    var translationOption: PointOption {
+        return PointOption(xOption: translationValueOption, yOption: translationValueOption)
+    }
+}
+
 final class TransformView<T: BinderProtocol>: View, BindableReceiver {
     typealias Model = Transform
+    typealias ModelOption = TransformOption
     typealias Binder = T
     var binder: Binder {
         didSet { updateWithModel() }
@@ -196,39 +212,48 @@ final class TransformView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var defaultModel = Model()
-    var standardTranslation = Point(x: 1, y: 1)
+    var option: ModelOption {
+        didSet {
+            translationView.option = option.translationOption
+            zView.option = option.zOption
+            rotationView.option = option.rotationOption
+            updateLayout()
+        }
+    }
     
     let translationView: DiscretePointView<Binder>
     let zView: DiscreteRealView<Binder>
     let rotationView: DiscreteRealView<Binder>
     
     var sizeType: SizeType {
-        didSet { updateLayout() }
+        didSet {
+            translationView.sizeType = sizeType
+            zView.sizeType = sizeType
+            rotationView.sizeType = sizeType
+            updateLayout()
+        }
     }
     let classNameView = TextFormView(text: Transform.name, font: .bold)
     let classZNameView = TextFormView(text: "z:")
     let classRotationNameView = TextFormView(text: "θ:")
     
-    init(binder: Binder, keyPath: BinderKeyPath, standardAmplitude: Real = 1.0,
+    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
         self.binder = binder
         self.keyPath = keyPath
+        self.option = option
         
         translationView = DiscretePointView(binder: binder,
                                             keyPath: keyPath.appending(path: \Model.translation),
-                                            option: PointOption(xOption: Model.translationValueOption,
-                                                                yOption: Model.translationValueOption),
+                                            option: option.translationOption,
                                             sizeType: sizeType)
-        
         zView = DiscreteRealView(binder: binder, keyPath: keyPath.appending(path: \Model.z),
-                                 option: Model.zOption,
+                                 option: option.zOption,
                                  frame: Layout.valueFrame(with: .regular), sizeType: sizeType)
-        
         rotationView = DiscreteRealView(binder: binder,
                                         keyPath: keyPath.appending(path: \Model.rotation),
-                                        option: Model.thetaOption,
+                                        option: option.rotationOption,
                                         frame: Layout.valueFrame(with: .regular), sizeType: sizeType)
         
         self.sizeType = sizeType
@@ -263,7 +288,7 @@ final class TransformView<T: BinderProtocol>: View, BindableReceiver {
     func updateWithModel() {
         translationView.updateWithModel()
         zView.updateWithModel()
-        thetaView.model = transform.rotation * 180 / (.pi)
+        rotationView.updateWithModel()
     }
 }
 extension TransformView: Localizable {
@@ -277,8 +302,8 @@ extension TransformView: Queryable {
     }
 }
 extension TransformView: Assignable {
-    func delete(for p: Point, _ version: Version) {
-        push(defaultModel, to: version)
+    func reset(for p: Point, _ version: Version) {
+        push(option.defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {
         return [Object(model)]

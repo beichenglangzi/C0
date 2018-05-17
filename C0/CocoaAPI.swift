@@ -182,8 +182,8 @@ private struct C0Coder {
             return try? decoder.decode(Easing.self, from: data)
         case typeKey(from: Transform.self):
             return try? decoder.decode(Transform.self, from: data)
-        case typeKey(from: Wiggle.self):
-            return try? decoder.decode(Wiggle.self, from: data)
+        case typeKey(from: SineWave.self):
+            return try? decoder.decode(SineWave.self, from: data)
         case typeKey(from: Effect.self):
             return try? decoder.decode(Effect.self, from: data)
         case typeKey(from: Line.self):

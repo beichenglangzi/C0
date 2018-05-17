@@ -241,7 +241,7 @@ struct Monospline {
 protocol KeyframeTimingProtocol {
     var timing: KeyframeTiming { get }
 }
-protocol KeyframeValue: Codable, Equatable, Interpolatable, Initializable, Referenceable {}
+protocol KeyframeValue: AbstractViewable, Codable, Equatable, Interpolatable, Initializable, Referenceable {}
 struct Keyframe<Value: KeyframeValue>: Codable, Equatable, KeyframeTimingProtocol {
     var value = Value()
     var timing = KeyframeTiming()
@@ -275,6 +275,21 @@ extension Keyframe: ThumbnailViewable {
         return timing.interpolation.displayText.thumbnailView(withFrame: frame, sizeType)
     }
 }
+extension Keyframe: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Keyframe>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> View {
+        switch type {
+        case .normal:
+            return KeyframeView(binder: binder, keyPath: keyPath,
+                                frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+
 
 struct KeyframeTiming: Codable, Hashable {
     enum Interpolation: Int8, Codable {
@@ -405,10 +420,22 @@ final class KeyframeView<Value: KeyframeValue, T: BinderProtocol>: View, Bindabl
     }
     var defaultModel = Model()
     
-    override init() {
+    var keyValueView: View
+    var keyframeTimingView: KeyframeTimingView<Binder>
+    
+    init(binder: Binder, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        super.init()
         
     }
     
+    override func updateLayout() {
+        
+    }
     func updateWithModel() {
         
     }
@@ -419,7 +446,7 @@ extension KeyframeView: Queryable {
     }
 }
 extension KeyframeView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         var model = Model()
         model.timing.time = self.model.timing.time
         push(model, to: version)
@@ -511,7 +538,7 @@ extension KeyframeTimingView: Queryable {
     }
 }
 extension KeyframeTimingView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         push(defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {

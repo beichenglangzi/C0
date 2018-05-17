@@ -1887,7 +1887,7 @@ extension CanvasView: Bindable {
     }
 }
 extension CanvasView: Assignable {
-    func delete(for point: Point) {
+    func reset(for point: Point) {
         //        let p = convertToCurrentLocal(point)
         //        if deleteCells(for: p) {
         //            return

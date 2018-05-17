@@ -303,7 +303,7 @@ final class MediaEncoderView<T: MediaEncoder>: View {
         self.sizeType = sizeType
         
         super.init()
-        stopView.model = { [unowned self] in self.stop() }
+        stopView.model = { [unowned self] _ in self.stop() }
         children = [textView, stopView]
         self.frame = frame
     }

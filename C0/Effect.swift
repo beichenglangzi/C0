@@ -113,7 +113,7 @@ struct EffectOption {
                                      rawValueClosure: { BlendType.RawValue($0) },
                                      names: BlendType.displayTexts)
     var blurRadiusOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1000,
-                                      modelInterval: 0.1, exp: 3, numberOfDigits: 0, unit: "")
+                                      modelInterval: 0.1, exp: 3)
     var opacityOption = RealOption.opacity
 }
 
@@ -220,7 +220,7 @@ extension EffectView: Queryable {
     }
 }
 extension EffectView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         push(defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {

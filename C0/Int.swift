@@ -61,7 +61,15 @@ extension Int: ThumbnailViewable {
 struct IntGetterOption: GetterOption {
     typealias Model = Int
     
+    var reverseTransformedModel: ((Model) -> (Model))
     var unit: String
+    
+    init(reverseTransformedModel: @escaping ((Model) -> (Model)) = { $0 },
+         unit: String = "") {
+        
+        self.reverseTransformedModel = reverseTransformedModel
+        self.unit = unit
+    }
     
     func string(with model: Model) -> String {
         return "\(model)"
@@ -78,10 +86,26 @@ struct IntOption: Object1DOption {
     var defaultModel: Model
     var minModel: Model
     var maxModel: Model
+    var transformedModel: ((Model) -> (Model))
+    var reverseTransformedModel: ((Model) -> (Model))
     var modelInterval: Model
-    
-    var exp = 1.0.cg
+    var exp: Real
     var unit: String
+    
+    init(defaultModel: Model, minModel: Model, maxModel: Model,
+         transformedModel: @escaping ((Model) -> (Model)) = { $0 },
+         reverseTransformedModel: @escaping ((Model) -> (Model)) = { $0 },
+         modelInterval: Model = 0, exp: Real = 1, unit: String = "") {
+        
+        self.defaultModel = defaultModel
+        self.minModel = minModel
+        self.maxModel = maxModel
+        self.transformedModel = transformedModel
+        self.reverseTransformedModel = reverseTransformedModel
+        self.modelInterval = modelInterval
+        self.exp = exp
+        self.unit = unit
+    }
     
     func model(with object: Any) -> Model? {
         switch object {

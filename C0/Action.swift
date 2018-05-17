@@ -838,8 +838,8 @@ final class RotatableActionManager: ActionManagable {
 }
 
 protocol ReferenceViewer: class {
-    var model: Reference { get }
-    func push(_ model: Reference, to version: Version)
+    var reference: Reference { get }
+    func push(_ reference: Reference, to version: Version)
 }
 protocol Queryable {
     static var referenceableType: Referenceable.Type { get }
@@ -911,21 +911,30 @@ final class UndoableActionManager: ActionManagable {
 }
 
 protocol CopiedObjectsViewer: class {
-    var model: [Object] { get }
-    func push(_ model: [Object], to version: Version)
+    var copiedObjects: [Object] { get }
+    func push(_ copiedObjects: [Object], to version: Version)
 }
 protocol Copiable {
     func copiedObjects(at p: Point) -> [Object]
 }
 protocol Assignable: Copiable {
-    func delete(for p: Point, _ version: Version)
+    func reset(for p: Point, _ version: Version)
     func paste(_ objects: [Any], for p: Point, _ version: Version)
+}
+protocol CollectionAssignable: Assignable {
+    func remove(for p: Point, _ version: Version)
+    func add(_ objects: [Any], for p: Point, _ version: Version)
 }
 final class AssignableActionManager: ActionManagable {
     typealias Viewer = View & CopiedObjectsViewer
     typealias Receiver = View & Assignable
+    typealias CollectionReceiver = View & CollectionAssignable
     typealias CopyReceiver = View & Copiable
     
+    var resetAction = Action(name: Text(english: "Reset", japanese: "リセット"),
+                             quasimode: Quasimode(modifier: [Inputter.EventType.shift,
+                                                             Inputter.EventType.command],
+                                                  [Inputter.EventType.x]))
     var cutAction = Action(name: Text(english: "Cut", japanese: "カット"),
                            quasimode: Quasimode(modifier: [Inputter.EventType.command],
                                                 [Inputter.EventType.x]))
@@ -935,20 +944,31 @@ final class AssignableActionManager: ActionManagable {
     var pasteAction = Action(name: Text(english: "Paste", japanese: "ペースト"),
                              quasimode: Quasimode(modifier: [Inputter.EventType.command],
                                                   [Inputter.EventType.v]))
+    var addAction = Action(name: Text(english: "Add", japanese: "加算"),
+                             quasimode: Quasimode(modifier: [Inputter.EventType.command],
+                                                  [Inputter.EventType.d]))
     var actions: [Action] {
-        return [cutAction, copyAction, pasteAction]
+        return [resetAction, cutAction, copyAction, pasteAction, addAction]
     }
     
     func send(_ eventMap: EventMap, in rootView: View) {
+        if let inputterEvent = eventMap.sendableInputterEvent(with: resetAction, .v) {
+            if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
+                let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                
+                let p = receiver.convertFromRoot(inputterEvent.rootLocation)
+                receiver.reset(for: p, version)
+            }
+        }
         if let inputterEvent = eventMap.sendableInputterEvent(with: cutAction, .x) {
             if let viewer = rootView.at(inputterEvent.rootLocation, Viewer.self),
-                let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
+                let receiver = rootView.at(inputterEvent.rootLocation, CollectionReceiver.self),
                 let version = viewer.withSelfAndAllParents(with: Versionable.self)?.version {
                 
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
                 let copiedObjects = receiver.copiedObjects(at: p)
                 if !copiedObjects.isEmpty {
-                    receiver.delete(for: p, version)
+                    receiver.remove(for: p, version)
                     viewer.push(copiedObjects, to: version)
                 }
             }
@@ -971,7 +991,16 @@ final class AssignableActionManager: ActionManagable {
                 let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
                 
                 let p = receiver.convertFromRoot(inputterEvent.rootLocation)
-                receiver.paste(viewer.model, for: p, version)
+                receiver.paste(viewer.copiedObjects, for: p, version)
+            }
+        }
+        if let inputterEvent = eventMap.sendableInputterEvent(with: addAction, .d) {
+            if let viewer = rootView.at(inputterEvent.rootLocation, Viewer.self),
+                let receiver = rootView.at(inputterEvent.rootLocation, CollectionReceiver.self),
+                let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+                
+                let p = receiver.convertFromRoot(inputterEvent.rootLocation)
+                receiver.add(viewer.copiedObjects, for: p, version)
             }
         }
     }
@@ -985,13 +1014,13 @@ final class NewableActionManager: ActionManagable {
     
     var newAction = Action(name: Text(english: "New", japanese: "新規"),
                            quasimode: Quasimode(modifier: [Inputter.EventType.command],
-                                                [Inputter.EventType.d]))
+                                                [Inputter.EventType.e]))
     var actions: [Action] {
         return [newAction]
     }
     
     func send(_ eventMap: EventMap, in rootView: View) {
-        if let inputterEvent = eventMap.sendableInputterEvent(with: newAction, .d) {
+        if let inputterEvent = eventMap.sendableInputterEvent(with: newAction, .e) {
             if let receiver = rootView.at(inputterEvent.rootLocation, Receiver.self),
                 let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
                 

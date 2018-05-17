@@ -551,8 +551,8 @@ struct CellGroup: Codable, TreeNode, Equatable, Namable {
     //                       in ctx: CGContext) {
     //        let isEdit = !isEdited ? false :
     //            (viewType != .preview && viewType != .editMaterial && viewType != .changingMaterial)
-    //        moveWithWiggle: if viewType == .preview && !xWiggle.isEmpty {
-    //            let waveY = yWiggle.yWith(t: wiggleT)
+    //        moveWithSineWave: if viewType == .preview && !xSineWave.isEmpty {
+    //            let waveY = ySineWave.yWith(t: wiggleT)
     //            ctx.translateBy(x: waveY, y: 0)
     //        }
     //        guard !isHidden else {
@@ -758,8 +758,8 @@ struct CellGroup: Codable, TreeNode, Equatable, Namable {
     //            ctx.stroke(bounds.insetBy(dx: -1.5, dy: -1.5))
     //        }
     //        ctx.setLineWidth(1)
-    //        if !xWiggle.isEmpty {
-    //            let amplitude = xWiggle.amplitude
+    //        if !xSineWave.isEmpty {
+    //            let amplitude = xSineWave.amplitude
     //            drawCameraBorder(bounds: cameraFrame.insetBy(dx: -amplitude, dy: 0),
     //                             inColor: Color.cameraBorder, outColor: Color.cutSubBorder)
     //        }

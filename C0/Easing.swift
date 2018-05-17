@@ -122,6 +122,9 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
     init(binder: T, keyPath: BinderKeyPath,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
+        self.binder = binder
+        self.keyPath = keyPath
+        
         self.sizeType = sizeType
         classXNameView = TextFormView(text: "t", font: Font.italic(with: sizeType))
         classYNameView = TextFormView(text: "t'", font: Font.italic(with: sizeType))
@@ -182,7 +185,7 @@ extension EasingView: ViewQueryable {
     }
 }
 extension EasingView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         push(defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {

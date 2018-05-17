@@ -589,8 +589,7 @@ final class ColorView<T: BinderProtocol>: View, BindableReceiver {
         self.binder = binder
         self.keyPath = keyPath
         
-        let valueOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1,
-                                     modelInterval: 0, exp: 1, numberOfDigits: 0, unit: "")
+        let valueOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1)
         hueView = CircularRealView(binder: binder, keyPath: keyPath.appending(path: \Color.hue),
                                    option: valueOption, width: hWidth)
         let slOption = PointOption(xOption: valueOption, yOption: valueOption)
@@ -684,7 +683,7 @@ extension ColorView: ViewQueryable {
     }
 }
 extension ColorView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         push(defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {

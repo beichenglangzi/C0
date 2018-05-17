@@ -105,7 +105,7 @@ enum AlgebraicTrackItem: Track {
     case tempo(TempoTrack)
     case subtitle(SubtitleTrack)
     case transform(TransformTrack)
-    case wiggle(WiggleTrack)
+    case wiggle(SineWaveTrack)
     var tempoTrack: TempoTrack? {
         get {
             switch self {
@@ -144,7 +144,7 @@ extension AlgebraicTrackItem: Codable {
                 self = .transform(track)
             }
         case .wiggle:
-            if let track = try? values.decode(WiggleTrack.self, forKey: key) {
+            if let track = try? values.decode(SineWaveTrack.self, forKey: key) {
                 self = .wiggle(track)
             }
         }
@@ -210,17 +210,17 @@ struct LinesKeyframeValue: KeyframeValue {
 }
 extension LinesKeyframeValue {
     //view
-    //    func drawPreviousNext(lineWidth: Real,
-    //                          isHiddenPrevious: Bool, isHiddenNext: Bool, index: Int, in ctx: CGContext) {
-    //        if !isHiddenPrevious && index - 1 >= 0 {
-    //            ctx.setFillColor(Color.previous.cg)
-    //            keyGeometries[index - 1].draw(withLineWidth: lineWidth, in: ctx)
-    //        }
-    //        if !isHiddenNext && index + 1 <= keyGeometries.count - 1 {
-    //            ctx.setFillColor(Color.next.cg)
-    //            keyGeometries[index + 1].draw(withLineWidth: lineWidth, in: ctx)
-    //        }
-    //    }
+    func drawPreviousNext(lineWidth: Real,
+                          isHiddenPrevious: Bool, isHiddenNext: Bool, index: Int, in ctx: CGContext) {
+        if !isHiddenPrevious && index - 1 >= 0 {
+            ctx.setFillColor(Color.previous.cg)
+            keyGeometries[index - 1].draw(withLineWidth: lineWidth, in: ctx)
+        }
+        if !isHiddenNext && index + 1 <= keyGeometries.count - 1 {
+            ctx.setFillColor(Color.next.cg)
+            keyGeometries[index + 1].draw(withLineWidth: lineWidth, in: ctx)
+        }
+    }
 }
 extension LinesKeyframeValue: Interpolatable {
     static func linear(_ f0: LinesKeyframeValue, _ f1: LinesKeyframeValue,

@@ -160,7 +160,7 @@ extension EnumView: Queryable {
     }
 }
 extension EnumView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         push(option.defaultModel, to:  version)
     }
     func copiedObjects(at p: Point) -> [Object] {

@@ -19,8 +19,7 @@
 
 import Foundation
 
-typealias RPB = Real
-struct Wiggle: Codable, Hashable, Initializable {//SineWave
+struct SineWave: Codable, Hashable, Initializable {
     var amplitude = 0.0.cg, frequency = 8.0.cg
     
     var isEmpty: Bool {
@@ -35,53 +34,45 @@ struct Wiggle: Codable, Hashable, Initializable {//SineWave
         return amplitude * sin(phase + φ)
     }
 }
-extension Wiggle {
-    static let amplitudeOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 10000,
-                                            modelInterval: 0.01, exp: 1,
-                                            numberOfDigits: 2, unit: "")
-    static let frequencyOption = RealOption(defaultModel: 8, minModel: 0.1, maxModel: 100000,
-                                            modelInterval: 0.1, exp: 1,
-                                            numberOfDigits: 1, unit: "rpb")
-}
-extension Wiggle: Interpolatable {
-    static func linear(_ f0: Wiggle, _ f1: Wiggle, t: Real) -> Wiggle {
+extension SineWave: Interpolatable {
+    static func linear(_ f0: SineWave, _ f1: SineWave, t: Real) -> SineWave {
         let amplitude = Real.linear(f0.amplitude, f1.amplitude, t: t)
         let frequency = Real.linear(f0.frequency, f1.frequency, t: t)
-        return Wiggle(amplitude: amplitude, frequency: frequency)
+        return SineWave(amplitude: amplitude, frequency: frequency)
     }
-    static func firstMonospline(_ f1: Wiggle, _ f2: Wiggle,
-                                _ f3: Wiggle, with ms: Monospline) -> Wiggle {
+    static func firstMonospline(_ f1: SineWave, _ f2: SineWave,
+                                _ f3: SineWave, with ms: Monospline) -> SineWave {
         let amplitude = Real.firstMonospline(f1.amplitude, f2.amplitude, f3.amplitude, with: ms)
         let frequency = Real.firstMonospline(f1.frequency, f2.frequency, f3.frequency, with: ms)
-        return Wiggle(amplitude: amplitude, frequency: frequency)
+        return SineWave(amplitude: amplitude, frequency: frequency)
     }
-    static func monospline(_ f0: Wiggle, _ f1: Wiggle,
-                           _ f2: Wiggle, _ f3: Wiggle, with ms: Monospline) -> Wiggle {
+    static func monospline(_ f0: SineWave, _ f1: SineWave,
+                           _ f2: SineWave, _ f3: SineWave, with ms: Monospline) -> SineWave {
         let amplitude = Real.monospline(f0.amplitude, f1.amplitude,
                                         f2.amplitude, f3.amplitude, with: ms)
         let frequency = Real.monospline(f0.frequency, f1.frequency,
                                         f2.frequency, f3.frequency, with: ms)
-        return Wiggle(amplitude: amplitude, frequency: frequency)
+        return SineWave(amplitude: amplitude, frequency: frequency)
     }
-    static func lastMonospline(_ f0: Wiggle, _ f1: Wiggle,
-                               _ f2: Wiggle, with ms: Monospline) -> Wiggle {
+    static func lastMonospline(_ f0: SineWave, _ f1: SineWave,
+                               _ f2: SineWave, with ms: Monospline) -> SineWave {
         let amplitude = Real.lastMonospline(f0.amplitude, f1.amplitude, f2.amplitude, with: ms)
         let frequency = Real.lastMonospline(f0.frequency, f1.frequency, f2.frequency, with: ms)
-        return Wiggle(amplitude: amplitude, frequency: frequency)
+        return SineWave(amplitude: amplitude, frequency: frequency)
     }
 }
-extension Wiggle: Referenceable {
+extension SineWave: Referenceable {
     static let name = Text(english: "Sine Wave", japanese: "サイン波")
 }
-extension Wiggle: KeyframeValue {}
-extension Wiggle: ThumbnailViewable {
+extension SineWave: KeyframeValue {}
+extension SineWave: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return View(frame: frame, isLocked: true)
     }
 }
 
-struct WiggleTrack: Track, Codable {
-    private(set) var animation = Animation<Wiggle>() {
+struct SineWaveTrack: Track, Codable {
+    private(set) var animation = Animation<SineWave>() {
         didSet {
             updateKeyPhases()
         }
@@ -108,9 +99,9 @@ struct WiggleTrack: Track, Codable {
         }
     }
     
-    func wigglePhase(withBeatTime time: Beat, defaultWiggle: Wiggle = Wiggle()) -> Real {
+    func wigglePhase(withBeatTime time: Beat, defaultSineWave: SineWave = SineWave()) -> Real {
         guard animation.loopFrames.count >= 2 else {
-            let wiggle = animation.interpolatedValue(atTime: time) ?? defaultWiggle
+            let wiggle = animation.interpolatedValue(atTime: time) ?? defaultSineWave
             return wiggle.frequency * Real(time)
         }
         for (li, loopFrame) in animation.loopFrames.enumerated().reversed() {
@@ -215,9 +206,28 @@ struct WiggleTrack: Track, Codable {
     }
 }
 
+struct SineWaveOption {
+    var defaultModel = SineWave()
+    
+    var standardAmplitude = 1.0.cg {
+        didSet {
+            amplitudeOption.transformedModel = { [standardAmplitude] in
+                $0 * standardAmplitude / 10
+            }
+            amplitudeOption.reverseTransformedModel = { [standardAmplitude] in
+                $0 * 10 / standardAmplitude
+            }
+        }
+    }
+    var amplitudeOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 10000,
+                                     modelInterval: 0.01, numberOfDigits: 2)
+    var frequencyOption = RealOption(defaultModel: 8, minModel: 0.1, maxModel: 100000,
+                                     modelInterval: 0.1, numberOfDigits: 1, unit: "rpb")
+}
 
-final class WiggleView<T: BinderProtocol>: View, BindableReceiver {
-    typealias Model = Wiggle
+final class SineWaveView<T: BinderProtocol>: View, BindableReceiver {
+    typealias Model = SineWave
+    typealias ModelOption = SineWaveOption
     typealias Binder = T
     var binder: Binder {
         didSet { updateWithModel() }
@@ -225,35 +235,49 @@ final class WiggleView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var defaultModel = Model()
+    
+    var option: ModelOption {
+        didSet {
+            amplitudeView.option = option.amplitudeOption
+            frequencyView.option = option.frequencyOption
+            updateWithModel()
+        }
+    }
     
     let amplitudeView: DiscreteRealView<Binder>
     let frequencyView: DiscreteRealView<Binder>
     
-    var standardAmplitude: Real
+    var sizeType: SizeType {
+        didSet {
+            amplitudeView.sizeType = sizeType
+            frequencyView.sizeType = sizeType
+            updateLayout()
+        }
+    }
     let classNameView: TextFormView
     let classAmplitudeNameView: TextFormView
     let classFrequencyNameView: TextFormView
     
-    init(binder: Binder, keyPath: BinderKeyPath, standardAmplitude: Real = 1.0,
+    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
         self.binder = binder
         self.keyPath = keyPath
+        self.option = option
         
         amplitudeView = DiscreteRealView(binder: binder,
-                                         keyPath: keyPath.appending(path: \Wiggle.amplitude),
-                                         option: Wiggle.amplitudeOption,
+                                         keyPath: keyPath.appending(path: \SineWave.amplitude),
+                                         option: option.amplitudeOption,
                                          frame: Layout.valueFrame(with: sizeType),
                                          sizeType: sizeType)
         frequencyView = DiscreteRealView(binder: binder,
-                                         keyPath: keyPath.appending(path: \Wiggle.frequency),
-                                         option: Wiggle.frequencyOption,
+                                         keyPath: keyPath.appending(path: \SineWave.frequency),
+                                         option: option.frequencyOption,
                                          frame: Layout.valueFrame(with: sizeType),
                                          sizeType: sizeType)
         
-        self.standardAmplitude = standardAmplitude
-        classNameView = TextFormView(text: Wiggle.name, font: Font.bold(with: sizeType))
+        self.sizeType = sizeType
+        classNameView = TextFormView(text: SineWave.name, font: Font.bold(with: sizeType))
         classAmplitudeNameView = TextFormView(text: "A:", font: Font.default(with: sizeType))
         classFrequencyNameView = TextFormView(text: "ƒ:")
         
@@ -280,23 +304,23 @@ final class WiggleView<T: BinderProtocol>: View, BindableReceiver {
             = frequencyView.frame.minX - classFrequencyNameView.frame.width
     }
     func updateWithModel() {
-        amplitudeView.model = 10 * wiggle.amplitude / standardAmplitude
+        amplitudeView.updateWithModel()
         frequencyView.updateWithModel()
     }
 }
-extension WiggleView: Localizable {
+extension SineWaveView: Localizable {
     func update(with locale: Locale) {
         updateLayout()
     }
 }
-extension WiggleView: Queryable {
+extension SineWaveView: Queryable {
     static var referenceableType: Referenceable.Type {
         return Model.self
     }
 }
-extension WiggleView: Assignable {
-    func delete(for p: Point, _ version: Version) {
-        push(defaultModel, to: version)
+extension SineWaveView: Assignable {
+    func reset(for p: Point, _ version: Version) {
+        push(option.defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {
         return [Object(model)]

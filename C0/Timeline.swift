@@ -130,8 +130,8 @@ struct Timeline: Codable {
     func updateTransform() {
         //        transform = CellGroup.transformWith(time: time, tracks: tracks)
     }
-    func updateWiggle() {
-        //        (xWiggle, wigglePhase) = CellGroup.wiggleAndPhaseWith(time: time, tracks: tracks)
+    func updateSineWave() {
+        //        (xSineWave, wigglePhase) = CellGroup.wiggleAndPhaseWith(time: time, tracks: tracks)
     }
     
     //    static func effectWith(time: Beat, _ tracks: [MultipleTrack]) -> Effect {
@@ -160,10 +160,10 @@ struct Timeline: Codable {
     //            Transform(translation: translation, scale: scale, rotation: rotation) : Transform()
     //    }
     //    static func wiggleAndPhaseWith(time: Beat,
-    //                                   tracks: [MultipleTrack]) -> (wiggle: Wiggle, wigglePhase: Real) {
+    //                                   tracks: [MultipleTrack]) -> (wiggle: SineWave, wigglePhase: Real) {
     //        var amplitude = 0.0.cg, frequency = 0.0.cg, phase = 0.0.cg, count = 0
     //        tracks.forEach {
-    //            if let wiggle = $0.wiggleItem?.drawWiggle {
+    //            if let wiggle = $0.wiggleItem?.drawSineWave {
     //                amplitude += wiggle.amplitude
     //                frequency += wiggle.frequency
     //                phase += $0.wigglePhase(withBeatTime: time)
@@ -172,10 +172,10 @@ struct Timeline: Codable {
     //        }
     //        if count > 0 {
     //            let reciprocalCount = 1 / Real(count)
-    //            let wiggle = Wiggle(amplitude: amplitude, frequency: frequency * reciprocalCount)
+    //            let wiggle = SineWave(amplitude: amplitude, frequency: frequency * reciprocalCount)
     //            return (wiggle, phase * reciprocalCount)
     //        } else {
-    //            return (Wiggle(), 0)
+    //            return (SineWave(), 0)
     //        }
     //    }
     
@@ -366,9 +366,18 @@ extension Timeline: Referenceable {
  Issue: 滑らかなスクロール
  Issue: スクロールの可視性の改善
  */
-final class TimelineView: View, Scrollable, Zoomable {
-    //timeline
-
+final class TimelineView<T: BinderProtocol>: View, BindableReceiver, Scrollable, Zoomable {
+    typealias Model = Effect
+    typealias ModelOption = EffectOption
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var defaultModel = Model()
+    
     let frameRateView = DiscreteRealView(model: 24, option: Timeline.frameRateOption,
                                          frame: Layout.valueFrame(with: .small),
                                          sizeType: .small)
@@ -577,7 +586,7 @@ final class TimelineView: View, Scrollable, Zoomable {
 //        let bx = sp + (sumKeyTimesHeight - baseTimeIntervalView.frame.height) / 2
 //        baseTimeIntervalView.frame.origin = Point(x: sp, y: bx)
     }
-    private func updateWithTimeline() {
+    func updateWithModel() {
         //            _scrollPoint.x = x(withTime: scene.time)
         //            _intervalScrollPoint.x = x(withTime: time(withLocalX: _scrollPoint.x))
         //            cutViews = self.cutViews(with: scene)
@@ -1679,33 +1688,24 @@ extension TimelineView: ViewQueryable {
                                       japanese: "時間選択: 左右スクロール\nトラック選択: 上下スクロール")
 }
 extension TimelineView: Assignable {
-    func delete(for p: Point, _ version: Version) {
-        //        let localX = convertToLocalX(p.x)
-        //        let cutIndex = self.cutIndex(withLocalX: localX)
-        //        removeCut(at: cutIndex)
+    func reset(for p: Point, _ version: Version) {
+        push(defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {
-        return []
+        return [Object(model)]
     }
     func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        //        for object in objects {
-        //            if let cut = object as? Cut {
-        //                let localX = convertToLocalX(p.x)
-        //                let index = cutIndex(withLocalX: localX)
-        //                paste(cut.copied, at: index + 1)
-        //                return
-        //            }
-        //        }
+        for object in objects {
+            if let model = object as? Model {
+                push(model, to: version)
+                return
+            }
+        }
     }
 }
 extension TimelineView: Newable {
     func new(for p: Point, _ version: Version) {
-        //        let localX = convertToLocalX(p.x)
-        //        let cutIndex = self.cutIndex(withLocalX: localX)
-        //        let cut = Cut()
-        //        let cutView = self.bindedCutView(with: cut, height: cutHeight)
-        //        insert(cutView, at: cutIndex + 1, time: time)
-        //        set(time: scene.cutTrack.animation.time(atLoopFrameIndex: cutIndex + 1), oldTime: time)
+        
     }
 }
 

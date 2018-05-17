@@ -56,6 +56,20 @@ extension String: ThumbnailViewable {
                             frame: frame, isSizeToFit: false)
     }
 }
+extension String: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, String>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> View {
+        switch type {
+        case .normal:
+            return StringView(binder: binder, keyPath: keyPath, option: StringOption(),
+                              textMaterial: TextMaterial(font: Font.default(with: sizeType)),
+                              frame: frame)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
 extension String: Interpolatable {
     static func linear(_ f0: String, _ f1: String, t: Real) -> String {
         return f0
@@ -269,7 +283,7 @@ extension StringView: ViewQueryable {
     }
 }
 extension StringView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         deleteBackward()
     }
     func copiedObjects(at p: Point) -> [Object] {

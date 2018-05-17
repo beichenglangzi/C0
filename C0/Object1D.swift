@@ -26,6 +26,7 @@ protocol Object1DOption: GetterOption {
     var defaultModel: Model { get }
     var minModel: Model { get }
     var maxModel: Model { get }
+    var transformedModel: ((Model) -> (Model)) { get }
     func model(with object: Any) -> Model?
     func ratio(with model: Model) -> Real
     func ratioFromDefaultModel(with model: Model) -> Real
@@ -45,6 +46,16 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
         didSet { updateWithModel() }
     }
     
+    var model: Model {
+        get {
+            return option.reverseTransformedModel(binder[keyPath: keyPath])
+        }
+        set {
+            binder[keyPath: keyPath] = option.transformedModel(newValue)
+            updateWithModel()
+        }
+    }
+    
     var option: ModelOption {
         didSet { updateWithModel() }
     }
@@ -61,8 +72,8 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
         
         self.sizeType = sizeType
         optionStringView = TextFormView(text: option.displayText(with: model),
-                                      font: Font.default(with: sizeType),
-                                      frameAlignment: .right, alignment: .right)
+                                        font: Font.default(with: sizeType),
+                                        frameAlignment: .right, alignment: .right)
         
         super.init()
         noIndicatedLineColor = .getBorder
@@ -77,7 +88,7 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
     }
     override func updateLayout() {
         optionStringView.frame.origin = Point(x: bounds.width - optionStringView.frame.width,
-                                            y: bounds.height - optionStringView.frame.height)
+                                              y: bounds.height - optionStringView.frame.height)
         updateWithModel()
     }
     func updateWithModel() {
@@ -96,7 +107,7 @@ extension Assignable1DView: ViewQueryable {
     }
 }
 extension Assignable1DView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         push(option.defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {
@@ -126,6 +137,16 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
     }
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
+    }
+    
+    var model: Model {
+        get {
+            return option.reverseTransformedModel(binder[keyPath: keyPath])
+        }
+        set {
+            binder[keyPath: keyPath] = option.transformedModel(newValue)
+            updateWithModel()
+        }
     }
     
     var option: ModelOption {
@@ -224,7 +245,7 @@ extension Discrete1DView: ViewQueryable {
     }
 }
 extension Discrete1DView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         push(option.defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {
@@ -266,6 +287,16 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     }
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
+    }
+    
+    var model: Model {
+        get {
+            return option.reverseTransformedModel(binder[keyPath: keyPath])
+        }
+        set {
+            binder[keyPath: keyPath] = option.transformedModel(newValue)
+            updateWithModel()
+        }
     }
     
     var option: ModelOption {
@@ -348,7 +379,7 @@ extension Slidable1DView: ViewQueryable {
     }
 }
 extension Slidable1DView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         push(option.defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {
@@ -419,6 +450,16 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     }
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
+    }
+    
+    var model: Model {
+        get {
+            return option.reverseTransformedModel(binder[keyPath: keyPath])
+        }
+        set {
+            binder[keyPath: keyPath] = option.transformedModel(newValue)
+            updateWithModel()
+        }
     }
     
     var option: ModelOption {
@@ -503,7 +544,7 @@ extension Circular1DView: ViewQueryable {
     }
 }
 extension Circular1DView: Assignable {
-    func delete(for p: Point, _ version: Version) {
+    func reset(for p: Point, _ version: Version) {
         push(option.defaultModel, to: version)
     }
     func copiedObjects(at p: Point) -> [Object] {

@@ -58,8 +58,17 @@ extension NSAttributedString {
 }
 
 struct TextMaterial {
-    var font = Font.default, color = Color.locked
-    var frameAlignment = TextAlignment.left, alignment = TextAlignment.natural
+    var font: Font, color: Color
+    var frameAlignment: TextAlignment, alignment: TextAlignment
+    
+    init(font: Font = .default, color: Color = .locked,
+         frameAlignment: TextAlignment = .left, alignment: TextAlignment = .natural) {
+        
+        self.font = font
+        self.color = color
+        self.frameAlignment = frameAlignment
+        self.alignment = alignment
+    }
     
     func fitFrameWith(defaultBounds: Rect, frame: Rect) -> Rect {
         let size = defaultBounds.size

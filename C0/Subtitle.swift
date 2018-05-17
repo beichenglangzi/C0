@@ -74,33 +74,33 @@ struct Subtitle: Codable, Equatable {
 }
 extension Subtitle {
     //view
-    //    func draw(bounds: Rect, with option: Option = Option(), in ctx: CGContext) {
-    //        guard !string.isEmpty else { return }
-    //        let attributes: [NSAttributedStringKey : Any] = [
-    //            NSAttributedStringKey(rawValue: String(kCTFontAttributeName)): option.font.ctFont,
-    //            NSAttributedStringKey(rawValue: String(kCTForegroundColorFromContextAttributeName)): true
-    //        ]
-    //        let attString = NSAttributedString(string: string, attributes: attributes)
-    //        let framesetter = CTFramesetterCreateWithAttributedString(attString)
-    //        let range = CFRange(location: 0, length: attString.length), ratio = bounds.size.width/640
-    //        let size = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, range, nil,
-    //                                                                Size(width: Real.infinity,
-    //                                                                     height: Real.infinity), nil)
-    //        let lineBounds = Rect(origin: Point(), size: size)
-    //        let ctFrame = CTFramesetterCreateFrame(framesetter, range,
-    //                                               CGPath(rect: lineBounds, transform: nil), nil)
-    //        ctx.saveGState()
-    //        ctx.setAllowsFontSmoothing(false)
-    //        ctx.translateBy(x: round(bounds.midX - lineBounds.midX),  y: round(bounds.minY + 20 * ratio))
-    //        ctx.setTextDrawingMode(.stroke)
-    //        ctx.setLineWidth(ceil(3 * ratio))
-    //        ctx.setStrokeColor(option.borderColor.cg)
-    //        CTFrameDraw(ctFrame, ctx)
-    //        ctx.setTextDrawingMode(.fill)
-    //        ctx.setFillColor(option.fillColor.cg)
-    //        CTFrameDraw(ctFrame, ctx)
-    //        ctx.restoreGState()
-    //    }
+    func draw(bounds: Rect, with option: Option = Option(), in ctx: CGContext) {
+        guard !string.isEmpty else { return }
+        let attributes: [NSAttributedStringKey: Any] = [
+            NSAttributedStringKey(rawValue: String(kCTFontAttributeName)): option.font.ctFont,
+            NSAttributedStringKey(rawValue: String(kCTForegroundColorFromContextAttributeName)): true
+        ]
+        let attString = NSAttributedString(string: string, attributes: attributes)
+        let framesetter = CTFramesetterCreateWithAttributedString(attString)
+        let range = CFRange(location: 0, length: attString.length), ratio = bounds.size.width/640
+        let size = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, range, nil,
+                                                                Size(width: Real.infinity,
+                                                                     height: Real.infinity), nil)
+        let lineBounds = Rect(origin: Point(), size: size)
+        let ctFrame = CTFramesetterCreateFrame(framesetter, range,
+                                               CGPath(rect: lineBounds, transform: nil), nil)
+        ctx.saveGState()
+        ctx.setAllowsFontSmoothing(false)
+        ctx.translateBy(x: round(bounds.midX - lineBounds.midX),  y: round(bounds.minY + 20 * ratio))
+        ctx.setTextDrawingMode(.stroke)
+        ctx.setLineWidth(ceil(3 * ratio))
+        ctx.setStrokeColor(option.borderColor.cg)
+        CTFrameDraw(ctFrame, ctx)
+        ctx.setTextDrawingMode(.fill)
+        ctx.setFillColor(option.fillColor.cg)
+        CTFrameDraw(ctFrame, ctx)
+        ctx.restoreGState()
+    }
 }
 extension Subtitle: Interpolatable {
     static func linear(_ f0: Subtitle, _ f1: Subtitle, t: Real) -> Subtitle {

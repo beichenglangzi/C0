@@ -780,9 +780,14 @@ protocol ConcreteViewable {
     func concreteViewWith<T: BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Self>,
                                              frame: Rect, _ sizeType: SizeType) -> View
 }
+
+enum AbstractType {
+    case normal, mini
+}
 protocol AbstractViewable {
     func abstractViewWith<T: BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Self>,
-                                             frame: Rect, _ sizeType: SizeType) -> View
+                                             frame: Rect, _ sizeType: SizeType,
+                                             type: AbstractType) -> View
 }
 protocol ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View
