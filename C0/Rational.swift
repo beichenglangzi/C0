@@ -208,7 +208,7 @@ struct RationalOption: Object1DOption {
     init(defaultModel: Model, minModel: Model, maxModel: Model,
          transformedModel: @escaping ((Model) -> (Model)) = { $0 },
          reverseTransformedModel: @escaping ((Model) -> (Model)) = { $0 },
-         modelInterval: Model = 0, unit: String = "") {
+         modelInterval: Model = 0, isInfinitesimal: Bool, unit: String = "") {
         
         self.defaultModel = defaultModel
         self.minModel = minModel
@@ -216,6 +216,7 @@ struct RationalOption: Object1DOption {
         self.transformedModel = transformedModel
         self.reverseTransformedModel = reverseTransformedModel
         self.modelInterval = modelInterval
+        self.isInfinitesimal = isInfinitesimal
         self.unit = unit
     }
     

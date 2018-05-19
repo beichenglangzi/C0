@@ -20,7 +20,7 @@
 import Foundation
 
 struct CellGroup: Codable, TreeNode, Equatable, Namable {
-    var name: Text
+    var name: String
     
     var children: [CellGroup]
     
@@ -29,15 +29,16 @@ struct CellGroup: Codable, TreeNode, Equatable, Namable {
     var effect: Effect, transform: Transform
     var drawing: Drawing
     var rootCell: Cell
-    var selectedCells: [Cell]
+    var selectedCellIndexes: [Cell.Index]
     
-    init(name: Text = "",
+    init(name: String = "",
          children: [CellGroup] = [CellGroup](),
          isHidden: Bool = false,
          effect: Effect = Effect(),
          transform: Transform = Transform(),
          drawing: Drawing = Drawing(),
-         rootCell: Cell = Cell()) {
+         rootCell: Cell = Cell(),
+         selectedCellIndexes: [Cell.Index] = []) {
         
         self.name = name
         self.children = children
@@ -46,9 +47,10 @@ struct CellGroup: Codable, TreeNode, Equatable, Namable {
         self.transform = transform
         self.drawing = drawing
         self.rootCell = rootCell
-        self.selectedCells = []
+        self.selectedCellIndexes = selectedCellIndexes
     }
-    
+}
+extension CellGroup {
     var imageBounds: Rect {
         return rootCell.allImageBounds.union(drawing.imageBounds)
     }
@@ -56,320 +58,247 @@ struct CellGroup: Codable, TreeNode, Equatable, Namable {
         return children.reduce(into: imageBounds) { $0.formUnion($1.imageBounds) }
     }
     
-//    enum Indication {
-//        struct DrawingItem {
-//            var selectedLineIndexes: [Int]
-//        }
-//        case none
-//        case indicated(DrawingItem)
-//        case selected()
-//    }
-//    func indication(at p: Point, reciprocalScale: Real) -> Indication? {
-//        let selectedCells = selectedCellsWithNotEmptyGeometry(at: p)
-//        if !selectedCells.isEmpty {
-//            return (sorted(selectedCells), [], .selected)
-//        } else if let cell = rootCell.at(p, reciprocalScale: reciprocalScale) {
-//            return ([cell], [], .indicated)
-//        } else {
-//            let lineIndexes = drawing.isNearestSelectedLineIndexes(at: p) ?
-//                drawing.selectedLineIndexes : []
-//            if lineIndexes.isEmpty {
-//                return drawing.lines.count == 0 ?
-//                    ([], [], .none) : ([], Array(0..<drawing.lines.count), .indicated)
-//            } else {
-//                return ([], lineIndexes, .selected)
-//            }
-//        }
-//    }
-    
-    func selectedCells(with cell: Cell) -> [Cell] {
-        let cells = selectedGeometryItemsWithNoEmptyGeometry.map { $0.cell }
-        if cells.contains(cell) {
-            return cells
-        } else {
-            return [cell]
+    func worldAffineTransform(at index: TreeIndex<CellGroup>) -> CGAffineTransform {
+        return nodes(at: index).reduce(transform.affineTransform) {
+            $1.transform.affineTransform.concatenating($0)
         }
     }
-//    var selectedTreeIndexesWithNotEmptyGeometry: [Cell] {
-//        return selectedCells.filter { !$0.geometry.isEmpty }
-//    }
-//    func selectedCellsWithNoEmptyGeometry(at point: Point) -> [Cell] {
-//        for cell in selectedCells {
-//            if cell.contains(point) {
-//                return selectedCells.filter { !$0.geometry.isEmpty }
-//            }
-//        }
-//        return []
-//    }
-//    var allSelectedGeometryItemsWithNotEmptyGeometry: [GeometryItem] {
-//        var selectedGeometryItems = [GeometryItem]()
-//        tracks.forEach { selectedGeometryItems += $0.selectedGeometryItemsWithNoEmptyGeometry }
-//        return selectedGeometryItems
-//    }
-//    func allSelectedGeometryItemsWithNotEmptyGeometry(at p: Point) -> [GeometryItem] {
-//        for track in tracks {
-//            let geometryItems = track.selectedGeometryItemsWithNoEmptyGeometry(at: p)
-//            if !geometryItems.isEmpty {
-//                var selectedGeometryItems = [GeometryItem]()
-//                tracks.forEach { selectedGeometryItems += $0.selectedGeometryItemsWithNoEmptyGeometry }
-//                return selectedGeometryItems
-//            }
-//        }
-//        return []
-//    }
-    
-//    enum Selection {
-//        var cellTuples: [(track: MultipleTrack, geometryItem: GeometryItem, geometry: Geometry)] = []
-//        var drawingTuple: (drawing: Drawing, lineIndexes: [Int], oldLines: [Line])? = nil
-//        var isEmpty: Bool {
-//            return (drawingTuple?.lineIndexes.isEmpty ?? true) && cellTuples.isEmpty
-//        }
-//    }
-//    func selection(with point: Point, reciprocalScale: Real) -> Selection {
-//        let ict = indicatedCellsTuple(with: point, reciprocalScale: reciprocalScale)
-//        if !ict.geometryItems.isEmpty {
-//            return Selection(cellTuples: ict.geometryItems.map { (track(with: $0), $0, $0.cell.geometry) },
-//                             drawingTuple: nil)
-//        } else if !ict.selectedLineIndexes.isEmpty {
-//            return Selection(cellTuples: [],
-//                             drawingTuple: (drawing, ict.selectedLineIndexes, drawing.lines))
-//        } else {
-//            return Selection()
-//        }
-//    }
-    
-//    func sorted(_ cells: [Cell]) -> [Cell] {
-//        var sortedCells = [Cell]()
-//        rootCell.allCells(isReversed: true) { (cell, stop) in
-//            if cells.contains(cell) {
-//                sortedCells.append(cell)
-//            }
-//        }
-//        return sortedCells
-//    }
-    
-    func worldAffineTransform(at treeIndex: TreeIndex<CellGroup>) -> CGAffineTransform {
-        treeIndex.indexPath
-        transform.affineTransform
+    func worldScale(at index: CellGroup.Index) -> Real {
+        return nodes(at: index).reduce(into: transform.scale.x) { $0 *= $1.transform.scale.x }
     }
-    private func worldAffineTransform(at treeIndex: TreeIndex<CellGroup>,
-                                      index: Int) -> CGAffineTransform {
-        treeIndex.indexPath
-        transform.affineTransform
+    
+    var selectedCellIndexesWithNotEmpty: [Cell.Index] {
+        return selectedCellIndexes.filter { !rootCell[$0].isEmpty }
     }
-    func worldScale(at treeIndex: TreeIndex<CellGroup>) -> Real {
-        if let parentScale = parent?.worldScale {
-            return transform.scale.x * parentScale
+    func selectedCellIndexesWithNotEmpty(at p: Point) -> [Cell.Index] {
+        for cellIndex in selectedCellIndexes {
+            if rootCell[cellIndex].contains(p) {
+                return selectedCellIndexesWithNotEmpty
+            }
+        }
+        return []
+    }
+    
+    enum Indication {
+        struct DrawingItem {
+            var selectedLineIndexes: [Int]
+        }
+        
+        case none
+        case indicated(DrawingItem)
+        case selected()
+    }
+    func indication(at p: Point, reciprocalScale: Real) -> Indication? {
+        let selectedCellIndexes = selectedCellIndexesWithNotEmpty(at: p)
+        if !selectedCellIndexes.isEmpty {
+            return .selected(rootCell.sortedIndexes(selectedCellIndexes))
+        } else if let cell = rootCell.at(p, reciprocalScale: reciprocalScale) {
+            return .indicated([cell])
         } else {
-            return transform.scale.x
+            let lineIndexes = drawing.isNearestSelectedLineIndexes(at: p) ?
+                drawing.selectedLineIndexes : []
+            if lineIndexes.isEmpty {
+                return drawing.lines.count == 0 ?
+                    .none : .indicated(Array(0..<drawing.lines.count))
+            } else {
+                return .selected(lineIndexes)
+            }
         }
     }
-//    var worldAffineTransform: CGAffineTransform {
-//        if let parentAffine = parent?.worldAffineTransform {
-//            return transform.affineTransform.concatenating(parentAffine)
-//        } else {
-//            return transform.affineTransform
-//        }
-//    }
-//    var worldScale: Real {
-//        if let parentScale = parent?.worldScale {
-//            return transform.scale.x * parentScale
-//        } else {
-//            return transform.scale.x
-//        }
-//    }
     
-//    struct LineCap {
-//        var line: Line, lineIndex: Int, isFirst: Bool
-//        var pointIndex: Int {
-//            return isFirst ? 0 : line.controls.count - 1
-//        }
-//    }
-//    struct Nearest {
-//        enum Result {
-//            struct DrawingItem {
-//                var drawing: Drawing, line: Line, lineIndex: Int, pointIndex: Int
-//            }
-//            struct CellItem {
-//                var cell: Cell, cellIndex: TreeIndex<Cell>
-//                var geometry: Geometry, lineIndex: Int, pointIndex: Int
-//            }
-//            struct DrawingLineCapItem {
-//                var drawing: Drawing, lines: [Line], drawingCaps: [LineCap]
-//            }
-//            struct CellLineCapsItem {
-//                var cell: Cell, cellIndex: TreeIndex<Cell>, geometry: Geometry, caps: [LineCap]
-//            }
-//            case drawing(DrawingItem), cell(CellItem)
-//            case drawingLineCap(DrawingLineCapItem), cellLineCaps(CellLineCapsItem)
-//        }
-//        var result: Result, point: Point
-//
-//        struct BezierSorted {
-//            enum Result {
-//                case drawing(Drawing), cell((cell: Cell, cellIndex: TreeIndex<Cell>))
-//            }
-//            var result: Result
-//            var lineCap: LineCap, point: Point
-//        }
-//        func bezierSortedResult(at p: Point) -> BezierSortedResult? {
-//            var minDrawing: Drawing?, minGeometryItem: GeometryItem?
-//            var minLineCap: LineCap?, minD² = Real.infinity
-//            func minNearest(with caps: [LineCap]) -> Bool {
-//                var isMin = false
-//                for cap in caps {
-//                    let d² = (cap.isFirst ?
-//                        cap.line.bezier(at: 0) :
-//                        cap.line.bezier(at: cap.line.controls.count - 3)).minDistance²(at: p)
-//                    if d² < minD² {
-//                        minLineCap = cap
-//                        minD² = d²
-//                        isMin = true
-//                    }
-//                }
-//                return isMin
-//            }
-//
-//            if let e = drawingEditLineCap {
-//                if minNearest(with: e.drawingCaps) {
-//                    minDrawing = e.drawing
-//                }
-//            }
-//            for e in geometryItemEditLineCaps {
-//                if minNearest(with: e.caps) {
-//                    minDrawing = nil
-//                    minGeometryItem = e.geometryItem
-//                }
-//            }
-//            if let drawing = minDrawing, let lineCap = minLineCap {
-//                return BezierSortedResult(drawing: drawing, geometryItem: nil, geometry: nil,
-//                                          lineCap: lineCap, point: point)
-//            }
-//            else if let geometryItem = minGeometryItem, let lineCap = minLineCap {
-//                return BezierSortedResult(drawing: nil, geometryItem: geometryItem,
-//                                          geometry: geometryItem.cell.geometry,
-//                                          lineCap: lineCap, point: point)
-//            }
-//            return nil
-//        }
-//    }
-//    func nearest(at point: Point, isVertex: Bool) -> Nearest? {
-//        var minD = Real.infinity, minDrawing: Drawing?, minGeometryItem: GeometryItem?
-//        var minLine: Line?, minLineIndex = 0, minPointIndex = 0, minPoint = Point()
-//        func nearestEditPoint(from lines: [Line]) -> Bool {
-//            var isNearest = false
-//            for (j, line) in lines.enumerated() {
-//                line.allEditPoints() { p, i in
-//                    if !(isVertex && i != 0 && i != line.controls.count - 1) {
-//                        let d = hypot²(point.x - p.x, point.y - p.y)
-//                        if d < minD {
-//                            minD = d
-//                            minLine = line
-//                            minLineIndex = j
-//                            minPointIndex = i
-//                            minPoint = p
-//                            isNearest = true
-//                        }
-//                    }
-//                }
-//            }
-//            return isNearest
-//        }
-//
-//        if nearestEditPoint(from: drawing.lines) {
-//            minDrawing = drawing
-//        }
-//        for geometryItem in editTrack.geometryItems {
-//            if nearestEditPoint(from: geometryItem.cell.geometry.lines) {
-//                minDrawing = nil
-//                minGeometryItem = geometryItem
-//            }
-//        }
-//
-//        if let minLine = minLine {
-//            if minPointIndex == 0 || minPointIndex == minLine.controls.count - 1 {
-//                func caps(with point: Point, _ lines: [Line]) -> [LineCap] {
-//                    return lines.enumerated().compactMap {
-//                        if point == $0.element.firstPoint {
-//                            return LineCap(line: $0.element, lineIndex: $0.offset, isFirst: true)
-//                        }
-//                        if point == $0.element.lastPoint {
-//                            return LineCap(line: $0.element, lineIndex: $0.offset, isFirst: false)
-//                        }
-//                        return nil
-//                    }
-//                }
-//                let drawingCaps = caps(with: minPoint, editTrack.drawing.lines)
-//                let drawingResult: (drawing: Drawing, lines: [Line], drawingCaps: [LineCap])? =
-//                    drawingCaps.isEmpty ? nil : (editTrack.drawing,
-//                                                 editTrack.drawing.lines, drawingCaps)
-//                let cellResults: [(geometryItem: GeometryItem, geometry: Geometry, caps: [LineCap])]
-//                cellResults = editTrack.geometryItems.compactMap {
-//                    let aCaps = caps(with: minPoint, $0.cell.geometry.lines)
-//                    return aCaps.isEmpty ? nil : ($0, $0.cell.geometry, aCaps)
-//                }
-//                return Nearest(drawingEdit: nil, geometryItemEdit: nil,
-//                               drawingEditLineCap: drawingResult,
-//                               geometryItemEditLineCaps: cellResults, point: minPoint)
-//            } else {
-//                if let drawing = minDrawing {
-//                    return Nearest(drawingEdit: (drawing, minLine, minLineIndex, minPointIndex),
-//                                   geometryItemEdit: nil,
-//                                   drawingEditLineCap: nil, geometryItemEditLineCaps: [],
-//                                   point: minPoint)
-//                } else if let geometryItem = minGeometryItem {
-//                    return Nearest(drawingEdit: nil,
-//                                   geometryItemEdit: (geometryItem, geometryItem.cell.geometry,
-//                                                      minLineIndex, minPointIndex),
-//                                   drawingEditLineCap: nil, geometryItemEditLineCaps: [],
-//                                   point: minPoint)
-//                }
-//            }
-//        }
-//        return nil
-//    }
-//    func nearestLine(at point: Point
-//        ) -> (drawing: Drawing?, geometryItem: GeometryItem?, line: Line, lineIndex: Int, pointIndex: Int)? {
-//
-//        guard let nearest = self.nearest(at: point, isVertex: false) else {
-//            return nil
-//        }
-//        if let e = nearest.drawingEdit {
-//            return (e.drawing, nil, e.line, e.lineIndex, e.pointIndex)
-//        } else if let e = nearest.geometryItemEdit {
-//            return (nil, e.geometryItem, e.geometry.lines[e.lineIndex], e.lineIndex, e.pointIndex)
-//        } else if nearest.drawingEditLineCap != nil || !nearest.geometryItemEditLineCaps.isEmpty {
-//            if let b = nearest.bezierSortedResult(at: point) {
-//                return (b.drawing, b.geometryItem, b.lineCap.line, b.lineCap.lineIndex,
-//                        b.lineCap.isFirst ? 0 : b.lineCap.line.controls.count - 1)
-//            }
-//        }
-//        return nil
-//    }
-    
-    func snappedCells(with cell: Cell) -> [Cell] {
-        var cells = self.cells
-        var snapedCells = cells.compactMap { $0 !== cell && $0.isSnaped(cell) ? $0 : nil }
-        func snap(_ withCell: Cell) {
-            var newSnapedCells = [Cell]()
-            cells = cells.compactMap {
-                if $0.isSnaped(withCell) {
-                    newSnapedCells.append($0)
-                    return nil
-                } else {
-                    return $0
+    struct CellItem {
+        var cell: Cell, cellIndex: Cell.Index
+    }
+    enum DrawingOrCell {
+        case drawing(Drawing), cell(CellItem)
+    }
+    struct LinePoint {
+        var line: Line, lineIndex: Int, pointIndex: Int
+        var isFirst: Bool {
+            return pointIndex == 0
+        }
+        var isLast: Bool {
+            return  pointIndex == line.controls.count - 1
+        }
+    }
+    struct LineCap {
+        enum Orientation {
+            case first, last
+        }
+        
+        var line: Line, lineIndex: Int, orientation: Orientation
+        
+        init(line: Line, lineIndex: Int, orientation: Orientation) {
+            self.line = line
+            self.lineIndex = lineIndex
+            self.orientation = orientation
+        }
+        init?(line: Line, lineIndex i: Int, at p: Point) {
+            if p == line.firstPoint {
+                self = LineCap(line: line, lineIndex: i, orientation: .first)
+            } else if p == line.lastPoint {
+                self = LineCap(line: line, lineIndex: i, orientation: .last)
+            } else {
+                return nil
+            }
+        }
+        
+        var pointIndex: Int {
+            return orientation == .first ? 0 : line.controls.count - 1
+        }
+        var linePoint: LinePoint {
+            return LinePoint(line: line, lineIndex: lineIndex, pointIndex: pointIndex)
+        }
+        var point: Point {
+            return orientation == .first ? line.firstPoint : line.lastPoint
+        }
+        var reversedPoint: Point {
+            return orientation == .first ? line.lastPoint : line.firstPoint
+        }
+    }
+    struct LineItem {
+        var linePoint: LinePoint, drawingOrCell: DrawingOrCell
+    }
+    struct LineCapItem {
+        var lineCap: LineCap, drawingOrCell: DrawingOrCell
+        
+        var lineItem: LineItem {
+            return LineItem(linePoint: lineCap.linePoint, drawingOrCell: drawingOrCell)
+        }
+    }
+    struct LineCapsItem {
+        struct DrawingCap {
+            var drawing: Drawing, drawingLineCaps: [LineCap]
+        }
+        struct CellCap {
+            var cellItem: CellItem, cellLineCaps: [LineCap]
+        }
+        var drawingCap: DrawingCap?, cellCaps: [CellCap]
+        
+        func bezierSortedLineCapItem(at p: Point) -> LineCapItem? {
+            var minDrawing: Drawing?, minCellItem: CellItem?
+            var minLineCap: LineCap?, minD² = Real.infinity
+            func minNearest(with caps: [LineCap]) -> Bool {
+                var isMin = false
+                for cap in caps {
+                    let d² = (cap.orientation == .first ?
+                        cap.line.bezier(at: 0) :
+                        cap.line.bezier(at: cap.line.controls.count - 3)).minDistance²(at: p)
+                    if d² < minD² {
+                        minLineCap = cap
+                        minD² = d²
+                        isMin = true
+                    }
+                }
+                return isMin
+            }
+            
+            if let drawingCap = drawingCap {
+                if minNearest(with: drawingCap.drawingLineCaps) {
+                    minDrawing = drawingCap.drawing
                 }
             }
-            if !newSnapedCells.isEmpty {
-                snapedCells += newSnapedCells
-                for newCell in newSnapedCells { snap(newCell) }
+            for cellCap in cellCaps {
+                if minNearest(with: cellCap.cellLineCaps) {
+                    minDrawing = nil
+                    minCellItem = cellCap.cellItem
+                }
+            }
+            
+            if let lineCap = minLineCap {
+                if let drawing = minDrawing {
+                    return LineCapItem(lineCap: lineCap, drawingOrCell: .drawing(drawing))
+                } else if let cellItem = minCellItem {
+                    return LineCapItem(lineCap: lineCap, drawingOrCell: .cell(cellItem))
+                }
+            }
+            return nil
+        }
+    }
+    struct Nearest {
+        enum Result {
+            struct LineCapResult {
+                var bezierSortedLineCapItem: LineCapItem, lineCapsItem: LineCapsItem
+            }
+            
+            case lineItem(LineItem), lineCapResult(LineCapResult)
+        }
+        
+        var result: Result, point: Point
+    }
+    func nearest(at point: Point, isVertex: Bool) -> Nearest? {
+        var minD = Real.infinity, minLinePoint: LinePoint?, minPoint = Point()
+        func nearestLinePoint(from lines: [Line]) -> Bool {
+            var isNearest = false
+            for (j, line) in lines.enumerated() {
+                for (i, mp) in line.mainPointSequence.enumerated() {
+                    guard !(isVertex && i != 0 && i != line.controls.count - 1) else { continue }
+                    let d = hypot²(point.x - mp.x, point.y - mp.y)
+                    if d < minD {
+                        minD = d
+                        minLinePoint = LinePoint(line: line, lineIndex: j, pointIndex: i)
+                        minPoint = mp
+                        isNearest = true
+                    }
+                }
+            }
+            return isNearest
+        }
+        
+        var minDrawing: Drawing?, minCellItem: CellItem?
+        if nearestLinePoint(from: drawing.lines) {
+            minDrawing = drawing
+        }
+        for (i, cell) in rootCell.enumerated() {
+            if nearestLinePoint(from: cell.geometry.lines) {
+                minDrawing = nil
+                minCellItem = CellItem(cell: cell, cellIndex: i)
             }
         }
-        snap(cell)
-        return snapedCells
+        
+        guard let linePoint = minLinePoint else { return nil }
+        if linePoint.isFirst || linePoint.isLast {
+            func lineCaps(with lines: [Line]) -> [LineCap] {
+                return lines.enumerated().compactMap { (i, line) in
+                    LineCap(line: line, lineIndex: i, at: minPoint)
+                }
+            }
+            let drawingCap = LineCapsItem.DrawingCap(drawing: drawing,
+                                                     drawingLineCaps: lineCaps(with: drawing.lines))
+            let cellCaps: [LineCapsItem.CellCap] = rootCell.enumerated().compactMap { (i, cell) in
+                let caps = lineCaps(with: cell.geometry.lines)
+                return caps.isEmpty ?
+                    nil : LineCapsItem.CellCap(CellItem(cell: cell, cellIndex: i), caps)
+            }
+            let lineCapsItem = LineCapsItem(drawingCap: drawingCap, cellCaps: cellCaps)
+            let bslci = lineCapsItem.bezierSortedLineCapItem(at: minPoint)!
+            let result = Nearest.Result.LineCapResult(bezierSortedLineCapItem: bslci,
+                                                      lineCapsItem: lineCapsItem)
+            return Nearest(result: .lineCapResult(result), point: minPoint)
+        } else {
+            if let drawing = minDrawing {
+                let lineItem = LineItem(linePoint: linePoint, drawingOrCell: .drawing(drawing))
+                return Nearest(result: .lineItem(lineItem), point: minPoint)
+            } else if let cellItem = minCellItem {
+                let lineItem = LineItem(linePoint: linePoint, drawingOrCell: .cell(cellItem))
+                return Nearest(result: .lineItem(lineItem), point: minPoint)
+            } else {
+                fatalError()
+            }
+        }
     }
     
-    func snappedPoint(_ point: Point, with n: CellGroup.Nearest.BezierSortedResult,
+    func nearestLineItem(at p: Point) -> LineItem? {
+        guard let nearest = self.nearest(at: p, isVertex: false) else {
+            return nil
+        }
+        switch nearest.result {
+        case .lineItem(let result): return result
+        case .lineCapResult(let result): return result.bezierSortedLineCapItem.lineItem
+        }
+    }
+    
+    func snappedPoint(_ point: Point, with lci: LineCapItem,
                       snapDistance: Real, grid: Real?) -> Point {
         let p: Point
         if let grid = grid {
@@ -377,6 +306,7 @@ struct CellGroup: Codable, TreeNode, Equatable, Namable {
         } else {
             p = point
         }
+        
         var minD = Real.infinity, minP = p
         func updateMin(with ap: Point) {
             let d0 = p.distance(ap)
@@ -385,19 +315,19 @@ struct CellGroup: Codable, TreeNode, Equatable, Namable {
                 minP = ap
             }
         }
-        func update(geometryItem: GeometryItem?) {
+        func update(cellIndex: Cell.Index?) {
             for (i, line) in drawing.lines.enumerated() {
-                if i == n.lineCap.lineIndex {
-                    updateMin(with: n.lineCap.isFirst ? line.lastPoint : line.firstPoint)
+                if i == lci.lineCap.lineIndex {
+                    updateMin(with: lci.lineCap.reversedPoint)
                 } else {
                     updateMin(with: line.firstPoint)
                     updateMin(with: line.lastPoint)
                 }
             }
-            for cell in rootCell {
+            for (aCellIndex, cell) in rootCell.enumerated() {
                 for (i, line) in cell.geometry.lines.enumerated() {
-                    if aGeometryItem.id == geometryItem.id && i == n.lineCap.lineIndex {
-                        updateMin(with: n.lineCap.isFirst ? line.lastPoint : line.firstPoint)
+                    if aCellIndex == cellIndex && i == lci.lineCap.lineIndex {
+                        updateMin(with: lci.lineCap.reversedPoint)
                     } else {
                         updateMin(with: line.firstPoint)
                         updateMin(with: line.lastPoint)
@@ -405,10 +335,11 @@ struct CellGroup: Codable, TreeNode, Equatable, Namable {
                 }
             }
         }
-        if n.drawing != nil {
-            update(geometryItem: nil)
-        } else if let geometryItem = n.geometryItem {
-            update(geometryItem: geometryItem)
+        switch lci.drawingOrCell {
+        case .drawing:
+            update(cellIndex: nil)
+        case .cell(let cellItem):
+            update(cellIndex: cellItem.cellIndex)
         }
         return minP
     }
@@ -484,745 +415,559 @@ struct CellGroup: Codable, TreeNode, Equatable, Namable {
             return minPoint
         }
     }
-    
+}
+extension CellGroup {
     //view
-    //    func draw(scene: Scene, viewType: Cut.ViewType,
-    //              scale: Real, rotation: Real,
-    //              viewScale: Real, viewRotation: Real,
-    //              in ctx: CGContext) {
-    //        let inScale = scale * transform.scale.x, inRotation = rotation + transform.rotation
-    //        let inViewScale = viewScale * transform.scale.x
-    //        let inViewRotation = viewRotation + transform.rotation
-    //        let reciprocalScale = 1 / inScale, reciprocalAllScale = 1 / inViewScale
-    //
-    //        ctx.concatenate(transform.affineTransform)
-    //
-    //        if effect.opacity != 1 || effect.blendType != .normal || effect.blurRadius > 0 || !isEdited {
-    //            ctx.saveGState()
-    //            ctx.setAlpha(!isEdited ? 0.2 * effect.opacity : effect.opacity)
-    //            ctx.setBlendMode(effect.blendType.blendMode)
-    //            if effect.blurRadius > 0 {
-    //                let invertCTM = ctx.ctm
-    //                let bBounds = ctx.boundingBoxOfClipPath.inset(by: -effect.blurRadius).applying(invertCTM)
-    //                if let bctx = CGContext.bitmap(with: bBounds.size) {
-    //                    bctx.translateBy(x: -effect.blurRadius, y: -effect.blurRadius)
-    //                    bctx.concatenate(ctx.ctm)
-    //                    _draw(scene: scene, viewType: viewType,
-    //                          reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
-    //                          scale: inViewScale, rotation: inViewRotation, in: bctx)
-    //                    children.forEach {
-    //                        $0.draw(scene: scene, viewType: viewType,
-    //                                scale: inScale, rotation: inRotation,
-    //                                viewScale: inViewScale, viewRotation: inViewRotation,
-    //                                in: bctx)
-    //                    }
-    //                    bctx.drawBlur(withBlurRadius: effect.blurRadius, to: ctx)
-    //                }
-    //            } else {
-    //                ctx.beginTransparencyLayer(auxiliaryInfo: nil)
-    //                _draw(scene: scene, viewType: viewType,
-    //                      reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
-    //                      scale: inViewScale, rotation: inViewRotation, in: ctx)
-    //                children.forEach {
-    //                    $0.draw(scene: scene, viewType: viewType,
-    //                            scale: inScale, rotation: inRotation,
-    //                            viewScale: inViewScale, viewRotation: inViewRotation,
-    //                            in: ctx)
-    //                }
-    //                ctx.endTransparencyLayer()
-    //            }
-    //            ctx.restoreGState()
-    //        } else {
-    //            _draw(scene: scene, viewType: viewType,
-    //                  reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
-    //                  scale: inViewScale, rotation: inViewRotation, in: ctx)
-    //            children.forEach {
-    //                $0.draw(scene: scene, viewType: viewType,
-    //                        scale: inScale, rotation: inRotation,
-    //                        viewScale: inViewScale, viewRotation: inViewRotation,
-    //                        in: ctx)
-    //            }
-    //        }
-    //    }
-    //
-    //    private func _draw(scene: Scene, viewType: Cut.ViewType,
-    //                       reciprocalScale: Real, reciprocalAllScale: Real,
-    //                       scale: Real, rotation: Real,
-    //                       in ctx: CGContext) {
-    //        let isEdit = !isEdited ? false :
-    //            (viewType != .preview && viewType != .editMaterial && viewType != .changingMaterial)
-    //        moveWithSineWave: if viewType == .preview && !xSineWave.isEmpty {
-    //            let waveY = ySineWave.yWith(t: wiggleT)
-    //            ctx.translateBy(x: waveY, y: 0)
-    //        }
-    //        guard !isHidden else {
-    //            return
-    //        }
-    //        if isEdit {
-    //            rootCell.children.forEach {
-    //                $0.draw(isEdit: isEdit, isUseDraw: false,
-    //                        reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
-    //                        scale: scale, rotation: rotation,
-    //                        in: ctx)
-    //            }
-    //
-    //            ctx.saveGState()
-    //            ctx.setAlpha(0.5)
-    //            ctx.beginTransparencyLayer(auxiliaryInfo: nil)
-    //            rootCell.children.forEach {
-    //                $0.draw(isEdit: isEdit, isUseDraw: true,
-    //                        reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
-    //                        scale: scale, rotation: rotation,
-    //                        in: ctx)
-    //            }
-    //            ctx.endTransparencyLayer()
-    //            ctx.restoreGState()
-    //        } else {
-    //            rootCell.children.forEach {
-    //                $0.draw(isEdit: isEdit, isUseDraw: true,
-    //                        reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
-    //                        scale: scale, rotation: rotation,
-    //                        in: ctx)
-    //            }
-    //        }
-    //
-    //        drawAnimation: do {
-    //            if isEdit {
-    //                tracks.forEach {
-    ////                    if !$0.isHidden {
-    //                        if $0 === editTrack {
-    //                            $0.drawing.drawEdit(withReciprocalScale: reciprocalScale, in: ctx)
-    //                        } else {
-    //                            ctx.setAlpha(0.5)
-    //                            $0.drawing.drawEdit(withReciprocalScale: reciprocalScale, in: ctx)
-    //                            ctx.setAlpha(1)
-    //                        }
-    ////                    }
-    //                }
-    //            } else {
-    //                var alpha = 1.0.cg
-    //                tracks.forEach {
-    ////                    if !$0.isHidden {
-    //                        ctx.setAlpha(alpha)
-    //                        $0.drawing.draw(withReciprocalScale: reciprocalScale, in: ctx)
-    ////                    }
-    //                    alpha = max(alpha * 0.4, 0.25)
-    //                }
-    //                ctx.setAlpha(1)
-    //            }
-    //        }
-    //    }
-    //
-    //    struct Edit {
-    //        var indicatedGeometryItem: GeometryItem? = nil, editMaterial: Material? = nil, editZ: EditZ? = nil
-    //        var editPoint: EditPoint? = nil, editTransform: EditTransform? = nil, point: Point?
-    //    }
-    //    func drawEdit(_ edit: Edit,
-    //                  scene: Scene, viewType: Cut.ViewType,
-    //                  strokeLine: Line?, strokeLineWidth: Real, strokeLineColor: Color,
-    //                  reciprocalViewScale: Real, scale: Real, rotation: Real,
-    //                  in ctx: CGContext) {
-    //        let worldScale = self.worldScale
-    //        let rScale = 1 / worldScale
-    //        let rAllScale = reciprocalViewScale / worldScale
-    //        let wat = worldAffineTransform
-    //        ctx.saveGState()
-    //        ctx.concatenate(wat)
-    //
-    //        if !wat.isIdentity {
-    //            ctx.setStrokeColor(Color.locked.cg)
-    //            ctx.move(to: Point(x: -10, y: 0))
-    //            ctx.addLine(to: Point(x: 10, y: 0))
-    //            ctx.move(to: Point(x: 0, y: -10))
-    //            ctx.addLine(to: Point(x: 0, y: 10))
-    //            ctx.strokePath()
-    //        }
-    //
-    //        drawStroke: do {
-    //            if let strokeLine = strokeLine {
-    //                if viewType == .editSelected || viewType == .editDeselected {
-    //                    let geometry = Geometry(lines: [strokeLine])
-    //                    if viewType == .editSelected {
-    //                        geometry.drawSkin(lineColor: .selectBorder, subColor: .select,
-    //                                          reciprocalScale: rScale, reciprocalAllScale: rAllScale,
-    //                                          in: ctx)
-    //                    } else {
-    //                        geometry.drawSkin(lineColor: .deselectBorder, subColor: .deselect,
-    //                                          reciprocalScale: rScale, reciprocalAllScale: rAllScale,
-    //                                          in: ctx)
-    //                    }
-    //                } else {
-    //                    ctx.setFillColor(strokeLineColor.cg)
-    //                    strokeLine.draw(size: strokeLineWidth * rScale, in: ctx)
-    //                }
-    //            }
-    //        }
-    //
-    //        let isEdit = viewType != .preview && viewType != .changingMaterial
-    //        if isEdit {
-    ////            if !editTrack.isHidden {
-    //                if viewType == .editPoint || viewType == .editVertex {
-    //                    editTrack.drawTransparentCellLines(withReciprocalScale: rScale, in: ctx)
-    //                }
-    //                editTrack.drawPreviousNext(isHiddenPrevious: scene.isHiddenPrevious,
-    //                                           isHiddenNext: scene.isHiddenNext,
-    //                                           time: time, reciprocalScale: rScale, in: ctx)
-    ////            }
-    //
-    //            for track in tracks {
-    ////                if !track.isHidden {
-    //                    track.drawSelectedCells(opacity: 0.75 * (track != editTrack ? 0.5 : 1),
-    //                                            color: .selected,
-    //                                            subColor: .subSelected,
-    //                                            reciprocalScale: rScale,  in: ctx)
-    ////                    let drawing = track.drawingItem.drawing
-    //                    let selectedLineIndexes = track.drawing.selectedLineIndexes
-    //                    if !selectedLineIndexes.isEmpty {
-    //                        let imageBounds = selectedLineIndexes.reduce(into: Rect.null) {
-    //                            $0.formUnion(track.drawing.lines[$1].imageBounds)
-    //                        }
-    //                        ctx.setStrokeColor(Color.selected.with(alpha: 0.8).cg)
-    //                        ctx.setLineWidth(rScale)
-    //                        ctx.stroke(imageBounds)
-    //                    }
-    ////                }
-    //            }
-    ////            if !editTrack.isHidden {
-    //                let isMovePoint = viewType == .editPoint || viewType == .editVertex
-    //
-    ////                if viewType == .editMaterial {
-    ////                    if let material = edit.editMaterial {
-    ////                        drawMaterial: do {
-    ////                            rootCell.allCells { cell, stop in
-    ////                                if cell.material.id == material.id {
-    ////                                    ctx.addPath(cell.geometry.path)
-    ////                                }
-    ////                            }
-    ////                            ctx.setLineWidth(3 * rAllScale)
-    ////                            ctx.setLineJoin(.round)
-    ////                            ctx.setStrokeColor(Color.editMaterial.cg)
-    ////                            ctx.strokePath()
-    ////                            rootCell.allCells { cell, stop in
-    ////                                if cell.material.color == material.color
-    ////                                    && cell.material.id != material.id {
-    ////
-    ////                                    ctx.addPath(cell.geometry.path)
-    ////                                }
-    ////                            }
-    ////                            ctx.setLineWidth(3 * rAllScale)
-    ////                            ctx.setLineJoin(.round)
-    ////                            ctx.setStrokeColor(Color.editMaterialColorOnly.cg)
-    ////                            ctx.strokePath()
-    ////                        }
-    ////                    }
-    ////                }
-    //
-    ////                if !isMovePoint,
-    ////                    let indicatedGeometryItem = edit.indicatedGeometryItem,
-    ////                    editTrack.geometryItems.contains(indicatedGeometryItem) {
-    ////
-    ////                    if editTrack.selectedGeometryItems.contains(indicatedGeometryItem), let p = edit.point {
-    ////                        editTrack.selectedGeometryItems.forEach {
-    ////                            drawNearestCellLine(for: p, cell: $0.cell, lineColor: .selected,
-    ////                                                reciprocalAllScale: rAllScale, in: ctx)
-    ////                        }
-    ////                    }
-    ////                }
-    //                if let editZ = edit.editZ {
-    //                    drawEditZ(editZ, in: ctx)
-    //                }
-    //                if isMovePoint {
-    //                    drawEditPoints(with: edit.editPoint, isEditVertex: viewType == .editVertex,
-    //                                   reciprocalAllScale: rAllScale, in: ctx)
-    //                }
-    //                if let editTransform = edit.editTransform {
-    //                    if viewType == .editWarp {
-    //                        drawWarp(with: editTransform, reciprocalAllScale: rAllScale, in: ctx)
-    //                    } else if viewType == .editTransform {
-    //                        drawTransform(with: editTransform, reciprocalAllScale: rAllScale, in: ctx)
-    //                    }
-    //                }
-    ////            }
-    //        }
-    //        ctx.restoreGState()
-    //        if viewType != .preview {
-    //            drawTransform(scene.frame, in: ctx)
-    //        }
-    //    }
-    //
-    //    func drawTransform(_ cameraFrame: Rect, in ctx: CGContext) {
-    //        func drawCameraBorder(bounds: Rect, inColor: Color, outColor: Color) {
-    //            ctx.setStrokeColor(inColor.cg)
-    //            ctx.stroke(bounds.insetBy(dx: -0.5, dy: -0.5))
-    //            ctx.setStrokeColor(outColor.cg)
-    //            ctx.stroke(bounds.insetBy(dx: -1.5, dy: -1.5))
-    //        }
-    //        ctx.setLineWidth(1)
-    //        if !xSineWave.isEmpty {
-    //            let amplitude = xSineWave.amplitude
-    //            drawCameraBorder(bounds: cameraFrame.insetBy(dx: -amplitude, dy: 0),
-    //                             inColor: Color.cameraBorder, outColor: Color.cutSubBorder)
-    //        }
-    //        let track = editTrack
-    //        func drawPreviousNextCamera(t: Transform, color: Color) {
-    //            let affine = transform.affineTransform.inverted().concatenating(t.affineTransform)
-    //            ctx.saveGState()
-    //            ctx.concatenate(affine)
-    //            drawCameraBorder(bounds: cameraFrame, inColor: color, outColor: Color.cutSubBorder)
-    //            ctx.restoreGState()
-    //            func strokeBounds() {
-    //                ctx.move(to: Point(x: cameraFrame.minX, y: cameraFrame.minY))
-    //                ctx.addLine(to: Point(x: cameraFrame.minX, y: cameraFrame.minY).applying(affine))
-    //                ctx.move(to: Point(x: cameraFrame.minX, y: cameraFrame.maxY))
-    //                ctx.addLine(to: Point(x: cameraFrame.minX, y: cameraFrame.maxY).applying(affine))
-    //                ctx.move(to: Point(x: cameraFrame.maxX, y: cameraFrame.minY))
-    //                ctx.addLine(to: Point(x: cameraFrame.maxX, y: cameraFrame.minY).applying(affine))
-    //                ctx.move(to: Point(x: cameraFrame.maxX, y: cameraFrame.maxY))
-    //                ctx.addLine(to: Point(x: cameraFrame.maxX, y: cameraFrame.maxY).applying(affine))
-    //            }
-    //            ctx.setStrokeColor(color.cg)
-    //            strokeBounds()
-    //            ctx.strokePath()
-    //            ctx.setStrokeColor(Color.cutSubBorder.cg)
-    //            strokeBounds()
-    //            ctx.strokePath()
-    //        }
-    //        let lki = track.animation.indexInfo(withTime: time)
-    //        if lki.keyframeInternalTime == 0 && lki.keyframeIndex > 0 {
-    //            if let t = track.transformItem?.keyTransforms[lki.keyframeIndex - 1], transform != t {
-    //                drawPreviousNextCamera(t: t, color: .red)
-    //            }
-    //        }
-    //        if let t = track.transformItem?.keyTransforms[lki.keyframeIndex], transform != t {
-    //            drawPreviousNextCamera(t: t, color: .red)
-    //        }
-    //        if lki.keyframeIndex < track.animation.keyframes.count - 1 {
-    //            if let t = track.transformItem?.keyTransforms[lki.keyframeIndex + 1], transform != t {
-    //                drawPreviousNextCamera(t: t, color: .green)
-    //            }
-    //        }
-    //        drawCameraBorder(bounds: cameraFrame, inColor: Color.locked, outColor: Color.cutSubBorder)
-    //    }
-    //
-    //    struct EditPoint: Equatable {
-    //        var nearestLine: Line, nearestPointIndex: Int, lines: [Line], point: Point, isSnap: Bool
-    //
-    //        func draw(withReciprocalAllScale reciprocalAllScale: Real,
-    //                  lineColor: Color, in ctx: CGContext) {
-    //            for line in lines {
-    //                ctx.setFillColor((line == nearestLine ? lineColor : Color.subSelected).cg)
-    //                line.draw(size: 2 * reciprocalAllScale, in: ctx)
-    //            }
-    //            point.draw(radius: 3 * reciprocalAllScale, lineWidth: reciprocalAllScale,
-    //                       inColor: isSnap ? .snap : lineColor, outColor: .controlPointIn, in: ctx)
-    //        }
-    //    }
-    //    private let editPointRadius = 0.5.cg, lineEditPointRadius = 1.5.cg, pointEditPointRadius = 3.0.cg
-    //    func drawEditPoints(with editPoint: EditPoint?, isEditVertex: Bool,
-    //                        reciprocalAllScale: Real, in ctx: CGContext) {
-    //        if let ep = editPoint, ep.isSnap {
-    //            let p: Point?, np: Point?
-    //            if ep.nearestPointIndex == 1 {
-    //                p = ep.nearestLine.firstPoint
-    //                np = ep.nearestLine.controls.count == 2 ?
-    //                    nil : ep.nearestLine.controls[2].point
-    //            } else if ep.nearestPointIndex == ep.nearestLine.controls.count - 2 {
-    //                p = ep.nearestLine.lastPoint
-    //                np = ep.nearestLine.controls.count == 2 ?
-    //                    nil :
-    //                    ep.nearestLine.controls[ep.nearestLine.controls.count - 3].point
-    //            } else {
-    //                p = nil
-    //                np = nil
-    //            }
-    //            if let p = p {
-    //                func drawSnap(with point: Point, capPoint: Point) {
-    //                    if let ps = Point.boundsPointWithLine(ap: point, bp: capPoint,
-    //                                                            bounds: ctx.boundingBoxOfClipPath) {
-    //                        ctx.move(to: ps.p0)
-    //                        ctx.addLine(to: ps.p1)
-    //                        ctx.setLineWidth(1 * reciprocalAllScale)
-    //                        ctx.setStrokeColor(Color.selected.cg)
-    //                        ctx.strokePath()
-    //                    }
-    //                    if let np = np, ep.nearestLine.controls.count > 2 {
-    //                        let p1 = ep.nearestPointIndex == 1 ?
-    //                            ep.nearestLine.controls[1].point :
-    //                            ep.nearestLine.controls[ep.nearestLine.controls.count - 2].point
-    //                        ctx.move(to: p1.mid(np))
-    //                        ctx.addLine(to: p1)
-    //                        ctx.addLine(to: capPoint)
-    //                        ctx.setLineWidth(0.5 * reciprocalAllScale)
-    //                        ctx.setStrokeColor(Color.selected.cg)
-    //                        ctx.strokePath()
-    //                        p1.draw(radius: 2 * reciprocalAllScale, lineWidth: reciprocalAllScale,
-    //                                inColor: Color.selected, outColor: Color.controlPointIn, in: ctx)
-    //                    }
-    //                }
-    //                func drawSnap(with lines: [Line]) {
-    //                    for line in lines {
-    //                        if line != ep.nearestLine {
-    //                            if ep.nearestLine.controls.count == 3 {
-    //                                if line.firstPoint == ep.nearestLine.firstPoint {
-    //                                    drawSnap(with: line.controls[1].point,
-    //                                             capPoint: ep.nearestLine.firstPoint)
-    //                                } else if line.lastPoint == ep.nearestLine.firstPoint {
-    //                                    drawSnap(with: line.controls[line.controls.count - 2].point,
-    //                                             capPoint: ep.nearestLine.firstPoint)
-    //                                }
-    //                                if line.firstPoint == ep.nearestLine.lastPoint {
-    //                                    drawSnap(with: line.controls[1].point,
-    //                                             capPoint: ep.nearestLine.lastPoint)
-    //                                } else if line.lastPoint == ep.nearestLine.lastPoint {
-    //                                    drawSnap(with: line.controls[line.controls.count - 2].point,
-    //                                             capPoint: ep.nearestLine.lastPoint)
-    //                                }
-    //                            } else {
-    //                                if line.firstPoint == p {
-    //                                    drawSnap(with: line.controls[1].point, capPoint: p)
-    //                                } else if line.lastPoint == p {
-    //                                    drawSnap(with: line.controls[line.controls.count - 2].point,
-    //                                             capPoint: p)
-    //                                }
-    //                            }
-    //                        } else if line.firstPoint == line.lastPoint {
-    //                            if ep.nearestPointIndex == line.controls.count - 2 {
-    //                                drawSnap(with: line.controls[1].point, capPoint: p)
-    //                            } else if ep.nearestPointIndex == 1 && p == line.firstPoint {
-    //                                drawSnap(with: line.controls[line.controls.count - 2].point,
-    //                                         capPoint: p)
-    //                            }
-    //                        }
-    //                    }
-    //                }
-    //                drawSnap(with: editTrack.drawing.lines)
-    //                for cell in editTrack.cells {
-    //                    drawSnap(with: cell.geometry.lines)
-    //                }
-    //            }
-    //        }
-    //        editPoint?.draw(withReciprocalAllScale: reciprocalAllScale,
-    //                        lineColor: .selected,
-    //                        in: ctx)
-    //
-    //        var capPointDic = [Point: Bool]()
-    //        func updateCapPointDic(with lines: [Line]) {
-    //            for line in lines {
-    //                let fp = line.firstPoint, lp = line.lastPoint
-    //                if capPointDic[fp] != nil {
-    //                    capPointDic[fp] = true
-    //                } else {
-    //                    capPointDic[fp] = false
-    //                }
-    //                if capPointDic[lp] != nil {
-    //                    capPointDic[lp] = true
-    //                } else {
-    //                    capPointDic[lp] = false
-    //                }
-    //            }
-    //        }
-    //        if !editTrack.geometryItems.isEmpty {
-    //            for cell in editTrack.cells {
-    //                if !cell.isLocked {
-    //                    if !isEditVertex {
-    //                        Line.drawEditPointsWith(lines: cell.geometry.lines,
-    //                                                reciprocalScale: reciprocalAllScale, in: ctx)
-    //                    }
-    //                    updateCapPointDic(with: cell.geometry.lines)
-    //                }
-    //            }
-    //        }
-    //        if !isEditVertex {
-    //            Line.drawEditPointsWith(lines: editTrack.drawing.lines,
-    //                                    reciprocalScale: reciprocalAllScale, in: ctx)
-    //        }
-    //        updateCapPointDic(with: editTrack.drawing.lines)
-    //
-    //        let r = lineEditPointRadius * reciprocalAllScale, lw = 0.5 * reciprocalAllScale
-    //        for v in capPointDic {
-    //            v.key.draw(radius: r, lineWidth: lw,
-    //                       inColor: v.value ? .controlPointJointIn : .controlPointCapIn,
-    //                       outColor: .controlPointOut, in: ctx)
-    //        }
-    //    }
-    //
-    //    struct EditZ: Equatable {
-    //        var cells: [Cell], point: Point, firstPoint: Point, firstY: Real
-    //    }
-    //    func drawEditZ(_ editZ: EditZ, in ctx: CGContext) {
-    //        rootCell.depthFirstSearch(duplicate: true) { parent, cell in
-    //            if editZ.cells.contains(cell), let index = parent.children.index(of: cell) {
-    //                if !parent.geometry.isEmpty {
-    //                    parent.geometry.clip(in: ctx) {
-    //                        Cell.drawCellPaths(Array(parent.children[(index + 1)...]),
-    //                                           Color.moveZ, in: ctx)
-    //                    }
-    //                } else {
-    //                    Cell.drawCellPaths(Array(parent.children[(index + 1)...]),
-    //                                       Color.moveZ, in: ctx)
-    //                }
-    //            }
-    //        }
-    //    }
-    //    let editZHeight = 4.0.cg
-    //    func drawEditZKnob(_ editZ: EditZ, at point: Point, in ctx: CGContext) {
-    //        ctx.saveGState()
-    //        ctx.setLineWidth(1)
-    //        let editCellY = editZFirstY(with: editZ.cells)
-    //        drawZ(withFillColor: .knob, lineColor: .getSetBorder,
-    //              position: Point(x: point.x,
-    //                                y: point.y - editZ.firstY + editCellY), in: ctx)
-    //        var p = Point(x: point.x - editZHeight, y: point.y - editZ.firstY)
-    //        rootCell.allCells { (cell, stop) in
-    //            drawZ(withFillColor: cell.colorAndLineColor(withIsEdit: true, isInterpolated: false).color,
-    //                  lineColor: .getSetBorder, position: p, in: ctx)
-    //            p.y += editZHeight
-    //        }
-    //        ctx.restoreGState()
-    //    }
-    //    func drawZ(withFillColor fillColor: Color, lineColor: Color,
-    //               position p: Point, in ctx: CGContext) {
-    //        ctx.setFillColor(fillColor.cg)
-    //        ctx.setStrokeColor(lineColor.cg)
-    //        ctx.addRect(Rect(x: p.x - editZHeight / 2, y: p.y - editZHeight / 2,
-    //                           width: editZHeight, height: editZHeight))
-    //        ctx.drawPath(using: .fillStroke)
-    //    }
-    //    func editZFirstY(with cells: [Cell]) -> Real {
-    //        guard let firstCell = cells.first else {
-    //            return 0
-    //        }
-    //        var y = 0.0.cg
-    //        rootCell.allCells { (cell, stop) in
-    //            if cell == firstCell {
-    //                stop = true
-    //            } else {
-    //                y += editZHeight
-    //            }
-    //        }
-    //        return y
-    //    }
-    //    func drawNearestCellLine(for p: Point, cell: Cell, lineColor: Color,
-    //                             reciprocalAllScale: Real, in ctx: CGContext) {
-    //        if let n = cell.geometry.nearestBezier(with: p) {
-    //            let np = cell.geometry.lines[n.lineIndex].bezier(at: n.bezierIndex).position(withT: n.t)
-    //            ctx.setStrokeColor(Color.background.multiply(alpha: 0.75).cg)
-    //            ctx.setLineWidth(3 * reciprocalAllScale)
-    //            ctx.move(to: Point(x: p.x, y: p.y))
-    //            ctx.addLine(to: Point(x: np.x, y: p.y))
-    //            ctx.addLine(to: Point(x: np.x, y: np.y))
-    //            ctx.strokePath()
-    //            ctx.setStrokeColor(lineColor.cg)
-    //            ctx.setLineWidth(reciprocalAllScale)
-    //            ctx.move(to: Point(x: p.x, y: p.y))
-    //            ctx.addLine(to: Point(x: np.x, y: p.y))
-    //            ctx.addLine(to: Point(x: np.x, y: np.y))
-    //            ctx.strokePath()
-    //        }
-    //    }
-    //
-    //    struct EditTransform: Equatable {
-    //        static let centerRatio = 0.25.cg
-    //        var rotatedRect: RotatedRect, anchorPoint: Point
-    //        var point: Point, oldPoint: Point, isCenter: Bool
-    //    }
-    //    func warpAffineTransform(with et: EditTransform) -> CGAffineTransform {
-    //        guard et.oldPoint != et.anchorPoint else {
-    //            return CGAffineTransform.identity
-    //        }
-    //        let theta = et.oldPoint.tangential(et.anchorPoint)
-    //        let angle = theta < 0 ? theta + .pi : theta - .pi
-    //        var pAffine = CGAffineTransform(rotationAngle: -angle)
-    //        pAffine = pAffine.translatedBy(x: -et.anchorPoint.x, y: -et.anchorPoint.y)
-    //        let newOldP = et.oldPoint.applying(pAffine), newP = et.point.applying(pAffine)
-    //        let scaleX = newP.x / newOldP.x, skewY = (newP.y - newOldP.y) / newOldP.x
-    //        var affine = CGAffineTransform(translationX: et.anchorPoint.x, y: et.anchorPoint.y)
-    //        affine = affine.rotated(by: angle)
-    //        affine = affine.scaledBy(x: scaleX, y: 1)
-    //        if skewY != 0 {
-    //            affine = CGAffineTransform(a: 1, b: skewY, c: 0, d: 1, tx: 0, ty: 0).concatenating(affine)
-    //        }
-    //        affine = affine.rotated(by: -angle)
-    //        return affine.translatedBy(x: -et.anchorPoint.x, y: -et.anchorPoint.y)
-    //    }
-    //    func transformAffineTransform(with et: EditTransform) -> CGAffineTransform {
-    //        guard et.oldPoint != et.anchorPoint else {
-    //            return CGAffineTransform.identity
-    //        }
-    //        let r = et.point.distance(et.anchorPoint), oldR = et.oldPoint.distance(et.anchorPoint)
-    //        let angle = et.anchorPoint.tangential(et.point)
-    //        let oldAngle = et.anchorPoint.tangential(et.oldPoint)
-    //        let scale = r / oldR
-    //        var affine = CGAffineTransform(translationX: et.anchorPoint.x, y: et.anchorPoint.y)
-    //        affine = affine.rotated(by: angle.differenceRotation(oldAngle))
-    //        affine = affine.scaledBy(x: scale, y: scale)
-    //        affine = affine.translatedBy(x: -et.anchorPoint.x, y: -et.anchorPoint.y)
-    //        return affine
-    //    }
-    //    func drawWarp(with et: EditTransform, reciprocalAllScale: Real, in ctx: CGContext) {
-    //        if et.isCenter {
-    //            drawLine(firstPoint: et.rotatedRect.midXMinYPoint,
-    //                     lastPoint: et.rotatedRect.midXMaxYPoint,
-    //                     reciprocalAllScale: reciprocalAllScale, in: ctx)
-    //            drawLine(firstPoint: et.rotatedRect.minXMidYPoint,
-    //                     lastPoint: et.rotatedRect.maxXMidYPoint,
-    //                     reciprocalAllScale: reciprocalAllScale, in: ctx)
-    //        } else {
-    //            drawLine(firstPoint: et.anchorPoint, lastPoint: et.point,
-    //                     reciprocalAllScale: reciprocalAllScale, in: ctx)
-    //        }
-    //
-    //        drawRotatedRect(with: et, reciprocalAllScale: reciprocalAllScale, in: ctx)
-    //        et.anchorPoint.draw(radius: lineEditPointRadius * reciprocalAllScale,
-    //                            lineWidth: reciprocalAllScale, in: ctx)
-    //    }
-    //    func drawTransform(with et: EditTransform, reciprocalAllScale: Real, in ctx: CGContext) {
-    //        ctx.setAlpha(0.5)
-    //        drawLine(firstPoint: et.anchorPoint, lastPoint: et.oldPoint,
-    //                 reciprocalAllScale: reciprocalAllScale, in: ctx)
-    //        drawCircleWith(radius: et.oldPoint.distance(et.anchorPoint), anchorPoint: et.anchorPoint,
-    //                       reciprocalAllScale: reciprocalAllScale, in: ctx)
-    //        ctx.setAlpha(1)
-    //        drawLine(firstPoint: et.anchorPoint, lastPoint: et.point,
-    //                 reciprocalAllScale: reciprocalAllScale, in: ctx)
-    //        drawCircleWith(radius: et.point.distance(et.anchorPoint), anchorPoint: et.anchorPoint,
-    //                       reciprocalAllScale: reciprocalAllScale, in: ctx)
-    //
-    //        drawRotatedRect(with: et, reciprocalAllScale: reciprocalAllScale, in: ctx)
-    //        et.anchorPoint.draw(radius: lineEditPointRadius * reciprocalAllScale,
-    //                            lineWidth: reciprocalAllScale, in: ctx)
-    //    }
-    //    func drawRotatedRect(with et: EditTransform, reciprocalAllScale: Real, in ctx: CGContext) {
-    //        ctx.setLineWidth(reciprocalAllScale)
-    //        ctx.setStrokeColor(Color.camera.cg)
-    //        ctx.saveGState()
-    //        ctx.concatenate(et.rotatedRect.affineTransform)
-    //        let w = et.rotatedRect.size.width * EditTransform.centerRatio
-    //        let h = et.rotatedRect.size.height * EditTransform.centerRatio
-    //        ctx.stroke(Rect(x: (et.rotatedRect.size.width - w) / 2,
-    //                          y: (et.rotatedRect.size.height - h) / 2, width: w, height: h))
-    //        ctx.stroke(Rect(x: 0, y: 0,
-    //                          width: et.rotatedRect.size.width, height: et.rotatedRect.size.height))
-    //        ctx.restoreGState()
-    //    }
-    //
-    //    func drawCircleWith(radius r: Real, anchorPoint: Point,
-    //                        reciprocalAllScale: Real, in ctx: CGContext) {
-    //        let cb = Rect(x: anchorPoint.x - r, y: anchorPoint.y - r, width: r * 2, height: r * 2)
-    //        let outLineWidth = 3 * reciprocalAllScale, inLineWidth = 1.5 * reciprocalAllScale
-    //        ctx.setLineWidth(outLineWidth)
-    //        ctx.setStrokeColor(Color.controlPointOut.cg)
-    //        ctx.strokeEllipse(in: cb)
-    //        ctx.setLineWidth(inLineWidth)
-    //        ctx.setStrokeColor(Color.controlPointIn.cg)
-    //        ctx.strokeEllipse(in: cb)
-    //    }
-    //    func drawLine(firstPoint: Point, lastPoint: Point,
-    //                  reciprocalAllScale: Real, in ctx: CGContext) {
-    //        let outLineWidth = 3 * reciprocalAllScale, inLineWidth = 1.5 * reciprocalAllScale
-    //        ctx.setLineWidth(outLineWidth)
-    //        ctx.setStrokeColor(Color.controlPointOut.cg)
-    //        ctx.move(to: firstPoint)
-    //        ctx.addLine(to: lastPoint)
-    //        ctx.strokePath()
-    //        ctx.setLineWidth(inLineWidth)
-    //        ctx.setStrokeColor(Color.controlPointIn.cg)
-    //        ctx.move(to: firstPoint)
-    //        ctx.addLine(to: lastPoint)
-    //        ctx.strokePath()
-    //    }
+    func draw(scene: Scene, viewType: Cut.ViewType,
+              scale: Real, rotation: Real,
+              viewScale: Real, viewRotation: Real,
+              in ctx: CGContext) {
+        let inScale = scale * transform.scale.x, inRotation = rotation + transform.rotation
+        let inViewScale = viewScale * transform.scale.x
+        let inViewRotation = viewRotation + transform.rotation
+        let reciprocalScale = 1 / inScale, reciprocalAllScale = 1 / inViewScale
+        
+        ctx.concatenate(transform.affineTransform)
+        
+        if effect.opacity != 1 || effect.blendType != .normal || effect.blurRadius > 0 || !isEdited {
+            ctx.saveGState()
+            ctx.setAlpha(!isEdited ? 0.2 * effect.opacity : effect.opacity)
+            ctx.setBlendMode(effect.blendType.blendMode)
+            if effect.blurRadius > 0 {
+                let invertCTM = ctx.ctm
+                let bBounds = ctx.boundingBoxOfClipPath.inset(by: -effect.blurRadius).applying(invertCTM)
+                if let bctx = CGContext.bitmap(with: bBounds.size) {
+                    bctx.translateBy(x: -effect.blurRadius, y: -effect.blurRadius)
+                    bctx.concatenate(ctx.ctm)
+                    _draw(scene: scene, viewType: viewType,
+                          reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
+                          scale: inViewScale, rotation: inViewRotation, in: bctx)
+                    children.forEach {
+                        $0.draw(scene: scene, viewType: viewType,
+                                scale: inScale, rotation: inRotation,
+                                viewScale: inViewScale, viewRotation: inViewRotation,
+                                in: bctx)
+                    }
+                    bctx.drawBlur(withBlurRadius: effect.blurRadius, to: ctx)
+                }
+            } else {
+                ctx.beginTransparencyLayer(auxiliaryInfo: nil)
+                _draw(scene: scene, viewType: viewType,
+                      reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
+                      scale: inViewScale, rotation: inViewRotation, in: ctx)
+                children.forEach {
+                    $0.draw(scene: scene, viewType: viewType,
+                            scale: inScale, rotation: inRotation,
+                            viewScale: inViewScale, viewRotation: inViewRotation,
+                            in: ctx)
+                }
+                ctx.endTransparencyLayer()
+            }
+            ctx.restoreGState()
+        } else {
+            _draw(scene: scene, viewType: viewType,
+                  reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
+                  scale: inViewScale, rotation: inViewRotation, in: ctx)
+            children.forEach {
+                $0.draw(scene: scene, viewType: viewType,
+                        scale: inScale, rotation: inRotation,
+                        viewScale: inViewScale, viewRotation: inViewRotation,
+                        in: ctx)
+            }
+        }
+    }
     
-    //    func drawPreviousNext(isHiddenPrevious: Bool, isHiddenNext: Bool,
-    //                          time: Beat, reciprocalScale: Real, in ctx: CGContext) {
-    //        let index = animation.indexInfo(withTime: time).keyframeIndex
-    //        drawingItem.drawPreviousNext(isHiddenPrevious: isHiddenPrevious, isHiddenNext: isHiddenNext,
-    //                                     index: index, reciprocalScale: reciprocalScale, in: ctx)
-    //        geometryItems.enumerated().forEach { (i, geometryItem) in
-    //            geometryItem.drawPreviousNext(lineWidth: cells[i].material.lineWidth * reciprocalScale,
-    //                                          isHiddenPrevious: isHiddenPrevious,
-    //                                          isHiddenNext: isHiddenNext,
-    //                                          index: index, in: ctx)
-    //        }
-    //    }
-    //    func drawSelectedCells(opacity: Real, color: Color, subColor: Color,
-    //                           reciprocalScale: Real, in ctx: CGContext) {
-    //        guard !selectedGeometryItems.isEmpty else {
-    //            return
-    //        }
-    //        ctx.setAlpha(opacity)
-    //        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
-    //        var geometrys = [Geometry]()
-    //        ctx.setFillColor(subColor.with(alpha: 1).cg)
-    //        func setPaths(with geometryItem: GeometryItem) {
-    //            let cell = geometryItem.cell
-    //            if !cell.geometry.isEmpty {
-    //                cell.geometry.addPath(in: ctx)
-    //                ctx.fillPath()
-    //                geometrys.append(cell.geometry)
-    //            }
-    //        }
-    //        selectedGeometryItems.forEach { setPaths(with: $0) }
-    //        ctx.endTransparencyLayer()
-    //        ctx.setAlpha(1)
-    //
-    //        ctx.setFillColor(color.with(alpha: 1).cg)
-    //        geometrys.forEach { $0.draw(withLineWidth: 1.5 * reciprocalScale, in: ctx) }
-    //    }
-    //    func drawTransparentCellLines(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
-    //        cells.forEach {
-    //            $0.geometry.drawLines(withColor: .getSetBorder, reciprocalScale: reciprocalScale, in: ctx)
-    //            $0.geometry.drawPathLine(withReciprocalScale: reciprocalScale, in: ctx)
-    //        }
-    //    }
-    //    func drawSkinGeometryItem(_ geometryItem: GeometryItem,
-    //                              reciprocalScale: Real, reciprocalAllScale: Real, in ctx: CGContext) {
-    //        geometryItem.geometry.drawSkin(lineColor: .indicated,
-    //                                       subColor: Color.subIndicated.multiply(alpha: 0.2),
-    //                                       skinLineWidth: animation.isInterpolated ? 3 : 1,
-    //                                       reciprocalScale: reciprocalScale,
-    //                                       reciprocalAllScale: reciprocalAllScale, in: ctx)
-    //    }
+    private func _draw(scene: Scene, viewType: Cut.ViewType,
+                       reciprocalScale: Real, reciprocalAllScale: Real,
+                       scale: Real, rotation: Real,
+                       in ctx: CGContext) {
+        let isEdit = !isEdited ? false :
+            (viewType != .preview && viewType != .editMaterial && viewType != .changingMaterial)
+        moveWithSineWave: if viewType == .preview && !xSineWave.isEmpty {
+            let waveY = ySineWave.yWith(t: wiggleT)
+            ctx.translateBy(x: waveY, y: 0)
+        }
+        guard !isHidden else {
+            return
+        }
+        if isEdit {
+            rootCell.children.forEach {
+                $0.draw(isEdit: isEdit, isUseDraw: false,
+                        reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
+                        scale: scale, rotation: rotation,
+                        in: ctx)
+            }
+            
+            ctx.saveGState()
+            ctx.setAlpha(0.5)
+            ctx.beginTransparencyLayer(auxiliaryInfo: nil)
+            rootCell.children.forEach {
+                $0.draw(isEdit: isEdit, isUseDraw: true,
+                        reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
+                        scale: scale, rotation: rotation,
+                        in: ctx)
+            }
+            ctx.endTransparencyLayer()
+            ctx.restoreGState()
+        } else {
+            rootCell.children.forEach {
+                $0.draw(isEdit: isEdit, isUseDraw: true,
+                        reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
+                        scale: scale, rotation: rotation,
+                        in: ctx)
+            }
+        }
+        
+        drawAnimation: do {
+            if isEdit {
+                tracks.forEach {
+                    if $0 === editTrack {
+                        $0.drawing.drawEdit(withReciprocalScale: reciprocalScale, in: ctx)
+                    } else {
+                        ctx.setAlpha(0.5)
+                        $0.drawing.drawEdit(withReciprocalScale: reciprocalScale, in: ctx)
+                        ctx.setAlpha(1)
+                    }
+                }
+            } else {
+                var alpha = 1.0.cg
+                tracks.forEach {
+                    ctx.setAlpha(alpha)
+                    $0.drawing.draw(withReciprocalScale: reciprocalScale, in: ctx)
+                    alpha = max(alpha * 0.4, 0.25)
+                }
+                ctx.setAlpha(1)
+            }
+        }
+    }
+    
+    struct Edit {
+        var indicatedGeometryItem: GeometryItem? = nil, editMaterial: Material? = nil, editZ: EditZ? = nil
+        var editPoint: EditPoint? = nil, editTransform: EditTransform? = nil, point: Point?
+    }
+    func drawEdit(_ edit: Edit,
+                  scene: Scene, viewType: Cut.ViewType,
+                  strokeLine: Line?, strokeLineWidth: Real, strokeLineColor: Color,
+                  reciprocalViewScale: Real, scale: Real, rotation: Real,
+                  in ctx: CGContext) {
+        let worldScale = self.worldScale
+        let rScale = 1 / worldScale
+        let rAllScale = reciprocalViewScale / worldScale
+        let wat = worldAffineTransform
+        ctx.saveGState()
+        ctx.concatenate(wat)
+        
+        if !wat.isIdentity {
+            ctx.setStrokeColor(Color.locked.cg)
+            ctx.move(to: Point(x: -10, y: 0))
+            ctx.addLine(to: Point(x: 10, y: 0))
+            ctx.move(to: Point(x: 0, y: -10))
+            ctx.addLine(to: Point(x: 0, y: 10))
+            ctx.strokePath()
+        }
+        
+        drawStroke: do {
+            if let strokeLine = strokeLine {
+                if viewType == .editSelected || viewType == .editDeselected {
+                    let geometry = Geometry(lines: [strokeLine])
+                    if viewType == .editSelected {
+                        geometry.drawSkin(lineColor: .selectBorder, subColor: .select,
+                                          reciprocalScale: rScale, reciprocalAllScale: rAllScale,
+                                          in: ctx)
+                    } else {
+                        geometry.drawSkin(lineColor: .deselectBorder, subColor: .deselect,
+                                          reciprocalScale: rScale, reciprocalAllScale: rAllScale,
+                                          in: ctx)
+                    }
+                } else {
+                    ctx.setFillColor(strokeLineColor.cg)
+                    strokeLine.draw(size: strokeLineWidth * rScale, in: ctx)
+                }
+            }
+        }
+        
+        let isEdit = viewType != .preview && viewType != .changingMaterial
+        if isEdit {
+            if viewType == .editPoint || viewType == .editVertex {
+                editTrack.drawTransparentCellLines(withReciprocalScale: rScale, in: ctx)
+            }
+            editTrack.drawPreviousNext(isHiddenPrevious: scene.isHiddenPrevious,
+                                       isHiddenNext: scene.isHiddenNext,
+                                       time: time, reciprocalScale: rScale, in: ctx)
+            
+            for track in tracks {
+                track.drawSelectedCells(opacity: 0.75 * (track != editTrack ? 0.5 : 1),
+                                        color: .selected,
+                                        subColor: .subSelected,
+                                        reciprocalScale: rScale,  in: ctx)
+                let selectedLineIndexes = track.drawing.selectedLineIndexes
+                if !selectedLineIndexes.isEmpty {
+                    let imageBounds = selectedLineIndexes.reduce(into: Rect.null) {
+                        $0.formUnion(track.drawing.lines[$1].imageBounds)
+                    }
+                    ctx.setStrokeColor(Color.selected.with(alpha: 0.8).cg)
+                    ctx.setLineWidth(rScale)
+                    ctx.stroke(imageBounds)
+                }
+            }
+            let isMovePoint = viewType == .editPoint || viewType == .editVertex
+            
+            if viewType == .editMaterial {
+                if let material = edit.editMaterial {
+                    drawMaterial: do {
+                        rootCell.allCells { cell, stop in
+                            if cell.material.id == material.id {
+                                ctx.addPath(cell.geometry.path)
+                            }
+                        }
+                        ctx.setLineWidth(3 * rAllScale)
+                        ctx.setLineJoin(.round)
+                        ctx.setStrokeColor(Color.editMaterial.cg)
+                        ctx.strokePath()
+                        rootCell.allCells { cell, stop in
+                            if cell.material.color == material.color
+                                && cell.material.id != material.id {
+                                
+                                ctx.addPath(cell.geometry.path)
+                            }
+                        }
+                        ctx.setLineWidth(3 * rAllScale)
+                        ctx.setLineJoin(.round)
+                        ctx.setStrokeColor(Color.editMaterialColorOnly.cg)
+                        ctx.strokePath()
+                    }
+                }
+            }
+            
+            if !isMovePoint,
+                let indicatedGeometryItem = edit.indicatedGeometryItem,
+                editTrack.geometryItems.contains(indicatedGeometryItem) {
+                
+                if editTrack.selectedGeometryItems.contains(indicatedGeometryItem), let p = edit.point {
+                    editTrack.selectedGeometryItems.forEach {
+                        drawNearestCellLine(for: p, cell: $0.cell, lineColor: .selected,
+                                            reciprocalAllScale: rAllScale, in: ctx)
+                    }
+                }
+            }
+            if let editZ = edit.editZ {
+                drawEditZ(editZ, in: ctx)
+            }
+            if isMovePoint {
+                drawEditPoints(with: edit.editPoint, isEditVertex: viewType == .editVertex,
+                               reciprocalAllScale: rAllScale, in: ctx)
+            }
+            if let editTransform = edit.editTransform {
+                if viewType == .editWarp {
+                    drawWarp(with: editTransform, reciprocalAllScale: rAllScale, in: ctx)
+                } else if viewType == .editTransform {
+                    drawTransform(with: editTransform, reciprocalAllScale: rAllScale, in: ctx)
+                }
+            }
+        }
+        ctx.restoreGState()
+        if viewType != .preview {
+            drawTransform(scene.frame, in: ctx)
+        }
+    }
+    
+    func drawTransform(_ cameraFrame: Rect, in ctx: CGContext) {
+        func drawCameraBorder(bounds: Rect, inColor: Color, outColor: Color) {
+            ctx.setStrokeColor(inColor.cg)
+            ctx.stroke(bounds.insetBy(dx: -0.5, dy: -0.5))
+            ctx.setStrokeColor(outColor.cg)
+            ctx.stroke(bounds.insetBy(dx: -1.5, dy: -1.5))
+        }
+        ctx.setLineWidth(1)
+        if !xSineWave.isEmpty {
+            let amplitude = xSineWave.amplitude
+            drawCameraBorder(bounds: cameraFrame.insetBy(dx: -amplitude, dy: 0),
+                             inColor: Color.cameraBorder, outColor: Color.cutSubBorder)
+        }
+        let track = editTrack
+        func drawPreviousNextCamera(t: Transform, color: Color) {
+            let affine = transform.affineTransform.inverted().concatenating(t.affineTransform)
+            ctx.saveGState()
+            ctx.concatenate(affine)
+            drawCameraBorder(bounds: cameraFrame, inColor: color, outColor: Color.cutSubBorder)
+            ctx.restoreGState()
+            func strokeBounds() {
+                ctx.move(to: Point(x: cameraFrame.minX, y: cameraFrame.minY))
+                ctx.addLine(to: Point(x: cameraFrame.minX, y: cameraFrame.minY).applying(affine))
+                ctx.move(to: Point(x: cameraFrame.minX, y: cameraFrame.maxY))
+                ctx.addLine(to: Point(x: cameraFrame.minX, y: cameraFrame.maxY).applying(affine))
+                ctx.move(to: Point(x: cameraFrame.maxX, y: cameraFrame.minY))
+                ctx.addLine(to: Point(x: cameraFrame.maxX, y: cameraFrame.minY).applying(affine))
+                ctx.move(to: Point(x: cameraFrame.maxX, y: cameraFrame.maxY))
+                ctx.addLine(to: Point(x: cameraFrame.maxX, y: cameraFrame.maxY).applying(affine))
+            }
+            ctx.setStrokeColor(color.cg)
+            strokeBounds()
+            ctx.strokePath()
+            ctx.setStrokeColor(Color.cutSubBorder.cg)
+            strokeBounds()
+            ctx.strokePath()
+        }
+        let lki = track.animation.indexInfo(withTime: time)
+        if lki.keyframeInternalTime == 0 && lki.keyframeIndex > 0 {
+            if let t = track.transformItem?.keyTransforms[lki.keyframeIndex - 1], transform != t {
+                drawPreviousNextCamera(t: t, color: .red)
+            }
+        }
+        if let t = track.transformItem?.keyTransforms[lki.keyframeIndex], transform != t {
+            drawPreviousNextCamera(t: t, color: .red)
+        }
+        if lki.keyframeIndex < track.animation.keyframes.count - 1 {
+            if let t = track.transformItem?.keyTransforms[lki.keyframeIndex + 1], transform != t {
+                drawPreviousNextCamera(t: t, color: .green)
+            }
+        }
+        drawCameraBorder(bounds: cameraFrame, inColor: Color.locked, outColor: Color.cutSubBorder)
+    }
+    
+    struct EditPoint: Equatable {
+        var nearestLine: Line, nearestPointIndex: Int, lines: [Line], point: Point, isSnap: Bool
+        
+        func draw(withReciprocalAllScale reciprocalAllScale: Real,
+                  lineColor: Color, in ctx: CGContext) {
+            for line in lines {
+                ctx.setFillColor((line == nearestLine ? lineColor : Color.subSelected).cg)
+                line.draw(size: 2 * reciprocalAllScale, in: ctx)
+            }
+            point.draw(radius: 3 * reciprocalAllScale, lineWidth: reciprocalAllScale,
+                       inColor: isSnap ? .snap : lineColor, outColor: .controlPointIn, in: ctx)
+        }
+    }
+    private static let editPointRadius = 0.5.cg, lineEditPointRadius = 1.5.cg
+    private static let pointEditPointRadius = 3.0.cg
+    func drawEditPoints(with editPoint: EditPoint?, isEditVertex: Bool,
+                        reciprocalAllScale: Real, in ctx: CGContext) {
+        if let ep = editPoint, ep.isSnap {
+            let p: Point?, np: Point?
+            if ep.nearestPointIndex == 1 {
+                p = ep.nearestLine.firstPoint
+                np = ep.nearestLine.controls.count == 2 ?
+                    nil : ep.nearestLine.controls[2].point
+            } else if ep.nearestPointIndex == ep.nearestLine.controls.count - 2 {
+                p = ep.nearestLine.lastPoint
+                np = ep.nearestLine.controls.count == 2 ?
+                    nil :
+                    ep.nearestLine.controls[ep.nearestLine.controls.count - 3].point
+            } else {
+                p = nil
+                np = nil
+            }
+            if let p = p {
+                func drawSnap(with point: Point, capPoint: Point) {
+                    if let ps = Point.boundsPointWithLine(ap: point, bp: capPoint,
+                                                          bounds: ctx.boundingBoxOfClipPath) {
+                        ctx.move(to: ps.p0)
+                        ctx.addLine(to: ps.p1)
+                        ctx.setLineWidth(1 * reciprocalAllScale)
+                        ctx.setStrokeColor(Color.selected.cg)
+                        ctx.strokePath()
+                    }
+                    if let np = np, ep.nearestLine.controls.count > 2 {
+                        let p1 = ep.nearestPointIndex == 1 ?
+                            ep.nearestLine.controls[1].point :
+                            ep.nearestLine.controls[ep.nearestLine.controls.count - 2].point
+                        ctx.move(to: p1.mid(np))
+                        ctx.addLine(to: p1)
+                        ctx.addLine(to: capPoint)
+                        ctx.setLineWidth(0.5 * reciprocalAllScale)
+                        ctx.setStrokeColor(Color.selected.cg)
+                        ctx.strokePath()
+                        p1.draw(radius: 2 * reciprocalAllScale, lineWidth: reciprocalAllScale,
+                                inColor: Color.selected, outColor: Color.controlPointIn, in: ctx)
+                    }
+                }
+                func drawSnap(with lines: [Line]) {
+                    for line in lines {
+                        if line != ep.nearestLine {
+                            if ep.nearestLine.controls.count == 3 {
+                                if line.firstPoint == ep.nearestLine.firstPoint {
+                                    drawSnap(with: line.controls[1].point,
+                                             capPoint: ep.nearestLine.firstPoint)
+                                } else if line.lastPoint == ep.nearestLine.firstPoint {
+                                    drawSnap(with: line.controls[line.controls.count - 2].point,
+                                             capPoint: ep.nearestLine.firstPoint)
+                                }
+                                if line.firstPoint == ep.nearestLine.lastPoint {
+                                    drawSnap(with: line.controls[1].point,
+                                             capPoint: ep.nearestLine.lastPoint)
+                                } else if line.lastPoint == ep.nearestLine.lastPoint {
+                                    drawSnap(with: line.controls[line.controls.count - 2].point,
+                                             capPoint: ep.nearestLine.lastPoint)
+                                }
+                            } else {
+                                if line.firstPoint == p {
+                                    drawSnap(with: line.controls[1].point, capPoint: p)
+                                } else if line.lastPoint == p {
+                                    drawSnap(with: line.controls[line.controls.count - 2].point,
+                                             capPoint: p)
+                                }
+                            }
+                        } else if line.firstPoint == line.lastPoint {
+                            if ep.nearestPointIndex == line.controls.count - 2 {
+                                drawSnap(with: line.controls[1].point, capPoint: p)
+                            } else if ep.nearestPointIndex == 1 && p == line.firstPoint {
+                                drawSnap(with: line.controls[line.controls.count - 2].point,
+                                         capPoint: p)
+                            }
+                        }
+                    }
+                }
+                drawSnap(with: editTrack.drawing.lines)
+                for cell in editTrack.cells {
+                    drawSnap(with: cell.geometry.lines)
+                }
+            }
+        }
+        editPoint?.draw(withReciprocalAllScale: reciprocalAllScale,
+                        lineColor: .selected,
+                        in: ctx)
+        
+        var capPointDic = [Point: Bool]()
+        func updateCapPointDic(with lines: [Line]) {
+            for line in lines {
+                let fp = line.firstPoint, lp = line.lastPoint
+                if capPointDic[fp] != nil {
+                    capPointDic[fp] = true
+                } else {
+                    capPointDic[fp] = false
+                }
+                if capPointDic[lp] != nil {
+                    capPointDic[lp] = true
+                } else {
+                    capPointDic[lp] = false
+                }
+            }
+        }
+        if !editTrack.geometryItems.isEmpty {
+            for cell in editTrack.cells {
+                if !cell.isLocked {
+                    if !isEditVertex {
+                        Line.drawEditPointsWith(lines: cell.geometry.lines,
+                                                reciprocalScale: reciprocalAllScale, in: ctx)
+                    }
+                    updateCapPointDic(with: cell.geometry.lines)
+                }
+            }
+        }
+        if !isEditVertex {
+            Line.drawEditPointsWith(lines: editTrack.drawing.lines,
+                                    reciprocalScale: reciprocalAllScale, in: ctx)
+        }
+        updateCapPointDic(with: editTrack.drawing.lines)
+        
+        let r = CellGroup.lineEditPointRadius * reciprocalAllScale, lw = 0.5 * reciprocalAllScale
+        for v in capPointDic {
+            v.key.draw(radius: r, lineWidth: lw,
+                       inColor: v.value ? .controlPointJointIn : .controlPointCapIn,
+                       outColor: .controlPointOut, in: ctx)
+        }
+    }
+    
+    func drawPreviousNext(isHiddenPrevious: Bool, isHiddenNext: Bool,
+                          time: Beat, reciprocalScale: Real, in ctx: CGContext) {
+        let index = animation.indexInfo(withTime: time).keyframeIndex
+        drawingItem.drawPreviousNext(isHiddenPrevious: isHiddenPrevious, isHiddenNext: isHiddenNext,
+                                     index: index, reciprocalScale: reciprocalScale, in: ctx)
+        geometryItems.enumerated().forEach { (i, geometryItem) in
+            geometryItem.drawPreviousNext(lineWidth: cells[i].material.lineWidth * reciprocalScale,
+                                          isHiddenPrevious: isHiddenPrevious,
+                                          isHiddenNext: isHiddenNext,
+                                          index: index, in: ctx)
+        }
+    }
+    func drawSelectedCells(opacity: Real, color: Color, subColor: Color,
+                           reciprocalScale: Real, in ctx: CGContext) {
+        guard !selectedGeometryItems.isEmpty else {
+            return
+        }
+        ctx.setAlpha(opacity)
+        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
+        var geometrys = [Geometry]()
+        ctx.setFillColor(subColor.with(alpha: 1).cg)
+        func setPaths(with geometryItem: GeometryItem) {
+            let cell = geometryItem.cell
+            if !cell.geometry.isEmpty {
+                cell.geometry.addPath(in: ctx)
+                ctx.fillPath()
+                geometrys.append(cell.geometry)
+            }
+        }
+        selectedGeometryItems.forEach { setPaths(with: $0) }
+        ctx.endTransparencyLayer()
+        ctx.setAlpha(1)
+        
+        ctx.setFillColor(color.with(alpha: 1).cg)
+        geometrys.forEach { $0.draw(withLineWidth: 1.5 * reciprocalScale, in: ctx) }
+    }
+    func drawTransparentCellLines(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
+        cells.forEach {
+            $0.geometry.drawLines(withColor: .getSetBorder, reciprocalScale: reciprocalScale, in: ctx)
+            $0.geometry.drawPathLine(withReciprocalScale: reciprocalScale, in: ctx)
+        }
+    }
+    func drawSkinGeometryItem(_ geometryItem: GeometryItem,
+                              reciprocalScale: Real, reciprocalAllScale: Real, in ctx: CGContext) {
+        geometryItem.geometry.drawSkin(lineColor: .indicated,
+                                       subColor: Color.subIndicated.multiply(alpha: 0.2),
+                                       skinLineWidth: animation.isInterpolated ? 3 : 1,
+                                       reciprocalScale: reciprocalScale,
+                                       reciprocalAllScale: reciprocalAllScale, in: ctx)
+    }
 }
 extension CellGroup: Referenceable {
     static let name = Text(english: "CellGroup", japanese: "ノード")
 }
 extension CellGroup: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return name.view(withFrame: frame, sizeType)
+        return name.thumbnailView(withFrame: frame, sizeType)
     }
 }
 
-struct CellGroupChildrenKeyframeValue: KeyframeValue {
+struct CellGroupChildren: KeyframeValue {
     var children = [CellGroup]()
     var editingTreeIndex = TreeIndex<CellGroup>()
     
-    static func linear(_ f0: CellGroupChildrenKeyframeValue, _ f1: CellGroupChildrenKeyframeValue,
-                       t: Real) -> CellGroupChildrenKeyframeValue {
+    static func linear(_ f0: CellGroupChildren, _ f1: CellGroupChildren,
+                       t: Real) -> CellGroupChildren {
         return f0
     }
-    static func firstMonospline(_ f1: CellGroupChildrenKeyframeValue,
-                                _ f2: CellGroupChildrenKeyframeValue,
-                                _ f3: CellGroupChildrenKeyframeValue,
-                                with ms: Monospline) -> CellGroupChildrenKeyframeValue {
+    static func firstMonospline(_ f1: CellGroupChildren,
+                                _ f2: CellGroupChildren, _ f3: CellGroupChildren,
+                                with ms: Monospline) -> CellGroupChildren {
         return f1
     }
-    static func monospline(_ f0: CellGroupChildrenKeyframeValue,
-                           _ f1: CellGroupChildrenKeyframeValue,
-                           _ f2: CellGroupChildrenKeyframeValue,
-                           _ f3: CellGroupChildrenKeyframeValue,
-                           with ms: Monospline) -> CellGroupChildrenKeyframeValue {
+    static func monospline(_ f0: CellGroupChildren, _ f1: CellGroupChildren,
+                           _ f2: CellGroupChildren, _ f3: CellGroupChildren,
+                           with ms: Monospline) -> CellGroupChildren {
         return f1
     }
-    static func lastMonospline(_ f0: CellGroupChildrenKeyframeValue,
-                               _ f1: CellGroupChildrenKeyframeValue,
-                               _ f2: CellGroupChildrenKeyframeValue,
-                               with ms: Monospline) -> CellGroupChildrenKeyframeValue {
+    static func lastMonospline(_ f0: CellGroupChildren,
+                               _ f1: CellGroupChildren, _ f2: CellGroupChildren,
+                               with ms: Monospline) -> CellGroupChildren {
         return f1
     }
 }
-extension CellGroupChildrenKeyframeValue: Referenceable {
+extension CellGroupChildren: Referenceable {
     static let name = Text(english: "Cell Node Children Keyframe Value",
                            japanese: "セルノード子キーフレーム値")
+}
+extension CellGroupChildren: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, CellGroupChildren>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> View {
+        switch type {
+        case .normal:
+            return View()
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
 }
 
 final class CellGroupView<T: BinderProtocol>: View, BindableReceiver {

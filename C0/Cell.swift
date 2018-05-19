@@ -50,20 +50,23 @@ struct Cell: Codable, Equatable, TreeNode {
     }
     
     var isEmpty: Bool {
+        return geometry.isEmpty
+    }
+    var allIsEmpty: Bool {
         for child in children {
-            if !child.isEmpty {
+            if !child.allIsEmpty {
                 return false
             }
         }
-        return geometry.isEmpty
-    }
-    var allImageBounds: Rect {
-        return children.reduce(into: imageBounds) { $0.formUnion($1.imageBounds) }
+        return isEmpty
     }
     var imageBounds: Rect {
         return geometry.path.isEmpty ?
             Rect.null : Line.visibleImageBoundsWith(imageBounds: geometry.path.boundingBoxOfPath,
                                                     lineWidth: material.lineWidth * 2)
+    }
+    var allImageBounds: Rect {
+        return children.reduce(into: imageBounds) { $0.formUnion($1.imageBounds) }
     }
     var isEditable: Bool {
         return !isLocked && !isHidden
@@ -181,13 +184,35 @@ struct Cell: Codable, Equatable, TreeNode {
             treeIndexes.append(treeIndex)
         }
     }
-//    func intersection(_ treeIndexes: [TreeIndex<Cell>]) -> Cell {
-//        let children = self.children
-//        let newIndexes = treeIndexes.filter { $0.indexPath.first != nil }
-//        if !newIndexes.isEmpty {
-//             intersection(newIndexes)
-//        }
-//    }
+    func intersection(_ treeIndexes: [TreeIndex<Cell>]) -> Cell? {
+        let newIndexes = treeIndexes.filter { !$0.indexPath.isEmpty }
+        let firstIndexes = newIndexes.map { $0.indexPath[0] }
+        let lastIndexes = newIndexes.compactMap { $0.indexPath.count == 1 ? $0.indexPath[0] : nil }
+        let removedFirstIndexes: [TreeIndex<Cell>] = newIndexes.map { $0.removedFirst }
+        var intersects = false
+        let children: [Cell] = self.children.enumerated().compactMap { (i, child) in
+            guard firstIndexes.contains(i) else { return nil }
+            intersects = true
+            if lastIndexes.contains(i) {
+                return child.intersection(removedFirstIndexes) ?? child
+            } else {
+                let aNewIndexes = removedFirstIndexes.filter { !$0.indexPath.isEmpty }
+                let aRemovedFirstIndexes: [TreeIndex<Cell>] = aNewIndexes.map {
+                    $0.removedFirst
+                }
+                return Cell(children: child.children.compactMap {
+                    $0.intersection(aRemovedFirstIndexes)
+                })
+            }
+        }
+        if intersects {
+            var cell = self
+            cell.children = children
+            return cell
+        } else {
+            return nil
+        }
+    }
     
     func isSnapped(_ other: Geometry) -> Bool {
         return isEditable && geometry.isSnapped(other)

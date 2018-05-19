@@ -64,6 +64,20 @@ extension SineWave: Interpolatable {
 extension SineWave: Referenceable {
     static let name = Text(english: "Sine Wave", japanese: "サイン波")
 }
+extension SineWave: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, SineWave>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> View {
+        switch type {
+        case .normal:
+            return SineWaveView(binder: binder, keyPath: keyPath, option: SineWaveOption(),
+                                frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
 extension SineWave: KeyframeValue {}
 extension SineWave: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {

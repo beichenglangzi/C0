@@ -69,9 +69,7 @@ final class SceneVideoEncoder: MediaEncoder {
                                          scale: Point(x: scale, y: scale),
                                          rotation: 0)
         drawView.bounds.size = size
-        drawView.drawClosure = { [unowned self] ctx, _ in
-            self.scene.canvas.draw(in: ctx)
-        }
+        drawView.drawClosure = { [unowned self] ctx, _ in self.scene.canvas.draw(in: ctx) }
     }
     
     func write(to url: URL,
@@ -154,13 +152,9 @@ final class SceneVideoEncoder: MediaEncoder {
                 append = adaptor.append(pb, withPresentationTime: CMTime(value: Int64(i),
                                                                          timescale: timeScale))
             }
-            if !append {
-                break
-            }
+            if !append { break }
             progressClosure(Real(i) / Real(allFrameCount - 1), &stop)
-            if stop {
-                break
-            }
+            if stop { break }
         }
         writerInput.markAsFinished()
         

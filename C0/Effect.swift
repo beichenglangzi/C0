@@ -69,6 +69,19 @@ extension Effect {
 extension Effect: Referenceable {
     static let name = Text(english: "Effect", japanese: "エフェクト")
 }
+extension Effect: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Effect>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> View {
+        switch type {
+        case .normal:
+            return EffectView(binder: binder, keyPath: keyPath,
+                              frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
 extension Effect: Interpolatable {
     static func linear(_ f0: Effect, _ f1: Effect, t: Real) -> Effect {
         let blendType = f0.blendType

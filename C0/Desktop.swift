@@ -33,7 +33,7 @@ extension Desktop: Referenceable {
 final class DesktopBinder: BinderProtocol {
     var rootModel: Desktop {
         didSet {
-//            dataModel.isWrite = true
+            dataModel.isWrite = true
         }
     }
     
@@ -43,48 +43,41 @@ final class DesktopBinder: BinderProtocol {
     init(rootModel: Desktop) {
         self.rootModel = rootModel
         
-//        diffDesktopDataModel = DataModel(key: diffDesktopDataModelKey)
-//        objectsDataModel = DataModel(key: objectsDataModelKey,
-//                                     directoryWith: [sceneBinder.dataModel])
-//        dataModel = DataModel(key: dataModelKey,
-//                              directoryWith: [diffDesktopDataModel, objectsDataModel])
-//
-//        diffDesktopDataModel.dataClosure = { [unowned self] in self.rootModel.jsonData }
+        diffDesktopDataModel = DataModel(key: diffDesktopDataModelKey)
+        objectsDataModel = DataModel(key: objectsDataModelKey, directoryWith: [])
+        dataModel = DataModel(key: dataModelKey,
+                              directoryWith: [diffDesktopDataModel, objectsDataModel])
+
+        diffDesktopDataModel.dataClosure = { [unowned self] in self.rootModel.jsonData }
     }
     
-//    let dataModelKey = "desktop"
-//    var dataModel: DataModel {
-//        didSet {
-//            if let objectsDataModel = dataModel.children[objectsDataModelKey] {
-//                self.objectsDataModel = objectsDataModel
-//            } else {
-//                dataModel.insert(objectsDataModel)
-//            }
-//
-//            if let dDesktopDataModel = dataModel.children[diffDesktopDataModelKey] {
-//                self.diffDesktopDataModel = dDesktopDataModel
-//            } else {
-//                dataModel.insert(diffDesktopDataModel)
-//            }
-//
-//            if let sceneDataModel = objectsDataModel.children[sceneBinder.dataModelKey] {
-//                sceneBinder.dataModel = sceneDataModel
-//            } else {
-//                objectsDataModel.insert(sceneBinder.dataModel)
-//            }
-//        }
-//    }
-//    let diffDesktopDataModelKey = "diffDesktop"
-//    var diffDesktopDataModel: DataModel {
-//        didSet {
-//            if let desktop = diffDesktopDataModel.readObject(Desktop.self) {
-//                self.rootModel = desktop
-//            }
-//            diffDesktopDataModel.dataClosure = { [unowned self] in self.rootModel.jsonData }
-//        }
-//    }
-//    let objectsDataModelKey = "objects"
-//    var objectsDataModel: DataModel
+    let dataModelKey = "desktop"
+    var dataModel: DataModel {
+        didSet {
+            if let objectsDataModel = dataModel.children[objectsDataModelKey] {
+                self.objectsDataModel = objectsDataModel
+            } else {
+                dataModel.insert(objectsDataModel)
+            }
+
+            if let dDesktopDataModel = dataModel.children[diffDesktopDataModelKey] {
+                self.diffDesktopDataModel = dDesktopDataModel
+            } else {
+                dataModel.insert(diffDesktopDataModel)
+            }
+        }
+    }
+    let diffDesktopDataModelKey = "diffDesktop"
+    var diffDesktopDataModel: DataModel {
+        didSet {
+            if let desktop = diffDesktopDataModel.readObject(Desktop.self) {
+                self.rootModel = desktop
+            }
+            diffDesktopDataModel.dataClosure = { [unowned self] in self.rootModel.jsonData }
+        }
+    }
+    let objectsDataModelKey = "objects"
+    var objectsDataModel: DataModel
 }
 extension Desktop {
     static let isHiddenActionManagerOption = BoolOption(defaultModel: false, cationModel: nil,
@@ -113,12 +106,13 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
 
     let versionView: VersionView<Binder>
     let copiedObjectsNameView = TextFormView(text: Text(english: "Copied:", japanese: "コピー済み:"))
-    let copiedObjectsView: MiniViewablesView<Binder>
+    let copiedObjectsView: ObjectsView<Object, Binder>
     let isHiddenActionManagerView: BoolView<Binder>
     let isSimpleReferenceView: BoolView<Binder>
     let referenceView: ReferenceView<Binder>
+    let objectsView: ObjectsView<Object, Binder>
     let actionManagerView = SenderView()
-    let objectsView: AnyArrayView
+    
     let sceneView: SceneView<Binder>
 
     var versionWidth = 120.0.cg
@@ -144,8 +138,6 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         isSimpleReferenceView = BoolView(binder: binder, keyPath: isrKeyPath,
                                          option: Model.isSimpleReferenceOption,
                                          sizeType: sizeType)
-        
-        sceneView = SceneView(binder: binder, keyPath: \Model.objects)
         
         super.init()
         fillColor = .background
@@ -241,8 +233,10 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
                           y: 0,
                           width: objectViewWidth,
                           height: copiedObjectsView.bounds.height - padding * 2)
-        copiedObjectsView.children = model.copiedObjects.map {
-            $0.view(withBounds: bounds, .small)
+        copiedObjectsView.children = model.copiedObjects.enumerated().map { (i, object) in
+            return object.abstractViewWith(binder: binder,
+                                    keyPath: keyPath.appending(path: \Model.copiedObjects[i]),
+                                    frame: bounds, .small, type: .mini)
         }
         updateCopiedObjectViewPositions()
     }

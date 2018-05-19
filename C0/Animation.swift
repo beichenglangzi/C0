@@ -613,9 +613,9 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
             keyLineViews.append(keyLineView)
         }
 
-        let durationFillColor = editingKeyframeIndex == animation.keyframes.count ?
+        let durationFillColor = editingKeyframeIndex == model.keyframes.count ?
             Color.editing : Color.knob
-        let durationLineColor = ((animation.duration + beginBaseTime) / baseTimeInterval).isInteger ?
+        let durationLineColor = ((model.duration + beginBaseTime) / baseTimeInterval).isInteger ?
             Color.getSetBorder : Color.warning
         let durationKnob = AnimationView.knobView(from: Point(x: maxX, y: midY),
                                                   fillColor: durationFillColor,
@@ -628,22 +628,18 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
 
         self.knobViews = knobViews
 
-        if let selectionView = selectionView {
-            selectedViews.append(selectionView)
-        }
-
         updateEditLoopframeIndex()
         updateIndicatedView()
         children = [editView, indicatedView] + keyLineViews + knobViews as [View] + selectedViews
     }
     private func updateWithBeginTime() {
-        for (i, li) in animation.loopFrames.enumerated() {
+        for (i, li) in model.loopFrames.enumerated() {
             if i > 0 {
                 knobViews[i - 1].lineColor = ((li.time + beginBaseTime) / baseTimeInterval).isInteger ?
                     Color.getSetBorder : Color.warning
             }
         }
-        knobViews.last?.lineColor = ((animation.duration + beginBaseTime) / baseTimeInterval).isInteger ?
+        knobViews.last?.lineColor = ((model.duration + beginBaseTime) / baseTimeInterval).isInteger ?
             Color.getSetBorder : Color.warning
     }
     func updateWithModel() {
@@ -735,15 +731,6 @@ extension AnimationView: Selectable {
     func deselectAll(_ version: Version) {
         selectAll(isDeselect: true)
     }
-    var selectionView: View? {
-        didSet {
-            if let selectionView = selectionView {
-                append(child: selectionView)
-            } else {
-                oldValue?.removeFromParent()
-            }
-        }
-    }
     private struct SelectObject {
         var oldAnimation = Animation()
     }
@@ -751,16 +738,12 @@ extension AnimationView: Selectable {
     func select(from rect: Rect, _ phase: Phase, isDeselect: Bool) {
         switch phase {
         case .began:
-            selectionView = isDeselect ? View.deselection : View.selection
-            selectObject.oldAnimation = animation
-            selectionView?.frame = rect
+            
+            selectObject.oldAnimation = model
         case .changed:
-            selectionView?.frame = rect
-            isUseUpdateChildren = false
-            animation.selectedKeyframeIndexes = selectedIndex(from: rect,
+            model.selectedKeyframeIndexes = selectedIndex(from: rect,
                                                               with: selectObject,
                                                               isDeselect: isDeselect)
-            isUseUpdateChildren = true
             updateLayout()
         case .ended:
             let newIndexes = selectedIndex(from: rect,
@@ -771,24 +754,22 @@ extension AnimationView: Selectable {
                            oldSelectedIndexes: newIndexes)
                 }
             }
-            isUseUpdateChildren = false
-            animation.selectedKeyframeIndexes = newIndexes
-            isUseUpdateChildren = true
+            model.selectedKeyframeIndexes = newIndexes
             updateLayout()
             
-            selectionView = nil
             selectObject = SelectObject()
         }
     }
     private func indexes(from rect: Rect, with selectObject: SelectObject) -> [Int] {
         let startTime = time(withX: rect.minX, isBased: false) + baseTimeInterval / 2
-        let startIndexTuple = Keyframe.index(time: startTime,
-                                             with: selectObject.oldAnimation.keyframes)
-        let startIndex = startIndexTuple.index
+        let startIndexInfo = Keyframe.indexInfo(atTime: startTime,
+                                                with: selectObject.oldAnimation.keyframes)
+        let startIndex = startIndexInfo.index
         let selectEndX = rect.maxX
         let endTime = time(withX: selectEndX, isBased: false) + baseTimeInterval / 2
-        let endIndexTuple = Keyframe.index(time: endTime, with: selectObject.oldAnimation.keyframes)
-        let endIndex = endIndexTuple.index
+        let endIndexInfo = Keyframe.indexInfo(atTime: endTime,
+                                              with: selectObject.oldAnimation.keyframes)
+        let endIndex = endIndexInfo.index
         return startIndex == endIndex ?
             [startIndex] :
             Array(startIndex < endIndex ? (startIndex...endIndex) : (endIndex...startIndex))
@@ -802,10 +783,10 @@ extension AnimationView: Selectable {
             Array(Set(oldIndexes).union(Set(selectedIndexes))).sorted()
     }
     func selectAll(isDeselect: Bool) {
-        let indexes = isDeselect ? [] : Array(0..<animation.keyframes.count)
-        if indexes != animation.selectedKeyframeIndexes {
+        let indexes = isDeselect ? [] : Array(0..<model.keyframes.count)
+        if indexes != model.selectedKeyframeIndexes {
             set(selectedIndexes: indexes,
-                oldSelectedIndexes: animation.selectedKeyframeIndexes)
+                oldSelectedIndexes: model.selectedKeyframeIndexes)
         }
     }
     
@@ -814,10 +795,8 @@ extension AnimationView: Selectable {
             $0.set(selectedIndexes: oldSelectedIndexes,
                    oldSelectedIndexes: selectedIndexes)
         }
-        isUseUpdateChildren = false
-        let oldAnimation = animation
-        animation.selectedKeyframeIndexes = selectedIndexes
-        isUseUpdateChildren = true
+        let oldAnimation = model
+        model.selectedKeyframeIndexes = selectedIndexes
         updateLayout()
     }
 }
@@ -841,34 +820,30 @@ extension AnimationView: Newable {
     func new(for p: Point, _ version: Version) {
         _ = splitKeyframe(withTime: time(withX: p.x))
     }
-    
-    var splitKeyframeLabelClosure: ((Keyframe, Int) -> (Keyframe.Label))?
     func splitKeyframe(withTime time: Rational) -> Bool {
-        guard time < animation.duration else {
+        guard time < model.duration else {
             return false
         }
-        let ki = Keyframe.index(time: time, with: animation.keyframes)
-        guard ki.interTime > 0 else {
+        let ii = Keyframe.indexInfo(atTime: time, with: model.keyframes)
+        guard ii.interTime > 0 else {
             return false
         }
-        let k = animation.keyframes[ki.index]
-        let newEaing = ki.duration != 0 ?
-            k.easing.split(with: Real(ki.interTime / ki.duration)) :
-            (b0: k.easing, b1: Easing())
-        let splitKeyframe0 = Keyframe(time: k.time, label: k.label,
-                                      loop: k.loop, interpolation: k.interpolation,
-                                      easing: newEaing.b0)
-        let splitKeyframe1 = Keyframe(time: time,
-                                      label: splitKeyframeLabelClosure?(k, ki.index) ?? .main,
-                                      loop: k.loop, interpolation: k.interpolation,
-                                      easing: newEaing.b1)
-        replace(splitKeyframe0, at: ki.index)
-        insert(splitKeyframe1, at: ki.index + 1)
-        let indexes = animation.selectedKeyframeIndexes
+        let keyframe = model.keyframes[ii.index]
+        let newEaing = ii.duration != 0 ?
+            keyframe.timing.easing.split(with: Real(ii.interTime / ii.duration)) :
+            (b0: keyframe.timing.easing, b1: Easing())
+        var splitKeyframe0 = keyframe, splitKeyframe1 = keyframe
+        splitKeyframe0.timing.easing = newEaing.b0
+        splitKeyframe1.timing.time = time
+        splitKeyframe1.timing.label = keyframe.value.defaultLabel
+        splitKeyframe1.timing.easing = newEaing.b1
+        replace(splitKeyframe0, at: ii.index)
+        insert(splitKeyframe1, at: ii.index + 1)
+        let indexes = model.selectedKeyframeIndexes
         for (i, index) in indexes.enumerated() {
-            if index >= ki.index {
-                let movedIndexes = indexes.map { $0 > ki.index ? $0 + 1 : $0 }
-                let intertedIndexes = index == ki.index ?
+            if index >= ii.index {
+                let movedIndexes = indexes.map { $0 > ii.index ? $0 + 1 : $0 }
+                let intertedIndexes = index == ii.index ?
                     movedIndexes.withInserted(index + 1, at: i + 1) : movedIndexes
                 set(selectedIndexes: intertedIndexes, oldSelectedIndexes: indexes)
                 break
@@ -891,7 +866,7 @@ extension AnimationView: Movable {
         switch phase {
         case .began:
             oldTime = realBaseTime(withX: p.x)
-            if let ki = nearestKeyframeIndex(at: p), animation.keyframes.count > 1 {
+            if let ki = nearestKeyframeIndex(at: p), model.keyframes.count > 1 {
                 let keyframeIndex = ki > 0 ? ki : 1
                 oldKeyframeIndex = keyframeIndex
                 moveKeyframe(withDeltaTime: 0, keyframeIndex: keyframeIndex, phase: phase)
@@ -904,7 +879,7 @@ extension AnimationView: Movable {
             let fdt = t - oldTime + (t - oldTime >= 0 ? 0.5 : -0.5)
             let dt = basedRationalTime(withRealBaseTime: fdt)
             let deltaTime = max(dragObject.minDeltaTime, dt + dragObject.clipDeltaTime)
-            if let keyframeIndex = oldKeyframeIndex, keyframeIndex < animation.keyframes.count {
+            if let keyframeIndex = oldKeyframeIndex, keyframeIndex < model.keyframes.count {
                 moveKeyframe(withDeltaTime: deltaTime,
                              keyframeIndex: keyframeIndex, phase: phase)
             } else {
@@ -912,12 +887,13 @@ extension AnimationView: Movable {
             }
         }
     }
-    func move(withDeltaTime deltaTime: Rational, keyframeIndex: Int?, _ phase: Phase, _ version: Version) {
-        if let keyframeIndex = keyframeIndex, keyframeIndex < animation.keyframes.count {
+    func move(withDeltaTime deltaTime: Rational, keyframeIndex: Int?,
+              _ phase: Phase, _ version: Version) {
+        if let keyframeIndex = keyframeIndex, keyframeIndex < model.keyframes.count {
             moveKeyframe(withDeltaTime: deltaTime,
-                         keyframeIndex: keyframeIndex, phase: phase)
+                         keyframeIndex: keyframeIndex, phase: phase, version)
         } else {
-            moveDuration(withDeltaTime: deltaTime, phase)
+            moveDuration(withDeltaTime: deltaTime, phase, version)
         }
     }
     func moveKeyframe(withDeltaTime deltaTime: Rational,
@@ -926,11 +902,11 @@ extension AnimationView: Movable {
         case .began:
             editingKeyframeIndex = keyframeIndex
             isDrag = false
-            let preTime = animation.keyframes[keyframeIndex - 1].time
-            let time = animation.keyframes[keyframeIndex].time
+            let preTime = model.keyframes[keyframeIndex - 1].timing.time
+            let time = model.keyframes[keyframeIndex].timing.time
             dragObject.clipDeltaTime = clipDeltaTime(withTime: time + beginBaseTime)
             dragObject.minDeltaTime = preTime - time
-            dragObject.oldAnimation = animation
+            dragObject.oldAnimation = model
             dragObject.oldTime = time
         case .changed:
             isDrag = true
@@ -938,10 +914,8 @@ extension AnimationView: Movable {
             (keyframeIndex..<nks.count).forEach {
                 nks[$0].time += deltaTime
             }
-            isUseUpdateChildren = false
-            animation.keyframes = nks
-            animation.duration = dragObject.oldAnimation.duration + deltaTime
-            isUseUpdateChildren = true
+            model.keyframes = nks
+            model.duration = dragObject.oldAnimation.duration + deltaTime
             updateLayout()
         case .ended:
             editingKeyframeIndex = nil
@@ -949,7 +923,7 @@ extension AnimationView: Movable {
                 dragObject = DragObject()
                 return
             }
-            let newKeyframes: [Keyframe]
+            let newKeyframes: [Keyframe<Value>]
             if deltaTime != 0 {
                 var nks = dragObject.oldAnimation.keyframes
                 (keyframeIndex..<nks.count).forEach {
@@ -964,10 +938,8 @@ extension AnimationView: Movable {
             } else {
                 newKeyframes = dragObject.oldAnimation.keyframes
             }
-            isUseUpdateChildren = false
-            animation.keyframes = newKeyframes
-            animation.duration = dragObject.oldAnimation.duration + deltaTime
-            isUseUpdateChildren = true
+            model.keyframes = newKeyframes
+            model.duration = dragObject.oldAnimation.duration + deltaTime
             updateLayout()
             
             isDrag = false
@@ -977,19 +949,17 @@ extension AnimationView: Movable {
     func moveDuration(withDeltaTime deltaTime: Rational, _ phase: Phase, _ version: Version) {
         switch phase {
         case .began:
-            editingKeyframeIndex = animation.keyframes.count
+            editingKeyframeIndex = model.keyframes.count
             isDrag = false
-            let preTime = animation.keyframes[animation.keyframes.count - 1].time
-            let time = animation.duration
+            let preTime = model.keyframes[model.keyframes.count - 1].timing.time
+            let time = model.duration
             dragObject.clipDeltaTime = clipDeltaTime(withTime: time + beginBaseTime)
             dragObject.minDeltaTime = preTime - time
-            dragObject.oldAnimation = animation
+            dragObject.oldAnimation = model
             dragObject.oldTime = time
         case .changed:
             isDrag = true
-            isUseUpdateChildren = false
-            animation.duration = dragObject.oldAnimation.duration + deltaTime
-            isUseUpdateChildren = true
+            model.duration = dragObject.oldAnimation.duration + deltaTime
             updateLayout()
         case .ended:
             editingKeyframeIndex = nil
@@ -1003,9 +973,7 @@ extension AnimationView: Movable {
                            oldDuration: dragObject.oldAnimation.duration + deltaTime)
                 }
             }
-            isUseUpdateChildren = false
-            animation.duration = dragObject.oldAnimation.duration + deltaTime
-            isUseUpdateChildren = true
+            model.duration = dragObject.oldAnimation.duration + deltaTime
             updateLayout()
             
             isDrag = false

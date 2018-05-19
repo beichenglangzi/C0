@@ -24,6 +24,8 @@ protocol TreeNode: Sequence {
     subscript(indexPath: IndexPath) -> Self { get set }
 }
 extension TreeNode {
+    typealias Index = TreeIndex<Self>
+    
     subscript(indexPath: IndexPath) -> Self {
         get {
             return at(indexPath: indexPath, at: 0)
@@ -87,6 +89,39 @@ struct TreeNodeIterator<T: TreeNode>: IteratorProtocol {
     }
 }
 
+struct TreeIndexIterator<T: TreeNode>: IteratorProtocol {
+    typealias Element = TreeIndex<T>
+    
+    init(rootNode: T) {
+        parentIndexes = [(rootNode, 0)]
+    }
+    
+    private var parentIndexes = [(parent: T, index: Int)]()
+    mutating func next() -> Element? {
+        guard let lastParentIndex = parentIndexes.last else {
+            return nil
+        }
+        if lastParentIndex.index >= lastParentIndex.parent.children.count {
+            parentIndexes.removeLast()
+            return lastParentIndex.parent
+        } else {
+            let child = lastParentIndex.parent.children[lastParentIndex.index]
+            if child.children.isEmpty {
+                parentIndexes[parentIndexes.count - 1].index += 1
+                return child
+            } else {
+                var aParent = child
+                repeat {
+                    parentIndexes.append((aParent, 0))
+                    aParent = aParent.children[0]
+                } while !aParent.children.isEmpty
+                parentIndexes[parentIndexes.count - 1].index += 1
+                return aParent
+            }
+        }
+    }
+}
+
 extension TreeNode where Element: Namable {
     var unduplicatedIndexName: Text {
         var minIndex: Int?
@@ -123,6 +158,11 @@ struct TreeIndex<T>: Codable, Hashable {
     func reversed() -> TreeIndex<T> {
         return TreeIndex(indexPath: IndexPath(indexes: indexPath.reversed()))
     }
+    var removedFirst: TreeIndex<Cell> {
+        var indexPath = self.indexPath
+        _ = indexPath.removeFirst()
+        return TreeIndex<Cell>(indexPath: indexPath)
+    }
 }
 extension TreeNode {
     subscript(treeIndex: TreeIndex<Self>) -> Self {
@@ -132,5 +172,29 @@ extension TreeNode {
         set {
             self[treeIndex.indexPath] = newValue
         }
+    }
+    
+    func nodes(at treeIndex: TreeIndex<Self>) -> [Self] {
+        var nodes = [Self]()
+        nodes.reserveCapacity(treeIndex.indexPath.count)
+        self.nodes(at: treeIndex, index: 0, nodes: &nodes)
+        return nodes
+    }
+    private func nodes(at treeIndex: TreeIndex<Self>, index: Int, nodes: inout [Self]) {
+        nodes.append(children[treeIndex.indexPath[index]])
+        let newIndex = index + 1
+        if newIndex < treeIndex.indexPath.count {
+            self.nodes(at: treeIndex, index: newIndex, nodes: &nodes)
+        }
+    }
+    
+    func sortedIndexes(_ indexes: [Index]) -> [Index] {
+        var sortedIndexes = [Index]()
+        for (i, node) in self {
+            if indexes.contains(Index(indexPath: i)) {
+                sortedIndexes.append(i)
+            }
+        }
+        return sortedIndexes
     }
 }

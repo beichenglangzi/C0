@@ -111,7 +111,7 @@ extension CALayer {
     }
 }
 
-final class ImageView<T: BinderProtocol>: View, BindableReceiver, Movable {
+final class ImageView<T: BinderProtocol>: View, BindableReceiver {
     typealias Model = Image
     typealias Binder = T
     var binder: Binder {
@@ -138,6 +138,13 @@ final class ImageView<T: BinderProtocol>: View, BindableReceiver, Movable {
     }
     private var dragType = DragType.move, downPosition = Point(), oldFrame = Rect()
     private var resizeWidth = 10.0.cg, ratio = 1.0.cg
+}
+extension ImageView: Queryable {
+    static var referenceableType: Referenceable.Type {
+        return Model.self
+    }
+}
+extension ImageView: Movable {
     func captureWillMoveObject(to version: Version) {}
     func move(for point: Point, first fp: Point, pressure: Real,
               time: Second, _ phase: Phase) {
@@ -148,13 +155,13 @@ final class ImageView<T: BinderProtocol>: View, BindableReceiver, Movable {
             if Rect(x: 0, y: 0, width: resizeWidth, height: resizeWidth).contains(ip) {
                 dragType = .resizeMinXMinY
             } else if Rect(x:  bounds.width - resizeWidth, y: 0,
-                             width: resizeWidth, height: resizeWidth).contains(ip) {
+                           width: resizeWidth, height: resizeWidth).contains(ip) {
                 dragType = .resizeMaxXMinY
             } else if Rect(x: 0, y: bounds.height - resizeWidth,
-                             width: resizeWidth, height: resizeWidth).contains(ip) {
+                           width: resizeWidth, height: resizeWidth).contains(ip) {
                 dragType = .resizeMinXMaxY
             } else if Rect(x: bounds.width - resizeWidth, y: bounds.height - resizeWidth,
-                             width: resizeWidth, height: resizeWidth).contains(ip) {
+                           width: resizeWidth, height: resizeWidth).contains(ip) {
                 dragType = .resizeMaxXMaxY
             } else {
                 dragType = .move
@@ -187,10 +194,5 @@ final class ImageView<T: BinderProtocol>: View, BindableReceiver, Movable {
             }
             self.frame = phase == .ended ? frame.integral : frame
         }
-    }
-}
-extension ImageView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
     }
 }

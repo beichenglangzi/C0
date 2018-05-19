@@ -214,7 +214,8 @@ final class DrawingView<T: BinderProtocol>: View, BindableReceiver {
         linesView.updateWithModel()
         draftLinesView.updateWithModel()
     }
-    
+}
+extension DrawingView {
     func changeToDraft(_ version: Version) {
         capture(model, to: version)
         model.draftLines = model.lines

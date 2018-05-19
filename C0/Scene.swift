@@ -73,6 +73,18 @@ extension Color {
     static let subtitleFill = white
 }
 
+struct CellgroupIndex: Codable {
+    var index: Int, cellIndexes: [Int]
+}
+struct MaterialMap: Codable {
+    var material: Material
+    var cellNodeIndexes: [CellgroupIndex]
+}
+struct ColorMap: Codable {
+    var color: Color
+    var cellNodeIndexes: [CellgroupIndex]
+}
+
 /**
  Issue: 複数のサウンド
  Issue: 変更通知
@@ -84,7 +96,8 @@ struct Scene: Codable {
     var isHiddenSubtitles: Bool
     var isHiddenPrevious: Bool, isHiddenNext: Bool
     var canvas: Canvas
-    
+    var materials: [MaterialMap]
+    var colors: [ColorMap]
     init(name: Text = Text(english: "Untitled", japanese: "名称未設定"),
          renderingVerticalResolution: Int = 1080,
          timeline: Timeline = Timeline(),
@@ -103,6 +116,71 @@ struct Scene: Codable {
     
     var duration: Beat {
         return timeline.duration
+    }
+    
+    struct CellRemoveManager {
+        let trackAndGeometryItems: [(track: MultipleTrack, geometryItems: [GeometryItem])]
+        let rootCell: Cell
+        let parents: [(cell: Cell, index: Int)]
+        func contains(_ geometryItem: GeometryItem) -> Bool {
+            for tac in trackAndGeometryItems {
+                if tac.geometryItems.contains(geometryItem) {
+                    return true
+                }
+            }
+            return false
+        }
+    }
+    func cellRemoveManager(with geometryItem: GeometryItem) -> CellRemoveManager {
+        var cells = [geometryItem.cell]
+        geometryItem.cell.depthFirstSearch(duplicate: false, closure: { parent, cell in
+            let parents = rootCell.parents(with: cell)
+            if parents.count == 1 {
+                cells.append(cell)
+            }
+        })
+        var trackAndGeometryItems = [(track: MultipleTrack, geometryItems: [GeometryItem])]()
+        for track in tracks {
+            var geometryItems = [GeometryItem]()
+            cells = cells.filter {
+                if let removeGeometryItem = track.geometryItem(with: $0) {
+                    geometryItems.append(removeGeometryItem)
+                    return false
+                }
+                return true
+            }
+            if !geometryItems.isEmpty {
+                trackAndGeometryItems.append((track, geometryItems))
+            }
+        }
+        guard !trackAndGeometryItems.isEmpty else {
+            fatalError()
+        }
+        return CellRemoveManager(trackAndGeometryItems: trackAndGeometryItems,
+                                 rootCell: geometryItem.cell,
+                                 parents: rootCell.parents(with: geometryItem.cell))
+    }
+    func insertCell(with crm: CellRemoveManager) {
+        crm.parents.forEach { $0.cell.children.insert(crm.rootCell, at: $0.index) }
+        for tac in crm.trackAndGeometryItems {
+            for geometryItem in tac.geometryItems {
+                guard geometryItem.keyGeometries.count == tac.track.animation.keyframes.count else {
+                    fatalError()
+                }
+                guard !tac.track.geometryItems.contains(geometryItem) else {
+                    fatalError()
+                }
+                tac.track.append(geometryItem)
+            }
+        }
+    }
+    func removeCell(with crm: CellRemoveManager) {
+        crm.parents.forEach { $0.cell.children.remove(at: $0.index) }
+        for tac in crm.trackAndGeometryItems {
+            for geometryItem in tac.geometryItems {
+                tac.track.remove(geometryItem)
+            }
+        }
     }
     
     func canvas(atTime time: Beat) -> Canvas {
@@ -127,8 +205,8 @@ extension Scene {
                                                    name: Text(english: "Previous", japanese: "前"),
                                                    info: .hidden)
     static let isHiddenNextOption = BoolOption(defaultModel: true, cationModel: false,
-                                                   name: Text(english: "Next", japanese: "次"),
-                                                   info: .hidden)
+                                               name: Text(english: "Next", japanese: "次"),
+                                               info: .hidden)
 }
 extension Scene: Referenceable {
     static let name = Text(english: "Scene", japanese: "シーン")
@@ -149,7 +227,9 @@ final class SceneBinder: BinderProtocol {
     }
 }
 
-final class SceneBinderView: View {}
+final class SceneBinderView: View {
+    
+}
 
 struct SceneLayout {
     static let versionWidth = 120.0.cg, propertyWidth = 200.0.cg
@@ -234,30 +314,21 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
                     sizeView, renderingVerticalResolutionView,
                     exportSubtitlesView, exportImageView, exportMovieView,
                     isHiddenSubtitlesView, isHiddenPreviousView, isHiddenNextView,
-                    timelineView, canvasView, playManagerView]
+                    timelineView, canvasView, playerView]
         
-//        sizeView.binding = { [unowned self] in
-//            self.scene.frame = Rect(origin: Point(x: -$0.size.width / 2, y: -$0.size.height / 2),
-//                                    size: $0.size)
-////            self.canvasView.setNeedsDisplay()
-//            let sp = Point(x: $0.size.width, y: $0.size.height)
-//            self.transformView.standardTranslation = sp
-//            self.wiggleXView.standardAmplitude = $0.size.width
-//            self.wiggleYView.standardAmplitude = $0.size.height
-//        }
+        sizeView.binding = { [unowned self] in
+            self.scene.frame = Rect(origin: Point(x: -$0.size.width / 2, y: -$0.size.height / 2),
+                                    size: $0.size)
+            self.canvasView.setNeedsDisplay()
+            let sp = Point(x: $0.size.width, y: $0.size.height)
+            self.transformView.standardTranslation = sp
+            self.wiggleXView.standardAmplitude = $0.size.width
+            self.wiggleYView.standardAmplitude = $0.size.height
+        }
 
-//        soundView.setSoundClosure = { [unowned self] in
-//            self.scene.sound = $0.sound
-//            self.timelineView.soundWaveformView.sound = $0.sound
-        
-////            if self.scene.sound.url == nil && self.canvasView.playerView.audioPlayer?.isPlaying ?? false {
-////                self.canvasView.playerView.audioPlayer?.stop()
-////            }
-//        }
-        
-//        timelineView.setSceneDurationClosure = { [unowned self] in
-//            self.playManagerView.maxTime = self.scene.secondTime(withBeatTime: $1)
-//        }
+        timelineView.setSceneDurationClosure = { [unowned self] in
+            self.playerView.maxTimeView.update = self.scene.secondTime(withBeatTime: $1)
+        }
         
         exportSubtitlesView.model = { [unowned self] _ in self.exportSubtitles() }
         exportImageView.model = { [unowned self] _ in self.exportImage() }
@@ -280,12 +351,11 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
         return Rect(x: 0, y: 0, width: width, height: height)
     }
     override func updateLayout() {
-        let padding = Layout.basicPadding, sPadding = Layout.smallPadding, buttonH = Layout.basicHeight
+        let padding = Layout.basicPadding, buttonH = Layout.basicHeight
         let h = buttonH + padding * 2
         let cs = SceneLayout.canvasSize, th = SceneLayout.timelineHeight
         let pw = SceneLayout.propertyWidth
         let y = bounds.height - buttonH - padding
-        let kh = 120.0.cg
         
         classNameView.frame.origin = Point(x: padding,
                                            y: bounds.height - classNameView.frame.height - padding)
@@ -317,7 +387,7 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
         ty -= cs.height
         canvasView.frame = Rect(x: padding, y: ty, width: cs.width, height: cs.height)
         ty -= h
-        playManagerView.frame = Rect(x: padding, y: ty, width: cs.width, height: h)
+        playerView.frame = Rect(x: padding, y: ty, width: cs.width, height: h)
         
         let px = padding * 2 + cs.width, propertyMaxY = y
         var py = propertyMaxY

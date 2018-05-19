@@ -44,6 +44,20 @@ struct Material: Codable, Hashable {
 extension Material: Referenceable {
     static let name = Text(english: "Material", japanese: "マテリアル")
 }
+extension Material: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Material>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> View {
+        switch type {
+        case .normal:
+            return MaterialView(binder: binder, keyPath: keyPath,
+                                frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
 extension Material: Interpolatable {
     static func linear(_ f0: Material, _ f1: Material, t: Real) -> Material {
         let type = f0.type

@@ -330,7 +330,11 @@ final class C0Document: NSDocument, NSWindowDelegate {
             preferenceDataModel.dataClosure = { [unowned self] in self.preference.jsonData }
         }
     }
-    private var preference = C0Preference()
+    private var preference = C0Preference() {
+        didSet {
+            preferenceDataModel.isWrite = true
+        }
+    }
     
     var window: NSWindow {
         return windowControllers.first!.window!
@@ -417,19 +421,15 @@ final class C0Document: NSDocument, NSWindowDelegate {
     
     func windowDidResize(_ notification: Notification) {
         preference.windowFrame = window.frame
-        preferenceDataModel.isWrite = true
     }
     func windowDidMove(_ notification: Notification) {
         preference.windowFrame = window.frame
-        preferenceDataModel.isWrite = true
     }
     func windowDidEnterFullScreen(_ notification: Notification) {
         preference.isFullScreen = true
-        preferenceDataModel.isWrite = true
     }
     func windowDidExitFullScreen(_ notification: Notification) {
         preference.isFullScreen = false
-        preferenceDataModel.isWrite = true
     }
     
     func didSetCopiedObjects() {

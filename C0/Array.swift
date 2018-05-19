@@ -19,7 +19,7 @@
 
 import struct Foundation.Locale
 
-typealias AbstractElement = Equatable & AbstractViewable & Codable & Referenceable
+typealias AbstractElement = AbstractViewable & Codable & Referenceable
 
 struct ArrayIndex<T>: Codable, Hashable {
     var index = 0

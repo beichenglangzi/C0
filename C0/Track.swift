@@ -207,6 +207,10 @@ extension SumKeyframeValue: Referenceable {
 struct LinesKeyframeValue: KeyframeValue {
     var drawing = Drawing()
     var geometries = [Geometry]()
+    
+    var defaultLabel: KeyframeTiming.Label {
+        return geometries.contains(where: { !$0.isEmpty }) ? .sub : .main
+    }
 }
 extension LinesKeyframeValue {
     //view

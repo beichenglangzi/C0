@@ -46,24 +46,6 @@ struct Object {
         get { return value as! Bool }
         set { value = newValue }
     }
-//    var int: Int? {
-//        switch self {
-//        case .int(let value): return value
-//        default: return nil
-//        }
-//    }
-//    var real: Real? {
-//        switch self {
-//        case .real(let value): return value
-//        default: return nil
-//        }
-//    }
-//    var string: String? {
-//        switch self {
-//        case .string(let value): return value
-//        default: return nil
-//        }
-//    }
     
     private enum CodingKeys: CodingKey {
         case bookmark, name,volume, isHidden
@@ -83,14 +65,17 @@ extension Object: Decodable {
 }
 extension Object: Encodable {
     func encode(to encoder: Encoder) throws {
-//        let t = type(of: value)
-//        let s = String(describing: t)
+        let typeName = String(describing: type(of: value))
         
     }
 }
+extension Object: Referenceable {
+    static var name = Text(english: "Object", japanese: "オブジェクト")
+}
 extension Object: AbstractViewable {
     func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
-                             frame: Rect, _ sizeType: SizeType) -> View where T : BinderProtocol {
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> View where T : BinderProtocol {
         switch value {
         case (let value as Bool):
             return value.abstractViewWith(binder: binder,

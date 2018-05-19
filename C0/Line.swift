@@ -46,7 +46,8 @@ struct Line: Codable {
         self.lastAngle = controls[controls.count - 2].point
             .tangential(controls[controls.count - 1].point)
     }
-    
+}
+extension Line {
     func withInsert(_ control: Control, at i: Int) -> Line {
         return Line(controls: controls.withInserted(control, at: i))
     }
