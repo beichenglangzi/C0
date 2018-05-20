@@ -195,6 +195,21 @@ struct Scene: Codable {
     }
 }
 extension Scene {
+    func drawPreviousNext(isHiddenPrevious: Bool, isHiddenNext: Bool,
+                          time: Beat, reciprocalScale: Real, in ctx: CGContext) {
+        let animation = timeline.editingTrack.animatable
+        let index = animation.indexInfo(withTime: time).keyframeIndex
+        drawingItem.drawPreviousNext(isHiddenPrevious: isHiddenPrevious, isHiddenNext: isHiddenNext,
+                                     index: index, reciprocalScale: reciprocalScale, in: ctx)
+        geometryItems.enumerated().forEach { (i, geometryItem) in
+            geometryItem.drawPreviousNext(lineWidth: cells[i].material.lineWidth * reciprocalScale,
+                                          isHiddenPrevious: isHiddenPrevious,
+                                          isHiddenNext: isHiddenNext,
+                                          index: index, in: ctx)
+        }
+    }
+}
+extension Scene {
     static let renderingVerticalResolutionOption = IntOption(defaultModel: 1080,
                                                              minModel: 1, maxModel: 10000,
                                                              modelInterval: 1, exp: 1, unit: " p")
@@ -319,7 +334,6 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
         sizeView.binding = { [unowned self] in
             self.scene.frame = Rect(origin: Point(x: -$0.size.width / 2, y: -$0.size.height / 2),
                                     size: $0.size)
-            self.canvasView.setNeedsDisplay()
             let sp = Point(x: $0.size.width, y: $0.size.height)
             self.transformView.standardTranslation = sp
             self.wiggleXView.standardAmplitude = $0.size.width

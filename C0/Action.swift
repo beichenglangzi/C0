@@ -568,10 +568,15 @@ final class IndicatableActionManager: ActionManagable {
     }
 }
 
-protocol Selectable {
-    func captureSelections(to version: Version)
+protocol ViewSelector {
     func select(from rect: Rect, _ phase: Phase)
     func deselect(from rect: Rect, _ phase: Phase)
+}
+protocol Selectable {
+    func captureSelections(to version: Version)
+    func makeViewSelector() -> ViewSelector
+//    func select(from rect: Rect, _ phase: Phase)
+//    func deselect(from rect: Rect, _ phase: Phase)
     func selectAll()
     func deselectAll()
 }
@@ -597,7 +602,7 @@ final class SelectableActionManager: ActionManagable {
     }
     
     private final class Selector {
-        var selectionView: View?
+        var selectionView: View?, viewSelector: ViewSelector?
         weak var receiver: Receiver?
         private var startPoint = Point(), startRootPoint = Point(), oldIsDeselect = false
         func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View, isDeselect: Bool) {
@@ -615,12 +620,13 @@ final class SelectableActionManager: ActionManagable {
                     self.receiver = receiver
                     
                     receiver.captureSelections(to: version)
+                    viewSelector = receiver.makeViewSelector()
                     
                     let rect = Rect(origin: startPoint, size: Size())
                     if isDeselect {
-                        receiver.deselect(from: rect, phase)
+                        viewSelector?.deselect(from: rect, phase)
                     } else {
-                        receiver.select(from: rect, phase)
+                        viewSelector?.select(from: rect, phase)
                     }
                     oldIsDeselect = isDeselect
                 }
@@ -640,9 +646,10 @@ final class SelectableActionManager: ActionManagable {
                                 minY: min(startPoint.y, p.y), maxY: max(startPoint.y, p.y))
                 let rect = aabb.rect
                 if isDeselect {
-                    receiver.deselect(from: rect, phase)
+                    viewSelector?.deselect(from: rect, phase)
+                    
                 } else {
-                    receiver.select(from: rect, phase)
+                    viewSelector?.select(from: rect, phase)
                 }
                 
                 if phase == .ended {
@@ -743,10 +750,19 @@ final class ScrollableActionManager: ActionManagable {
     }
 }
 
-protocol Zoomable {
+protocol ViewTransformable {
+    func convertToCurrentLocal(_ p: Point) -> Point
+    func convertFromCurrentLocal(_ p: Point) -> Point
+    var transform: Transform { get set }
+    func resetView(for p: Point, _ version: Version)
+}
+protocol Zoomable: ViewTransformable {
     func captureScale(to version: Version)
     func zoom(for p: Point, time: Second, magnification: Real, _ phase: Phase)
-    func resetView(for p: Point, _ version: Version)
+}
+protocol Rotatable: ViewTransformable {
+    func captureRotation(to version: Version)
+    func rotate(for p: Point, time: Second, rotationQuantity: Real, _ phase: Phase)
 }
 final class ZoomableActionManager: ActionManagable {
     typealias Receiver = View & Zoomable
@@ -796,10 +812,6 @@ final class ZoomableActionManager: ActionManagable {
     }
 }
 
-protocol Rotatable {
-    func captureRotation(to version: Version)
-    func rotate(for p: Point, time: Second, rotationQuantity: Real, _ phase: Phase)
-}
 final class RotatableActionManager: ActionManagable {
     typealias Receiver = View & Rotatable
     

@@ -341,7 +341,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
     }
     weak var c0View: C0View!
     var desktop: Desktop {
-        return c0View.desktopView.desktop
+        return c0View.desktopView.model
     }
     
     override init() {
@@ -375,7 +375,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
         c0View = windowController.contentViewController!.view as! C0View
         
         if let desktopDataModel = rootDataModel.children[c0View.desktopBinder.dataModelKey] {
-            view.desktopBinder.dataModel = desktopDataModel
+            c0View.desktopBinder.dataModel = desktopDataModel
         } else {
             rootDataModel.insert(c0View.desktopBinder.dataModel)
         }
@@ -570,19 +570,23 @@ protocol CocoaKeyInputtable {
  */
 final class C0View: NSView, NSTextInputClient {
     let sender: Sender
-    let desktopBinder = DesktopBinder()
-    let desktopView = DesktopView()
+    let desktopBinder: DesktopBinder
+    let desktopView: DesktopView<DesktopBinder>
     
     private let isHiddenActionManagerKey = "isHiddenActionManagerKey"
     private let isSimpleReferenceKey = "isSimpleReferenceKey"
     
     override init(frame frameRect: NSRect) {
         sender = Sender(rootView: desktopView)
+        desktopBinder = DesktopBinder(rootModel: Desktop())
+        desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
         super.init(frame: frameRect)
         setup()
     }
     required init?(coder: NSCoder) {
         sender = Sender(rootView: desktopView)
+        desktopBinder = DesktopBinder(rootModel: Desktop())
+        desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
         super.init(coder: coder)
         setup()
     }
@@ -595,13 +599,14 @@ final class C0View: NSView, NSTextInputClient {
         desktopView.isHiddenActionManagerBinding = { [unowned self] in
             UserDefaults.standard.set($0, forKey: self.isHiddenActionManagerKey)
         }
-        desktopView.update(withIsHiddenActionManager:
-            UserDefaults.standard.bool(forKey: isHiddenActionManagerKey))
+        desktopView.model.isHiddenActionManager
+            = UserDefaults.standard.bool(forKey: isHiddenActionManagerKey)
+        
         desktopView.isSimpleReferenceBinding = { [unowned self] in
             UserDefaults.standard.set($0, forKey: self.isSimpleReferenceKey)
         }
-        desktopView.update(withIsSimpleReference:
-            UserDefaults.standard.bool(forKey: isSimpleReferenceKey))
+        desktopView.model.isSimpleReference
+            = UserDefaults.standard.bool(forKey: isSimpleReferenceKey)
         
         desktopView.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }
         

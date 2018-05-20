@@ -249,7 +249,7 @@ extension CellGroup {
         if nearestLinePoint(from: drawing.lines) {
             minDrawing = drawing
         }
-        for (i, cell) in rootCell.enumerated() {
+        for (i, cell) in rootCell.treeIndexEnumerated() {
             if nearestLinePoint(from: cell.geometry.lines) {
                 minDrawing = nil
                 minCellItem = CellItem(cell: cell, cellIndex: i)
@@ -265,10 +265,13 @@ extension CellGroup {
             }
             let drawingCap = LineCapsItem.DrawingCap(drawing: drawing,
                                                      drawingLineCaps: lineCaps(with: drawing.lines))
-            let cellCaps: [LineCapsItem.CellCap] = rootCell.enumerated().compactMap { (i, cell) in
+            let cellCaps: [LineCapsItem.CellCap] = rootCell.treeIndexEnumerated().compactMap {
+                (i, cell) in
+                
                 let caps = lineCaps(with: cell.geometry.lines)
                 return caps.isEmpty ?
-                    nil : LineCapsItem.CellCap(CellItem(cell: cell, cellIndex: i), caps)
+                    nil : LineCapsItem.CellCap(cellItem: CellItem(cell: cell, cellIndex: i),
+                                               cellLineCaps: caps)
             }
             let lineCapsItem = LineCapsItem(drawingCap: drawingCap, cellCaps: cellCaps)
             let bslci = lineCapsItem.bezierSortedLineCapItem(at: minPoint)!
@@ -324,7 +327,7 @@ extension CellGroup {
                     updateMin(with: line.lastPoint)
                 }
             }
-            for (aCellIndex, cell) in rootCell.enumerated() {
+            for (aCellIndex, cell) in rootCell.treeIndexEnumerated() {
                 for (i, line) in cell.geometry.lines.enumerated() {
                     if aCellIndex == cellIndex && i == lci.lineCap.lineIndex {
                         updateMin(with: lci.lineCap.reversedPoint)
@@ -336,10 +339,8 @@ extension CellGroup {
             }
         }
         switch lci.drawingOrCell {
-        case .drawing:
-            update(cellIndex: nil)
-        case .cell(let cellItem):
-            update(cellIndex: cellItem.cellIndex)
+        case .drawing: update(cellIndex: nil)
+        case .cell(let cellItem): update(cellIndex: cellItem.cellIndex)
         }
         return minP
     }
@@ -541,10 +542,6 @@ extension CellGroup {
         }
     }
     
-    struct Edit {
-        var indicatedGeometryItem: GeometryItem? = nil, editMaterial: Material? = nil, editZ: EditZ? = nil
-        var editPoint: EditPoint? = nil, editTransform: EditTransform? = nil, point: Point?
-    }
     func drawEdit(_ edit: Edit,
                   scene: Scene, viewType: Cut.ViewType,
                   strokeLine: Line?, strokeLineWidth: Real, strokeLineColor: Color,
@@ -649,9 +646,6 @@ extension CellGroup {
                                             reciprocalAllScale: rAllScale, in: ctx)
                     }
                 }
-            }
-            if let editZ = edit.editZ {
-                drawEditZ(editZ, in: ctx)
             }
             if isMovePoint {
                 drawEditPoints(with: edit.editPoint, isEditVertex: viewType == .editVertex,
@@ -868,23 +862,9 @@ extension CellGroup {
         }
     }
     
-    func drawPreviousNext(isHiddenPrevious: Bool, isHiddenNext: Bool,
-                          time: Beat, reciprocalScale: Real, in ctx: CGContext) {
-        let index = animation.indexInfo(withTime: time).keyframeIndex
-        drawingItem.drawPreviousNext(isHiddenPrevious: isHiddenPrevious, isHiddenNext: isHiddenNext,
-                                     index: index, reciprocalScale: reciprocalScale, in: ctx)
-        geometryItems.enumerated().forEach { (i, geometryItem) in
-            geometryItem.drawPreviousNext(lineWidth: cells[i].material.lineWidth * reciprocalScale,
-                                          isHiddenPrevious: isHiddenPrevious,
-                                          isHiddenNext: isHiddenNext,
-                                          index: index, in: ctx)
-        }
-    }
     func drawSelectedCells(opacity: Real, color: Color, subColor: Color,
                            reciprocalScale: Real, in ctx: CGContext) {
-        guard !selectedGeometryItems.isEmpty else {
-            return
-        }
+        guard !selectedGeometryItems.isEmpty else { return }
         ctx.setAlpha(opacity)
         ctx.beginTransparencyLayer(auxiliaryInfo: nil)
         var geometrys = [Geometry]()

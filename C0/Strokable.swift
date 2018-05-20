@@ -124,178 +124,181 @@ private struct Stroker {
         }
     }
 }
-private var stroker = Stroker()
-func stroke(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
-    stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: true)
-}
-func stroke(for point: Point, pressure: Real, time: Second, _ phase: Phase,
-            isAppendLine: Bool) {
-    let p = convertToCurrentLocal(point)
-    switch phase {
-    case .began:
-        let fc = Line.Control(point: p, pressure: pressure)
-        stroker.line = Line(controls: [fc, fc, fc])
-        stroker.oldPoint = p
-        stroker.oldTime = time
-        stroker.oldTempTime = time
-        stroker.tempDistance = 0
-        stroker.temps = [Stroker.Temp(control: fc, speed: 0)]
-        stroker.beginTime = time
-    case .changed:
-        guard var line = stroker.line, p != stroker.oldPoint else {
-            return
-        }
-        let d = p.distance(stroker.oldPoint)
-        stroker.tempDistance += d
-        
-        let pressure = (stroker.temps.first!.control.pressure + pressure) / 2
-        let rc = Line.Control(point: line.controls[line.controls.count - 3].point,
-                              pressure: pressure)
-        line = line.withReplaced(rc, at: line.controls.count - 3)
-        set(line)
-        
-        let speed = d / (time - stroker.oldTime)
-        stroker.temps.append(Stroker.Temp(control: Line.Control(point: p, pressure: pressure),
-                                          speed: speed))
-        let lPressure = stroker.temps.reduce(0.0.cg) { $0 + $1.control.pressure }
-            / Real(stroker.temps.count)
-        let lc = Line.Control(point: p, pressure: lPressure)
-        
-        let mlc = lc.mid(stroker.temps[stroker.temps.count - 2].control)
-        if let jc = stroker.join.joinControlWith(line, lastControl: mlc) {
-            line = line.withInsert(jc, at: line.controls.count - 2)
-            set(line, updateBounds: line.strokeLastBoundingBox)
-            stroker.temps = [Stroker.Temp(control: lc, speed: speed)]
+
+final class ViewStroker<Binder: BinderProtocol> {
+    var canvasView: CanvasView<Binder>
+    private var stroker = Stroker()
+    func stroke(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
+        stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: true)
+    }
+    func stroke(for point: Point, pressure: Real, time: Second, _ phase: Phase,
+                isAppendLine: Bool) {
+        let p = canvasView.convertToCurrentLocal(point)
+        switch phase {
+        case .began:
+            let fc = Line.Control(point: p, pressure: pressure)
+            stroker.line = Line(controls: [fc, fc, fc])
+            stroker.oldPoint = p
+            stroker.oldTime = time
             stroker.oldTempTime = time
             stroker.tempDistance = 0
-        } else if stroker.interval.isAppendPointWith(distance: stroker.tempDistance / viewScale,
-                                                     deltaTime: time - stroker.oldTempTime,
-                                                     stroker.temps,
-                                                     scale: viewScale) {
-            line = line.withInsert(lc, at: line.controls.count - 2)
+            stroker.temps = [Stroker.Temp(control: fc, speed: 0)]
+            stroker.beginTime = time
+        case .changed:
+            guard var line = stroker.line, p != stroker.oldPoint else {
+                return
+            }
+            let d = p.distance(stroker.oldPoint)
+            stroker.tempDistance += d
+            
+            let pressure = (stroker.temps.first!.control.pressure + pressure) / 2
+            let rc = Line.Control(point: line.controls[line.controls.count - 3].point,
+                                  pressure: pressure)
+            line = line.withReplaced(rc, at: line.controls.count - 3)
+            set(line)
+            
+            let speed = d / (time - stroker.oldTime)
+            stroker.temps.append(Stroker.Temp(control: Line.Control(point: p, pressure: pressure),
+                                              speed: speed))
+            let lPressure = stroker.temps.reduce(0.0.cg) { $0 + $1.control.pressure }
+                / Real(stroker.temps.count)
+            let lc = Line.Control(point: p, pressure: lPressure)
+            
+            let mlc = lc.mid(stroker.temps[stroker.temps.count - 2].control)
+            if let jc = stroker.join.joinControlWith(line, lastControl: mlc) {
+                line = line.withInsert(jc, at: line.controls.count - 2)
+                set(line, updateBounds: line.strokeLastBoundingBox)
+                stroker.temps = [Stroker.Temp(control: lc, speed: speed)]
+                stroker.oldTempTime = time
+                stroker.tempDistance = 0
+            } else if stroker.interval.isAppendPointWith(distance: stroker.tempDistance / viewScale,
+                                                         deltaTime: time - stroker.oldTempTime,
+                                                         stroker.temps,
+                                                         scale: viewScale) {
+                line = line.withInsert(lc, at: line.controls.count - 2)
+                set(line, updateBounds: line.strokeLastBoundingBox)
+                stroker.temps = [Stroker.Temp(control: lc, speed: speed)]
+                stroker.oldTempTime = time
+                stroker.tempDistance = 0
+            }
+            
+            line = line.withReplaced(lc, at: line.controls.count - 2)
+            line = line.withReplaced(lc, at: line.controls.count - 1)
             set(line, updateBounds: line.strokeLastBoundingBox)
-            stroker.temps = [Stroker.Temp(control: lc, speed: speed)]
-            stroker.oldTempTime = time
-            stroker.tempDistance = 0
-        }
-        
-        line = line.withReplaced(lc, at: line.controls.count - 2)
-        line = line.withReplaced(lc, at: line.controls.count - 1)
-        set(line, updateBounds: line.strokeLastBoundingBox)
-        
-        stroker.oldTime = time
-        stroker.oldPoint = p
-    case .ended:
-        guard var line = stroker.line else {
-            return
-        }
-        if !stroker.interval.isAppendPointWith(distance: stroker.tempDistance / viewScale,
-                                               deltaTime: time - stroker.oldTempTime,
-                                               stroker.temps,
-                                               scale: viewScale) {
-            line = line.withRemoveControl(at: line.controls.count - 2)
-        }
-        line = line.withReplaced(Line.Control(point: p, pressure: line.controls.last!.pressure),
-                                 at: line.controls.count - 1)
-        line = stroker.short.shortedLineWith(line, deltaTime: time - stroker.beginTime,
-                                             scale: viewScale)
-        if isAppendLine {
-            addLine(line, in: node.editTrack.drawingItem.drawing, node, time: self.time)
-            stroker.line = nil
-        } else {
-            stroker.line = line
-        }
-    }
-}
-private func set(_ line: Line) {
-    stroker.line = line
-    let lastBounds = line.visibleImageBounds(withLineWidth: stroker.lineWidth)
-    let ub = lastBounds.union(stroker.oldLastBounds)
-    let b = Line.visibleImageBoundsWith(imageBounds: ub, lineWidth: stroker.lineWidth)
-    setNeedsDisplay(inCurrentLocalBounds: b)
-    stroker.oldLastBounds = lastBounds
-}
-private func set(_ line: Line, updateBounds lastBounds: Rect) {
-    stroker.line = line
-    let ub = lastBounds.union(stroker.oldLastBounds)
-    let b = Line.visibleImageBoundsWith(imageBounds: ub, lineWidth: stroker.lineWidth)
-    setNeedsDisplay(inCurrentLocalBounds: b)
-    stroker.oldLastBounds = lastBounds
-}
-
-func lassoErase(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
-    _ = stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: false)
-    switch phase {
-    case .began:
-        break
-    case .changed:
-        if let line = stroker.line {
-            let b = line.visibleImageBounds(withLineWidth: stroker.lineWidth)
-            setNeedsDisplay(inCurrentLocalBounds: b)
-        }
-    case .ended:
-        if let line = stroker.line {
-            lassoErase(with: line)
-            stroker.line = nil
-        }
-    }
-}
-func lassoErase(with line: Line) {
-    let inNode = cut.currentNode
-    let drawing = inNode.editTrack.drawingItem.drawing, track = inNode.editTrack
-    if let index = drawing.lines.index(of: line) {
-        removeLine(at: index, in: drawing, inNode, time: time)
-    }
-    if !drawing.selectedLineIndexes.isEmpty {
-        setSelectedLineIndexes([], oldLineIndexes: drawing.selectedLineIndexes,
-                               in: drawing, inNode, time: time)
-    }
-    var isRemoveLineInDrawing = false, isRemoveLineInCell = false
-    let lasso = LineLasso(lines: [line])
-    let newDrawingLines = drawing.lines.reduce(into: [Line]()) {
-        let split = lasso.split(with: $1)
-        if split.isSplited {
-            isRemoveLineInDrawing = true
-            $0 += split.lines
-        } else {
-            $0.append($1)
-        }
-    }
-    if isRemoveLineInDrawing {
-        set(newDrawingLines, old: drawing.lines, in: drawing, inNode, time: time)
-    }
-    var removeGeometryItems = [GeometryItem]()
-    removeGeometryItems = track.geometryItems.filter { geometryItem in
-        if geometryItem.cell.intersects(lasso) {
-            set(Geometry(), old: geometryItem.cell.geometry,
-                at: track.animation.editKeyframeIndex, in: geometryItem, track, inNode, time: time)
-            if geometryItem.isEmptyKeyGeometries {
-                return true
+            
+            stroker.oldTime = time
+            stroker.oldPoint = p
+        case .ended:
+            guard var line = stroker.line else {
+                return
             }
-            isRemoveLineInCell = true
-        }
-        return false
-    }
-    if !isRemoveLineInDrawing && !isRemoveLineInCell {
-        if let hitGeometryItem = inNode.geometryItem(at: line.firstPoint,
-                                                     reciprocalScale: scene.reciprocalScale,
-                                                     with: track) {
-            let lines = hitGeometryItem.cell.geometry.lines
-            set(Geometry(), old: hitGeometryItem.cell.geometry,
-                at: track.animation.editKeyframeIndex,
-                in: hitGeometryItem, track, inNode, time: time)
-            if hitGeometryItem.isEmptyKeyGeometries {
-                removeGeometryItems.append(hitGeometryItem)
+            if !stroker.interval.isAppendPointWith(distance: stroker.tempDistance / viewScale,
+                                                   deltaTime: time - stroker.oldTempTime,
+                                                   stroker.temps,
+                                                   scale: viewScale) {
+                line = line.withRemoveControl(at: line.controls.count - 2)
             }
-            set(drawing.lines + lines, old: drawing.lines,
-                in: drawing, inNode, time: time)
+            line = line.withReplaced(Line.Control(point: p, pressure: line.controls.last!.pressure),
+                                     at: line.controls.count - 1)
+            line = stroker.short.shortedLineWith(line, deltaTime: time - stroker.beginTime,
+                                                 scale: viewScale)
+            if isAppendLine {
+                addLine(line, in: node.editTrack.drawingItem.drawing, node, time: self.time)
+                stroker.line = nil
+            } else {
+                stroker.line = line
+            }
         }
     }
-    if !removeGeometryItems.isEmpty {
-        self.removeGeometryItems(removeGeometryItems)
+    private func set(_ line: Line) {
+        stroker.line = line
+        let lastBounds = line.visibleImageBounds(withLineWidth: stroker.lineWidth)
+        let ub = lastBounds.union(stroker.oldLastBounds)
+        let b = Line.visibleImageBoundsWith(imageBounds: ub, lineWidth: stroker.lineWidth)
+        canvasView.displayLinkDraw(inCurrentLocalBounds: b)
+        stroker.oldLastBounds = lastBounds
+    }
+    private func set(_ line: Line, updateBounds lastBounds: Rect) {
+        stroker.line = line
+        let ub = lastBounds.union(stroker.oldLastBounds)
+        let b = Line.visibleImageBoundsWith(imageBounds: ub, lineWidth: stroker.lineWidth)
+        canvasView.displayLinkDraw(inCurrentLocalBounds: b)
+        stroker.oldLastBounds = lastBounds
+    }
+    
+    func lassoErase(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
+        _ = stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: false)
+        switch phase {
+        case .began:
+            break
+        case .changed:
+            if let line = stroker.line {
+                let b = line.visibleImageBounds(withLineWidth: stroker.lineWidth)
+                canvasView.displayLinkDraw(inCurrentLocalBounds: b)
+            }
+        case .ended:
+            if let line = stroker.line {
+                lassoErase(with: line)
+                stroker.line = nil
+            }
+        }
+    }
+    func lassoErase(with line: Line) {
+        let inNode = cut.currentNode
+        let drawing = inNode.editTrack.drawingItem.drawing, track = inNode.editTrack
+        if let index = drawing.lines.index(of: line) {
+            removeLine(at: index, in: drawing, inNode, time: time)
+        }
+        if !drawing.selectedLineIndexes.isEmpty {
+            setSelectedLineIndexes([], oldLineIndexes: drawing.selectedLineIndexes,
+                                   in: drawing, inNode, time: time)
+        }
+        var isRemoveLineInDrawing = false, isRemoveLineInCell = false
+        let lasso = LineLasso(lines: [line])
+        let newDrawingLines = drawing.lines.reduce(into: [Line]()) {
+            let split = lasso.split(with: $1)
+            if split.isSplited {
+                isRemoveLineInDrawing = true
+                $0 += split.lines
+            } else {
+                $0.append($1)
+            }
+        }
+        if isRemoveLineInDrawing {
+            set(newDrawingLines, old: drawing.lines, in: drawing, inNode, time: time)
+        }
+        var removeGeometryItems = [GeometryItem]()
+        removeGeometryItems = track.geometryItems.filter { geometryItem in
+            if geometryItem.cell.intersects(lasso) {
+                set(Geometry(), old: geometryItem.cell.geometry,
+                    at: track.animation.editKeyframeIndex, in: geometryItem, track, inNode, time: time)
+                if geometryItem.isEmptyKeyGeometries {
+                    return true
+                }
+                isRemoveLineInCell = true
+            }
+            return false
+        }
+        if !isRemoveLineInDrawing && !isRemoveLineInCell {
+            if let hitGeometryItem = inNode.geometryItem(at: line.firstPoint,
+                                                         reciprocalScale: scene.reciprocalScale,
+                                                         with: track) {
+                let lines = hitGeometryItem.cell.geometry.lines
+                set(Geometry(), old: hitGeometryItem.cell.geometry,
+                    at: track.animation.editKeyframeIndex,
+                    in: hitGeometryItem, track, inNode, time: time)
+                if hitGeometryItem.isEmptyKeyGeometries {
+                    removeGeometryItems.append(hitGeometryItem)
+                }
+                set(drawing.lines + lines, old: drawing.lines,
+                    in: drawing, inNode, time: time)
+            }
+        }
+        if !removeGeometryItems.isEmpty {
+            self.removeGeometryItems(removeGeometryItems)
+        }
     }
 }
-
 
 protocol Strokable {
     var viewScale: Real { get }

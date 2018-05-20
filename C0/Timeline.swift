@@ -34,10 +34,11 @@ struct Timeline: Codable {
     var subtitleTrack: SubtitleTrack
     var childrenTrack: Track<CellGroupChildren>
     var materialTracks
-    var tracks: [MultipleTrack] = [MultipleTrack()], editTrackIndex: Int = 0,
+    var editTrackIndex: Int = 0,
     var allTracks: [Track]
+    var editingTrackIndex: Int
     var editingTrack: Track {
-        return tracks[editingTrackIndex]
+        return allTracks[editingTrackIndex]
     }
     var canvas: Canvas
     var selectedTrackIndexes = [Int]()
@@ -152,6 +153,10 @@ extension Timeline {
                                                        minModel: Rational(1, 100000), maxModel: 100000,
                                                        modelInterval: 1, isInfinitesimal: true,
                                                        unit: " b")
+    static let tempoOption = RealOption(defaultModel: 120,
+                                        minModel: 1, maxModel: 10000,
+                                        modelInterval: 1, exp: 1,
+                                        numberOfDigits: 0, unit: " bpm")
 }
 extension Timeline: Referenceable {
     static let name = Text(english: "Timeline", japanese: "タイムライン")
@@ -177,40 +182,30 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
     let baseTimeIntervalView: DiscreteRationalView<Binder>
     let curretEditKeyframeTimeExpressionView: ExpressionView<Binder>
     let timeRulerView = RulerView()
-    let tempoView = DiscreteRealView(model: 120,
-                                               option: RealOption(defaultModel: 120,
-                                                                        minModel: 1, maxModel: 10000,
-                                                                        modelInterval: 1, exp: 1,
-                                                                        numberOfDigits: 0, unit: " bpm"),
-                                               frame: Rect(x: 0, y: 0,
-                                                             width: leftWidth, height: Layout.basicHeight))
     let tempoAnimationClipView = View(isLocked: true)
-    let tempoAnimationView = AnimationView(height: defaultSumKeyTimesHeight)
+    let tempoAnimationView: AnimationView<BPM, Binder>
     let soundWaveformView = SoundWaveformView()
     let cutViewsView = View(isLocked: true)
-    let classSumAnimationNameView = StringView(text: Text(english: "Sum:", japanese: "合計:"),
+    let classSumAnimationNameView = TextFormView(text: Text(english: "Sum:", japanese: "合計:"),
                                                font: .small)
     let sumKeyTimesClipView = View(isLocked: true)
     
-    static let defaultTimeHeight = Layout.basicHeight
-    static let defaultSumKeyTimesHeight = 18.0.cg
     var baseWidth = 6.0.cg {
         didSet {
             sumKeyTimesView.baseWidth = baseWidth
             tempoAnimationView.baseWidth = baseWidth
             soundWaveformView.baseWidth = baseWidth
-            cutViews.forEach { $0.baseWidth = baseWidth }
             updateWith(time: time, scrollPoint: Point(x: x(withTime: time), y: _scrollPoint.y))
         }
     }
-    private let timeHeight = defaultTimeHeight
+    private let timeHeight = Layout.basicHeight
     private let timeRulerHeight = Layout.smallHeight
-    private let tempoHeight = defaultSumKeyTimesHeight
+    private let tempoHeight = 18.0.cg
     private let subtitleHeight = 24.0.cg, soundHeight = 20.0.cg
-    private let sumKeyTimesHeight = defaultSumKeyTimesHeight
+    private let sumKeyTimesHeight = 18.0.cg
     private let knobHalfHeight = 8.0.cg, subKnobHalfHeight = 4.0.cg, maxLineHeight = 3.0.cg
     private(set) var maxScrollX = 0.0.cg, cutHeight = 0.0.cg
-    static let leftWidth = 80.0.cg
+    private let leftWidth = 80.0.cg
     let timeView: View = {
         let view = View(isLocked: true)
         view.fillColor = .editing
@@ -285,30 +280,8 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
     
     override func updateLayout() {
         let sp = Layout.basicPadding
-        mainHeight = bounds.height - timeRulerHeight - sumKeyTimesHeight - sp * 2
-        cutHeight = mainHeight - tempoHeight - subtitleHeight - soundHeight
-        let midX = bounds.midX, leftWidth = TimelineView.leftWidth
+        let midX = bounds.midX
         let rightX = leftWidth
-        timeRulerView.frame = Rect(x: rightX, y: bounds.height - timeRulerHeight - sp,
-                                 width: bounds.width - rightX - sp, height: timeRulerHeight)
-        curretEditKeyframeTimeView.frame.origin = Point(x: rightX - curretEditKeyframeTimeView.frame.width - Layout.smallPadding,
-                                         y: bounds.height - timeRulerHeight
-                                            - Layout.basicPadding + Layout.smallPadding)
-        tempoAnimationClipView.frame = Rect(x: rightX,
-                                         y: bounds.height - timeRulerHeight - tempoHeight - sp,
-                                         width: bounds.width - rightX - sp, height: tempoHeight)
-        let tracksHeight = 30.0.cg
-        tracksManager.tracksView.frame = Rect(x: sp, y: sumKeyTimesHeight + sp,
-                                                width: leftWidth - sp,
-                                                height: tracksHeight)
-        nodeTreeView.nodesView.frame = Rect(x: sp, y: sumKeyTimesHeight + sp + tracksHeight,
-                                              width: leftWidth - sp,
-                                              height: cutHeight - tracksHeight)
-        cutViewsView.frame = Rect(x: rightX, y: sumKeyTimesHeight + sp,
-                                   width: bounds.width - rightX - sp,
-                                   height: mainHeight - tempoHeight)
-        classSumAnimationNameView.frame.origin = Point(x: rightX - classSumAnimationNameView.frame.width,
-                                        y: sp + (sumKeyTimesHeight - classSumAnimationNameView.frame.height) / 2)
         sumKeyTimesClipView.frame = Rect(x: rightX, y: sp,
                                       width: bounds.width - rightX - sp, height: sumKeyTimesHeight)
         timeView.frame = Rect(x: midX - baseWidth / 2, y: sp,
@@ -321,8 +294,6 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
     func updateWithModel() {
         _scrollPoint.x = x(withTime: model.editingTime)
         _intervalScrollPoint.x = x(withTime: time(withLocalX: _scrollPoint.x))
-        cutViews = self.cutViews(with: model)
-        editCutView.isEdit = true
         
     }
 
@@ -371,7 +342,6 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
             editCutView.isEdit = true
         }
         
-        
         if time != model.editingTime {
             model.editingTime = time
             
@@ -385,11 +355,6 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
             updateKeyframeView()
 //            curretEditKeyframeTimeView.rational = model.curretEditKeyframeTime
             tempoView.model = model.tempoTrack.editingTempo
-        }
-        if isCut {
-            nodeTreeView.cut = model.editCut
-            tracksManager.node = model.currentNode
-            nodeView.node = model.currentNode
         }
         updateViewClosure?((isCut, isTransform, isKeyframe))
     }
@@ -436,95 +401,9 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
         updateBeats()
         updateTimeRuler()
     }
-    
-    func bindedCutView(with cut: Cut, beginBaseTime: Beat = 0, height: Real) -> CutView {
-        let cutView = CutView(cut,
-                              beginBaseTime: beginBaseTime,
-                              baseWidth: baseWidth,
-                              baseTimeInterval: baseTimeInterval,
-                              knobHalfHeight: knobHalfHeight,
-                              subKnobHalfHeight: subKnobHalfHeight,
-                              maxLineWidth: maxLineHeight, height: height)
-
-        cutView.animationViews.enumerated().forEach { (i, animationView) in
-            let nodeAndTrack = cutView.cut.nodeAndTrack(atNodeAndTrackIndex: i)
-            bind(in: animationView, in: cutView, from: nodeAndTrack)
-        }
-        cutView.pasteClosure = { [unowned self] in
-            if let index = self.cutViews.index(of: $0) {
-                for object in $1 {
-                    if let cut = object as? Cut {
-                        self.paste(cut.copied, at: index + 1)
-                        return
-                    }
-                }
-            }
-        }
-        cutView.deleteClosure = { [unowned self] in
-            if let index = self.cutViews.index(of: $0) {
-                self.removeCut(at: index)
-            }
-        }
-        cutView.scrollClosure = { [unowned self, unowned cutView] obj in
-            if obj.phase == .ended {
-                if obj.nodeAndTrack != obj.oldNodeAndTrack {
-                    self.registerUndo(time: self.time) {
-                        self.set(obj.oldNodeAndTrack, old: obj.nodeAndTrack, in: cutView, time: $1)
-                    }
-                    self.
-                }
-            }
-            if cutView.cut == self.nodeTreeView.cut {
-                self.nodeTreeView.updateWithNodes()
-                self.tracksManager.node = cutView.cut.currentNode
-                self.tracksManager.updateWithTracks(isAlwaysUpdate: true)
-                self.setNodeAndTrackBinding?(self, cutView, obj.nodeAndTrack)
-            }
-        }
-        cutView.subtitleKeyframeBinding = { [unowned self] _ in
-            var subtitleStringViews = [View]()
-            self.cutViews.forEach { subtitleStringViews += $0.subtitleStringViews as [View] }
-            self.cutViewsView.children = self.cutViews.reversed() as [View]
-                + self.cutViews.map { $0.subtitleAnimationView } as [View] + subtitleStringViews as [View] + [self.soundWaveformView] as [View]
-            self.updateWithScrollPosition()
-        }
-        cutView.subtitleBinding = { [unowned self] _ in
-            self.updateWithScrollPosition()
-        }
-        return cutView
-    }
-    var setNodeAndTrackBinding: ((TimelineView, CutView, Cut.NodeAndTrack) -> ())?
-
-    func bind(in animationView: AnimationView, in cutView: CutView,
-              from nodeAndTrack: Cut.NodeAndTrack) {
-        animationView.setKeyframeClosure = { [unowned self, unowned cutView] in
-            guard $0.phase == .ended else {
-                return
-            }
-            switch $0.setType {
-            case .insert:
-                self.insert($0.keyframe, at: $0.index, in: nodeAndTrack.track, in: nodeAndTrack.node,
-                            in: $0.animationView, in: cutView)
-            case .remove:
-                self.removeKeyframe(at: $0.index,
-                                    in: nodeAndTrack.track, in: nodeAndTrack.node,
-                                    in: $0.animationView, in: cutView, time: self.time)
-            case .replace:
-                self.replace($0.keyframe, at: $0.index,
-                             in: nodeAndTrack.track,
-                             in: $0.animationView, in: cutView, time: self.time)
-            }
-        }
-        animationView.slideClosure = { [unowned self, unowned cutView] in
-            self.setAnimation(with: $0, in: nodeAndTrack.track, in: nodeAndTrack.node, in: cutView)
-        }
-        animationView.selectClosure = { [unowned self, unowned cutView] in
-            self.setAnimation(with: $0, in: nodeAndTrack.track, in: cutView)
-        }
-    }
 
     func updateTimeRuler() {
-        let minTime = time(withLocalX: convertToLocalX(bounds.minX + TimelineView.leftWidth))
+        let minTime = time(withLocalX: convertToLocalX(bounds.minX + leftWidth))
         let maxTime = time(withLocalX: convertToLocalX(bounds.maxX))
         let minSecond = Int(floor(model.secondTime(withBeatTime: minTime)))
         let maxSecond = Int(ceil(model.secondTime(withBeatTime: maxTime)))
@@ -601,26 +480,17 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
     func localX(withRealBaseTime realBaseTime: RealBaseTime) -> Real {
         return Real(realBaseTime) * baseWidth
     }
-    func cutIndex(withLocalX x: Real) -> Int {
-        return model.cutTrack.animation.keyframeIndex(atTime: time(withLocalX: x))
-    }
-    func cutIndex(withTime time: Beat) -> Int {
-        return model.cutTrack.animation.keyframeIndex(atTime: time)
-    }
-    func movingCutIndex(withTime time: Beat) -> Int {
-        return model.cutTrack.animation.movingKeyframeIndex(withTime: time)
-    }
     var editX: Real {
-        return bounds.midX - TimelineView.leftWidth
+        return bounds.midX - leftWidth
     }
     var localDeltaX: Real {
         return editX - _intervalScrollPoint.x
     }
     func convertToLocalX(_ x: Real) -> Real {
-        return x - TimelineView.leftWidth - localDeltaX
+        return x - leftWidth - localDeltaX
     }
     func convertFromLocalX(_ x: Real) -> Real {
-        return x - TimelineView.leftWidth + localDeltaX
+        return x - leftWidth + localDeltaX
     }
     func convertToLocal(_ p: Point) -> Point {
         return Point(x: convertToLocalX(p.x), y: p.y)
@@ -685,54 +555,13 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
             tempoAnimationView.baseTimeInterval = baseTimeInterval
             soundWaveformView.baseTimeInterval = baseTimeInterval
             cutViews.forEach { $0.baseTimeInterval = baseTimeInterval }
-            updateCutViewPositions()
             baseTimeIntervalView.model = baseTimeInterval
 
             model.baseTimeInterval = baseTimeInterval
             
         }
     }
-
-    private var isUpdateSumKeyTimes = true
-    private var moveAnimationViews = [(animationView: AnimationView, keyframeIndex: Int?)]()
-    private func setAnimations(with obj: AnimationView.SlideBinding) {
-        switch obj.phase {
-        case .began:
-            isUpdateSumKeyTimes = false
-            let cutIndex = movingCutIndex(withTime: obj.oldTime)
-            let cutView = self.cutViews[cutIndex]
-            let time = obj.oldTime - model.cutTrack.animation.time(atLoopFrameIndex: cutIndex)
-            moveAnimationViews = []
-            cutView.animationViews.forEach {
-                let s = $0.movingKeyframeIndex(atTime: time)
-                if s.isSolution && (s.index != nil ? s.index! > 0 : true) {
-                    moveAnimationViews.append(($0, s.index))
-                }
-            }
-            let ts = tempoAnimationView.movingKeyframeIndex(atTime: obj.oldTime)
-            if ts.isSolution {
-                moveAnimationViews.append((tempoAnimationView, ts.index))
-            }
-
-            moveAnimationViews.forEach {
-                $0.animationView.move(withDeltaTime: obj.deltaTime,
-                                      keyframeIndex: $0.keyframeIndex, obj.phase)
-            }
-        case .changed:
-            moveAnimationViews.forEach {
-                $0.animationView.move(withDeltaTime: obj.deltaTime,
-                                      keyframeIndex: $0.keyframeIndex, obj.phase)
-            }
-        case .ended:
-            moveAnimationViews.forEach {
-                $0.animationView.move(withDeltaTime: obj.deltaTime,
-                                      keyframeIndex: $0.keyframeIndex, obj.phase)
-            }
-            moveAnimationViews = []
-            isUpdateSumKeyTimes = true
-        }
-    }
-
+    
     private var isScrollTrack = false
     private weak var scrollCutView: CutView?
     func scroll(for p: Point, time: Second, scrollDeltaPoint: Point,
@@ -773,18 +602,14 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
         get {
             var index = 0
             for cut in model.cuts {
-                if cut == model.editCut {
-                    break
-                }
+                guard cut != model.editCut else { break }
                 index += cut.currentNode.editTrack.animation.loopFrames.count
             }
             index += model.currentNode.editTrack.animation.currentLoopframeIndex
             return model.editingTime == model.duration ? index + 1 : index
         }
         set {
-            guard newValue != currentAllKeyframeIndex else {
-                return
-            }
+            guard newValue != currentAllKeyframeIndex else { return }
             var index = 0
             for (cutIndex, cut) in model.cuts.enumerated() {
                 let animation = cut.currentNode.editTrack.animation

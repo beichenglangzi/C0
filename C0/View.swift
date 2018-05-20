@@ -194,7 +194,7 @@ class View {
         child.parent = self
         child.allChildrenAndSelf { $0.contentsScale = contentsScale }
     }
-    func insert(child: View, at index: Int) {
+    func insert(child: View, at index: Array<View>.Index) {
         child.removeFromParent()
         caLayer.insertSublayer(child.caLayer, at: UInt32(index))
         _children.insert(child, at: index)
