@@ -22,7 +22,7 @@ import CoreGraphics
 protocol KeyframeTimingProtocol {
     var timing: KeyframeTiming { get }
 }
-protocol KeyframeValue: AbstractViewable, Codable, Equatable, Interpolatable, Initializable, Referenceable {
+protocol KeyframeValue: Codable, Equatable, Interpolatable, Initializable, Referenceable {
     var defaultLabel: KeyframeTiming.Label { get }
 }
 extension KeyframeValue {
@@ -105,8 +105,9 @@ extension KeyframeTiming: ThumbnailViewable {
 extension KeyframeTiming.Interpolation: Referenceable {
     static let uninheritanceName = Text(english: "Interpolation", japanese: "補間")
     static let name = KeyframeTiming.name.spacedUnion(uninheritanceName)
-    static let classDescription = Text(english: "\"Bound\": Uses \"Spline\" without interpolation on previous, Not previous and next: Use \"Linear\"",
-                                       japanese: "バウンド: 前方側の補間をしないスプライン補間, 前後が足りない場合: リニア補間を使用")
+    static let classDescription
+        = Text(english: "\"Bound\": Uses \"Spline\" without interpolation on previous, Not previous and next: Use \"Linear\"",
+               japanese: "バウンド: 前方側の補間をしないスプライン補間, 前後が足りない場合: リニア補間を使用")
 }
 extension KeyframeTiming.Interpolation: DisplayableText {
     var displayText: Text {
@@ -127,8 +128,9 @@ extension KeyframeTiming.Interpolation: DisplayableText {
 extension KeyframeTiming.Loop: Referenceable {
     static let uninheritanceName = Text(english: "Loop", japanese: "ループ")
     static let name = KeyframeTiming.name.spacedUnion(uninheritanceName)
-    static let classDescription = Text(english: "Loop from \"Began Loop\" keyframe to \"Ended Loop\" keyframe on \"Ended Loop\" keyframe",
-                                       japanese: "「ループ開始」キーフレームから「ループ終了」キーフレームの間を「ループ終了」キーフレーム上でループ")
+    static let classDescription
+        = Text(english: "Loop from \"Began Loop\" keyframe to \"Ended Loop\" keyframe on \"Ended Loop\" keyframe",
+               japanese: "「ループ開始」キーフレームから「ループ終了」キーフレームの間を「ループ終了」キーフレーム上でループ")
 }
 extension KeyframeTiming.Loop: DisplayableText {
     var displayText: Text {
@@ -206,6 +208,8 @@ final class KeyframeView<Value: KeyframeValue, T: BinderProtocol>: View, Bindabl
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((KeyframeView<Value, Binder>) -> ())]()
+    
     var defaultModel = Model()
     
     var keyValueView: View
@@ -225,7 +229,8 @@ final class KeyframeView<Value: KeyframeValue, T: BinderProtocol>: View, Bindabl
         
     }
     func updateWithModel() {
-        
+//        keyValueView
+        keyframeTimingView.updateWithModel()
     }
 }
 extension KeyframeView: Queryable {
@@ -261,6 +266,8 @@ final class KeyframeTimingView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((KeyframeTimingView<Binder>) -> ())]()
+    
     var defaultModel = Model()
     
     let labelView: EnumView<KeyframeTiming.Label, Binder>

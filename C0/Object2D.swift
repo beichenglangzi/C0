@@ -89,6 +89,7 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((Discrete2DView<ModelOption, Binder>) -> ())]()
     
     var option: ModelOption {
         didSet { updateWithModel() }
@@ -232,6 +233,7 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>: View, Slidable
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((Slidable2DView<ModelOption, Binder>) -> ())]()
     
     var option: ModelOption {
         didSet { updateWithModel() }
@@ -239,11 +241,6 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>: View, Slidable
     
     var padding = 5.0.cg {
         didSet { updateLayout() }
-    }
-    var formBackgroundViews = [View]() {
-        didSet {
-            children = formBackgroundViews + [knobView]
-        }
     }
     let knobView = View.knob()
     

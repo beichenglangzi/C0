@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Locale
 import AVFoundation
 
 struct Player {
@@ -49,6 +49,7 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((ScenePlayerView<Binder>) -> ())]()
     
     var sceneKeyPath: KeyPath<Binder, Scene> {
         didSet { updateWithModel() }
@@ -106,14 +107,15 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
         didSet {
             guard isPlaying != oldValue else { return }
             if isPlaying {
-                oldPlayTime = scene.editCut.currentTime
+                oldPlayTime = scene.timeline.editingTime
                 playingDrawnCount = 0
                 oldTimestamp = CFAbsoluteTimeGetCurrent()
-                let t = scene.time
+                let t = scene.timeline.editingTime
                 playIntSecond = t.integralPart
                 playingFrameRate = scene.timeline.frameRate
-                playFrameTime = scene.frameTime(withBeatTime: scene.time)
+                playFrameTime = scene.timeline.frameTime(withBeatTime: scene.timeline.editingTime)
                 playingDrawnCount = 0
+                
                 if let url = scene.sound.url {
                     do {
                         try audioPlayer = AVAudioPlayer(contentsOf: url)
@@ -123,9 +125,11 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
                 }
                 audioPlayer?.currentTime = Double(scene.secondTime(withBeatTime: t))
                 audioPlayer?.play()
+                
                 timer.begin(interval: 1 / Second(scene.frameRate),
                             tolerance: 0.1 / Second(scene.frameRate),
                             closure: { [unowned self] in self.updatePlayTime() })
+                
                 drawView.displayLinkDraw()
             } else {
                 timer.stop()
@@ -145,12 +149,11 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
             } else {
                 playingDrawnCount = 0
                 oldTimestamp = CFAbsoluteTimeGetCurrent()
-                playFrameRate = scene.frameRate
+                playingFrameRate = scene.timeline.frameRate
                 timer.begin(interval: 1 / Second(scene.frameRate),
                             tolerance: 0.1 / Second(scene.frameRate),
                             closure: { [unowned self] in self.updatePlayTime() })
-                
-                audioPlayer?.play()
+                audioPlayers.forEach { $0.play() }
             }
         }
     }
@@ -165,7 +168,7 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
         super.init()
         drawView.drawClosure = { [unowned self] ctx, _ in self.draw(in: ctx) }
         
-        children = [drawView, timeStringView, frameRateView, timeView]
+        children = [drawView, timeStringView, playingFrameRateView, timeView]
         
         timeView.movePointClosure = { [unowned self] in
             switch $1 {
@@ -200,7 +203,7 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
         let frw = Layout.valueWidth(with: .regular)
         playingFrameRateView.frame = Rect(x: bounds.width - frw - padding,
                                           y: padding * 2, width: frw, height: height - padding * 2)
-        let sliderWidth = frameRateView.frame.minX - timeStringView.frame.maxX - padding * 2
+        let sliderWidth = playingFrameRateView.frame.minX - timeStringView.frame.maxX - padding * 2
         timeView.frame = Rect(x: timeStringView.frame.maxX + padding,
                               y: sliderY, width: sliderWidth, height: height)
         timeView.backgroundViews = [ScenePlayerView.sliderView(with: timeView.bounds,
@@ -212,21 +215,21 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
     private func updateWithFrameRate() {
         let oldBounds = playingFrameRateView.bounds
         playingFrameRateView.model = playingFrameRate
-        playingFrameRateView.optionStringView.textMaterial.color = playingFrameRate < frameRate ?
-            .warning : .locked
+        playingFrameRateView.optionStringView.textMaterial.color
+            = playingFrameRate < scene.timeline.frameRate ? .warning : .locked
         if oldBounds.size != playingFrameRateView.bounds.size { updateLayout() }
     }
     var allowableDelayTime = Second(0.1)
     private func updatePlayTime() {
         playFrameTime += 1
-        if let audioPlayer = audioPlayer, !scene.sound.isHidden {
-            let playTime = scene.secondTime(withFrameTime: playFrameTime)
+        if let audioPlayer = audioPlayer {
+            let playTime = scene.timeline.secondTime(withFrameTime: playFrameTime)
             let audioTime = Second(audioPlayer.currentTime)
             if abs(playTime - audioTime) > allowableDelayTime {
                 playFrameTime = scene.frameTime(withSecondTime: audioTime)
             }
         }
-        let newTime = scene.beatTime(withFrameTime: playFrameTime)
+        let newTime = scene.timeline.beatTime(withFrameTime: playFrameTime)
         update(withTime: newTime)
     }
     private func updateBinding() {

@@ -132,16 +132,29 @@ final class TextFormView: View {
     }
     private var textFrame: TextFrame
     
-    init(text: Text = "",
-         font: Font = .default, color: Color = .locked,
-         frameAlignment: TextAlignment = .left, alignment: TextAlignment = .natural,
-         frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
+    convenience init(text: Text = "",
+                     font: Font = .default, color: Color = .locked,
+                     lineColor: Color? = nil, lineWidth: Real = 0,
+                     frameAlignment: TextAlignment = .left, alignment: TextAlignment = .natural,
+                     frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
         
         self.text = text
         
         self.padding = padding
         textMaterial = TextMaterial(font: font, color: color,
+                                    lineColor: lineColor, lineWidth: lineWidth,
                                     frameAlignment: frameAlignment, alignment: alignment)
+        textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
+                              frameWidth: textFrameWidth)
+        
+        self.init(text: text, textMaterial: textMaterial,
+                  frame: frame, padding: padding, isSizeToFit: isSizeToFit)
+    }
+    init(text: Text = "", textMaterial: TextMaterial = TextMaterial(),
+         frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
+        
+        self.text = text
+        self.textMaterial = textMaterial
         textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
         
@@ -149,9 +162,12 @@ final class TextFormView: View {
         noIndicatedLineColor = nil
         indicatedLineColor = .noBorderIndicated
         
-        self.frame = frame
-        if isSizeToFit { sizeToFit() }
-        displayLinkDraw()
+        if isSizeToFit {
+            sizeToFit()
+        } else {
+            self.frame = frame
+            displayLinkDraw()
+        }
     }
     
     override var defaultBounds: Rect {

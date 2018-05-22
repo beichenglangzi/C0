@@ -398,10 +398,11 @@ final class C0Document: NSDocument, NSWindowDelegate {
         c0View.desktopBinder.diffDesktopDataModel.didChangeIsWriteClosure = isWriteClosure
         preferenceDataModel.didChangeIsWriteClosure = isWriteClosure
         
-        c0View.desktopView.push(copiedObjects: NSPasteboard.general.copiedObjects)
-        c0View.desktopView.desktop.copiedObjectsBinding = { [unowned self] _ in
+        c0View.desktopView.copiedObjectsView.push(NSPasteboard.general.copiedObjects,
+                                                  to: c0View.desktopView.version)
+        c0View.desktopView.copiedObjectsView.notifications.append({ [unowned self] _ in
             self.didSetCopiedObjects()
-        }
+        })
     }
     private func setupWindow(with preference: C0Preference) {
         window.setFrame(preference.windowFrame, display: false)
@@ -442,7 +443,8 @@ final class C0Document: NSDocument, NSWindowDelegate {
         let pasteboard = NSPasteboard.general
         if pasteboard.changeCount != oldChangeCountWithPsteboard {
             oldChangeCountWithPsteboard = pasteboard.changeCount
-            c0View.desktopView.push(copiedObjects: pasteboard.copiedObjects)
+            c0View.desktopView.copiedObjectsView.push(pasteboard.copiedObjects,
+                                                      to: c0View.desktopView.version)
             oldChangeCountWithCopiedObjects = changeCountWithCopiedObjects
         }
     }
@@ -464,24 +466,21 @@ extension NSPasteboard {
     var copiedObjects: [Object] {
         var copiedObjects = [Object]()
         func append(with data: Data, type: NSPasteboard.PasteboardType) {
-            let object = C0Coder.decode(from: data, forKey: type.rawValue)
-            if let object = object as? [Line] {
-                copiedObjects.append(object)
-            } else if let object = object as? Object {
+            if let object = try? JSONDecoder().decode(Object.self, from: data) {
                 copiedObjects.append(object)
             }
         }
         if let urls = readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
-            urls.forEach { copiedObjects.append($0) }
+            urls.forEach { copiedObjects.append(Object($0)) }
         }
         if let string = string(forType: .string) {
-            copiedObjects.append(string)
+            copiedObjects.append(Object(string))
         } else if let types = types {
             for type in types {
                 if let data = data(forType: type) {
                     append(with: data, type: type)
                 } else if let string = string(forType: .string) {
-                    copiedObjects.append(string)
+                    copiedObjects.append(Object(string))
                 }
             }
         } else if let items = pasteboardItems {
@@ -490,7 +489,7 @@ extension NSPasteboard {
                     if let data = item.data(forType: type) {
                         append(with: data, type: type)
                     } else if let string = item.string(forType: .string) {
-                        copiedObjects.append(string)
+                        copiedObjects.append(Object(string))
                     }
                 }
             }
@@ -505,12 +504,12 @@ extension NSPasteboard {
         var strings = [String]()
         var typesAndDatas = [(type: NSPasteboard.PasteboardType, data: Data)]()
         for object in copiedObjects {
-            if let string = object as? String {
+            if let string = object.value as? String {
                 strings.append(string)
             } else {
-                let type = C0Coder.typeKey(from: object)
-                if let data = C0Coder.encode(object, forKey: type) {
-                    typesAndDatas.append((NSPasteboard.PasteboardType(rawValue: type), data))
+                let typeName = String(describing: type(of: object.value))
+                if let data = object.jsonData {
+                    typesAndDatas.append((NSPasteboard.PasteboardType(rawValue: typeName), data))
                 }
             }
         }
@@ -596,15 +595,15 @@ final class C0View: NSView, NSTextInputClient {
         wantsLayer = true
         guard let layer = layer else { return }
         
-        desktopView.isHiddenActionManagerBinding = { [unowned self] in
+        desktopView.isHiddenActionManagerView.notifications.append({ [unowned self] in
             UserDefaults.standard.set($0, forKey: self.isHiddenActionManagerKey)
-        }
+        })
         desktopView.model.isHiddenActionManager
             = UserDefaults.standard.bool(forKey: isHiddenActionManagerKey)
         
-        desktopView.isSimpleReferenceBinding = { [unowned self] in
+        desktopView.isSimpleReferenceView.notifications.append({ [unowned self] in
             UserDefaults.standard.set($0, forKey: self.isSimpleReferenceKey)
-        }
+        })
         desktopView.model.isSimpleReference
             = UserDefaults.standard.bool(forKey: isSimpleReferenceKey)
         

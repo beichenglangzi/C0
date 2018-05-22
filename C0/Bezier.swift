@@ -22,9 +22,10 @@ import CoreGraphics
 struct BezierIntersection: Codable {
     var t: Real, isLeft: Bool, point: Point
 }
-struct Bezier2: Equatable, Codable {
+struct Bezier2: Codable, Hashable {
     var p0 = Point(), cp = Point(), p1 = Point()
-    
+}
+extension Bezier2 {
     static func ==(lhs: Bezier2, rhs: Bezier2) -> Bool {
         return lhs.p0 == rhs.p0 && lhs.cp == rhs.cp && lhs.p1 == rhs.p1
     }
@@ -330,8 +331,10 @@ struct Bezier2: Equatable, Codable {
     }
 }
 
-struct Bezier3: Codable {
+struct Bezier3: Codable, Hashable {
     var p0 = Point(), cp0 = Point(), cp1 = Point(), p1 = Point()
+}
+extension Bezier3 {
     static func linear(_ p0: Point, _ p1: Point) -> Bezier3 {
         return Bezier3(p0: p0, cp0: p0, cp1: p1, p1: p1)
     }

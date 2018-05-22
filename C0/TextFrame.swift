@@ -38,34 +38,47 @@ enum TextAlignment {
 
 extension NSAttributedStringKey {
     static let ctFont = NSAttributedStringKey(rawValue: String(kCTFontAttributeName))
-    static let ctForegroundColor = NSAttributedStringKey(rawValue:
-        String(kCTForegroundColorAttributeName))
-    static let ctParagraphStyle = NSAttributedStringKey(rawValue:
-        String(kCTParagraphStyleAttributeName))
+    static let ctForegroundColor
+        = NSAttributedStringKey(rawValue: String(kCTForegroundColorAttributeName))
+    static let ctParagraphStyle
+        = NSAttributedStringKey(rawValue: String(kCTParagraphStyleAttributeName))
+    static let ctForegroundColorFromContext
+        = NSAttributedStringKey(rawValue: String(kCTForegroundColorFromContextAttributeName))
+    static let ctBorder = NSAttributedStringKey(rawValue: "ctBorder")
 }
 extension NSAttributedString {
-    static func attributesWith(font: Font, color: Color,
+    static func attributesWith(font: Font, color: Color, border: TextBorder?,
                                alignment: TextAlignment = .natural) -> [NSAttributedStringKey: Any] {
         var alignment = alignment.ct
         let settings = [CTParagraphStyleSetting(spec: .alignment,
                                                 valueSize: MemoryLayout<CTTextAlignment>.size,
                                                 value: &alignment)]
         let style = CTParagraphStyleCreate(settings, settings.count)
-        return [.ctFont: font.ctFont,
-                .ctForegroundColor: color.cg,
-                .ctParagraphStyle: style]
+        if let border = border {
+            return [.ctFont: font.ctFont,
+                    .ctForegroundColor: color.cg,
+                    .ctBorder: border,
+                    .ctParagraphStyle: style]
+        } else {
+            return [.ctFont: font.ctFont,
+                    .ctForegroundColor: color.cg,
+                    .ctParagraphStyle: style]
+        }
     }
 }
 
 struct TextMaterial {
-    var font: Font, color: Color
+    var font: Font, color: Color, lineColor: Color?, lineWidth: Real
     var frameAlignment: TextAlignment, alignment: TextAlignment
     
     init(font: Font = .default, color: Color = .locked,
+         lineColor: Color? = nil, lineWidth: Real = 0,
          frameAlignment: TextAlignment = .left, alignment: TextAlignment = .natural) {
         
         self.font = font
         self.color = color
+        self.lineColor = lineColor
+        self.lineWidth = lineWidth
         self.frameAlignment = frameAlignment
         self.alignment = alignment
     }
@@ -78,6 +91,10 @@ struct TextMaterial {
             Point(x: frame.origin.x, y: y)
         return Rect(origin: origin, size: size)
     }
+}
+
+struct TextBorder {
+    var lineColor: CGColor, lineWidth = 0.0.cg
 }
 
 struct TextFrame {
@@ -116,8 +133,15 @@ struct TextFrame {
         typographicBounds = TextFrame.typographicBounds(with: lines)
     }
     init(string: String = "", textMaterial: TextMaterial, frameWidth: Real? = nil) {
+        let border: TextBorder?
+        if let borderColor = textMaterial.lineColor, textMaterial.lineWidth > 0 {
+            border = TextBorder(lineColor: borderColor.cg, lineWidth: textMaterial.lineWidth)
+        } else {
+            border = nil
+        }
         let attributes = NSAttributedString.attributesWith(font: textMaterial.font,
                                                            color: textMaterial.color,
+                                                           border: border,
                                                            alignment: textMaterial.alignment)
         let attributedString = NSMutableAttributedString(string: string, attributes: attributes)
         self.init(attributedString: attributedString,
@@ -155,10 +179,11 @@ struct TextFrame {
         var origin = Point()
         return ls.reversed().map {
             origin.y += $0.descent + $0.leading
-            let result = TextLine(ctLine: $0.ctLine, origin: origin)
+            let runs = $0.ctLine.runs.map { TextRun(ctRun: $0) }
+            let result = TextLine(ctLine: $0.ctLine, origin: origin, runs: runs)
             origin.y += $0.ascent
             return result
-            }.reversed()
+        }.reversed()
     }
     
     func line(for point: Point) -> TextLine? {
@@ -265,6 +290,7 @@ struct TextFrame {
 struct TextLine {
     let ctLine: CTLine
     let origin: Point
+    let runs: [TextRun]
     
     func contains(at i: Int) -> Bool {
         let range = CTLineGetStringRange(ctLine)
@@ -335,7 +361,31 @@ struct TextLine {
     
     func draw(in ctx: CGContext) {
         ctx.textPosition = origin
-        CTLineDraw(ctLine, ctx)
+        runs.forEach { $0.draw(in: ctx) }
+    }
+}
+
+struct TextRun {
+    let ctRun: CTRun
+    
+    var color: CGColor? {
+        let attributes = CTRunGetAttributes(ctRun) as? [NSAttributedStringKey: Any] ?? [:]
+        let colorAttribute = attributes[.foregroundColor]
+        return colorAttribute != nil ? colorAttribute as! CGColor : CGColor.black
+    }
+    
+    func draw(in ctx: CGContext) {
+        let attributes = CTRunGetAttributes(ctRun) as? [NSAttributedStringKey: Any] ?? [:]
+        if let textBorder = attributes[.ctBorder] as? TextBorder {
+            ctx.saveGState()
+            ctx.setAllowsFontSmoothing(false)
+            ctx.setTextDrawingMode(.stroke)
+            ctx.setLineWidth(textBorder.lineWidth)
+            ctx.setStrokeColor(textBorder.lineColor)
+            CTRunDraw(ctRun, ctx, CTRunGetStringRange(ctRun))
+            ctx.restoreGState()
+        }
+        CTRunDraw(ctRun, ctx, CTRunGetStringRange(ctRun))
     }
 }
 
@@ -344,18 +394,16 @@ extension CFRange {
         return location + length
     }
 }
-
+extension CTLine {
+    var runs: [CTRun] {
+        return CTLineGetGlyphRuns(self) as? [CTRun] ?? []
+    }
+}
 extension CTRun {
     func typographicBounds(for range: NSRange) -> Rect {
         var ascent = 0.0.cg, descent = 0.0.cg, leading = 0.0.cg
         let range = CFRange(location: range.location, length: range.length)
         let width = CTRunGetTypographicBounds(self, range, &ascent, &descent, &leading).cg
         return Rect(x: 0, y: -descent, width: width, height: ascent + descent)
-    }
-}
-
-extension CTLine {
-    var runs: [CTRun] {
-        return CTLineGetGlyphRuns(self) as? [CTRun] ?? []
     }
 }

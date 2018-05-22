@@ -74,8 +74,8 @@ extension Array: Referenceable where Element: Referenceable {
 }
 
 final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableReceiver {
-    typealias Element = T
-    typealias Model = [T]
+    typealias ModelElement = T
+    typealias Model = [ModelElement]
     typealias Binder = U
     var binder: Binder {
         didSet { updateWithModel() }
@@ -83,35 +83,61 @@ final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableRe
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((ObjectsView<ModelElement, Binder>) -> ())]()
+    
+    var defaultModel = Model()
     
     var sizeType: SizeType {
         didSet { updateLayout() }
+    }
+    var abstractType: AbstractType {
+        didSet { updateChildren() }
     }
     
     var modelViews: [View]
     
     init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+         frame: Rect = Rect(), sizeType: SizeType = .regular, abstractType: AbstractType = .normal) {
         
         self.sizeType = sizeType
+        self.abstractType = abstractType
         
         super.init()
         isClipped = true
-        //children
+        updateChildren()
         self.frame = frame
     }
     
+    var layoutClosure: ((Model, [View]) -> ())?
     override func updateLayout() {
-        
+        layoutClosure?(model, modelViews)
+    }
+    func updateChildren() {
+        modelViews = model.enumerated().map { (i, element) in
+            return element.abstractViewWith(binder: binder,
+                                            keyPath: keyPath.appending(path: \Model[i]), frame: Rect(),
+                                            sizeType, type: abstractType)
+        }
+        self.children = modelViews
     }
     func updateWithModel() {
-        
+        updateChildren()
     }
     
-    func append(_ element: Element) {
-//        let keyPath = self.keyPath.appending(path: \Model.[model.count - 1])
-//        let view = element.abstractViewWith(binder: binder, keyPath: keyPath, frame: Rect(), sizeType)
-        
+    func append(_ element: ModelElement, _ version: Version) {
+        var model = self.model
+        model.append(element)
+        push(model, to: version)
+    }
+    func insert(_ element: ModelElement, at index: Int, _ version: Version) {
+        var model = self.model
+        model.insert(element, at: index)
+        push(model, to: version)
+    }
+    func remove(at index: Int, _ version: Version) {
+        var model = self.model
+        model.remove(at: index)
+        push(model, to: version)
     }
 }
 extension ObjectsView: Queryable {
@@ -119,16 +145,28 @@ extension ObjectsView: Queryable {
         return [Model].self
     }
 }
-extension ObjectsView: Copiable {
+extension ObjectsView: Assignable {
+    func reset(for p: Point, _ version: Version) {
+        push(defaultModel, to: version)
+    }
     func copiedObjects(at p: Point) -> [Object] {
         return [Object(model)]
+    }
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
+        for object in objects {
+            if let model = object as? Model {
+                push(model, to: version)
+                return
+            }
+        }
     }
 }
 
 typealias ArrayCountElement = Equatable & Codable & Referenceable
 
 final class ArrayCountView<T: ArrayCountElement, U: BinderProtocol>: View, BindableReceiver {
-    typealias Model = [T]
+    typealias ModelElement = T
+    typealias Model = [ModelElement]
     typealias Binder = U
     var binder: Binder {
         didSet { updateWithModel() }
@@ -136,6 +174,7 @@ final class ArrayCountView<T: ArrayCountElement, U: BinderProtocol>: View, Binda
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((ArrayCountView<ModelElement, Binder>) -> ())]()
     
     let countView: IntGetterView<Binder>
     
@@ -169,7 +208,10 @@ final class ArrayCountView<T: ArrayCountElement, U: BinderProtocol>: View, Binda
     
     override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
-        return Rect(x: 0, y: 0, width: classNameView.frame.width + countNameView.frame.width + width + padding * 3, height: h)
+        return Rect(x: 0,
+                    y: 0,
+                    width: classNameView.frame.width + countNameView.frame.width + width + padding * 3,
+                    height: h)
     }
     override func updateLayout() {
         let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)

@@ -239,6 +239,10 @@ extension Point {
         return Point(x: lhs.x / rhs, y: lhs.y / rhs)
     }
     
+    func rounded() -> Point {
+        return Point(x: x.rounded(), y: y.rounded())
+    }
+    
     func draw(radius r: Real, lineWidth: Real = 1,
               inColor: Color = .knob, outColor: Color = .getSetBorder, in ctx: CGContext) {
         let rect = Rect(x: x - r, y: y - r, width: r * 2, height: r * 2)

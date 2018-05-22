@@ -48,7 +48,8 @@ struct Sound {
     private enum CodingKeys: String, CodingKey {
         case bookmark, name,volume, isHidden
     }
-    
+}
+extension Sound {
     func samples(withSampleRate sampleRate: Float64 = basicSampleRate) -> [Float] {
         guard let url = url else {
             return []
@@ -168,6 +169,19 @@ extension Sound: KeyframeValue {}
 extension Sound: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return name.thumbnailView(withFrame: frame, sizeType)
+    }
+}
+extension Sound: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Sound>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> View {
+        switch type {
+        case .normal:
+            return SoundView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
     }
 }
 
@@ -303,13 +317,20 @@ final class SoundView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((SoundView<Binder>) -> ())]()
+    
     var defaultModel = Sound()
     
     var sizeType: SizeType
     let classNameView: TextFormView
     let nameView: StringView<Binder>
     
-    init(sizeType: SizeType = .regular) {
+    init(binder: T, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        
         self.sizeType = sizeType
         classNameView = TextFormView(text: Sound.name, font: Font.bold(with: sizeType))
         var textMaterial = TextMaterial()
@@ -320,7 +341,7 @@ final class SoundView<T: BinderProtocol>: View, BindableReceiver {
         super.init()
         isClipped = true
         children = [classNameView, nameView]
-        updateLayout()
+        self.frame = frame
     }
     
     override func updateLayout() {

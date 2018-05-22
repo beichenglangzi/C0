@@ -23,45 +23,6 @@ import CoreGraphics
  Issue: Lab色空間ベースのカラーピッカー及びカラー補間
  */
 struct Color: Codable {
-    static let white = Color(hue: 0, saturation: 0, lightness: 1)
-    static let gray = Color(hue: 0, saturation: 0, lightness: 0.5)
-    static let black = Color(hue: 0, saturation: 0, lightness: 0)
-    static let red = Color(red: 1, green: 0, blue: 0)
-    static let green = Color(hue: 156.0 / 360, saturation: 1, brightness: 0.69)
-    static let orange = Color(hue: 38.0 / 360, saturation: 1, brightness: 0.95)
-    
-    static let rgbRed = Color(red: 1, green: 0, blue: 0)
-    static let rgbOrange = Color(red: 1, green: 0.5, blue: 0)
-    static let rgbYellow = Color(red: 1, green: 1, blue: 0)
-    static let rgbGreen = Color(red: 0, green: 1, blue: 0)
-    static let rgbCyan = Color(red: 0, green: 1, blue: 1)
-    static let rgbBlue = Color(red: 0, green: 0, blue: 1)
-    static let rgbMagenta = Color(red: 1, green: 0, blue: 1)
-    
-    static let background = Color(white: 0.94)
-    static let getSetBorder = Color(white: 0.7)
-    static let getBorder = Color(red: 1.0, green: 0.5, blue: 0.5)
-    static let formBorder = Color(white: 0.84)
-    static let bindingBorder = Color(red: 1.0, green: 0.0, blue: 1.0)
-    static let content = Color(white: 0.35)
-    static let subContent = Color(white: 0.88)
-    static let font = Color(white: 0.05)
-    static let knob = white
-    static let locked = Color(white: 0.5)
-    static let subLocked = Color(white: 0.65)
-    static let editing = Color(white: 0.88)
-    static let translucentEdit = Color(white: 0, alpha: 0.1)
-    static let indicated = Color(red: 0.1, green: 0.6, blue: 0.9)
-    static let noBorderIndicated = Color(red: 0.85, green: 0.9, blue: 0.94)
-    static let subIndicated = Color(red: 0.6, green: 0.95, blue: 1)
-    static let select = Color(red: 0, green: 0.7, blue: 1, alpha: 0.3)
-    static let selectBorder = Color(red: 0, green: 0.5, blue: 1, alpha: 0.5)
-    static let deselect = Color(red: 0.9, green: 0.3, blue: 0, alpha: 0.3)
-    static let deselectBorder = Color(red: 1, green: 0, blue: 0, alpha: 0.5)
-    static let selected = Color(red: 0.1, green: 0.7, blue: 1)
-    static let subSelected = Color(red: 0.8, green: 0.95, blue: 1)
-    static let warning = rgbRed
-    
     var hue: Real {
         didSet {
             rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
@@ -122,7 +83,48 @@ struct Color: Codable {
         self.alpha = alpha
         self.colorSpace = colorSpace
     }
+}
+extension Color {
+    static let white = Color(hue: 0, saturation: 0, lightness: 1)
+    static let gray = Color(hue: 0, saturation: 0, lightness: 0.5)
+    static let black = Color(hue: 0, saturation: 0, lightness: 0)
+    static let red = Color(red: 1, green: 0, blue: 0)
+    static let green = Color(hue: 156.0 / 360, saturation: 1, brightness: 0.69)
+    static let orange = Color(hue: 38.0 / 360, saturation: 1, brightness: 0.95)
     
+    static let rgbRed = Color(red: 1, green: 0, blue: 0)
+    static let rgbOrange = Color(red: 1, green: 0.5, blue: 0)
+    static let rgbYellow = Color(red: 1, green: 1, blue: 0)
+    static let rgbGreen = Color(red: 0, green: 1, blue: 0)
+    static let rgbCyan = Color(red: 0, green: 1, blue: 1)
+    static let rgbBlue = Color(red: 0, green: 0, blue: 1)
+    static let rgbMagenta = Color(red: 1, green: 0, blue: 1)
+    
+    static let background = Color(white: 0.94)
+    static let getSetBorder = Color(white: 0.7)
+    static let getBorder = Color(red: 1.0, green: 0.5, blue: 0.5)
+    static let formBorder = Color(white: 0.84)
+    static let bindingBorder = Color(red: 1.0, green: 0.0, blue: 1.0)
+    static let content = Color(white: 0.35)
+    static let subContent = Color(white: 0.88)
+    static let font = Color(white: 0.05)
+    static let knob = white
+    static let locked = Color(white: 0.5)
+    static let subLocked = Color(white: 0.65)
+    static let editing = Color(white: 0.88)
+    static let translucentEdit = Color(white: 0, alpha: 0.1)
+    static let indicated = Color(red: 0.1, green: 0.6, blue: 0.9)
+    static let noBorderIndicated = Color(red: 0.85, green: 0.9, blue: 0.94)
+    static let subIndicated = Color(red: 0.6, green: 0.95, blue: 1)
+    static let select = Color(red: 0, green: 0.7, blue: 1, alpha: 0.3)
+    static let selectBorder = Color(red: 0, green: 0.5, blue: 1, alpha: 0.5)
+    static let deselect = Color(red: 0.9, green: 0.3, blue: 0, alpha: 0.3)
+    static let deselectBorder = Color(red: 1, green: 0, blue: 0, alpha: 0.5)
+    static let selected = Color(red: 0.1, green: 0.7, blue: 1)
+    static let subSelected = Color(red: 0.8, green: 0.95, blue: 1)
+    static let warning = rgbRed
+}
+extension Color {
     static func random(colorSpace: ColorSpace = .sRGB) -> Color {
         let hue = Real.random(min: 0, max: 1)
         let saturation = Real.random(min: 0.5, max: 1)
@@ -257,7 +259,8 @@ extension Color: Interpolatable {
 
 struct RGB {
     var r = 0.0.cg, g = 0.0.cg, b = 0.0.cg
-    
+}
+extension RGB {
     var hsv: HSV {
         let minValue = min(r, g, b), maxValue = max(r, g, b)
         let d = maxValue - minValue
@@ -322,7 +325,8 @@ extension RGB: Interpolatable {
 
 struct HSV {
     var h = 0.0.cg, s = 0.0.cg, v = 0.0.cg
-    
+}
+extension HSV {
     var rgb: RGB {
         guard s != 0 else {
             return RGB(r: v, g: v, b: v)
@@ -560,6 +564,8 @@ final class ColorView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((ColorView<Binder>) -> ())]()
+    
     var defaultModel = Model()
     
     let hueView: CircularRealView<Binder>
@@ -622,7 +628,7 @@ final class ColorView<T: BinderProtocol>: View, BindableReceiver {
         hueDrawView.lineColor = nil
         hueDrawView.drawClosure = { [unowned self] ctx, _ in self.hueCircle.draw(in: ctx) }
         hueView.backgroundViews = [hueDrawView]
-        slView.formBackgroundViews = [slColorGradientView, slBlackWhiteGradientView]
+        slView.children = [slColorGradientView, slBlackWhiteGradientView, slView.knobView]
         children = [hueView, slView]
         self.frame = frame
     }

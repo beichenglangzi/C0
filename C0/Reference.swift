@@ -70,6 +70,7 @@ final class ReferenceView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((ReferenceView<Binder>) -> ())]()
     
     let classNameView: TextFormView
     let nameView: StringGetterView<Binder>

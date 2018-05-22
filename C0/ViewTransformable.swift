@@ -17,9 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-import Foundation
-
 final class ViewTransformer {
     var view: ViewTransformable
     
@@ -46,7 +43,7 @@ final class ViewTransformer {
         case .changed:
             if !isBlockScale {
                 zoom(at: p) {
-                    let newScale = (scale * pow(magnification * correctionScale + 1, 2))
+                    let newScale = (scale * ((magnification * correctionScale + 1) ** 2))
                         .clip(min: minScale, max: maxScale)
                     if blockScale.isOver(old: scale, new: newScale) {
                         isBlockScale = true

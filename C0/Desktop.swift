@@ -38,7 +38,6 @@ final class DesktopBinder: BinderProtocol {
     }
     
     var version = Version()
-    var sceneBinder = SceneBinder()
     
     init(rootModel: Desktop) {
         self.rootModel = rootModel
@@ -80,15 +79,17 @@ final class DesktopBinder: BinderProtocol {
     var objectsDataModel: DataModel
 }
 extension Desktop {
-    static let isHiddenActionManagerOption = BoolOption(defaultModel: false, cationModel: nil,
-                                                        name: Text(english: "Action Manager",
-                                                                   japanese: "アクション管理"),
-                                                        info: .hidden)
-    private static let isrInfo = BoolOption.Info(trueName: Text(english: "Outline",  japanese: "概略"),
-                                                 falseName: Text(english: "detail", japanese: "詳細"))
-    static let isSimpleReferenceOption = BoolOption(defaultModel: false, cationModel: nil,
-                                                    name: Text(english: "Reference", japanese: "情報"),
-                                                    info: isrInfo)
+    static let isHiddenActionManagerOption
+        = BoolOption(defaultModel: false, cationModel: nil,
+                     name: Text(english: "Action Manager", japanese: "アクション管理"),
+                     info: .hidden)
+    private static let isrInfo
+        = BoolOption.Info(trueName: Text(english: "Outline",  japanese: "概略"),
+                          falseName: Text(english: "detail", japanese: "詳細"))
+    static let isSimpleReferenceOption
+        = BoolOption(defaultModel: false, cationModel: nil,
+                     name: Text(english: "Reference", japanese: "情報"),
+                     info: isrInfo)
 }
 
 /**
@@ -103,6 +104,7 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((DesktopView<Binder>) -> ())]()
 
     let versionView: VersionView<Binder>
     let copiedObjectsNameView = TextFormView(text: Text(english: "Copied:", japanese: "コピー済み:"))
@@ -148,9 +150,6 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
                     actionManagerView, referenceView, objectsView]
     }
 
-    var isHiddenActionManagerBinding: ((Bool) -> ())?
-    var isSimpleReferenceBinding: ((Bool) -> ())?
-
     var locale = Locale.current {
         didSet {
             if locale.languageCode != oldValue.languageCode {
@@ -158,7 +157,7 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
             }
         }
     }
-
+    
     override var contentsScale: Real {
         didSet {
             if contentsScale != oldValue {
@@ -176,7 +175,9 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
                                  width: versionWidth, height: topViewsHeight)
         copiedObjectsNameView.frame.origin = Point(x: versionView.frame.maxX + padding,
                                                    y: headerY + padding)
-        let cw = max(bounds.width - actionWidth - versionWidth - isrw - ihamvw - copiedObjectsNameView.frame.width - padding * 3, 0)
+        let conw = copiedObjectsNameView.frame.width
+        let cw = max(bounds.width - actionWidth - versionWidth - isrw - ihamvw - conw - padding * 3,
+                     0)
         copiedObjectsView.frame = Rect(x: copiedObjectsNameView.frame.maxX, y: headerY,
                                        width: cw, height: topViewsHeight)
         updateCopiedObjectViewPositions()
@@ -235,8 +236,8 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
                           height: copiedObjectsView.bounds.height - padding * 2)
         copiedObjectsView.children = model.copiedObjects.enumerated().map { (i, object) in
             return object.abstractViewWith(binder: binder,
-                                    keyPath: keyPath.appending(path: \Model.copiedObjects[i]),
-                                    frame: bounds, .small, type: .mini)
+                                           keyPath: keyPath.appending(path: \Model.copiedObjects[i]),
+                                           frame: bounds, .small, type: .mini)
         }
         updateCopiedObjectViewPositions()
     }
@@ -248,12 +249,8 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
 }
 extension DesktopView: ReferenceViewer {
     var reference: Reference {
-        get {
-            return referenceView.model
-        }
-        set {
-            referenceView.model = newValue
-        }
+        get { return referenceView.model }
+        set { referenceView.model = newValue }
     }
     func push(_ reference: Reference, to version: Version) {
         referenceView.push(reference, to: version)
@@ -271,12 +268,8 @@ extension DesktopView: Versionable {
 }
 extension DesktopView: CopiedObjectsViewer {
     var copiedObjects: [Object] {
-        get {
-            return copiedObjectsView.model
-        }
-        set {
-            copiedObjectsView.model = newValue
-        }
+        get { return copiedObjectsView.model }
+        set { copiedObjectsView.model = newValue }
     }
     func push(_ copiedObjects: [Object], to version: Version) {
         copiedObjectsView.push(copiedObjects, to: version)

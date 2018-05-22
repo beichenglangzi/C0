@@ -59,6 +59,7 @@ final class EnumView<T: EnumType, U: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((EnumView<Model, Binder>) -> ())]()
     
     var option: ModelOption {
         didSet { updateWithModel() }

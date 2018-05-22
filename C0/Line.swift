@@ -30,8 +30,15 @@ struct Line: Codable {
             return Control(point: point.mid(other.point), pressure: (pressure + other.pressure) / 2)
         }
     }
-    let controls: [Control]
-    let imageBounds: Rect, firstAngle: Real, lastAngle: Real
+    var controls: [Control] {
+        didSet {
+            imageBounds = Line.imageBounds(with: controls)
+            firstAngle = controls[0].point.tangential(controls[1].point)
+            lastAngle = controls[controls.count - 2].point
+                .tangential(controls[controls.count - 1].point)
+        }
+    }
+    private(set) var imageBounds: Rect, firstAngle: Real, lastAngle: Real
     
     init(bezier: Bezier2,
          p0Pressure: Real, cpPressure: Real, p1Pressure: Real) {
@@ -41,23 +48,9 @@ struct Line: Codable {
     }
     init(controls: [Control]) {
         self.controls = controls
-        self.imageBounds = Line.imageBounds(with: controls)
-        self.firstAngle = controls[0].point.tangential(controls[1].point)
-        self.lastAngle = controls[controls.count - 2].point
-            .tangential(controls[controls.count - 1].point)
     }
 }
 extension Line {
-    func withInsert(_ control: Control, at i: Int) -> Line {
-        return Line(controls: controls.withInserted(control, at: i))
-    }
-    func withRemoveControl(at i: Int) -> Line {
-        return Line(controls: controls.withRemoved(at: i))
-    }
-    func withReplaced(_ control: Control, at i: Int) -> Line {
-        return Line(controls: controls.withReplaced(control, at: i))
-    }
-    
     func applying(_ affine: CGAffineTransform) -> Line {
         return Line(controls: controls.map { Control(point: $0.point.applying(affine),
                                                      pressure: $0.pressure) })
@@ -155,10 +148,14 @@ extension Line {
     
     func splited(at i: Int) -> Line {
         if i == 0 {
-            return withInsert(controls[0].mid(controls[1]), at: 1)
+            var line = self
+            line.controls[1] = controls[0].mid(controls[1])
+            return line
         } else if i == controls.count - 1 {
-            return withInsert(controls[controls.count - 1].mid(controls[controls.count - 2]),
-                              at: controls.count - 1)
+            var line = self
+            line.controls[controls.count - 1]
+                = controls[controls.count - 1].mid(controls[controls.count - 2])
+            return line
         } else {
             var cs = controls
             cs[i] = controls[i - 1].mid(controls[i])
@@ -684,7 +681,7 @@ extension Line {
     }
 }
 extension Line {
-    //View
+    //view
     static func drawMainPointsWith(lines: [Line], inColor: Color = .controlEditPointIn,
                                    outColor: Color = .controlPointOut,
                                    skinLineWidth: Real = 1, skinRadius: Real = 1.5,
@@ -992,130 +989,6 @@ extension Array where Element == Point {
             let p = Point(x: cp.x + r * cos(angle), y: cp.y + r * sin(angle))
             angle += theta
             return p
-        }
-    }
-}
-
-struct LineLasso {
-    let lines: [Line], path: CGPath
-    init(lines: [Line]) {
-        self.lines = lines
-        self.path = Line.path(with: lines)
-    }
-    var imageBounds: Rect {
-        return path.boundingBox
-    }
-    func contains(_ p: Point) -> Bool {
-        return (imageBounds.contains(p) ? path.contains(p) : false)
-    }
-    
-    func intersects(_ otherLine: Line) -> Bool {
-        guard imageBounds.intersects(otherLine.imageBounds) else {
-            return false
-        }
-        for line in lines {
-            if line.intersects(otherLine) {
-                return true
-            }
-        }
-        for control in otherLine.controls {
-            if contains(control.point) {
-                return true
-            }
-        }
-        return false
-    }
-    
-    struct SplitItem {
-        let isAround: Bool
-        let indexes: [Index]
-        struct Index {
-            let startIndex: Int, startT: Real, endIndex: Int, endT: Real
-        }
-    }
-    func splitItem(with otherLine: Line, isMultiLine: Bool = true) -> SplitItem {
-        func intersectsLineImageBounds(_ otherLine: Line) -> Bool {
-            for line in lines {
-                if otherLine.imageBounds.intersects(line.imageBounds) {
-                    return true
-                }
-            }
-            return false
-        }
-        guard !otherLine.isEmpty && intersectsLineImageBounds(otherLine) else {
-            return SplitItem(isAround: false, indexes: [])
-        }
-        
-        var newSplitIndexes = [SplitItem.Index](), oldIndex = 0, oldT = 0.0.cg
-        var splitLine = false, leftIndex = 0
-        let firstPointInPath = path.contains(otherLine.firstPoint)
-        let lastPointInPath = path.contains(otherLine.lastPoint)
-        for (i0, b0) in otherLine.bezierSequence.enumerated() {
-            guard var oldLassoLine = lines.last else { continue }
-            let bis = lines.reduce(into: [BezierIntersection]()) { (bis, lassoLine) in
-                guard !lassoLine.isEmpty else { return }
-                let lp = oldLassoLine.lastPoint, fp = lassoLine.firstPoint
-                if lp != fp {
-                    bis += b0.intersections(Bezier2.linear(lp, fp))
-                }
-                for b1 in lassoLine.bezierSequence {
-                    bis += b0.intersections(b1)
-                }
-                oldLassoLine = lassoLine
-            }
-            guard !bis.isEmpty else { continue }
-            
-            let sbis = bis.sorted { $0.t < $1.t }
-            for bi in sbis {
-                let newLeftIndex = leftIndex + (bi.isLeft ? 1 : -1)
-                if firstPointInPath {
-                    if leftIndex != 0 && newLeftIndex == 0 {
-                        newSplitIndexes.append(SplitItem.Index(startIndex: oldIndex, startT: oldT,
-                                                               endIndex: i0, endT: bi.t))
-                    } else if leftIndex == 0 && newLeftIndex != 0 {
-                        oldIndex = i0
-                        oldT = bi.t
-                    }
-                } else {
-                    if leftIndex != 0 && newLeftIndex == 0 {
-                        oldIndex = i0
-                        oldT = bi.t
-                    } else if leftIndex == 0 && newLeftIndex != 0 {
-                        newSplitIndexes.append(SplitItem.Index(startIndex: oldIndex, startT: oldT,
-                                                               endIndex: i0, endT: bi.t))
-                    }
-                }
-                leftIndex = newLeftIndex
-            }
-            splitLine = true
-        }
-        if splitLine && !lastPointInPath {
-            let endIndex = otherLine.controls.count <= 2 ? 0 : otherLine.controls.count - 3
-            newSplitIndexes.append(SplitItem.Index(startIndex: oldIndex, startT: oldT,
-                                                   endIndex: endIndex, endT: 1))
-        }
-        if !newSplitIndexes.isEmpty {
-            return SplitItem(isAround: true, indexes: newSplitIndexes)
-        } else if !splitLine && firstPointInPath && lastPointInPath {
-            return SplitItem(isAround: true, indexes: [])
-        } else {
-            return SplitItem(isAround: false, indexes: [])
-        }
-    }
-    static func split(with otherLine: Line, _ splitItemIndexes: [SplitItem.Index],
-                      isMultiLine: Bool = true) -> [Line] {
-        return splitItemIndexes.reduce(into: [Line]()) { (lines, si) in
-            lines += otherLine.splited(startIndex: si.startIndex, startT: si.startT,
-                                       endIndex: si.endIndex, endT: si.endT,
-                                       isMultiLine: isMultiLine)
-        }
-    }
-    func split(with otherLine: Line, isMultiLine: Bool = true) -> (isAround: Bool, lines: [Line]) {
-        let splitItem = self.splitItem(with: otherLine)
-        if splitItem.isAround {
-            return (true, LineLasso.split(with: otherLine, splitItem.indexes))
-        } else {
-            return (false, [])
         }
     }
 }

@@ -20,10 +20,15 @@
 import CoreGraphics
 
 struct Geometry: Equatable {
-    let lines: [Line], path: CGPath
+    var lines = [Line]() {
+        didSet {
+            path = Line.path(with: lines, length: 0.5)
+        }
+    }
+    private(set) var path: CGPath
+    
     init(lines: [Line] = []) {
         self.lines = lines
-        self.path = Line.path(with: lines, length: 0.5)
     }
     
     private static let distance = 6.0.cg, vertexLineLength = 10.0.cg, minSnapRatio = 0.0625.cg
@@ -140,7 +145,8 @@ struct Geometry: Equatable {
             return Line(controls: controls)
         }
     }
-
+}
+extension Geometry {
     func applying(_ affine: CGAffineTransform) -> Geometry {
         return Geometry(lines: lines.map { $0.applying(affine) })
     }
@@ -349,24 +355,6 @@ struct Geometry: Equatable {
         }
         return false
     }
-    func intersects(_ lasso: LineLasso) -> Bool {
-        guard !isEmpty && imageBounds.intersects(lasso.imageBounds) else {
-            return false
-        }
-        for line in lines {
-            for aLine in lasso.lines {
-                if aLine.intersects(line) {
-                    return true
-                }
-            }
-        }
-        for line in lines {
-            if lasso.contains(line.firstPoint) || lasso.contains(line.lastPoint) {
-                return true
-            }
-        }
-        return false
-    }
     func intersectsLines(_ bounds: Rect) -> Bool {
         guard !isEmpty && imageBounds.intersects(bounds) else {
             return false
@@ -469,6 +457,22 @@ extension Geometry {
     func draw(withLineWidth lineWidth: Real, in ctx: CGContext) {
         lines.forEach { $0.draw(size: lineWidth, in: ctx) }
     }
+    
+    static func view(with geometries: [Geometry], color: Color) -> View {
+        let fillColor: Color = {
+            var color = color
+            color.alpha = 1
+            return color
+        } ()
+        let view = View(path: CGMutablePath())
+        view.effect.opacity = color.alpha
+        view.children = geometries.map {
+            let gv = View(path: $0.path, isLocked: true)
+            gv.fillColor = fillColor
+            return gv
+        }
+        return view
+    }
 }
 extension Geometry: Interpolatable {
     static func linear(_ f0: Geometry, _ f1: Geometry, t: Real) -> Geometry {
@@ -503,5 +507,126 @@ extension Geometry: Codable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.unkeyedContainer()
         try container.encode(lines)
+    }
+}
+
+struct GeometryLasso {
+    let geometry: Geometry
+    
+    enum Splited {
+        struct Index {
+            let startIndex: Int, startT: Real, endIndex: Int, endT: Real
+        }
+        
+        case around, splited([Index])
+    }
+    func splited(with otherLine: Line) -> Splited? {
+        func intersectsLineImageBounds(_ otherLine: Line) -> Bool {
+            for line in geometry.lines {
+                if otherLine.imageBounds.intersects(line.imageBounds) {
+                    return true
+                }
+            }
+            return false
+        }
+        guard !otherLine.isEmpty && intersectsLineImageBounds(otherLine) else {
+            return nil
+        }
+        
+        var newSplitedIndexes = [Splited.Index](), oldIndex = 0, oldT = 0.0.cg
+        var isSplitLine = false, leftIndex = 0
+        let firstPointInPath = geometry.path.contains(otherLine.firstPoint)
+        let lastPointInPath = geometry.path.contains(otherLine.lastPoint)
+        for (i0, b0) in otherLine.bezierSequence.enumerated() {
+            guard var oldLassoLine = geometry.lines.last else { continue }
+            let bis = geometry.lines.reduce(into: [BezierIntersection]()) { (bis, lassoLine) in
+                guard !lassoLine.isEmpty else { return }
+                let lp = oldLassoLine.lastPoint, fp = lassoLine.firstPoint
+                if lp != fp {
+                    bis += b0.intersections(Bezier2.linear(lp, fp))
+                }
+                for b1 in lassoLine.bezierSequence {
+                    bis += b0.intersections(b1)
+                }
+                oldLassoLine = lassoLine
+            }
+            guard !bis.isEmpty else { continue }
+            
+            let sbis = bis.sorted { $0.t < $1.t }
+            for bi in sbis {
+                let newLeftIndex = leftIndex + (bi.isLeft ? 1 : -1)
+                if firstPointInPath {
+                    if leftIndex != 0 && newLeftIndex == 0 {
+                        newSplitedIndexes.append(Splited.Index(startIndex: oldIndex, startT: oldT,
+                                                               endIndex: i0, endT: bi.t))
+                    } else if leftIndex == 0 && newLeftIndex != 0 {
+                        oldIndex = i0
+                        oldT = bi.t
+                    }
+                } else {
+                    if leftIndex != 0 && newLeftIndex == 0 {
+                        oldIndex = i0
+                        oldT = bi.t
+                    } else if leftIndex == 0 && newLeftIndex != 0 {
+                        newSplitedIndexes.append(Splited.Index(startIndex: oldIndex, startT: oldT,
+                                                               endIndex: i0, endT: bi.t))
+                    }
+                }
+                leftIndex = newLeftIndex
+            }
+            isSplitLine = true
+        }
+        if isSplitLine && !lastPointInPath {
+            let endIndex = otherLine.controls.count <= 2 ? 0 : otherLine.controls.count - 3
+            newSplitedIndexes.append(Splited.Index(startIndex: oldIndex, startT: oldT,
+                                                   endIndex: endIndex, endT: 1))
+        }
+        if !newSplitedIndexes.isEmpty {
+            return Splited.splited(newSplitedIndexes)
+        } else if !isSplitLine && firstPointInPath && lastPointInPath {
+            return Splited.around
+        } else {
+            return nil
+        }
+    }
+    
+    enum SplitedLine {
+        case around(Line), splited([Line])
+    }
+    func splitedLine(with otherLine: Line) -> SplitedLine? {
+        guard let splited = self.splited(with: otherLine) else {
+            return nil
+        }
+        switch splited {
+        case .around: return SplitedLine.around(otherLine)
+        case .splited(let indexes):
+            return SplitedLine.splited(GeometryLasso.splitedLines(with: otherLine, indexes))
+        }
+    }
+    static func splitedLines(with otherLine: Line, _ splitedIndexes: [Splited.Index]) -> [Line] {
+        return splitedIndexes.reduce(into: [Line]()) { (lines, si) in
+            lines += otherLine.splited(startIndex: si.startIndex, startT: si.startT,
+                                       endIndex: si.endIndex, endT: si.endT)
+        }
+    }
+}
+extension Geometry {
+    func intersects(_ lasso: GeometryLasso) -> Bool {
+        guard !isEmpty && imageBounds.intersects(lasso.geometry.imageBounds) else {
+            return false
+        }
+        for line in lines {
+            for aLine in lasso.geometry.lines {
+                if aLine.intersects(line) {
+                    return true
+                }
+            }
+        }
+        for line in lines {
+            if lasso.geometry.contains(line.firstPoint) || lasso.geometry.contains(line.lastPoint) {
+                return true
+            }
+        }
+        return false
     }
 }

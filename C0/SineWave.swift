@@ -17,7 +17,8 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Locale
+import CoreGraphics
 
 struct SineWave: Codable, Hashable, Initializable {
     var amplitude = 0.0.cg, frequency = 8.0.cg
@@ -113,16 +114,16 @@ struct SineWaveTrack: Track, Codable {
         }
     }
     
-    func wigglePhase(withBeatTime time: Beat, defaultSineWave: SineWave = SineWave()) -> Real {
+    func sineWavePhase(withBeatTime time: Beat, defaultSineWave: SineWave = SineWave()) -> Real {
         guard animation.loopFrames.count >= 2 else {
-            let wiggle = animation.interpolatedValue(atTime: time) ?? defaultSineWave
-            return wiggle.frequency * Real(time)
+            let sineWave = animation.interpolatedValue(atTime: time) ?? defaultSineWave
+            return sineWave.frequency * Real(time)
         }
         for (li, loopFrame) in animation.loopFrames.enumerated().reversed() {
             guard loopFrame.time <= time else { continue }
             if li == animation.loopFrames.count - 1 {
-                let wiggle = animation.keyframes[loopFrame.index].value
-                return keyPhases[li] + wiggle.frequency * Real(time - loopFrame.time)
+                let sineWave = animation.keyframes[loopFrame.index].value
+                return keyPhases[li] + sineWave.frequency * Real(time - loopFrame.time)
             } else {
                 let i2t = animation.loopFrames[li + 1].time
                 let d = i2t - loopFrame.time
@@ -249,6 +250,7 @@ final class SineWaveView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((SineWaveView<Binder>) -> ())]()
     
     var option: ModelOption {
         didSet {

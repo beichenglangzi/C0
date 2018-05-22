@@ -182,6 +182,7 @@ final class StringView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((StringView<Binder>) -> ())]()
     
     var markedRange = NSRange(location: NSNotFound, length: 0) {
         didSet{

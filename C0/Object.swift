@@ -26,18 +26,10 @@ struct Object {
         self.value = value
     }
 //    case bool(Bool)
-//    case int(Int)
-//    case rational(Rational)
-//    case real(Real)
-//    case point(Point)
-//    case size(Size)
-//    case string(String)
-//    case array([Bool])
     
 //    var value: Codable & Referenceable {
 //        switch self {
 //        case .bool(let value): return value
-//        case .int(let value): return value
 //        default: return nil
 //        }
 //    }
@@ -48,25 +40,31 @@ struct Object {
     }
     
     private enum CodingKeys: CodingKey {
-        case bookmark, name,volume, isHidden
+        case typeName, value
+    }
+    enum CodingError: Error {
+        case decoding(String), encoding(String)
     }
 }
 extension Object: Decodable {
     init(from decoder: Decoder) throws {
-        
-        let key = ""
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let key = try values.decode(String.self, forKey: .typeName)
         switch key {
-        case String(describing: Bool.self):
-            
-        default:
-            <#code#>
+        case String(describing: Bool.self): value = try values.decode(Bool.self, forKey: .value)
+        default: throw CodingError.decoding("\(dump(values))")
         }
     }
 }
 extension Object: Encodable {
     func encode(to encoder: Encoder) throws {
         let typeName = String(describing: type(of: value))
-        
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(typeName, forKey: .typeName)
+        switch value {
+        case (let value as Bool): try container.encode(value, forKey: .value)
+        default: throw CodingError.encoding("\(typeName)")
+        }
     }
 }
 extension Object: Referenceable {
@@ -80,7 +78,7 @@ extension Object: AbstractViewable {
         case (let value as Bool):
             return value.abstractViewWith(binder: binder,
                                           keyPath: keyPath.appending(path: \Object.bool),
-                                          frame: frame, sizeType)
+                                          frame: frame, sizeType, type: type)
         default: fatalError()
         }
     }

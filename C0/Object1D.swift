@@ -45,6 +45,7 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((Assignable1DView<ModelOption, Binder>) -> ())]()
     
     var model: Model {
         get {
@@ -52,6 +53,7 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
         }
         set {
             binder[keyPath: keyPath] = option.transformedModel(newValue)
+            notifications.forEach { $0(self) }
             updateWithModel()
         }
     }
@@ -138,6 +140,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((Discrete1DView<ModelOption, Binder>) -> ())]()
     
     var model: Model {
         get {
@@ -145,6 +148,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
         }
         set {
             binder[keyPath: keyPath] = option.transformedModel(newValue)
+            notifications.forEach { $0(self) }
             updateWithModel()
         }
     }
@@ -288,6 +292,7 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((Slidable1DView<ModelOption, Binder>) -> ())]()
     
     var model: Model {
         get {
@@ -295,6 +300,7 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
         }
         set {
             binder[keyPath: keyPath] = option.transformedModel(newValue)
+            notifications.forEach { $0(self) }
             updateWithModel()
         }
     }
@@ -451,6 +457,7 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((Circular1DView<ModelOption, Binder>) -> ())]()
     
     var model: Model {
         get {
@@ -458,6 +465,7 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
         }
         set {
             binder[keyPath: keyPath] = option.transformedModel(newValue)
+            notifications.forEach { $0(self) }
             updateWithModel()
         }
     }

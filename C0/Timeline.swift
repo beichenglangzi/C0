@@ -17,7 +17,9 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Locale
+import struct Foundation.Data
+import CoreGraphics
 
 struct Timeline: Codable {
     var frameRate: FPS
@@ -28,17 +30,16 @@ struct Timeline: Codable {
             //tracks -> rootCellGroup
         }
     }
-    var rootTrack: TreeTrack
+    var rootTrack: TrackTree
     var soundTrack: SoundTrack
     var tempoTrack: TempoTrack
     var subtitleTrack: SubtitleTrack
-    var childrenTrack: Track<CellGroupChildren>
-    var materialTracks
-    var editTrackIndex: Int = 0,
-    var allTracks: [Track]
+    var childrenTrack: CellGroupChildrenTrack
+    var editTrackIndex: Int = 0
+    var allTracks: [TrackTree]
     var editingTrackIndex: Int
     var editingTrack: Track {
-        return allTracks[editingTrackIndex]
+        return allTracks[editingTrackIndex].track
     }
     var canvas: Canvas
     var selectedTrackIndexes = [Int]()
@@ -55,7 +56,8 @@ struct Timeline: Codable {
         allTracks = []
         self.canvas = canvas
     }
-    
+}
+extension Timeline {
     func beatTime(withFrameTime frameTime: FrameTime) -> Beat {
         return Beat(tempoTrack.realBeatTime(withSecondTime: Second(frameTime) / Second(frameRate)))
     }
@@ -101,7 +103,41 @@ struct Timeline: Codable {
             beatTime(withBaseTime: floor(ft)) - time
     }
     
-    var curretEditKeyframeTime: Beat {
+    var currentAllKeyframeIndex: Int {
+        get {
+            
+            var index = 0
+            for track in rootTrack.children {
+                guard cut != model.editCut else { break }
+                index += cut.currentNode.editTrack.animation.loopFrames.count
+            }
+            index += model.currentNode.editTrack.animation.currentLoopframeIndex
+            return model.editingTime == model.duration ? index + 1 : index
+        }
+        set {
+            guard newValue != currentAllKeyframeIndex else { return }
+            var index = 0
+            for (cutIndex, cut) in model.cuts.enumerated() {
+                let animation = cut.currentNode.editTrack.animation
+                let newIndex = index + animation.keyframes.count
+                if newIndex > newValue {
+                    let i = (newValue - index).clip(min: 0, max: animation.loopFrames.count - 1)
+                    let cutTime = model.cutTrack.animation.time(atLoopFrameIndex: cutIndex)
+                    updateNoIntervalWith(time: cutTime + animation.loopFrames[i].time)
+                    return
+                }
+                index = newIndex
+            }
+            updateNoIntervalWith(time: model.duration)
+        }
+    }
+    var maxAllKeyframeIndex: Int {
+        
+        return model.cuts.reduce(0) { $0 + $1.currentNode.editTrack.animation.loopFrames.count }
+    }
+    
+    var curretEditingKeyframeTime: Beat {
+        return editingTrack.
         let cut = editCut
         let animation = cut.currentNode.editTrack.animation
         let t = cut.currentTime >= animation.duration ?
@@ -109,8 +145,8 @@ struct Timeline: Codable {
         let cutAnimation = cutTrack.animation
         return 0
     }
-    var curretEditKeyframeTimeExpression: Expression {
-        let time = curretEditKeyframeTime
+    var curretEditingKeyframeTimeExpression: Expression {
+        let time = curretEditingKeyframeTime
         let iap = time.integerAndProperFraction
         return Expression.int(iap.integer) + Expression.rational(iap.properFraction)
     }
@@ -126,20 +162,27 @@ struct Timeline: Codable {
     }
     
     var soundTuples: [(sound: Sound, startFrameTime: FrameTime)] {
-        
+        return allTracks.reduce(into: [(sound: Sound, startFrameTime: FrameTime)]()) { (values, t) in
+            if let track = t.track.soundTrack {
+                values += track.animation.loopFrames.map { lf in
+                    let keyframe = track.animation.keyframes[lf.index]
+                    return (keyframe.value, frameTime(withBeatTime: t.time + keyframe.timing.time))
+                }
+            }
+        }
     }
     
     var vtt: Data? {
         var subtitleTuples = [(time: Beat, duration: Beat, subtitle: Subtitle)]()
-        cutTrack.keyCuts.enumerated().forEach { (i, cut) in
-            let cutTime = cutTrack.animation.time(atLoopFrameIndex: i)
-            let lfs = cut.subtitleTrack.animation.loopFrames
-            let keySubtitles = cut.subtitleTrack.keySubtitles
-            subtitleTuples += lfs.enumerated().map { (li, lf) in
-                let subtitle = keySubtitles[lf.index]
-                let nextTime = li + 1 < lfs.count ?
-                    lfs[li + 1].time : cut.subtitleTrack.animation.duration
-                return (lf.time + cutTime, nextTime - lf.time, subtitle)
+        subtitleTuples = allTracks.reduce(into: subtitleTuples) { (values, t) in
+            if let track = t.track.subtitleTrack {
+                let lfs = track.animation.loopFrames
+                values += lfs.enumerated().map { (li, lf) in
+                    let subtitle = track.animation.keyframes[lf.index].value
+                    let nextTime = li + 1 < lfs.count ?
+                        lfs[li + 1].time : track.animation.duration
+                    return (lf.time + t.time, nextTime - lf.time, subtitle)
+                }
             }
         }
         return Subtitle.vtt(subtitleTuples, timeClosure: { secondTime(withBeatTime: $0) })
@@ -150,7 +193,8 @@ extension Timeline {
                                             modelInterval: 1, exp: 1,
                                             numberOfDigits: 0, unit: " fps")
     static let baseTimeIntervalOption = RationalOption(defaultModel: Rational(1, 16),
-                                                       minModel: Rational(1, 100000), maxModel: 100000,
+                                                       minModel: Rational(1, 100000),
+                                                       maxModel: 100000,
                                                        modelInterval: 1, isInfinitesimal: true,
                                                        unit: " b")
     static let tempoOption = RealOption(defaultModel: 120,
@@ -176,6 +220,8 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((TimelineView<Binder>) -> ())]()
+    
     var defaultModel = Model()
     
     let frameRateView: DiscreteRealView<Binder>
@@ -192,7 +238,7 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
     
     var baseWidth = 6.0.cg {
         didSet {
-            sumKeyTimesView.baseWidth = baseWidth
+            
             tempoAnimationView.baseWidth = baseWidth
             soundWaveformView.baseWidth = baseWidth
             updateWith(time: time, scrollPoint: Point(x: x(withTime: time), y: _scrollPoint.y))
@@ -223,7 +269,8 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
         frameRateView = DiscreteRealView(binder: binder,
                                          keyPath: keyPath.appending(path: \Model.frameRate),
                                          option: Model.frameRateOption,
-                                         frame: Layout.valueFrame(with: .small), sizeType: .small)
+                                         frame: Layout.valueFrame(with: .small),
+                                         sizeType: .small)
         baseTimeIntervalView = DiscreteRationalView(binder: binder,
                                                     keyPath: keyPath.appending(path: \Model.baseTimeInterval),
                                                     option: Model.baseTimeIntervalOption,
@@ -235,7 +282,6 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
                     beatsView, classSumAnimationNameView, sumKeyTimesClipView,
                     timeRulerView,
                     tempoAnimationClipView, baseTimeIntervalView,
-                    nodeTreeView.nodesView, tracksManager.tracksView,
                     cutViewsView]
         
         baseTimeIntervalView.binding = { [unowned self] in
@@ -252,9 +298,7 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
         }
 
         sumKeyTimesView.setKeyframeClosure = { [unowned self] binding in
-            guard binding.phase == .ended else {
-                return
-            }
+            guard binding.phase == .ended else { return }
             self.isUpdateSumKeyTimes = false
             let cutIndex = self.movingCutIndex(withTime: binding.keyframe.time)
             let cutView = self.cutViews[cutIndex]
@@ -333,14 +377,8 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
     private func updateWith(time: Beat, scrollPoint: Point,
                             isIntervalScroll: Bool = true, alwaysUpdateCutIndex: Bool = false) {
         _scrollPoint = scrollPoint
-        _intervalScrollPoint = isIntervalScroll ? intervalScrollPoint(with: _scrollPoint) : scrollPoint
-
-        let cvi = model.cutTrack.animation.indexInfo(withTime: time)
-        if alwaysUpdateCutIndex || model.editCutIndex != cvi.loopFrameIndex {
-            editCutView.isEdit = false
-            self.editCutIndex = cvi.loopFrameIndex
-            editCutView.isEdit = true
-        }
+        _intervalScrollPoint = isIntervalScroll ?
+            intervalScrollPoint(with: _scrollPoint) : scrollPoint
         
         if time != model.editingTime {
             model.editingTime = time
@@ -351,17 +389,7 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
     }
     var updateViewClosure: (((isCut: Bool, isTransform: Bool, isKeyframe: Bool)) -> ())?
     private func updateView(isCut: Bool, isTransform: Bool, isKeyframe: Bool) {
-        if isKeyframe {
-            updateKeyframeView()
-//            curretEditKeyframeTimeView.rational = model.curretEditKeyframeTime
-            tempoView.model = model.tempoTrack.editingTempo
-        }
         updateViewClosure?((isCut, isTransform, isKeyframe))
-    }
-    func updateTime(withCutTime cutTime: Beat) {
-        let time = cutTime + model.cutTrack.animation.time(atLoopFrameIndex: model.editCutIndex)
-        _scrollPoint.x = x(withTime: time)
-        self.time = time
     }
     private func intervalScrollPoint(with scrollPoint: Point) -> Point {
         return Point(x: x(withTime: time(withLocalX: scrollPoint.x)), y: 0)
@@ -369,35 +397,9 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
     
     private func updateWithScrollPosition() {
         let minX = localDeltaX
-        _ = cutViews.reduce(minX) { x, cutView in
-            cutView.frame.origin = Point(x: x, y: 0)
-
-            cutView.subtitleAnimationView.frame.origin = Point(x: x, y: cutView.frame.height)
-            _ = cutView.subtitleStringViews.reduce(x) {
-                $1.frame.size = Size(width: 100, height: Layout.basicHeight)
-                $1.frame.origin = Point(x: $0, y: cutView.frame.height + cutView.subtitleAnimationView.frame.height)
-                return $0 + $1.frame.width
-            }
-
-            if !(cutView.frame.minX > bounds.maxX && cutView.frame.maxX < bounds.minX) {
-                let sp = Layout.smallPadding
-                if cutView.frame.minX < bounds.minX {
-                    let nw = cutView.classNameView.frame.width + sp
-                    if bounds.minX + nw > cutView.frame.maxX {
-                        cutView.nameX = cutView.frame.width - nw
-                    } else {
-                        cutView.nameX = bounds.minX + sp - cutView.frame.minX
-                    }
-                } else {
-                    cutView.nameX = sp
-                }
-            }
-
-            return x + cutView.frame.width
-        }
         soundWaveformView.frame.origin = Point(x: minX, y: cutViewsView.frame.height - soundWaveformView.frame.height)
         tempoAnimationView.frame.origin = Point(x: minX, y: 0)
-        sumKeyTimesView.frame.origin.x = minX
+        
         updateBeats()
         updateTimeRuler()
     }
@@ -440,7 +442,7 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
             return
         }
         let minX = localDeltaX
-        let minTime = time(withLocalX: convertToLocalX(bounds.minX + TimelineView.leftWidth))
+        let minTime = time(withLocalX: convertToLocalX(bounds.minX + leftWidth))
         let maxTime = time(withLocalX: convertToLocalX(bounds.maxX))
         let intMinTime = floor(minTime).integralPart, intMaxTime = ceil(maxTime).integralPart
         guard intMinTime < intMaxTime else {
@@ -498,63 +500,13 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
     func convertFromLocal(_ p: Point) -> Point {
         return Point(x: convertFromLocalX(p.x), y: p.y)
     }
-    func nearestKeyframeIndexTuple(at p: Point) -> (cutIndex: Int, keyframeIndex: Int?) {
-        let ci = cutIndex(withLocalX: p.x)
-        let cut = model.cuts[ci], ct = model.cuts[ci].currentTime
-        guard cut.currentNode.editTrack.animation.keyframes.count > 0 else {
-            fatalError()
-        }
-        var minD = Real.infinity, minI = 0
-        for (i, k) in cut.currentNode.editTrack.animation.keyframes.enumerated() {
-            let x = self.x(withTime: ct + k.time)
-            let d = abs(p.x - x)
-            if d < minD {
-                minI = i
-                minD = d
-            }
-        }
-        let x = self.x(withTime: ct + cut.duration)
-        let d = abs(p.x - x)
-        if d < minD {
-            return (ci, nil)
-        } else if minI == 0 && ci > 0 {
-            return (ci - 1, nil)
-        } else {
-            return (ci, minI)
-        }
-    }
-    func trackIndexTuple(at p: Point) -> (cutIndex: Int, trackIndex: Int, keyframeIndex: Int?) {
-        let ci = cutIndex(withLocalX: p.x)
-        let cut = model.cuts[ci], ct = model.cutTrack.animation.keyframes[ci].time
-        var minD = Real.infinity, minKeyframeIndex = 0, minTrackIndex = 0
-        for (ii, track) in cut.currentNode.tracks.enumerated() {
-            for (i, k) in track.animation.keyframes.enumerated() {
-                let x = self.x(withTime: ct + k.time)
-                let d = abs(p.x - x)
-                if d < minD {
-                    minTrackIndex = ii
-                    minKeyframeIndex = i
-                    minD = d
-                }
-            }
-        }
-        let x = self.x(withTime: ct + cut.duration)
-        let d = abs(p.x - x)
-        if d < minD {
-            return (ci, minTrackIndex, nil)
-        } else if minKeyframeIndex == 0 && ci > 0 {
-            return (ci - 1, minTrackIndex, nil)
-        } else {
-            return (ci,  minTrackIndex, minKeyframeIndex)
-        }
-    }
 
     var baseTimeInterval = Beat(1, 16) {
         didSet {
-            sumKeyTimesView.baseTimeInterval = baseTimeInterval
+            
             tempoAnimationView.baseTimeInterval = baseTimeInterval
             soundWaveformView.baseTimeInterval = baseTimeInterval
-            cutViews.forEach { $0.baseTimeInterval = baseTimeInterval }
+            
             baseTimeIntervalView.model = baseTimeInterval
 
             model.baseTimeInterval = baseTimeInterval
@@ -563,22 +515,11 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     private var isScrollTrack = false
-    private weak var scrollCutView: CutView?
+    private weak var scrollCutView: TrackItemView<Binder>?
     func scroll(for p: Point, time: Second, scrollDeltaPoint: Point,
                 phase: Phase, momentumPhase: Phase?) {
-        if phase == .began {
-            isScrollTrack = abs(scrollDeltaPoint.x) < abs(scrollDeltaPoint.y)
-        }
-        if isScrollTrack {
-            if phase == .began {
-                scrollCutView = editCutView
-            }
-            scrollCutView?.scrollTrack(for: p, time: time, scrollDeltaPoint: scrollDeltaPoint,
-                                       phase: phase, momentumPhase: momentumPhase)
-        } else {
-            scrollTime(for: p, time: time, scrollDeltaPoint: scrollDeltaPoint,
-                       phase: phase, momentumPhase: momentumPhase)
-        }
+        scrollTime(for: p, time: time, scrollDeltaPoint: scrollDeltaPoint,
+                   phase: phase, momentumPhase: momentumPhase)
     }
 
     private var indexScrollDeltaPosition = Point(), indexScrollBeginX = 0.0.cg
@@ -591,44 +532,14 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
         switch phase {
         case .began:
             indexScrollDeltaPosition = Point()
-            indexScrollIndex = currentAllKeyframeIndex
+            indexScrollIndex = model.currentAllKeyframeIndex
         case .changed, .ended:
             indexScrollDeltaPosition += scrollDeltaPoint
             let di = Int(-indexScrollDeltaPosition.x / indexScrollWidth)
-            currentAllKeyframeIndex = indexScrollIndex + di
+            model.currentAllKeyframeIndex = indexScrollIndex + di
         }
     }
-    var currentAllKeyframeIndex: Int {
-        get {
-            var index = 0
-            for cut in model.cuts {
-                guard cut != model.editCut else { break }
-                index += cut.currentNode.editTrack.animation.loopFrames.count
-            }
-            index += model.currentNode.editTrack.animation.currentLoopframeIndex
-            return model.editingTime == model.duration ? index + 1 : index
-        }
-        set {
-            guard newValue != currentAllKeyframeIndex else { return }
-            var index = 0
-            for (cutIndex, cut) in model.cuts.enumerated() {
-                let animation = cut.currentNode.editTrack.animation
-                let newIndex = index + animation.keyframes.count
-                if newIndex > newValue {
-                    let i = (newValue - index).clip(min: 0, max: animation.loopFrames.count - 1)
-                    let cutTime = model.cutTrack.animation.time(atLoopFrameIndex: cutIndex)
-                    updateNoIntervalWith(time: cutTime + animation.loopFrames[i].time)
-                    return
-                }
-                index = newIndex
-            }
-            updateNoIntervalWith(time: model.duration)
-        }
-    }
-    var maxAllKeyframeIndex: Int {
-        return model.cuts.reduce(0) { $0 + $1.currentNode.editTrack.animation.loopFrames.count }
-    }
-
+    
     func scrollTime(for p: Point, time: Second, scrollDeltaPoint: Point,
                     phase: Phase, momentumPhase: Phase?) {
         let maxX = self.x(withTime: model.duration)
@@ -681,12 +592,8 @@ final class RulerView: View {
     }
     
     var scrollPosition: Point {
-        get  {
-            return scrollView.frame.origin
-        }
-        set {
-            scrollView.frame.origin = newValue
-        }
+        get { return scrollView.frame.origin }
+        set { scrollView.frame.origin = newValue }
     }
     var scrollFrame = Rect()
     

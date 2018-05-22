@@ -37,6 +37,7 @@ protocol BindableReceiver: class {
     var model: Model { get set }
     var binder: Binder { get set }
     var keyPath: BinderKeyPath { get set }
+    var notifications: [((Self) -> ())] { get }
     func updateWithModel()
     func push(_ model: Model, to version: Version)
     func capture(_ model: Model, to version: Version)
@@ -49,6 +50,7 @@ extension BindableReceiver {
         }
         set {
             binder[keyPath: keyPath] = newValue
+            notifications.forEach { $0(self) }
             updateWithModel()
         }
     }

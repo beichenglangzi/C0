@@ -88,6 +88,12 @@ final class Version: UndoManager {
 extension Version: Referenceable {
     static let name = Text(english: "Version", japanese: "バージョン")
 }
+extension Version: Codable {
+    convenience init(from decoder: Decoder) throws {
+        self.init()
+    }
+    func encode(to encoder: Encoder) throws {}
+}
 
 /**
  Issue: バージョン管理
@@ -102,6 +108,7 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((VersionView<Binder>) -> ())]()
     
     let indexView: IntGetterView<Binder>
     let undoedDiffCountView: IntGetterView<Binder>

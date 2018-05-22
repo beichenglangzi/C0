@@ -80,7 +80,7 @@ extension TreeNode {
         return TreeIndexSequence(rootNode: self)
     }
     
-    subscript(treeIndex: TreeIndex<Self>) -> Self {
+    subscript(treeIndex: Index) -> Self {
         get {
             return self[treeIndex.indexPath]
         }
@@ -89,13 +89,13 @@ extension TreeNode {
         }
     }
     
-    func nodes(at treeIndex: TreeIndex<Self>) -> [Self] {
+    func nodes(at treeIndex: Index) -> [Self] {
         var nodes = [Self]()
         nodes.reserveCapacity(treeIndex.indexPath.count)
         self.nodes(at: treeIndex, index: 0, nodes: &nodes)
         return nodes
     }
-    private func nodes(at treeIndex: TreeIndex<Self>, index: Int, nodes: inout [Self]) {
+    private func nodes(at treeIndex: Index, index: Int, nodes: inout [Self]) {
         nodes.append(children[treeIndex.indexPath[index]])
         let newIndex = index + 1
         if newIndex < treeIndex.indexPath.count {
@@ -105,12 +105,29 @@ extension TreeNode {
     
     func sortedIndexes(_ indexes: [Index]) -> [Index] {
         var sortedIndexes = [Index]()
-        for (i, node) in self {
-            if indexes.contains(Index(indexPath: i)) {
+        for (i, _) in treeIndexEnumerated() {
+            if indexes.contains(i) {
                 sortedIndexes.append(i)
             }
         }
         return sortedIndexes
+    }
+}
+extension TreeNode where Element: Namable {
+    var unduplicatedIndexName: Text {
+        var minIndex: Int?
+        for node in self {
+            guard let i = node.name.suffixNumber else { continue }
+            if let minI = minIndex {
+                if i > minI {
+                    minIndex = i
+                }
+            } else {
+                minIndex = 0
+            }
+        }
+        let index = minIndex != nil ? minIndex! + 1 : 0
+        return Text("\(index)")
     }
 }
 
@@ -128,6 +145,7 @@ struct TreeNodeIterator<T: TreeNode>: IteratorProtocol {
         }
         if lastParentIndex.index >= lastParentIndex.parent.children.count {
             parentIndexes.removeLast()
+            parentIndexes[parentIndexes.count - 1].index += 1
             return lastParentIndex.parent
         } else {
             let child = lastParentIndex.parent.children[lastParentIndex.index]
@@ -148,52 +166,41 @@ struct TreeNodeIterator<T: TreeNode>: IteratorProtocol {
 }
 
 struct TreeIndexSequence<T: TreeNode>: Sequence, IteratorProtocol {
-    typealias Element = (TreeIndex<T>, T)
+    typealias Element = (T.Index, T)
     
     init(rootNode: T) {
-        parentIndexes = [(rootNode, 0)]
+        parents = [rootNode]
+        indexPath = IndexPath(index: 0)
     }
     
-    private var parentIndexes = [(parent: T, index: Int)]()
+    private var indexPath: IndexPath, parents: [T]
     mutating func next() -> Element? {
-        guard let lastParentIndex = parentIndexes.last else {
+        guard let lastParentIndex = indexPath.last, let parent = parents.last else {
             return nil
         }
-        if lastParentIndex.index >= lastParentIndex.parent.children.count {
-            parentIndexes.removeLast()
-            return lastParentIndex.parent
+        if lastParentIndex >= parent.children.count {
+            indexPath.removeLast()
+            parents.removeLast()
+            let oldIndexPath = indexPath
+            indexPath[indexPath.count - 1] += 1
+            return (T.Index(indexPath: oldIndexPath), parent)
         } else {
-            let child = lastParentIndex.parent.children[lastParentIndex.index]
+            let child = parent.children[lastParentIndex]
             if child.children.isEmpty {
-                parentIndexes[parentIndexes.count - 1].index += 1
-                return child
+                let oldIndexPath = indexPath
+                indexPath[indexPath.count - 1] += 1
+                return (T.Index(indexPath: oldIndexPath), child)
             } else {
                 var aParent = child
                 repeat {
-                    parentIndexes.append((aParent, 0))
+                    indexPath.append(0)
+                    parents.append(aParent)
                     aParent = aParent.children[0]
                 } while !aParent.children.isEmpty
-                parentIndexes[parentIndexes.count - 1].index += 1
-                return aParent
+                let oldIndexPath = indexPath
+                indexPath[indexPath.count - 1] += 1
+                return (T.Index(indexPath: oldIndexPath), aParent)
             }
         }
-    }
-}
-
-extension TreeNode where Element: Namable {
-    var unduplicatedIndexName: Text {
-        var minIndex: Int?
-        for node in self {
-            guard let i = node.name.suffixNumber else { continue }
-            if let minI = minIndex {
-                if i > minI {
-                    minIndex = i
-                }
-            } else {
-                minIndex = 0
-            }
-        }
-        let index = minIndex != nil ? minIndex! + 1 : 0
-        return Text("\(index)")
     }
 }

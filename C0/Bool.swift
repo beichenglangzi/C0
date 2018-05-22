@@ -43,9 +43,15 @@ extension Bool: ThumbnailViewable {
 }
 extension Bool: AbstractViewable {
     func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Bool>,
-                             frame: Rect, _ sizeType: SizeType) -> View where T : BinderProtocol {
-        return BoolView(binder: binder, keyPath: keyPath, option: BoolOption(),
-                        frame: frame, sizeType: sizeType)
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> View where T : BinderProtocol {
+        switch type {
+        case .normal:
+            return BoolView(binder: binder, keyPath: keyPath, option: BoolOption(),
+                            frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
     }
 }
 
@@ -76,6 +82,7 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((BoolView<Binder>) -> ())]()
     
     var option: ModelOption {
         didSet {

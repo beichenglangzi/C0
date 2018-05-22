@@ -25,7 +25,8 @@ struct Gradient {
     
     var values = [Value]()
     var startPoint = Point(), endPoint = Point(x: 1, y: 0)
-    
+}
+extension Gradient {
     var colors: [Color] {
         get {
             return values.map { $0.color }

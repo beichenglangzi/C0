@@ -33,7 +33,8 @@ struct Drawing: Codable, Equatable {
         self.lineColor = lineColor
         self.lineWidth = lineWidth
     }
-    
+}
+extension Drawing {
     func imageBounds(withLineWidth lineWidth: Real) -> Rect {
         return Line.imageBounds(with: lines, lineWidth: lineWidth)
             .union(Line.imageBounds(with: draftLines, lineWidth: lineWidth))
@@ -96,6 +97,19 @@ struct Drawing: Codable, Equatable {
     }
 }
 extension Drawing {
+    func viewWith() -> View {
+        return viewWith(lineColor: lineColor, lineWidth: lineWidth)
+    }
+    func viewWith(lineColor: Color, lineWidth: Real) -> View {
+        
+    }
+    func draftViewWith(lineColor: Color, lineWidth: Real) -> View {
+        
+    }
+    func selectedViewWith(lineColor: Color, lineWidth: Real) -> View {
+        
+    }
+    
     //view
     func drawEdit(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
         drawEdit(lineWidth: lineWidth * reciprocalScale, lineColor: lineColor, in: ctx)
@@ -143,6 +157,90 @@ extension Drawing: ThumbnailViewable {
     }
 }
 
+struct LinesTrack: Track, Codable {
+    var animation: Animation<Lines>
+    var animatable: Animatable {
+        return animation
+    }
+    
+    var cellTreeIndexes: [TreeIndex<Cell>]
+}
+extension LinesTrack {
+    func previousNextViewsWith(isHiddenPrevious: Bool, isHiddenNext: Bool,
+                               index: Int, reciprocalScale: Real) -> [View] {
+        var views = [View]()
+        func viewWith(lineColor: Color, at i: Int) -> View {
+            let drawing = animation.keyframes[i].value.drawing
+            let lineWidth = drawing.lineWidth * reciprocalScale
+            return drawing.viewWith(lineColor: .next, lineWidth: lineWidth)
+        }
+        if !isHiddenPrevious && index - 1 >= 0 {
+            views.append(viewWith(lineColor: .previous, at: index - 1))
+        }
+        if !isHiddenNext && index + 1 <= animation.keyframes.count - 1 {
+            views.append(viewWith(lineColor: .next, at: index + 1))
+        }
+        return views
+    }
+}
+
+struct Lines: Codable, Equatable {
+    var drawing = Drawing()
+    var geometries = [Geometry]()
+    
+    var defaultLabel: KeyframeTiming.Label {
+        return geometries.contains(where: { !$0.isEmpty }) ? .sub : .main
+    }
+}
+extension Lines: KeyframeValue {}
+extension Lines: Interpolatable {
+    static func linear(_ f0: Lines, _ f1: Lines,
+                       t: Real) -> Lines {
+        let drawing = f0.drawing
+        let geometries = [Geometry].linear(f0.geometries, f1.geometries, t: t)
+        return Lines(drawing: drawing, geometries: geometries)
+    }
+    static func firstMonospline(_ f1: Lines, _ f2: Lines,
+                                _ f3: Lines, with ms: Monospline) -> Lines {
+        let drawing = f1.drawing
+        let geometries = [Geometry].firstMonospline(f1.geometries,
+                                                    f2.geometries, f3.geometries, with: ms)
+        return Lines(drawing: drawing, geometries: geometries)
+    }
+    static func monospline(_ f0: Lines, _ f1: Lines,
+                           _ f2: Lines, _ f3: Lines,
+                           with ms: Monospline) -> Lines {
+        let drawing = f1.drawing
+        let geometries = [Geometry].monospline(f0.geometries, f1.geometries,
+                                               f2.geometries, f3.geometries, with: ms)
+        return Lines(drawing: drawing, geometries: geometries)
+    }
+    static func lastMonospline(_ f0: Lines, _ f1: Lines,
+                               _ f2: Lines, with ms: Monospline) -> Lines {
+        let drawing = f1.drawing
+        let geometries = [Geometry].lastMonospline(f0.geometries,
+                                                   f1.geometries, f2.geometries, with: ms)
+        return Lines(drawing: drawing, geometries: geometries)
+    }
+}
+extension Lines: Referenceable {
+    static let name = Text(english: "Lines Keyframe Value", japanese: "線キーフレーム値")
+}
+extension Lines: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Lines>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> View {
+        switch type {
+        case .normal:
+            return DrawingView(binder: binder, keyPath: keyPath.appending(path: \Lines.drawing),
+                               frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+
 /**
  Issue: DraftArray、下書き化などのコマンドを排除
  */
@@ -155,6 +253,8 @@ final class DrawingView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((DrawingView<Binder>) -> ())]()
+    
     var defaultModel = Model()
     
     let linesView: ArrayCountView<Line, Binder>

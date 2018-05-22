@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import CoreGraphics
 
 struct Canvas: Codable {
     var frame: Rect
@@ -105,6 +105,8 @@ final class CanvasView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((CanvasView<Binder>) -> ())]()
+    
     var defaultModel = Model()
     
     init(binder: T, keyPath: BinderKeyPath,
@@ -135,45 +137,7 @@ final class CanvasView<T: BinderProtocol>: View, BindableReceiver {
         }
     }
     func updateEditPoint(with point: Point) {
-        if let n = cut.currentNode.nearest(at: point, isVertex: viewType == .editVertex) {
-            if let e = n.drawingEdit {
-                editPoint = CellGroup.EditPoint(nearestLine: e.line, nearestPointIndex: e.pointIndex,
-                                                lines: [e.line],
-                                                point: n.point, isSnap: movePointIsSnap)
-            } else if let e = n.geometryItemEdit {
-                editPoint = CellGroup.EditPoint(nearestLine: e.geometry.lines[e.lineIndex],
-                                                nearestPointIndex: e.pointIndex,
-                                                lines: [e.geometry.lines[e.lineIndex]],
-                                                point: n.point, isSnap: movePointIsSnap)
-            } else if n.drawingEditLineCap != nil || !n.geometryItemEditLineCaps.isEmpty {
-                if let nlc = n.bezierSortedResult(at: point) {
-                    if let e = n.drawingEditLineCap {
-                        let drawingLines = e.drawingCaps.map { $0.line }
-                        let geometryItemLines = n.geometryItemEditLineCaps.reduce(into: [Line]()) {
-                            $0 += $1.caps.map { $0.line }
-                        }
-                        editPoint = CellGroup.EditPoint(nearestLine: nlc.lineCap.line,
-                                                        nearestPointIndex: nlc.lineCap.pointIndex,
-                                                        lines: drawingLines + geometryItemLines,
-                                                        point: n.point,
-                                                        isSnap: movePointIsSnap)
-                    } else {
-                        let geometryItemLines = n.geometryItemEditLineCaps.reduce(into: [Line]()) {
-                            $0 += $1.caps.map { $0.line }
-                        }
-                        editPoint = CellGroup.EditPoint(nearestLine: nlc.lineCap.line,
-                                                        nearestPointIndex: nlc.lineCap.pointIndex,
-                                                        lines: geometryItemLines,
-                                                        point: n.point,
-                                                        isSnap: movePointIsSnap)
-                    }
-                } else {
-                    editPoint = nil
-                }
-            }
-        } else {
-            editPoint = nil
-        }
+        
     }
     var currentTransform: CGAffineTransform {
         var affine = CGAffineTransform.identity
@@ -237,7 +201,7 @@ extension CanvasView: Selectable {
         model.editingCellGroup.selectedCellIndexes = []
     }
     func deselectAll() {
-        model.editingCellGroup.selectedCellIndexes = model.editingCellGroup.rootCell.enumerated().map { $0.offset }
+        model.editingCellGroup.selectedCellIndexes = model.editingCellGroup.rootCell.treeIndexEnumerated().map { (index, _) in index }
     }
 }
 final class CanvasViewSelector<Binder: BinderProtocol>: ViewSelector {
@@ -245,6 +209,10 @@ final class CanvasViewSelector<Binder: BinderProtocol>: ViewSelector {
     var cellGroup: CellGroup?, cellGroupIndex: CellGroup.Index
     var selectedLineIndexes = [Int]()
     var drawing: Drawing?
+    
+    init(canvasView: CanvasView<Binder>) {
+        self.canvasView = canvasView
+    }
     
     func select(from rect: Rect, _ phase: Phase) {
         select(from: rect, phase, isDeselect: false)
@@ -254,7 +222,7 @@ final class CanvasViewSelector<Binder: BinderProtocol>: ViewSelector {
     }
     func select(from rect: Rect, _ phase: Phase, isDeselect: Bool) {
         func unionWithStrokeLine(with drawing: Drawing) -> [Array<Line>.Index] {
-            func selected() -> (lineIndexes: [Int], geometryItems: [GeometryItem]) {
+            func selected() -> (lineIndexes: [Int]) {
                 let transform = currentTransform.inverted()
                 let lines = [Line].rectangle(rect).map { $0.applying(transform) }
                 let lasso = LineLasso(lines: lines)
@@ -271,13 +239,14 @@ final class CanvasViewSelector<Binder: BinderProtocol>: ViewSelector {
         
         switch phase {
         case .began:
+            cellGroup = canvasView.model.editingCellGroup
             cellGroupIndex = canvasView.model.editingCellGroupTreeIndex
-            selectedLineIndexes = canvasView.model.editingCellGroup.selectedCellIndexes
+            drawing = canvasView.model.editingCellGroup.drawing
+            selectedLineIndexes = canvasView.model.editingCellGroup.drawing.selectedLineIndexes
         case .changed, .ended:
-            guard let drawing = selectOption.drawing, let track = selectOption.track else { return }
-            canvasView.model.rootCellGroup[selectedLineIndexes]
-            (drawing.selectedLineIndexes, track.selectedGeometryItems)
-                = unionWithStrokeLine(with: drawing, track)
+            guard let drawing = drawing else { return }
+            
+            drawing.selectedLineIndexes = unionWithStrokeLine(with: drawing, track)
         }
     }
 }
@@ -288,15 +257,18 @@ extension CanvasView: Queryable {
 }
 extension CanvasView: Assignable {
     func reset(for p: Point, _ version: Version) {
-        <#code#>
+        push(defaultModel, to: version)
     }
-    
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        <#code#>
-    }
-    
     func copiedObjects(at p: Point) -> [Object] {
-        <#code#>
+        return [Object(model)]
+    }
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
+        for object in objects {
+            if let model = object as? Model {
+                push(model, to: version)
+                return
+            }
+        }
     }
 }
 extension CanvasView: Newable {
@@ -336,7 +308,7 @@ final class CanvasViewTransformer<Binder: BinderProtocol>: ViewSelector {
     var moveNode: CellGroup?
     func move(for point: Point, pressure: Real, time: Second, _ phase: Phase,
               type: TransformEditType) {
-        let p = convertToCurrentLocal(point)
+        let p = canvasView.convertToCurrentLocal(point)
         func affineTransform(with node: CellGroup) -> CGAffineTransform {
             switch type {
             case .move:
@@ -365,24 +337,12 @@ final class CanvasViewTransformer<Binder: BinderProtocol>: ViewSelector {
                 self.moveTransformAngleOldPoint = p
                 self.isMoveTransformAngle = false
                 self.moveTransformOldPoint = p
-                
-                if type == .warp {
-                    let mm = minMaxPointFrom(p)
-                    self.minWarpDistance = mm.minDistance
-                    self.maxWarpDistance = mm.maxDistance
-                }
             }
-            moveNode = cut.currentNode
+            moveNode = canvasView.model.editingCellGroup
             moveOldPoint = p
         case .changed, .ended:
             if type != .move {
                 if var editTransform = moveEditTransform {
-                }
-            }
-            if type == .warp {
-                if let editTransform = moveEditTransform, editTransform.isCenter {
-                    distanceWarp(for: p, pressure: pressure, time: time, phase)
-                    return
                 }
             }
             if !moveSelected.isEmpty, let node = moveNode {
@@ -463,12 +423,10 @@ final class CanvasViewPointMover<Binder: BinderProtocol>: ViewSelector {
             if nearest.drawingEdit != nil || nearest.geometryItemEdit != nil {
                 movingPoint(with: nearest, dp: dp, in: cut.currentNode.editTrack)
             } else {
-                if movePointIsSnap, let b = bezierSortedResult {
-                    movingPoint(with: nearest, bezierSortedResult: b, dp: dp,
-                                isVertex: isVertex, in: cut.currentNode.editTrack)
+                if movePointIsSnap {
+                    movingPoint(with: nearest, bezierSortedResult: b, dp: dp, isVertex: isVertex)
                 } else {
-                    movingLineCap(with: nearest, dp: dp,
-                                  isVertex: isVertex, in: cut.currentNode.editTrack)
+                    movingLineCap(with: nearest, dp: dp, isVertex: isVertex)
                 }
             }
         }

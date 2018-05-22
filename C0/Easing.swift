@@ -21,7 +21,8 @@ import CoreGraphics
 
 struct Easing: Codable, Hashable {
     var cp0 = Point(), cp1 = Point(x: 1, y: 1)
-    
+}
+extension Easing {
     func split(with t: Real) -> (b0: Easing, b1: Easing) {
         guard !isDefault else {
             return (Easing(), Easing())
@@ -57,6 +58,16 @@ struct Easing: Codable, Hashable {
         return path
     }
 }
+extension Easing {
+    static let cp0Option: PointOption = {
+        let valueOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1)
+        return PointOption(xOption: valueOption, yOption: valueOption)
+    } ()
+    static let cp1Option: PointOption = {
+        let valueOption = RealOption(defaultModel: 1, minModel: 0, maxModel: 1)
+        return PointOption(xOption: valueOption, yOption: valueOption)
+    } ()
+}
 extension Easing: Referenceable {
     static let name = Text(english: "Easing", japanese: "イージング")
 }
@@ -87,9 +98,11 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((EasingView<Binder>) -> ())]()
+    
     var defaultModel = Model()
     
-    let cp0View = PointView(), cp1View = PointView()
+    let cp0View: SlidablePointView<Binder>, cp1View: SlidablePointView<Binder>
     
     var sizeType: SizeType {
         didSet { updateLayout() }
@@ -124,6 +137,13 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
         
         self.binder = binder
         self.keyPath = keyPath
+        
+        cp0View = SlidablePointView(binder: binder,
+                                    keyPath: keyPath.appending(path: \Model.cp0),
+                                    option: Easing.cp0Option)
+        cp1View = SlidablePointView(binder: binder,
+                                    keyPath: keyPath.appending(path: \Model.cp1),
+                                    option: Easing.cp1Option)
         
         self.sizeType = sizeType
         classXNameView = TextFormView(text: "t", font: Font.italic(with: sizeType))
@@ -161,8 +181,8 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
     }
     func updateWithModel() {
         guard !bounds.isEmpty else { return }
-        cp0View.point = easing.cp0
-        cp1View.point = easing.cp1
+        cp0View.updateWithModel()
+        cp1View.updateWithModel()
         easingLinePathView.path = model.path(in: bounds.insetBy(dx: padding + cp0View.padding,
                                                                 dy: padding + cp0View.padding))
         let knobLinePath = CGMutablePath()

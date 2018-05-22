@@ -17,9 +17,10 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Locale
+import CoreGraphics
 
-struct Transform: Codable, Initializable {//OrderedAfineTransform transformItems
+struct Transform: Codable, Initializable {//OrderedAfineTransform items
     var translation: Point {
         didSet {
             affineTransform = Transform.affineTransform(translation: translation,
@@ -91,7 +92,8 @@ struct Transform: Codable, Initializable {//OrderedAfineTransform transformItems
         affineTransform = Transform.affineTransform(translation: translation,
                                                     scale: scale, rotation: rotation)
     }
-    
+}
+extension Transform {
     private static func affineTransform(translation: Point,
                                         scale: Point, rotation: Real) -> CGAffineTransform {
         var affine = CGAffineTransform(translationX: translation.x, y: translation.y)
@@ -226,6 +228,8 @@ final class TransformView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((TransformView<Binder>) -> ())]()
+    
     var option: ModelOption {
         didSet {
             translationView.option = option.translationOption

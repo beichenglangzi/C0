@@ -17,19 +17,10 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Locale
 
 enum BlendType: Int8, Codable, Hashable {
     case normal, addition, subtract
-}
-extension BlendType {
-    var blendMode: CGBlendMode {
-        switch self {
-        case .normal: return .normal
-        case .addition: return .plusLighter
-        case .subtract: return .plusDarker
-        }
-    }
 }
 extension BlendType: Referenceable {
     static let name = Text(english: "Blend Type", japanese: "ブレンドタイプ")
@@ -51,7 +42,8 @@ extension BlendType: DisplayableText {
 
 struct Effect: Codable, Hashable {
     var blendType = BlendType.normal, blurRadius = 0.0.cg, opacity = 1.0.cg
-    
+}
+extension Effect {
     var isEmpty: Bool {
         return self == Effect()
     }
@@ -147,6 +139,8 @@ final class EffectView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((EffectView<Binder>) -> ())]()
+    
     var defaultModel = Model()
     
     var option: ModelOption {
@@ -209,7 +203,7 @@ final class EffectView<T: BinderProtocol>: View, BindableReceiver {
                                            y: bounds.height - classNameView.frame.height - padding)
         blendTypeView.frame = Rect(x: px, y: padding + h, width: rw, height: h)
         classBlurNameView.frame.origin = Point(x: padding, y: padding * 2)
-        let blurW = ceil((cw - classBlurNameView.frame.width) / 2)
+        let blurW = ((cw - classBlurNameView.frame.width) / 2).rounded(.up)
         blurRadiusView.frame = Rect(x: classBlurNameView.frame.maxX, y: padding,
                                     width: blurW, height: h)
         let ow = bounds.width - blurRadiusView.frame.maxX - padding

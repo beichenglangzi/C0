@@ -311,7 +311,7 @@ final class MediaEncoderView<T: MediaEncoder>: View {
                               width: sb.width, height: sb.height)
     }
     
-    func write(to e: URL.File) {
+    func write(to e: URL.File) -> BlockOperation {
         let name = Text(e.url.deletingPathExtension().lastPathComponent)
         let type = Text(e.url.pathExtension.uppercased())
         
@@ -374,6 +374,7 @@ final class MediaEncoderView<T: MediaEncoder>: View {
             }
         }
         self.operation = operation
+        return operation
     }
     
     var endedClosure: ((MediaEncoderView) -> ())?

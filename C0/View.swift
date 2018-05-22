@@ -17,7 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
 import CoreGraphics
 import QuartzCore
 
@@ -708,6 +707,16 @@ extension CGContext {
             cictx.draw(outputImage,
                        in: ctx.boundingBoxOfClipPath,
                        from: Rect(origin: Point(), size: image.size))
+        }
+    }
+}
+
+private extension BlendType {
+    var cgBlendMode: CGBlendMode {
+        switch self {
+        case .normal: return .normal
+        case .addition: return .plusLighter
+        case .subtract: return .plusDarker
         }
     }
 }

@@ -17,7 +17,9 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Locale
+import struct Foundation.URL
+import class Foundation.OperationQueue
 
 typealias BPM = Real
 typealias FPS = Real
@@ -98,6 +100,8 @@ struct Scene: Codable {
     var canvas: Canvas
     var materials: [MaterialMap]
     var colors: [ColorMap]
+    var version = Version()
+    
     init(name: Text = Text(english: "Untitled", japanese: "名称未設定"),
          renderingVerticalResolution: Int = 1080,
          timeline: Timeline = Timeline(),
@@ -113,100 +117,14 @@ struct Scene: Codable {
         self.isHiddenNext = isHiddenNext
         self.canvas = canvas
     }
-    
+}
+extension Scene {
     var duration: Beat {
         return timeline.duration
     }
     
-    struct CellRemoveManager {
-        let trackAndGeometryItems: [(track: MultipleTrack, geometryItems: [GeometryItem])]
-        let rootCell: Cell
-        let parents: [(cell: Cell, index: Int)]
-        func contains(_ geometryItem: GeometryItem) -> Bool {
-            for tac in trackAndGeometryItems {
-                if tac.geometryItems.contains(geometryItem) {
-                    return true
-                }
-            }
-            return false
-        }
-    }
-    func cellRemoveManager(with geometryItem: GeometryItem) -> CellRemoveManager {
-        var cells = [geometryItem.cell]
-        geometryItem.cell.depthFirstSearch(duplicate: false, closure: { parent, cell in
-            let parents = rootCell.parents(with: cell)
-            if parents.count == 1 {
-                cells.append(cell)
-            }
-        })
-        var trackAndGeometryItems = [(track: MultipleTrack, geometryItems: [GeometryItem])]()
-        for track in tracks {
-            var geometryItems = [GeometryItem]()
-            cells = cells.filter {
-                if let removeGeometryItem = track.geometryItem(with: $0) {
-                    geometryItems.append(removeGeometryItem)
-                    return false
-                }
-                return true
-            }
-            if !geometryItems.isEmpty {
-                trackAndGeometryItems.append((track, geometryItems))
-            }
-        }
-        guard !trackAndGeometryItems.isEmpty else {
-            fatalError()
-        }
-        return CellRemoveManager(trackAndGeometryItems: trackAndGeometryItems,
-                                 rootCell: geometryItem.cell,
-                                 parents: rootCell.parents(with: geometryItem.cell))
-    }
-    func insertCell(with crm: CellRemoveManager) {
-        crm.parents.forEach { $0.cell.children.insert(crm.rootCell, at: $0.index) }
-        for tac in crm.trackAndGeometryItems {
-            for geometryItem in tac.geometryItems {
-                guard geometryItem.keyGeometries.count == tac.track.animation.keyframes.count else {
-                    fatalError()
-                }
-                guard !tac.track.geometryItems.contains(geometryItem) else {
-                    fatalError()
-                }
-                tac.track.append(geometryItem)
-            }
-        }
-    }
-    func removeCell(with crm: CellRemoveManager) {
-        crm.parents.forEach { $0.cell.children.remove(at: $0.index) }
-        for tac in crm.trackAndGeometryItems {
-            for geometryItem in tac.geometryItems {
-                tac.track.remove(geometryItem)
-            }
-        }
-    }
-    
     func canvas(atTime time: Beat) -> Canvas {
         
-    }
-    
-    static let isEncodeLineKey = CodingUserInfoKey(rawValue: "isEncodeLineKey")!
-    var diffData: Data? {
-        let encoder = JSONEncoder()
-        encoder.userInfo[Scene.isEncodeLineKey] = false
-        return try? encoder.encode(self)
-    }
-}
-extension Scene {
-    func drawPreviousNext(isHiddenPrevious: Bool, isHiddenNext: Bool,
-                          time: Beat, reciprocalScale: Real, in ctx: CGContext) {
-        let animation = timeline.editingTrack.animatable
-        let index = animation.indexInfo(withTime: time).keyframeIndex
-        drawingItem.drawPreviousNext(isHiddenPrevious: isHiddenPrevious, isHiddenNext: isHiddenNext,
-                                     index: index, reciprocalScale: reciprocalScale, in: ctx)
-        geometryItems.enumerated().forEach { (i, geometryItem) in
-            geometryItem.drawPreviousNext(lineWidth: cells[i].material.lineWidth * reciprocalScale,
-                                          isHiddenPrevious: isHiddenPrevious,
-                                          isHiddenNext: isHiddenNext,
-                                          index: index, in: ctx)
-        }
     }
 }
 extension Scene {
@@ -227,25 +145,6 @@ extension Scene: Referenceable {
     static let name = Text(english: "Scene", japanese: "シーン")
 }
 
-final class SceneBinder: BinderProtocol {
-    var rootModel: Scene
-    
-    init(rootModel: Scene) {
-        self.rootModel = rootModel
-    }
-    
-    var scene: Scene
-    var version = Version()
-    
-    init(_ scene: Scene = Scene()) {
-        self.scene = scene
-    }
-}
-
-final class SceneBinderView: View {
-    
-}
-
 struct SceneLayout {
     static let versionWidth = 120.0.cg, propertyWidth = 200.0.cg
     static let canvasSize = Size(width: 730, height: 480), timelineHeight = 190.0.cg
@@ -264,6 +163,7 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((SceneView<Binder>) -> ())]()
     
     let versionView: VersionView<Binder>
     
@@ -291,8 +191,7 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
         
         self.binder = binder
         self.keyPath = keyPath
-        
-        versionView = VersionView(binder: binder, keyPath: <#T##ReferenceWritableKeyPath<_, VersionView.Model>#>)
+        versionView = VersionView(binder: binder, keyPath: keyPath.appending(path: \Model.version))
         
         let defaultSize = model.canvas.frame.size
         let sizeWidthOption = RealOption(defaultModel: defaultSize.width,
@@ -331,18 +230,11 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
                     isHiddenSubtitlesView, isHiddenPreviousView, isHiddenNextView,
                     timelineView, canvasView, playerView]
         
-        sizeView.binding = { [unowned self] in
-            self.scene.frame = Rect(origin: Point(x: -$0.size.width / 2, y: -$0.size.height / 2),
-                                    size: $0.size)
-            let sp = Point(x: $0.size.width, y: $0.size.height)
-            self.transformView.standardTranslation = sp
-            self.wiggleXView.standardAmplitude = $0.size.width
-            self.wiggleYView.standardAmplitude = $0.size.height
-        }
-
-        timelineView.setSceneDurationClosure = { [unowned self] in
-            self.playerView.maxTimeView.update = self.scene.secondTime(withBeatTime: $1)
-        }
+        sizeView.notifications.append({ [unowned self] in
+            let origin = Point(x: -$0.model.width / 2, y: -$0.model.height / 2)
+            self.model.canvas.frame = Rect(origin: origin, size: $0.model)
+            let sp = Point(x: $0.model.width, y: $0.model.height)
+        })
         
         exportSubtitlesView.model = { [unowned self] _ in self.exportSubtitles() }
         exportImageView.model = { [unowned self] _ in self.exportImage() }
@@ -425,12 +317,13 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
             return Point(x: $0.x + encoderWidth, y: $0.y)
         }
     }
-    private func beganEncode<T: MediaEncoder>(_ view: MediaEncoderView<T>) {
+    private func beganEncode<T: MediaEncoder>(_ view: MediaEncoderView<T>, to file: URL.File) {
         view.stoppedClosure = { [unowned self] in self.endedEncode($0) }
         view.endedClosure = { [unowned self] in self.endedEncode($0) }
         encoderViews.append(view)
         parent?.append(child: view)
         updateEncoderPositions()
+        encodingQueue.addOperation(view.write(to: file))
     }
     private func endedEncode<T: MediaEncoder>(_ view: MediaEncoderView<T>) {
         if let index = encoderViews.index(of: view) {
@@ -442,7 +335,8 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
     
     func exportMovie() {
         let size = model.canvas.frame.size, p = model.renderingVerticalResolution
-        let newSize = Size(width: floor((size.width * Real(p)) / size.height), height: Real(p))
+        let newSize = Size(width: ((size.width * Real(p)) / size.height).rounded(.down),
+                           height: Real(p))
         let sizeString = "w: \(Int(newSize.width)) px, h: \(Int(newSize.height)) px"
         let message = Text(english: "Export Movie(\(sizeString))",
                            japanese: "動画として書き出す(\(sizeString))")
@@ -450,26 +344,27 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
     }
     func exportMovie(message: Text?, name: Text? = nil, size: Size,
                      videoType: VideoType = .mp4, codec: VideoCodec = .h264) {
-        URL.file(message: message, name: nil, fileTypes: [videoType]) { [unowned self] e in
+        URL.file(message: message, name: nil, fileTypes: [videoType]) { [unowned self] file in
             let encoder = SceneVideoEncoder(scene: self.model, size: size,
                                             videoType: videoType, codec: codec)
-            self.beganEncode(SceneVideoEncoderView(encoder: encoder))
+            self.beganEncode(SceneVideoEncoderView(encoder: encoder), to: file)
         }
     }
     
     func exportImage() {
         let size = model.canvas.frame.size, p = model.renderingVerticalResolution
-        let newSize = Size(width: floor((size.width * Real(p)) / size.height), height: Real(p))
+        let newSize = Size(width: ((size.width * Real(p)) / size.height).rounded(.down),
+                           height: Real(p))
         let sizeString = "w: \(Int(newSize.width)) px, h: \(Int(newSize.height)) px"
         let message = Text(english: "Export Image(\(sizeString))",
                            japanese: "画像として書き出す(\(sizeString))")
         exportImage(message: message, size: newSize)
     }
     func exportImage(message: Text?, size: Size, fileType: Image.FileType = .png) {
-        URL.file(message: message, fileTypes: [fileType]) { [unowned self] e in
+        URL.file(message: message, fileTypes: [fileType]) { [unowned self] file in
             let encoder = SceneImageEncoder(canvas: self.model.canvas,
                                             size: size, fileType: fileType)
-            self.beganEncode(SceneImageEncoderView(encoder: encoder))
+            self.beganEncode(SceneImageEncoderView(encoder: encoder), to: file)
         }
     }
     
@@ -478,9 +373,9 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
         exportSubtitles(message: message)
     }
     func exportSubtitles(message: Text?, fileType: Subtitle.FileType = .vtt) {
-        URL.file(message: message, fileTypes: [fileType]) { [unowned self] e in
+        URL.file(message: message, fileTypes: [fileType]) { [unowned self] file in
             let encoder = SceneSubtitlesEncoder(timeline: self.model.timeline, fileType: fileType)
-            self.beganEncode(SceneSubtitlesEncoderView(encoder: encoder))
+            self.beganEncode(SceneSubtitlesEncoderView(encoder: encoder), to: file)
         }
     }
 }

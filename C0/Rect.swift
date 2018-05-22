@@ -129,6 +129,10 @@ extension Rect {
         self = union(other)
     }
     
+    var midPoint: Point {
+        return Point(x: midX, y: midY)
+    }
+    
     static func boundingBox(with points: [Point]) -> Rect {
         guard !points.isEmpty else {
             return Rect.null
@@ -268,8 +272,7 @@ struct RotatedRect: Codable, Equatable {
                 minBounds = bounds
             }
         }
-        centerPoint = Point(x: minBounds.midX,
-                            y: minBounds.midY).applying(CGAffineTransform(rotationAngle: minAngle))
+        centerPoint = minBounds.midPoint.applying(CGAffineTransform(rotationAngle: minAngle))
         size = minBounds.size
         angle = minAngle
     }

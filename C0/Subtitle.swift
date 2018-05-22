@@ -17,26 +17,27 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Data
 
 struct Subtitle: Codable, Equatable {
     enum FileType: FileTypeProtocol {
         case vtt
+        
         var utType: String {
             switch self {
-            case .vtt:
-                return "vtt"
+            case .vtt: return "vtt"
             }
         }
     }
     
     struct Option {
-        var borderColor = Color.subtitleBorder, fillColor = Color.subtitleFill
         var font = Font.subtitle
+        var lineColor = Color.subtitleBorder, fillColor = Color.subtitleFill
     }
     
     var string = ""
-    
+}
+extension Subtitle {
     var vttString: String {
         return string
     }
@@ -73,33 +74,14 @@ struct Subtitle: Codable, Equatable {
     }
 }
 extension Subtitle {
-    //view
-    func draw(bounds: Rect, with option: Option = Option(), in ctx: CGContext) {
-        guard !string.isEmpty else { return }
-        let attributes: [NSAttributedStringKey: Any] = [
-            NSAttributedStringKey(rawValue: String(kCTFontAttributeName)): option.font.ctFont,
-            NSAttributedStringKey(rawValue: String(kCTForegroundColorFromContextAttributeName)): true
-        ]
-        let attString = NSAttributedString(string: string, attributes: attributes)
-        let framesetter = CTFramesetterCreateWithAttributedString(attString)
-        let range = CFRange(location: 0, length: attString.length), ratio = bounds.size.width/640
-        let size = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, range, nil,
-                                                                Size(width: Real.infinity,
-                                                                     height: Real.infinity), nil)
-        let lineBounds = Rect(origin: Point(), size: size)
-        let ctFrame = CTFramesetterCreateFrame(framesetter, range,
-                                               CGPath(rect: lineBounds, transform: nil), nil)
-        ctx.saveGState()
-        ctx.setAllowsFontSmoothing(false)
-        ctx.translateBy(x: round(bounds.midX - lineBounds.midX),  y: round(bounds.minY + 20 * ratio))
-        ctx.setTextDrawingMode(.stroke)
-        ctx.setLineWidth(ceil(3 * ratio))
-        ctx.setStrokeColor(option.borderColor.cg)
-        CTFrameDraw(ctFrame, ctx)
-        ctx.setTextDrawingMode(.fill)
-        ctx.setFillColor(option.fillColor.cg)
-        CTFrameDraw(ctFrame, ctx)
-        ctx.restoreGState()
+    func view(with option: Option = Option(), inBounds bounds: Rect) -> View {
+        let ratio = bounds.size.width / 640
+        let view = TextFormView(text: Text(string), font: option.font, color: option.fillColor,
+                                lineColor: option.lineColor, lineWidth: (3 * ratio).rounded(.up),
+                                frameAlignment: .center, alignment: .center)
+        view.frame.origin = Point(x: (bounds.midX - view.bounds.midX).rounded(),
+                                  y: (bounds.minY + 20 * ratio).rounded())
+        return view
     }
 }
 extension Subtitle: Interpolatable {
@@ -133,8 +115,9 @@ extension Subtitle: AbstractViewable {
                                               type: AbstractType) -> View {
         switch type {
         case .normal:
-            return SubtitleView(binder: binder, keyPath: keyPath,
-                                frame: frame, sizeType: sizeType)
+            return string.abstractViewWith(binder: binder,
+                                           keyPath: keyPath.appending(path: \Subtitle.string),
+                                           frame: frame, sizeType, type: .normal)
         case .mini:
             return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
         }
@@ -147,7 +130,7 @@ extension Subtitle: ThumbnailViewable {
     }
 }
 
-struct SubtitleTrack: Track {
+struct SubtitleTrack: Track, Codable {
     private(set) var animation = Animation<Subtitle>()
     var animatable: Animatable {
         return animation

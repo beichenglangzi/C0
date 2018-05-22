@@ -17,7 +17,8 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Locale
+import CoreGraphics
 
 struct CellGroup: Codable, TreeNode, Equatable, Namable {
     var name: String
@@ -81,29 +82,18 @@ extension CellGroup {
     
     enum Indication {
         struct DrawingItem {
-            var selectedLineIndexes: [Int]
+            var lineIndexes: [Int]
+        }
+        struct LineItem {
+            var pointIndexes: [Int]
+            //isPressure
         }
         
-        case none
-        case indicated(DrawingItem)
-        case selected()
+        case drawing(DrawingItem)
+        case line(LineItem)
     }
     func indication(at p: Point, reciprocalScale: Real) -> Indication? {
-        let selectedCellIndexes = selectedCellIndexesWithNotEmpty(at: p)
-        if !selectedCellIndexes.isEmpty {
-            return .selected(rootCell.sortedIndexes(selectedCellIndexes))
-        } else if let cell = rootCell.at(p, reciprocalScale: reciprocalScale) {
-            return .indicated([cell])
-        } else {
-            let lineIndexes = drawing.isNearestSelectedLineIndexes(at: p) ?
-                drawing.selectedLineIndexes : []
-            if lineIndexes.isEmpty {
-                return drawing.lines.count == 0 ?
-                    .none : .indicated(Array(0..<drawing.lines.count))
-            } else {
-                return .selected(lineIndexes)
-            }
-        }
+        
     }
     
     struct CellItem {
@@ -224,18 +214,18 @@ extension CellGroup {
             case lineItem(LineItem), lineCapResult(LineCapResult)
         }
         
-        var result: Result, point: Point
+        var result: Result, minDistance²: Real, point: Point
     }
     func nearest(at point: Point, isVertex: Bool) -> Nearest? {
-        var minD = Real.infinity, minLinePoint: LinePoint?, minPoint = Point()
+        var minD² = Real.infinity, minLinePoint: LinePoint?, minPoint = Point()
         func nearestLinePoint(from lines: [Line]) -> Bool {
             var isNearest = false
             for (j, line) in lines.enumerated() {
                 for (i, mp) in line.mainPointSequence.enumerated() {
                     guard !(isVertex && i != 0 && i != line.controls.count - 1) else { continue }
-                    let d = hypot²(point.x - mp.x, point.y - mp.y)
-                    if d < minD {
-                        minD = d
+                    let d² = hypot²(point.x - mp.x, point.y - mp.y)
+                    if d² < minD² {
+                        minD² = d²
                         minLinePoint = LinePoint(line: line, lineIndex: j, pointIndex: i)
                         minPoint = mp
                         isNearest = true
@@ -277,14 +267,14 @@ extension CellGroup {
             let bslci = lineCapsItem.bezierSortedLineCapItem(at: minPoint)!
             let result = Nearest.Result.LineCapResult(bezierSortedLineCapItem: bslci,
                                                       lineCapsItem: lineCapsItem)
-            return Nearest(result: .lineCapResult(result), point: minPoint)
+            return Nearest(result: .lineCapResult(result), minDistance²: minD², point: minPoint)
         } else {
             if let drawing = minDrawing {
                 let lineItem = LineItem(linePoint: linePoint, drawingOrCell: .drawing(drawing))
-                return Nearest(result: .lineItem(lineItem), point: minPoint)
+                return Nearest(result: .lineItem(lineItem), minDistance²: minD², point: minPoint)
             } else if let cellItem = minCellItem {
                 let lineItem = LineItem(linePoint: linePoint, drawingOrCell: .cell(cellItem))
-                return Nearest(result: .lineItem(lineItem), point: minPoint)
+                return Nearest(result: .lineItem(lineItem), minDistance²: minD², point: minPoint)
             } else {
                 fatalError()
             }
@@ -485,7 +475,7 @@ extension CellGroup {
         let isEdit = !isEdited ? false :
             (viewType != .preview && viewType != .editMaterial && viewType != .changingMaterial)
         moveWithSineWave: if viewType == .preview && !xSineWave.isEmpty {
-            let waveY = ySineWave.yWith(t: wiggleT)
+            let waveY = ySineWave.yWith(t: sineWaveT)
             ctx.translateBy(x: waveY, y: 0)
         }
         guard !isHidden else {
@@ -547,10 +537,10 @@ extension CellGroup {
                   strokeLine: Line?, strokeLineWidth: Real, strokeLineColor: Color,
                   reciprocalViewScale: Real, scale: Real, rotation: Real,
                   in ctx: CGContext) {
-        let worldScale = self.worldScale
+        let worldScale = self.worldScale(at: <#T##TreeIndex<CellGroup>#>)
         let rScale = 1 / worldScale
         let rAllScale = reciprocalViewScale / worldScale
-        let wat = worldAffineTransform
+        let wat = worldAffineTransform(at: <#T##TreeIndex<CellGroup>#>)
         ctx.saveGState()
         ctx.concatenate(wat)
         
@@ -942,12 +932,20 @@ extension CellGroupChildren: AbstractViewable {
                                               frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> View {
         switch type {
-        case .normal:
-            return View()
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        case .normal: return View()
+        case .mini: return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
         }
     }
+}
+
+struct CellGroupChildrenTrack: Track, Codable {
+    private(set) var animation = Animation<CellGroupChildren>()
+    var animatable: Animatable {
+        return animation
+    }
+}
+extension CellGroupChildrenTrack: Referenceable {
+    static let name = Text(english: "Cell Group Children Track", japanese: "セルグループ配列トラック")
 }
 
 final class CellGroupView<T: BinderProtocol>: View, BindableReceiver {
@@ -959,6 +957,7 @@ final class CellGroupView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((CellGroupView<Binder>) -> ())]()
     
     var sizeType: SizeType {
         didSet { updateLayout() }

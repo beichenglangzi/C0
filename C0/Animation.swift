@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import CoreGraphics
 
 protocol Animatable {
     var keyframeTimings: KeyframeTimingCollection { get }
@@ -389,6 +389,8 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((AnimationView<Value, Binder>) -> ())]()
+    
     var defaultModel = Model()
     
     var keyframesView: ObjectsView<Keyframe<Value>, Binder>
@@ -572,7 +574,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
                     keyLineViews.append(layer)
                 }
             }
-
+            
             if i > 0 {
                 let fillColor = li.loopingCount > 0 || li.index == editingKeyframeIndex ?
                     Color.editing : Color.knob
@@ -625,11 +627,9 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
                                                   subKnobHalfHeight: skhh,
                                                   with: .main)
         knobViews.append(durationKnob)
-
+        
         self.knobViews = knobViews
-
-        updateEditLoopframeIndex()
-        updateIndicatedView()
+        
         children = [editView, indicatedView] + keyLineViews + knobViews as [View] + selectedViews
     }
     private func updateWithBeginTime() {
@@ -675,7 +675,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
         let dt = beginBaseTime - floor(beginBaseTime / baseTimeInterval) * baseTimeInterval
         let basedX = x + self.x(withTime: dt)
         let t =  isBased ?
-            baseTimeInterval * Rational(Int(round(basedX / baseWidth))) :
+            baseTimeInterval * Rational(Int((basedX / baseWidth).rounded())) :
             basedRationalTime(withRealTime: Real(basedX / baseWidth) * Real(baseTimeInterval))
         return t - (beginBaseTime - floor(beginBaseTime / baseTimeInterval) * baseTimeInterval)
     }
@@ -852,38 +852,47 @@ extension AnimationView: Newable {
         return true
     }
 }
-extension AnimationView: Movable {
-    private var isDrag = false, oldTime = RealBaseTime(0), oldKeyframeIndex: Int?
-    private struct DragObject {
-        var clipDeltaTime = Rational(0), minDeltaTime = Rational(0), oldTime = Rational(0)
-        var oldAnimation = Animation()
+final class AnimationViewMover<Value: KeyframeValue, Binder: BinderProtocol> {
+    var animationView: AnimationView<Value, Binder>
+    var model: Animation<Value> {
+        get {
+            return animationView.model
+        }
+        set {
+            animationView.model = newValue
+        }
     }
     
-    private var dragObject = DragObject()
+    var editingKeyframeIndex: Int?
+    
+    var isDrag = false, oldRealBaseTime = RealBaseTime(0), oldKeyframeIndex: Int?
+    var clipDeltaTime = Rational(0), minDeltaTime = Rational(0), oldTime = Rational(0)
+    var oldAnimation = Animation<Value>()
+    
     func move(for point: Point, pressure: Real,
               time: Second, _ phase: Phase, _ version: Version) {
         let p = point
         switch phase {
         case .began:
-            oldTime = realBaseTime(withX: p.x)
-            if let ki = nearestKeyframeIndex(at: p), model.keyframes.count > 1 {
+            oldRealBaseTime = animationView.realBaseTime(withX: p.x)
+            if let ki = animationView.nearestKeyframeIndex(at: p), model.keyframes.count > 1 {
                 let keyframeIndex = ki > 0 ? ki : 1
                 oldKeyframeIndex = keyframeIndex
-                moveKeyframe(withDeltaTime: 0, keyframeIndex: keyframeIndex, phase: phase)
+                moveKeyframe(withDeltaTime: 0, keyframeIndex: keyframeIndex, phase: phase, version)
             } else {
                 oldKeyframeIndex = nil
-                moveDuration(withDeltaTime: 0, phase)
+                moveDuration(withDeltaTime: 0, phase, version)
             }
         case .changed, .ended:
-            let t = realBaseTime(withX: point.x)
-            let fdt = t - oldTime + (t - oldTime >= 0 ? 0.5 : -0.5)
-            let dt = basedRationalTime(withRealBaseTime: fdt)
-            let deltaTime = max(dragObject.minDeltaTime, dt + dragObject.clipDeltaTime)
+            let t = animationView.realBaseTime(withX: point.x)
+            let fdt = t - oldRealBaseTime + (t - oldRealBaseTime >= 0 ? 0.5 : -0.5)
+            let dt = animationView.basedRationalTime(withRealBaseTime: fdt)
+            let deltaTime = max(minDeltaTime, dt + clipDeltaTime)
             if let keyframeIndex = oldKeyframeIndex, keyframeIndex < model.keyframes.count {
                 moveKeyframe(withDeltaTime: deltaTime,
-                             keyframeIndex: keyframeIndex, phase: phase)
+                             keyframeIndex: keyframeIndex, phase: phase, version)
             } else {
-                moveDuration(withDeltaTime: deltaTime, phase)
+                moveDuration(withDeltaTime: deltaTime, phase, version)
             }
         }
     }
@@ -904,46 +913,44 @@ extension AnimationView: Movable {
             isDrag = false
             let preTime = model.keyframes[keyframeIndex - 1].timing.time
             let time = model.keyframes[keyframeIndex].timing.time
-            dragObject.clipDeltaTime = clipDeltaTime(withTime: time + beginBaseTime)
-            dragObject.minDeltaTime = preTime - time
-            dragObject.oldAnimation = model
-            dragObject.oldTime = time
+            clipDeltaTime = animationView.clipDeltaTime(withTime: time + animationView.beginBaseTime)
+            minDeltaTime = preTime - time
+            oldAnimation = model
+            oldTime = time
         case .changed:
             isDrag = true
-            var nks = dragObject.oldAnimation.keyframes
+            var nks = oldAnimation.keyframes
             (keyframeIndex..<nks.count).forEach {
-                nks[$0].time += deltaTime
+                nks[$0].timing.time += deltaTime
             }
             model.keyframes = nks
-            model.duration = dragObject.oldAnimation.duration + deltaTime
-            updateLayout()
+            model.duration = oldAnimation.duration + deltaTime
+            animationView.updateLayout()
         case .ended:
             editingKeyframeIndex = nil
             guard isDrag else {
-                dragObject = DragObject()
                 return
             }
             let newKeyframes: [Keyframe<Value>]
             if deltaTime != 0 {
-                var nks = dragObject.oldAnimation.keyframes
+                var nks = oldAnimation.keyframes
                 (keyframeIndex..<nks.count).forEach {
-                    nks[$0].time += deltaTime
+                    nks[$0].timing.time += deltaTime
                 }
                 registeringUndoManager?.registerUndo(withTarget: self) { [dragObject] in
-                    $0.set(dragObject.oldAnimation.keyframes, old: nks,
-                           duration: dragObject.oldAnimation.duration,
-                           oldDuration: dragObject.oldAnimation.duration + deltaTime)
+                    $0.set(oldAnimation.keyframes, old: nks,
+                           duration: oldAnimation.duration,
+                           oldDuration: oldAnimation.duration + deltaTime)
                 }
                 newKeyframes = nks
             } else {
-                newKeyframes = dragObject.oldAnimation.keyframes
+                newKeyframes = oldAnimation.keyframes
             }
             model.keyframes = newKeyframes
-            model.duration = dragObject.oldAnimation.duration + deltaTime
-            updateLayout()
+            model.duration = oldAnimation.duration + deltaTime
+            animationView.updateLayout()
             
             isDrag = false
-            dragObject = DragObject()
         }
     }
     func moveDuration(withDeltaTime deltaTime: Rational, _ phase: Phase, _ version: Version) {
@@ -953,31 +960,27 @@ extension AnimationView: Movable {
             isDrag = false
             let preTime = model.keyframes[model.keyframes.count - 1].timing.time
             let time = model.duration
-            dragObject.clipDeltaTime = clipDeltaTime(withTime: time + beginBaseTime)
-            dragObject.minDeltaTime = preTime - time
-            dragObject.oldAnimation = model
-            dragObject.oldTime = time
+            clipDeltaTime = animationView.clipDeltaTime(withTime: time + animationView.beginBaseTime)
+            minDeltaTime = preTime - time
+            oldAnimation = model
+            oldTime = time
         case .changed:
             isDrag = true
-            model.duration = dragObject.oldAnimation.duration + deltaTime
-            updateLayout()
+            model.duration = oldAnimation.duration + deltaTime
+            animationView.updateLayout()
         case .ended:
             editingKeyframeIndex = nil
-            guard isDrag else {
-                dragObject = DragObject()
-                return
-            }
+            guard isDrag else { return }
             if deltaTime != 0 {
                 registeringUndoManager?.registerUndo(withTarget: self) { [dragObject] in
-                    $0.set(duration: dragObject.oldAnimation.duration,
-                           oldDuration: dragObject.oldAnimation.duration + deltaTime)
+                    $0.set(duration: oldAnimation.duration,
+                           oldDuration: oldAnimation.duration + deltaTime)
                 }
             }
-            model.duration = dragObject.oldAnimation.duration + deltaTime
-            updateLayout()
+            model.duration = oldAnimation.duration + deltaTime
+            animationView.updateLayout()
             
             isDrag = false
-            dragObject = DragObject()
         }
     }
 }

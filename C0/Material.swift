@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Locale
 
 struct Material: Codable, Hashable {
     enum MaterialType: Int8, Codable {
@@ -168,6 +168,8 @@ final class MaterialView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((MaterialView<Binder>) -> ())]()
+    
     var defaultModel = Model()
     
     var option: ModelOption {

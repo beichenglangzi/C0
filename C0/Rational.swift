@@ -19,6 +19,7 @@
 
 struct Rational: AdditiveGroup, SignedNumeric {
     var p, q: Int
+    
     init(_ p: Int, _ q: Int) {
         guard q != 0 else { fatalError("Division by zero") }
         let d = abs(Int.gcd(p, q)) * (q / abs(q))
@@ -53,7 +54,8 @@ struct Rational: AdditiveGroup, SignedNumeric {
         }
         self.init(p1, q1)
     }
-    
+}
+extension Rational {
     static func continuedFractions(with x: Real, maxCount: Int = 32) -> [Int] {
         var x = x, cfs = [Int]()
         var a = x.rounded(.down)
@@ -128,14 +130,14 @@ extension Rational: Equatable {
         return lhs.p * rhs.q == lhs.q * rhs.p
     }
 }
-extension Rational: Comparable {
-    static func <(lhs: Rational, rhs: Rational) -> Bool {
-        return lhs.p * rhs.q < rhs.p * lhs.q
-    }
-}
 extension Rational: Hashable {
     var hashValue: Int {
         return Hash.uniformityHashValue(with: [p.hashValue, q.hashValue])
+    }
+}
+extension Rational: Comparable {
+    static func <(lhs: Rational, rhs: Rational) -> Bool {
+        return lhs.p * rhs.q < rhs.p * lhs.q
     }
 }
 extension Rational: Codable {

@@ -17,7 +17,8 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
+import struct Foundation.Locale
+import CoreGraphics
 
 /**
  Issue: 複数セルの重なり判定（複数のセルの上からセルを追加するときにもcontains判定が有効なように修正）
@@ -48,7 +49,8 @@ struct Cell: Codable, Equatable, TreeNode {
         self.isHidden = isHidden
         self.isMainEdit = isMainEdit
     }
-    
+}
+extension Cell {
     var isEmpty: Bool {
         return geometry.isEmpty
     }
@@ -158,7 +160,7 @@ struct Cell: Codable, Equatable, TreeNode {
     func intersects(_ geometry: Geometry) -> Bool {
         return isEditable && geometry.intersects(geometry)
     }
-    func intersects(_ lasso: LineLasso) -> Bool {
+    func intersects(_ lasso: GeometryLasso) -> Bool {
         return isEditable && geometry.intersects(lasso)
     }
     func intersectsLines(_ bounds: Rect) -> Bool {
@@ -244,6 +246,7 @@ extension Cell {
             return (aColor, aLineColor)
         }
     }
+    
     func draw(isEdit: Bool = false, isUseDraw: Bool = false,
               reciprocalScale: Real, reciprocalAllScale: Real,
               scale: Real, rotation: Real, in ctx: CGContext) {
@@ -311,7 +314,7 @@ extension Cell {
             }
         } else {
             ctx.saveGState()
-            ctx.setBlendMode(material.type.blendType.blendMode)
+//            ctx.setBlendMode(material.type.blendType.blendMode)
             ctx.drawBlurWith(color: color, width: material.lineWidth,
                              strength: 1,
                              isLuster: material.type == .luster, path: path,
@@ -341,32 +344,17 @@ extension Cell {
         }
     }
     
-    static func drawCellPaths(_ cells: [Cell], _ color: Color,
-                              alpha: Real = 0.3, in ctx: CGContext) {
-        ctx.setAlpha(alpha)
-        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
-        ctx.setFillColor(color.cg)
-        cells.forEach {
-            if !$0.isHidden {
-                $0.geometry.fillPath(in: ctx)
-            }
-        }
-        ctx.endTransparencyLayer()
-        ctx.setAlpha(1)
+    func indexViews() -> [View] {
+        var views = [View]()
+        indexViews(&views)
+        return views
     }
-    
-    func drawID(in ctx: CGContext) {
-        var i = 0
-        drawID(in: ctx, &i)
-    }
-    private func drawID(in ctx: CGContext, _ i: inout Int) {
+    private func indexViews(_ views: inout [View]) {
         children.forEach {
-            $0.drawID(in: ctx)
-            var textMaterial = TextMaterial()
-            textMaterial.font = .small
-            let textFrame = TextFrame(string: "\(i)", textMaterial: textMaterial)
-            textFrame.drawWithCenterOfImageBounds(in: imageBounds, in: ctx)
-            i += 1
+            $0.indexViews(&views)
+            let view = TextFormView(text: Text("\(views.count - 1)"), font: .small)
+            view.frame.origin = (imageBounds.midPoint - view.bounds.midPoint).rounded()
+            views.append(view)
         }
     }
 }
@@ -383,14 +371,15 @@ extension Cell: ThumbnailViewable {
         let c = CGAffineTransform.centering(from: allImageBounds, to: bounds.inset(by: 3))
         ctx.concatenate(c.affine)
         let scale = 3 * c.scale, rotation = 0.0.cg
+        let reciprocalScale = 1 / scale
         if geometry.isEmpty {
             children.forEach {
-                $0.draw(reciprocalScale: 1 / scale, reciprocalAllScale: 1 / scale,
+                $0.draw(reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalScale,
                         scale: scale, rotation: rotation,
                         in: ctx)
             }
         } else {
-            draw(reciprocalScale: 1 / scale, reciprocalAllScale: 1 / scale,
+            draw(reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalScale,
                  scale: scale, rotation: rotation,
                  in: ctx)
         }
@@ -406,6 +395,7 @@ final class CellView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
+    var notifications = [((CellView<Binder>) -> ())]()
     
     private let isLockedView: BoolView<Binder>
     
@@ -414,11 +404,14 @@ final class CellView<T: BinderProtocol>: View, BindableReceiver {
     }
     private let classNameView: TextFormView
     
-    init(binder: T, keyPath: BinderKeyPath, frame: Rect = Rect(), sizeType: SizeType = .regular) {
+    init(binder: T, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
         self.binder = binder
         self.keyPath = keyPath
         
-        isLockedView = BoolView(binder: binder, keyPath: keyPath.appending(path: \Model.isLocked),
+        isLockedView = BoolView(binder: binder,
+                                keyPath: keyPath.appending(path: \Model.isLocked),
                                 option: BoolOption(defaultModel: false, cationModel: true,
                                                    name: "", info: .locked),
                                 sizeType: sizeType)
