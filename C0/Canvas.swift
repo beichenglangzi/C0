@@ -105,7 +105,7 @@ final class CanvasView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((CanvasView<Binder>) -> ())]()
+    var notifications = [((CanvasView<Binder>, BasicNotification) -> ())]()
     
     var defaultModel = Model()
     

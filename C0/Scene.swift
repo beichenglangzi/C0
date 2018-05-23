@@ -163,7 +163,7 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((SceneView<Binder>) -> ())]()
+    var notifications = [((SceneView<Binder>, BasicNotification) -> ())]()
     
     let versionView: VersionView<Binder>
     
@@ -231,6 +231,7 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
                     timelineView, canvasView, playerView]
         
         sizeView.notifications.append({ [unowned self] in
+            guard case .didChange = $1 else { return }
             let origin = Point(x: -$0.model.width / 2, y: -$0.model.height / 2)
             self.model.canvas.frame = Rect(origin: origin, size: $0.model)
             let sp = Point(x: $0.model.width, y: $0.model.height)

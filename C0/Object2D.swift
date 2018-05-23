@@ -89,7 +89,7 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((Discrete2DView<ModelOption, Binder>) -> ())]()
+    var notifications = [((Discrete2DView<ModelOption, Binder>, BasicNotification) -> ())]()
     
     var option: ModelOption {
         didSet { updateWithModel() }
@@ -233,7 +233,7 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>: View, Slidable
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((Slidable2DView<ModelOption, Binder>) -> ())]()
+    var notifications = [((Slidable2DView<ModelOption, Binder>, BasicNotification) -> ())]()
     
     var option: ModelOption {
         didSet { updateWithModel() }

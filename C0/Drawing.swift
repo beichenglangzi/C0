@@ -253,7 +253,7 @@ final class DrawingView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((DrawingView<Binder>) -> ())]()
+    var notifications = [((DrawingView<Binder>, BasicNotification) -> ())]()
     
     var defaultModel = Model()
     

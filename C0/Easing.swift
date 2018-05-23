@@ -98,7 +98,7 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((EasingView<Binder>) -> ())]()
+    var notifications = [((EasingView<Binder>, BasicNotification) -> ())]()
     
     var defaultModel = Model()
     

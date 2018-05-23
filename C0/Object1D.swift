@@ -45,7 +45,7 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((Assignable1DView<ModelOption, Binder>) -> ())]()
+    var notifications = [((Assignable1DView<ModelOption, Binder>, BasicNotification) -> ())]()
     
     var model: Model {
         get {
@@ -53,7 +53,7 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
         }
         set {
             binder[keyPath: keyPath] = option.transformedModel(newValue)
-            notifications.forEach { $0(self) }
+            notifications.forEach { $0(self, ._didChange) }
             updateWithModel()
         }
     }
@@ -140,7 +140,15 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((Discrete1DView<ModelOption, Binder>) -> ())]()
+    enum Notification: NotificationProtocol {
+        case didChange
+        case didChangeFromPhase(Phase, beginModel: Model)
+        
+        static var _didChange: Notification {
+            return .didChange
+        }
+    }
+    var notifications = [((Discrete1DView<ModelOption, Binder>, Notification) -> ())]()
     
     var model: Model {
         get {
@@ -148,7 +156,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
         }
         set {
             binder[keyPath: keyPath] = option.transformedModel(newValue)
-            notifications.forEach { $0(self) }
+            notifications.forEach { $0(self, Notification.didChange) }
             updateWithModel()
         }
     }
@@ -238,7 +246,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
         return option.model(withDelta: delta / interval, oldModel: oldModel)
     }
     
-    private var pointMovableOldModel: Model?
+    private var pointMovableBiginModel: Model?
 }
 extension Discrete1DView: ViewQueryable {
     static var referenceableType: Referenceable.Type {
@@ -267,16 +275,20 @@ extension Discrete1DView: Assignable {
 extension Discrete1DView: PointMovable {
     func captureWillMovePoint(at p: Point, to version: Version) {
         capture(model, to: version)
-        self.pointMovableOldModel = model
+        pointMovableBiginModel = model
     }
     func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        guard let oldModel = pointMovableOldModel else { return }
+        guard let beginModel = pointMovableBiginModel else { return }
         switch phase {
         case .began: knobView.fillColor = .editing
         case .changed: break
         case .ended: knobView.fillColor = .knob
         }
-        model = option.clippedModel(model(at: p, first: fp, old: oldModel))
+        
+        let newValue = option.clippedModel(model(at: p, first: fp, old: beginModel))
+        binder[keyPath: keyPath] = option.transformedModel(newValue)
+        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beginModel)) }
+        updateWithModel()
     }
 }
 
@@ -292,7 +304,15 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((Slidable1DView<ModelOption, Binder>) -> ())]()
+    enum Notification: NotificationProtocol {
+        case didChange
+        case didChangeFromPhase(Phase, beginModel: Model)
+        
+        static var _didChange: Notification {
+            return .didChange
+        }
+    }
+    var notifications = [((Slidable1DView<ModelOption, Binder>, Notification) -> ())]()
     
     var model: Model {
         get {
@@ -300,7 +320,7 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
         }
         set {
             binder[keyPath: keyPath] = option.transformedModel(newValue)
-            notifications.forEach { $0(self) }
+            notifications.forEach { $0(self, .didChange) }
             updateWithModel()
         }
     }
@@ -374,7 +394,7 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
         return option.model(withRatio: t)
     }
     
-    var movePointClosure: ((Point, Phase) -> ())?
+    private var pointMovableBiginModel: Model?
 }
 extension Slidable1DView: ViewQueryable {
     static var referenceableType: Referenceable.Type {
@@ -408,15 +428,20 @@ extension Slidable1DView: Runnable {
 extension Slidable1DView: PointMovable {
     func captureWillMovePoint(at p: Point, to version: Version) {
         capture(model, to: version)
+        pointMovableBiginModel = model
     }
     func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        guard let beginModel = pointMovableBiginModel else { return }
         switch phase {
         case .began: knobView.fillColor = .editing
         case .changed: break
         case .ended: knobView.fillColor = .knob
         }
-        model = option.clippedModel(model(at: p))
-        movePointClosure?(p, phase)
+        
+        let newValue = option.clippedModel(model(at: p))
+        binder[keyPath: keyPath] = option.transformedModel(newValue)
+        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beginModel)) }
+        updateWithModel()
     }
 }
 extension Slidable1DView {
@@ -457,7 +482,15 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((Circular1DView<ModelOption, Binder>) -> ())]()
+    enum Notification: NotificationProtocol {
+        case didChange
+        case didChangeFromPhase(Phase, beginModel: Model)
+        
+        static var _didChange: Notification {
+            return .didChange
+        }
+    }
+    var notifications = [((Circular1DView<ModelOption, Binder>, Notification) -> ())]()
     
     var model: Model {
         get {
@@ -465,7 +498,7 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
         }
         set {
             binder[keyPath: keyPath] = option.transformedModel(newValue)
-            notifications.forEach { $0(self) }
+            notifications.forEach { $0(self, .didChange) }
             updateWithModel()
         }
     }
@@ -519,9 +552,13 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     override func updateLayout() {
         let cp = Point(x: bounds.midX, y: bounds.midY), r = bounds.width / 2
         let path = CGMutablePath()
-        path.addArc(center: cp, radius: r, startAngle: 0, endAngle: 2 * .pi, clockwise: true)
+        path.addArc(center: cp, radius: r,
+                    startAngle: 0, endAngle: 2 * .pi,
+                    clockwise: true)
         path.move(to: cp + Point(x: r - width, y: 0))
-        path.addArc(center: cp, radius: r - width, startAngle: 0, endAngle: 2 * .pi, clockwise: false)
+        path.addArc(center: cp, radius: r - width,
+                    startAngle: 0, endAngle: 2 * .pi,
+                    clockwise: false)
         self.path = path
         updateWithModel()
     }
@@ -538,10 +575,13 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
         }
         let cp = Point(x: bounds.midX, y: bounds.midY)
         let theta = cp.tangential(p)
-        let ct = (theta > startAngle ? theta - startAngle : theta - startAngle + 2 * .pi) / (2 * .pi)
+        let ct = (theta > startAngle ?
+            theta - startAngle : theta - startAngle + 2 * .pi) / (2 * .pi)
         let t = circularOrientation == .clockwise ? 1 - ct : ct
         return option.model(withRatio: t)
     }
+    
+    private var pointMovableBiginModel: Model?
 }
 extension Circular1DView: ViewQueryable {
     static var referenceableType: Referenceable.Type {
@@ -575,13 +615,19 @@ extension Circular1DView: Runnable {
 extension Circular1DView: PointMovable {
     func captureWillMovePoint(at p: Point, to version: Version) {
         capture(model, to: version)
+        pointMovableBiginModel = model
     }
     func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        guard let beginModel = pointMovableBiginModel else { return }
         switch phase {
         case .began: knobView.fillColor = .editing
         case .changed: break
         case .ended: knobView.fillColor = .knob
         }
-        model = option.clippedModel(model(at: p))
+        
+        let newValue = option.clippedModel(model(at: p))
+        binder[keyPath: keyPath] = option.transformedModel(newValue)
+        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beginModel)) }
+        updateWithModel()
     }
 }

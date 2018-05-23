@@ -564,7 +564,7 @@ final class ColorView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((ColorView<Binder>) -> ())]()
+    var notifications = [((ColorView<Binder>, BasicNotification) -> ())]()
     
     var defaultModel = Model()
     

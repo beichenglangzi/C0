@@ -136,6 +136,10 @@ protocol FileTypeProtocol {
 extension URL {
     struct File {
         var url: URL, name: Text, isExtensionHidden: Bool
+        
+        var attributes: [FileAttributeKey: Any] {
+            return [.extensionHidden: isExtensionHidden]
+        }
     }
     static func file(message: Text? = nil,
                      name: Text? = nil,
@@ -400,7 +404,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
         
         c0View.desktopView.copiedObjectsView.push(NSPasteboard.general.copiedObjects,
                                                   to: c0View.desktopView.version)
-        c0View.desktopView.copiedObjectsView.notifications.append({ [unowned self] _ in
+        c0View.desktopView.copiedObjectsView.notifications.append({ [unowned self] _, _ in
             self.didSetCopiedObjects()
         })
     }
@@ -595,14 +599,14 @@ final class C0View: NSView, NSTextInputClient {
         wantsLayer = true
         guard let layer = layer else { return }
         
-        desktopView.isHiddenActionManagerView.notifications.append({ [unowned self] in
-            UserDefaults.standard.set($0, forKey: self.isHiddenActionManagerKey)
+        desktopView.isHiddenActionManagerView.notifications.append({ [unowned self] view, _ in
+            UserDefaults.standard.set(view.model, forKey: self.isHiddenActionManagerKey)
         })
         desktopView.model.isHiddenActionManager
             = UserDefaults.standard.bool(forKey: isHiddenActionManagerKey)
         
-        desktopView.isSimpleReferenceView.notifications.append({ [unowned self] in
-            UserDefaults.standard.set($0, forKey: self.isSimpleReferenceKey)
+        desktopView.isSimpleReferenceView.notifications.append({ [unowned self] view, _ in
+            UserDefaults.standard.set(view.model, forKey: self.isSimpleReferenceKey)
         })
         desktopView.model.isSimpleReference
             = UserDefaults.standard.bool(forKey: isSimpleReferenceKey)

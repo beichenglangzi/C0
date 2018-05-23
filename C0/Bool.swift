@@ -82,7 +82,7 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((BoolView<Binder>) -> ())]()
+    var notifications = [((BoolView<Binder>, BasicNotification) -> ())]()
     
     var option: ModelOption {
         didSet {

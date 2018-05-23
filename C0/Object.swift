@@ -18,7 +18,7 @@
  */
 
 /**
- Issue: Protocolから静的に決定可能な代数的データ型のコードを自動生成
+ Compiler Issue: Protocolから静的に決定可能な代数的データ型のコードを自動生成
  */
 struct Object {
     var value: Codable & Referenceable

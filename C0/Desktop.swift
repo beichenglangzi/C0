@@ -104,7 +104,7 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((DesktopView<Binder>) -> ())]()
+    var notifications = [((DesktopView<Binder>, BasicNotification) -> ())]()
 
     let versionView: VersionView<Binder>
     let copiedObjectsNameView = TextFormView(text: Text(english: "Copied:", japanese: "コピー済み:"))

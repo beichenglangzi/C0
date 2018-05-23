@@ -351,7 +351,7 @@ final class MediaEncoderView<T: MediaEncoder>: View {
                         OperationQueue.main.addOperation() {
                             self.textView.text = text(withTotalProgress: 1)
                         }
-                        try FileManager.default.setAttributes([.extensionHidden: e.isExtensionHidden],
+                        try FileManager.default.setAttributes(e.attributes,
                                                               ofItemAtPath: e.url.path)
                         OperationQueue.main.addOperation() {
                             self.endedClosure?(self)

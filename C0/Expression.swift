@@ -85,7 +85,7 @@ final class ExpressionView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((ExpressionView<Binder>) -> ())]()
+    var notifications = [((ExpressionView<Binder>, BasicNotification) -> ())]()
     
     var sizeType: SizeType {
         didSet { updateLayout() }

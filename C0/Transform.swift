@@ -228,7 +228,7 @@ final class TransformView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((TransformView<Binder>) -> ())]()
+    var notifications = [((TransformView<Binder>, BasicNotification) -> ())]()
     
     var option: ModelOption {
         didSet {

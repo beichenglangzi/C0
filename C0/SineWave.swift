@@ -250,7 +250,7 @@ final class SineWaveView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((SineWaveView<Binder>) -> ())]()
+    var notifications = [((SineWaveView<Binder>, BasicNotification) -> ())]()
     
     var option: ModelOption {
         didSet {

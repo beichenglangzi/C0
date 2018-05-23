@@ -957,7 +957,7 @@ final class CellGroupView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((CellGroupView<Binder>) -> ())]()
+    var notifications = [((CellGroupView<Binder>, BasicNotification) -> ())]()
     
     var sizeType: SizeType {
         didSet { updateLayout() }

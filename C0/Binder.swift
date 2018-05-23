@@ -30,14 +30,29 @@ final class BasicBinder<Model>: BinderProtocol {
     }
 }
 
+/**
+ Compiler Issue: Protocolとenumのcaseが衝突する
+ */
+protocol NotificationProtocol {
+    static var _didChange: Self { get }
+}
+enum BasicNotification: NotificationProtocol {
+    case didChange
+    
+    static var _didChange: BasicNotification {
+        return .didChange
+    }
+}
+
 protocol BindableReceiver: class {
     associatedtype Model
     associatedtype Binder: BinderProtocol
     associatedtype BinderKeyPath: ReferenceWritableKeyPath<Binder, Model>
+    associatedtype Notification: NotificationProtocol
     var model: Model { get set }
     var binder: Binder { get set }
     var keyPath: BinderKeyPath { get set }
-    var notifications: [((Self) -> ())] { get }
+    var notifications: [((Self, Notification) -> ())] { get }
     func updateWithModel()
     func push(_ model: Model, to version: Version)
     func capture(_ model: Model, to version: Version)
@@ -50,7 +65,7 @@ extension BindableReceiver {
         }
         set {
             binder[keyPath: keyPath] = newValue
-            notifications.forEach { $0(self) }
+            notifications.forEach { $0(self, ._didChange) }
             updateWithModel()
         }
     }

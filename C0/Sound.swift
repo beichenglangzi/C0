@@ -18,6 +18,7 @@
  */
 
 import AudioToolbox
+import AVFoundation
 
 struct Sound {
     static let basicSampleRate = 44100.0
@@ -185,6 +186,41 @@ extension Sound: AbstractViewable {
     }
 }
 
+final class SoundPlayer {
+    var currentTime: Second {
+        get { return Second(av.currentTime) }
+        set { av.currentTime = TimeInterval(newValue) }
+    }
+    private var av: AVAudioPlayer
+    
+    func play() {
+        av.play()
+    }
+    func pause() {
+        av.pause()
+    }
+    func stop() {
+        av.stop()
+    }
+    var isPlaying: Bool {
+        return av.isPlaying
+    }
+    
+    init?(sound: Sound) {
+        if let url = sound.url, let audioPlayer = try? AVAudioPlayer(contentsOf: url) {
+            self.av = audioPlayer
+            audioPlayer.volume = Float(sound.volume)
+        } else {
+            return nil
+        }
+    }
+}
+extension Sound {
+    var soundPlayer: SoundPlayer? {
+        return SoundPlayer(sound: self)
+    }
+}
+
 struct SoundTrack: Track, Codable {
     private(set) var animation = Animation<Sound>()
     var animatable: Animatable {
@@ -317,7 +353,7 @@ final class SoundView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((SoundView<Binder>) -> ())]()
+    var notifications = [((SoundView<Binder>, BasicNotification) -> ())]()
     
     var defaultModel = Sound()
     

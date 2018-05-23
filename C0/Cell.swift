@@ -395,7 +395,7 @@ final class CellView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((CellView<Binder>) -> ())]()
+    var notifications = [((CellView<Binder>, BasicNotification) -> ())]()
     
     private let isLockedView: BoolView<Binder>
     

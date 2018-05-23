@@ -108,7 +108,7 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((VersionView<Binder>) -> ())]()
+    var notifications = [((VersionView<Binder>, BasicNotification) -> ())]()
     
     let indexView: IntGetterView<Binder>
     let undoedDiffCountView: IntGetterView<Binder>

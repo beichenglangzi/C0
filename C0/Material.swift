@@ -168,7 +168,7 @@ final class MaterialView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((MaterialView<Binder>) -> ())]()
+    var notifications = [((MaterialView<Binder>, BasicNotification) -> ())]()
     
     var defaultModel = Model()
     

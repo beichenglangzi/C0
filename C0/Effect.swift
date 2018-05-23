@@ -139,7 +139,7 @@ final class EffectView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((EffectView<Binder>) -> ())]()
+    var notifications = [((EffectView<Binder>, BasicNotification) -> ())]()
     
     var defaultModel = Model()
     

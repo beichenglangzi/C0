@@ -120,7 +120,7 @@ final class ImageView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((ImageView<Binder>) -> ())]()
+    var notifications = [((ImageView<Binder>, BasicNotification) -> ())]()
     
     init(binder: Binder, keyPath: BinderKeyPath, frame: Rect = Rect()) {
         self.binder = binder

@@ -73,6 +73,12 @@ extension Array: Referenceable where Element: Referenceable {
     }
 }
 
+enum ArrayNotification<Model> {
+    case insert(Int, Model)
+    case remove(Int)
+    case move(Int, Model)
+}
+
 final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableReceiver {
     typealias ModelElement = T
     typealias Model = [ModelElement]
@@ -83,7 +89,7 @@ final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableRe
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((ObjectsView<ModelElement, Binder>) -> ())]()
+    var notifications = [((ObjectsView<ModelElement, Binder>, BasicNotification) -> ())]()
     
     var defaultModel = Model()
     
@@ -97,7 +103,8 @@ final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableRe
     var modelViews: [View]
     
     init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular, abstractType: AbstractType = .normal) {
+         frame: Rect = Rect(), sizeType: SizeType = .regular,
+         abstractType: AbstractType = .normal) {
         
         self.sizeType = sizeType
         self.abstractType = abstractType
@@ -115,8 +122,8 @@ final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableRe
     func updateChildren() {
         modelViews = model.enumerated().map { (i, element) in
             return element.abstractViewWith(binder: binder,
-                                            keyPath: keyPath.appending(path: \Model[i]), frame: Rect(),
-                                            sizeType, type: abstractType)
+                                            keyPath: keyPath.appending(path: \Model[i]),
+                                            frame: Rect(), sizeType, type: abstractType)
         }
         self.children = modelViews
     }
@@ -174,7 +181,7 @@ final class ArrayCountView<T: ArrayCountElement, U: BinderProtocol>: View, Binda
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((ArrayCountView<ModelElement, Binder>) -> ())]()
+    var notifications = [((ArrayCountView<ModelElement, Binder>, BasicNotification) -> ())]()
     
     let countView: IntGetterView<Binder>
     

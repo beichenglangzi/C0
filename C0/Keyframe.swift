@@ -208,7 +208,7 @@ final class KeyframeView<Value: KeyframeValue, T: BinderProtocol>: View, Bindabl
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((KeyframeView<Value, Binder>) -> ())]()
+    var notifications = [((KeyframeView<Value, Binder>, BasicNotification) -> ())]()
     
     var defaultModel = Model()
     
@@ -266,7 +266,7 @@ final class KeyframeTimingView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((KeyframeTimingView<Binder>) -> ())]()
+    var notifications = [((KeyframeTimingView<Binder>, BasicNotification) -> ())]()
     
     var defaultModel = Model()
     

@@ -21,11 +21,11 @@ import Foundation
 
 extension String {
     var calculate: String {
-        return (NSExpression(format: self)
-            .expressionValue(with: nil, context: nil) as? NSNumber)?.stringValue ?? "Error"
+        let expressionValue = NSExpression(format: self).expressionValue(with: nil, context: nil)
+        return (expressionValue as? NSNumber)?.stringValue ?? "Error"
     }
     var suffixNumber: Int? {
-        if let numberString = components(separatedBy: NSCharacterSet.decimalDigits.inverted).last {
+        if let numberString = components(separatedBy: CharacterSet.decimalDigits.inverted).last {
             return Int(numberString)
         } else {
             return nil
@@ -57,7 +57,8 @@ extension String: ThumbnailViewable {
     }
 }
 extension String: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, String>,
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, String>,
                                               frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> View {
         switch type {
@@ -129,7 +130,8 @@ final class StringGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
         self.isSizeToFit = isSizeToFit
         self.padding = padding
         self.textMaterial = textMaterial
-        textFrame = TextFrame(string: model, textMaterial: textMaterial, frameWidth: textFrameWidth)
+        textFrame = TextFrame(string: model, textMaterial: textMaterial,
+                              frameWidth: textFrameWidth)
         
         super.init(drawClosure: { $1.draw(in: $0) })
         
@@ -147,7 +149,8 @@ final class StringGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
         updateWithModel()
     }
     func updateWithModel() {
-        textFrame = TextFrame(string: model, textMaterial: textMaterial, frameWidth: textFrameWidth)
+        textFrame = TextFrame(string: model, textMaterial: textMaterial,
+                              frameWidth: textFrameWidth)
         if isSizeToFit { sizeToFit() }
         displayLinkDraw()
     }
@@ -182,7 +185,7 @@ final class StringView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((StringView<Binder>) -> ())]()
+    var notifications = [((StringView<Binder>, BasicNotification) -> ())]()
     
     var markedRange = NSRange(location: NSNotFound, length: 0) {
         didSet{
@@ -226,9 +229,10 @@ final class StringView<T: BinderProtocol>: View, BindableReceiver {
         self.padding = padding
         
         defaultAttributes = NSAttributedString.attributesWith(font: textMaterial.font,
-                                                              color: textMaterial.color,
+                                                              color: textMaterial.color, border: nil,
                                                               alignment: textMaterial.alignment)
-        markedAttributes = NSAttributedString.attributesWith(font: .default, color: .gray)
+        markedAttributes = NSAttributedString.attributesWith(font: .default,
+                                                             color: .gray, border: nil)
         
         textFrame = TextFrame(string: model, textMaterial: textMaterial, frameWidth: textFrameWidth)
         
@@ -245,7 +249,8 @@ final class StringView<T: BinderProtocol>: View, BindableReceiver {
         updateWithModel()
     }
     func updateWithModel() {
-        textFrame = TextFrame(string: model, textMaterial: textMaterial, frameWidth: textFrameWidth)
+        textFrame = TextFrame(string: model, textMaterial: textMaterial,
+                              frameWidth: textFrameWidth)
         if isSizeToFit { sizeToFit() }
         displayLinkDraw()
         
@@ -355,7 +360,8 @@ extension StringView: CocoaKeyInputtable {
     func definition(characterIndex: Int) -> String? {
         let range = DCSGetTermRangeInString(nil, model as CFString, characterIndex + 1)
         if range.location != kCFNotFound {
-            return DCSCopyTextDefinition(nil, model as CFString, range)?.takeRetainedValue() as String?
+            let definition = DCSCopyTextDefinition(nil, model as CFString, range)
+            return definition?.takeRetainedValue() as String?
         } else {
             return nil
         }

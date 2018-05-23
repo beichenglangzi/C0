@@ -722,14 +722,27 @@ private extension BlendType {
 }
 
 final class DisplayLink {
-    var closure: (() -> ())?
+    var closure: ((Second) -> ())?
     
     var isRunning: Bool {
         return CVDisplayLinkIsRunning(cv)
     }
     
+    var time = Second(0)
+    var frameRate = FPS(60) {
+        didSet {
+            distanceTime = TimeInterval(1 / frameRate)
+        }
+    }
+    private var beginTimestamp = Date() {
+        didSet {
+            oldTimestamp = beginTimestamp
+        }
+    }
+    private var distanceTime = TimeInterval(1 / FPS(60))
     private let cv: CVDisplayLink
     private let source: DispatchSourceUserDataAdd
+    private var oldTimestamp = Date()
     
     init?(queue: DispatchQueue = DispatchQueue.main) {
         source = DispatchSource.makeUserDataAddSource(queue: queue)
@@ -757,7 +770,15 @@ final class DisplayLink {
             return nil
         }
         self.cv = cv
-        source.setEventHandler { [weak self] in self?.closure?() }
+        source.setEventHandler { [weak self] in
+            guard let link = self else { return }
+            let currentTimestamp = Date()
+            let d = currentTimestamp.timeIntervalSince(link.oldTimestamp)
+            if d >= link.distanceTime {
+                link.closure?(link.time)
+                link.oldTimestamp = currentTimestamp
+            }
+        }
     }
     deinit {
         if isRunning { stop() }
@@ -765,6 +786,7 @@ final class DisplayLink {
     
     func start() {
         guard !isRunning else { return }
+        oldTimestamp = Date()
         CVDisplayLinkStart(cv)
         source.resume()
     }
