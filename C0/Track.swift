@@ -18,7 +18,6 @@
  */
 
 protocol Track: Codable {
-    var editingKeyframeTimingIndex: KeyframeTimingCollection.Index { get }
     var animatable: Animatable { get }
 }
 
@@ -26,8 +25,6 @@ protocol Track: Codable {
  Compiler Issue: Protocolから静的に決定可能な代数的データ型のコードを自動生成
  */
 indirect enum AlgebraicTrack: Track {
-    var editingKeyframeTimingIndex: Int
-    
     case tempo(TempoTrack)
     case subtitle(SubtitleTrack)
     case transform(TransformTrack)

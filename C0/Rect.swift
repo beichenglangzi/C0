@@ -262,7 +262,7 @@ struct RotatedRect: Codable, Equatable {
         for (i, p) in chps.enumerated() {
             let nextP = chps[i == chps.count - 1 ? 0 : i + 1]
             let angle = p.tangential(nextP)
-            let affine = CGAffineTransform(rotationAngle: -angle)
+            let affine = AffineTransform(rotationAngle: -angle)
             let ps = chps.map { $0.applying(affine) }
             let bounds = Rect.boundingBox(with: ps)
             let area = bounds.width * bounds.height
@@ -272,7 +272,7 @@ struct RotatedRect: Codable, Equatable {
                 minBounds = bounds
             }
         }
-        centerPoint = minBounds.midPoint.applying(CGAffineTransform(rotationAngle: minAngle))
+        centerPoint = minBounds.midPoint.applying(AffineTransform(rotationAngle: minAngle))
         size = minBounds.size
         angle = minAngle
     }
@@ -280,10 +280,10 @@ struct RotatedRect: Codable, Equatable {
     var bounds: Rect {
         return Rect(x: 0, y: 0, width: size.width, height: size.height)
     }
-    var affineTransform: CGAffineTransform {
-        return CGAffineTransform(translationX: centerPoint.x, y: centerPoint.y)
+    var affineTransform: AffineTransform {
+        return AffineTransform(translation: centerPoint)
             .rotated(by: angle)
-            .translatedBy(x: -size.width / 2, y: -size.height / 2)
+            .translated(by: Point(x: -size.width / 2, y: -size.height / 2))
     }
     func convertToLocal(p: Point) -> Point {
         return p.applying(affineTransform.inverted())

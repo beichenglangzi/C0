@@ -20,6 +20,54 @@
 import struct Foundation.Locale
 import CoreGraphics
 
+typealias AffineTransform = CGAffineTransform
+
+extension AffineTransform {
+    init(translation: Point) {
+        self.init(translationX: translation.x, y: translation.y)
+    }
+    mutating func translateBy(x: Real, y: Real) {
+        self = translatedBy(x: x, y: y)
+    }
+    mutating func translate(by translation: Point) {
+        self = translatedBy(x: translation.x, y: translation.y)
+    }
+    func translated(by translation: Point) -> AffineTransform {
+        return translatedBy(x: translation.x, y: translation.y)
+    }
+    mutating func scale(by scale: Real) {
+        self = scaledBy(x: scale, y: scale)
+    }
+    mutating func scaleBy(x: Real, y: Real) {
+        self = scaledBy(x: x, y: y)
+    }
+    func scaled(by scale: Real) -> AffineTransform {
+        return scaledBy(x: scale, y: scale)
+    }
+    mutating func scale(by scale: Point) {
+        self = scaledBy(x: scale.x, y: scale.y)
+    }
+    func scaled(by scale: Point) -> AffineTransform {
+        return scaledBy(x: scale.x, y: scale.y)
+    }
+    mutating func rotate(by rotation: Real) {
+        self = rotated(by: rotation)
+    }
+    mutating func rotate(byDegrees rotation: Real) {
+        self = rotated(by: rotation * .pi / 180)
+    }
+    func rotated(byDegrees rotation: Real) -> AffineTransform {
+        return rotated(by: rotation * .pi / 180)
+    }
+    
+    static func *(lhs: AffineTransform, rhs: AffineTransform) -> AffineTransform {
+        return lhs.concatenating(rhs)
+    }
+    static func *=(lhs: inout AffineTransform, rhs: AffineTransform) {
+        lhs = lhs.concatenating(rhs)
+    }
+}
+
 struct Transform: Codable, Initializable {//OrderedAfineTransform items
     var translation: Point {
         didSet {
@@ -28,9 +76,7 @@ struct Transform: Codable, Initializable {//OrderedAfineTransform items
         }
     }
     var scale: Point {
-        get {
-            return _scale
-        }
+        get { return _scale }
         set {
             _scale = newValue
             _z = log2(newValue.x)
@@ -39,9 +85,7 @@ struct Transform: Codable, Initializable {//OrderedAfineTransform items
         }
     }
     var z: Real {
-        get {
-            return _z
-        }
+        get { return _z }
         set {
             _z = newValue
             let pow2 = pow(2, z)
@@ -57,7 +101,7 @@ struct Transform: Codable, Initializable {//OrderedAfineTransform items
                                                         scale: scale, rotation: rotation)
         }
     }
-    private(set) var affineTransform: CGAffineTransform
+    private(set) var affineTransform: AffineTransform
     
     init() {
         translation = Point()
@@ -95,13 +139,13 @@ struct Transform: Codable, Initializable {//OrderedAfineTransform items
 }
 extension Transform {
     private static func affineTransform(translation: Point,
-                                        scale: Point, rotation: Real) -> CGAffineTransform {
-        var affine = CGAffineTransform(translationX: translation.x, y: translation.y)
+                                        scale: Point, rotation: Real) -> AffineTransform {
+        var affine = AffineTransform(translation: translation)
         if rotation != 0 {
-            affine = affine.rotated(by: rotation)
+            affine.rotate(by: rotation)
         }
         if scale != Point() {
-            affine = affine.scaledBy(x: scale.x, y: scale.y)
+            affine.scale(by: scale)
         }
         return affine
     }
@@ -159,26 +203,7 @@ extension Transform: Interpolatable {
 extension Transform: Referenceable {
     static let name = Text(english: "Transform", japanese: "トランスフォーム")
 }
-extension Transform: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Transform>,
-                                              frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> View {
-        switch type {
-        case .normal:
-            return TransformView(binder: binder, keyPath: keyPath, option: TransformOption(),
-                                 frame: frame, sizeType: sizeType)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
-        }
-    }
-}
 extension Transform: KeyframeValue {}
-extension Transform: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return View(isLocked: true)
-    }
-}
 
 struct TransformTrack: Track, Codable {
     private(set) var animation = Animation<Transform>()
@@ -192,18 +217,6 @@ extension TransformTrack: Referenceable {
 
 struct TransformOption {
     var defaultModel = Transform()
-    
-    var standardTranslationValue = 1.0.cg {
-        didSet {
-            translationValueOption.transformedModel = { [standardTranslationValue] in
-                $0 * standardTranslationValue
-            }
-            translationValueOption.reverseTransformedModel = { [standardTranslationValue] in
-                $0 / standardTranslationValue
-            }
-        }
-    }
-    
     var translationValueOption = RealOption(defaultModel: 0, minModel: -1000000, maxModel: 1000000,
                                             modelInterval: 0.01, numberOfDigits: 2)
     var zOption = RealOption(defaultModel: 0, minModel: -20, maxModel: 20,
@@ -332,6 +345,26 @@ extension TransformView: Assignable {
                 push(model, to: version)
                 return
             }
+        }
+    }
+}
+
+extension Transform: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return View(isLocked: true)
+    }
+}
+extension Transform: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Transform>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> View {
+        switch type {
+        case .normal:
+            return TransformView(binder: binder, keyPath: keyPath, option: TransformOption(),
+                                 frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
         }
     }
 }

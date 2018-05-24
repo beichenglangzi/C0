@@ -172,7 +172,7 @@ extension Timeline {
     }
     
     var curretEditingKeyframeTime: Beat {
-        return editingTrack.animatable.keyframeTimings[editingTrack.editingKeyframeTimingIndex].time
+        return editingTrack.animatable.time(atKeyframeIndex: editingTrack.editingKeyframeIndex)
     }
     var curretEditingKeyframeTimeExpression: Expression {
         let time = curretEditingKeyframeTime
@@ -545,11 +545,12 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
         switch phase {
         case .began:
             indexScrollDeltaPosition = Point()
-            indexScrollIndex = model.editingTrack.editingKeyframeTimingIndex
+            indexScrollIndex = model.editingTrack.editingKeyframeIndex
         case .changed, .ended:
             indexScrollDeltaPosition += scrollDeltaPoint
             let di = Int(-indexScrollDeltaPosition.x / indexScrollWidth)
-            model.editingTime = model.editingTrack.animatable..time(at: indexScrollIndex + di)
+            let li = indexScrollIndex + di
+            model.editingTime = model.editingTrack.animatable.time(atLoopFrameIndex: li)
         }
     }
     

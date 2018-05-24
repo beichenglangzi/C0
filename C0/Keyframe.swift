@@ -19,7 +19,7 @@
 
 import CoreGraphics
 
-protocol KeyframeTimingProtocol {
+protocol KeyframeProtocol {
     var timing: KeyframeTiming { get }
 }
 protocol KeyframeValue: Codable, Equatable, Interpolatable, Initializable, Referenceable {
@@ -30,10 +30,11 @@ extension KeyframeValue {
         return .main
     }
 }
-struct Keyframe<Value: KeyframeValue>: Codable, Equatable, KeyframeTimingProtocol {
+struct Keyframe<Value: KeyframeValue>: Codable, Equatable, KeyframeProtocol {
     var value = Value()
     var timing = KeyframeTiming()
-    
+}
+extension Keyframe {
     struct IndexInfo {
         var index: Int, interTime: Beat, duration: Beat
     }
@@ -181,7 +182,7 @@ extension KeyframeTiming {
 }
 
 struct KeyframeTimingCollection: RandomAccessCollection {
-    let keyframes: [KeyframeTimingProtocol]
+    let keyframes: [KeyframeProtocol]
     var startIndex: Int {
         return keyframes.startIndex
     }

@@ -150,7 +150,7 @@ extension Drawing: ThumbnailViewable {
     }
     func draw(with bounds: Rect, in ctx: CGContext) {
         let imageBounds = self.imageBounds(withLineWidth: 1)
-        let c = CGAffineTransform.centering(from: imageBounds, to: bounds.inset(by: 5))
+        let c = AffineTransform.centering(from: imageBounds, to: bounds.inset(by: 5))
         ctx.concatenate(c.affine)
         draw(lineWidth: 0.5 / c.scale, lineColor: Color.strokeLine, in: ctx)
         drawDraft(lineWidth: 0.5 / c.scale, lineColor: Color.draft, in: ctx)

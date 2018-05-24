@@ -62,7 +62,7 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
         return binder[keyPath: sceneKeyPath]
     }
     
-    private var screenTransform = CGAffineTransform.identity
+    private var screenTransform = AffineTransform.identity
     private var audioPlayers = [SoundPlayer]()
     
     private var playingFrameTime = FrameTime(0), playIntSecond = 0
@@ -186,8 +186,7 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
         let paddingOrigin = Point(x: (bounds.width - scene.canvas.frame.size.width) / 2,
                                   y: (bounds.height - scene.canvas.frame.size.height) / 2)
         drawView.frame = Rect(origin: paddingOrigin, size: scene.canvas.frame.size)
-        screenTransform = CGAffineTransform(translationX: drawView.bounds.midX,
-                                            y: drawView.bounds.midY)
+        screenTransform = AffineTransform(translation: drawView.bounds.midPoint)
         
         let padding = Layout.basicPadding, height = Layout.basicHeight
         let sliderY = ((frame.height - height) / 2).rounded()

@@ -230,13 +230,6 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
                     isHiddenSubtitlesView, isHiddenPreviousView, isHiddenNextView,
                     timelineView, canvasView, playerView]
         
-        sizeView.notifications.append({ [unowned self] in
-            guard case .didChange = $1 else { return }
-            let origin = Point(x: -$0.model.width / 2, y: -$0.model.height / 2)
-            self.model.canvas.frame = Rect(origin: origin, size: $0.model)
-            let sp = Point(x: $0.model.width, y: $0.model.height)
-        })
-        
         exportSubtitlesView.model = { [unowned self] _ in self.exportSubtitles() }
         exportImageView.model = { [unowned self] _ in self.exportImage() }
         exportMovieView.model = { [unowned self] _ in self.exportMovie() }

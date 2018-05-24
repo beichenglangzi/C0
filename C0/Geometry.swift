@@ -147,7 +147,7 @@ struct Geometry: Equatable {
     }
 }
 extension Geometry {
-    func applying(_ affine: CGAffineTransform) -> Geometry {
+    func applying(_ affine: AffineTransform) -> Geometry {
         return Geometry(lines: lines.map { $0.applying(affine) })
     }
     func warpedWith(deltaPoint dp: Point, controlPoint: Point,
@@ -327,6 +327,22 @@ extension Geometry {
         }
         for line in lines {
             if line.intersects(bounds) {
+                return true
+            }
+        }
+        return false
+    }
+    func intersects(_ otherLine: Line) -> Bool {
+        guard imageBounds.intersects(otherLine.imageBounds) else {
+            return false
+        }
+        for line in lines {
+            if line.intersects(otherLine) {
+                return true
+            }
+        }
+        for control in otherLine.controls {
+            if contains(control.point) {
                 return true
             }
         }

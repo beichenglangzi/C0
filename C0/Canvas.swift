@@ -42,14 +42,10 @@ struct Canvas: Codable {
         }
     }
     var editingCellGroup: CellGroup {
-        get {
-            return rootCellGroup[editingCellGroupTreeIndex]
-        }
-        set {
-            rootCellGroup[editingCellGroupTreeIndex] = newValue
-        }
+        get { return rootCellGroup[editingCellGroupTreeIndex] }
+        set { rootCellGroup[editingCellGroupTreeIndex] = newValue }
     }
-    private(set) var editingWorldAffieTransform: CGAffineTransform
+    private(set) var editingWorldAffieTransform: AffineTransform
     
     init(frame: Rect = Rect(x: -288, y: -162, width: 576, height: 324),
          transform: Transform = Transform(), rootCellGroup: CellGroup = CellGroup(),
@@ -119,12 +115,12 @@ final class CanvasView<T: BinderProtocol>: View, BindableReceiver {
         
     }
     
-    var screenTransform = CGAffineTransform.identity
+    var screenTransform = AffineTransform.identity
     override func updateLayout() {
         updateScreenTransform()
     }
     private func updateScreenTransform() {
-        screenTransform = CGAffineTransform(translationX: bounds.midX, y: bounds.midY)
+        screenTransform = AffineTransform(translation: bounds.midPoint)
     }
     func updateWithModel() {
         
@@ -139,11 +135,11 @@ final class CanvasView<T: BinderProtocol>: View, BindableReceiver {
     func updateEditPoint(with point: Point) {
         
     }
-    var currentTransform: CGAffineTransform {
-        var affine = CGAffineTransform.identity
-        affine = affine.concatenating(model.editingWorldAffieTransform)
-        affine = affine.concatenating(model.transform.affineTransform)
-        affine = affine.concatenating(screenTransform)
+    var currentTransform: AffineTransform {
+        var affine = AffineTransform.identity
+        affine *= model.editingWorldAffieTransform
+        affine *= model.transform.affineTransform
+        affine *= screenTransform
         return affine
     }
     func convertToCurrentLocal(_ r: Rect) -> Rect {
@@ -186,11 +182,20 @@ final class CanvasView<T: BinderProtocol>: View, BindableReceiver {
 extension CanvasView: Selectable {
     func captureSelections(to version: Version) {
         version.registerUndo(withTarget: self) {
+            [oldSelectedCellIndexes = model.editingCellGroup.selectedCellIndexes, unowned version] in
             
+            $0.pushSelectedCellIndexes(oldSelectedCellIndexes, to: version)
         }
     }
-    func set(_ selection: ) {
-        model.editingCellGroup.selectedCellIndexes
+    func pushSelectedCellIndexes(_ selectedCellIndexes: [Cell.Index],
+                                 to version: Version) {
+        version.registerUndo(withTarget: self) {
+            [oldSelectedCellIndexes = model.editingCellGroup.selectedCellIndexes, unowned version] in
+            
+            $0.pushSelectedCellIndexes(oldSelectedCellIndexes, to: version)
+        }
+        model.editingCellGroup.selectedCellIndexes = selectedCellIndexes
+        updateLayout()
     }
     
     func makeViewSelector() -> ViewSelector {
@@ -222,18 +227,16 @@ final class CanvasViewSelector<Binder: BinderProtocol>: ViewSelector {
     }
     func select(from rect: Rect, _ phase: Phase, isDeselect: Bool) {
         func unionWithStrokeLine(with drawing: Drawing) -> [Array<Line>.Index] {
-            func selected() -> (lineIndexes: [Int]) {
-                let transform = currentTransform.inverted()
-                let lines = [Line].rectangle(rect).map { $0.applying(transform) }
-                let lasso = LineLasso(lines: lines)
-                return (drawing.lines.enumerated().compactMap { lasso.intersects($1) ? $0 : nil },
-                        track.geometryItems.filter { $0.cell.intersects(lasso) })
+            let transform = canvasView.currentTransform.inverted()
+            let lines = [Line].rectangle(rect).map { $0.applying(transform) }
+            let geometry = Geometry(lines: lines)
+            let lineIndexes = drawing.lines.enumerated().compactMap {
+                geometry.intersects($1) ? $0 : nil
             }
-            let s = selected()
             if isDeselect {
-                return Array(Set(selectedLineIndexes).subtracting(Set(s.lineIndexes)))
+                return Array(Set(selectedLineIndexes).subtracting(Set(lineIndexes)))
             } else {
-                return Array(Set(selectedLineIndexes).union(Set(s.lineIndexes)))
+                return Array(Set(selectedLineIndexes).union(Set(lineIndexes)))
             }
         }
         
@@ -245,8 +248,7 @@ final class CanvasViewSelector<Binder: BinderProtocol>: ViewSelector {
             selectedLineIndexes = canvasView.model.editingCellGroup.drawing.selectedLineIndexes
         case .changed, .ended:
             guard let drawing = drawing else { return }
-            
-            drawing.selectedLineIndexes = unionWithStrokeLine(with: drawing, track)
+//            drawing?.selectedLineIndexes = unionWithStrokeLine(with: drawing)
         }
     }
 }
@@ -278,17 +280,33 @@ extension CanvasView: Newable {
         guard !geometry.isEmpty else { return }
         let isDrawingSelectedLines = !editingCellGroup.drawing.selectedLineIndexes.isEmpty
         let unselectedLines = editingCellGroup.drawing.uneditLines
-        set(unselectedLines, old: editingCellGroup.drawing.lines,
-            in: editingCellGroup.drawing, inNode, time: time)
+        //remove Lines
         //insertCell
     }
 }
 extension CanvasView: Transformable {
+    func captureWillMoveObject(to version: Version) {
+        
+    }
     
+    func move(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        <#code#>
+    }
+    func transform(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        <#code#>
+    }
+    func warp(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        <#code#>
+    }
 }
-final class CanvasViewTransformer<Binder: BinderProtocol>: ViewSelector {
+final class CanvasViewTransformer<Binder: BinderProtocol> {
     var canvasView: CanvasView<Binder>
-    var transformBounds = Rect.null, moveOldPoint = Point(), moveTransformOldPoint = Point()
+    
+    init(canvasView: CanvasView<Binder>) {
+        self.canvasView = canvasView
+    }
+    
+    var transformBounds = Rect.null, beginPoint = Point(), anchorPoint = Point()
     enum TransformEditType {
         case move, transform, warp
     }
@@ -301,66 +319,81 @@ final class CanvasViewTransformer<Binder: BinderProtocol>: ViewSelector {
     func warp(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
         move(for: p, pressure: pressure, time: time, phase, type: .warp)
     }
-    let moveTransformAngleTime = Second(0.1)
-    var moveEditTransform: CellGroup.EditTransform?, moveTransformAngleOldTime = Second(0.0)
-    var moveTransformAnglePoint = Point(), moveTransformAngleOldPoint = Point()
-    var isMoveTransformAngle = false
-    var moveNode: CellGroup?
+    let transformAngleTime = Second(0.1)
+    var transformAngleOldTime = Second(0.0)
+    var transformAnglePoint = Point(), transformAngleOldPoint = Point()
+    var isTransformAngle = false
+    var cellGroup: CellGroup?
     func move(for point: Point, pressure: Real, time: Second, _ phase: Phase,
               type: TransformEditType) {
         let p = canvasView.convertToCurrentLocal(point)
-        func affineTransform(with node: CellGroup) -> CGAffineTransform {
+        
+        func transformAffineTransformWith(point: Point, oldPoint: Point,
+                                          anchorPoint: Point) -> AffineTransform {
+            guard oldPoint != anchorPoint else {
+                return AffineTransform.identity
+            }
+            let r = point.distance(anchorPoint), oldR = oldPoint.distance(anchorPoint)
+            let angle = anchorPoint.tangential(point)
+            let oldAngle = anchorPoint.tangential(oldPoint)
+            let scale = r / oldR
+            var affine = AffineTransform(translation: anchorPoint)
+            affine.rotate(by: angle.differenceRotation(oldAngle))
+            affine.scale(by: scale)
+            affine.translate(by: -anchorPoint)
+            return affine
+        }
+        func warpAffineTransformWith(point: Point, oldPoint: Point,
+                                     anchorPoint: Point) -> AffineTransform {
+            guard oldPoint != anchorPoint else {
+                return AffineTransform.identity
+            }
+            let theta = oldPoint.tangential(anchorPoint)
+            let angle = theta < 0 ? theta + .pi : theta - .pi
+            var pAffine = AffineTransform(rotationAngle: -angle)
+            pAffine.translate(by: -anchorPoint)
+            let newOldP = oldPoint.applying(pAffine), newP = point.applying(pAffine)
+            let scaleX = newP.x / newOldP.x, skewY = (newP.y - newOldP.y) / newOldP.x
+            var affine = AffineTransform(translation: anchorPoint)
+            affine.rotate(by: angle)
+            affine.scale(by: Point(x: scaleX, y: 1))
+            if skewY != 0 {
+                let skewAffine = AffineTransform(a: 1, b: skewY,
+                                                 c: 0, d: 1,
+                                                 tx: 0, ty: 0)
+                affine = skewAffine * affine
+            }
+            affine.rotate(by: -angle)
+            affine.translate(by: -anchorPoint)
+            return affine
+        }
+        
+        func affineTransform(with cellGroup: CellGroup) -> AffineTransform {
             switch type {
             case .move:
-                return CGAffineTransform(translationX: p.x - moveOldPoint.x, y: p.y - moveOldPoint.y)
-            case .warp:
-                if let editTransform = moveEditTransform {
-                    return node.warpAffineTransform(with: editTransform)
-                } else {
-                    return CGAffineTransform.identity
-                }
+                return AffineTransform(translation: p - beginPoint)
             case .transform:
-                if let editTransform = moveEditTransform {
-                    return node.transformAffineTransform(with: editTransform)
-                } else {
-                    return CGAffineTransform.identity
-                }
+                return transformAffineTransformWith(point: p, oldPoint: beginPoint,
+                                                    anchorPoint: anchorPoint)
+            case .warp:
+                return warpAffineTransformWith(point: p, oldPoint: beginPoint,
+                                               anchorPoint: anchorPoint)
             }
         }
         switch phase {
         case .began:
-            moveSelected = cut.currentNode.selection(with: p, reciprocalScale: model.reciprocalScale)
+            //selectedLines
             if type != .move {
-                self.moveEditTransform = editTransform(at: p)
-                editTransform = moveEditTransform
-                self.moveTransformAngleOldTime = time
-                self.moveTransformAngleOldPoint = p
-                self.isMoveTransformAngle = false
-                self.moveTransformOldPoint = p
+                self.transformAngleOldTime = time
+                self.transformAngleOldPoint = p
+                self.isTransformAngle = false
             }
-            moveNode = canvasView.model.editingCellGroup
-            moveOldPoint = p
+            cellGroup = canvasView.model.editingCellGroup
+            beginPoint = p
         case .changed, .ended:
-            if type != .move {
-                if var editTransform = moveEditTransform {
-                }
-            }
-            if !moveSelected.isEmpty, let node = moveNode {
-                let affine = affineTransform(with: node)
-                if let mdp = moveSelected.drawingTuple {
-                    var newLines = mdp.oldLines
-                    for index in mdp.lineIndexes {
-                        newLines.remove(at: index)
-                        newLines.insert(mdp.oldLines[index].applying(affine), at: index)
-                    }
-                    //                    mdp.drawing.lines = newLines
-                }
-                for mcp in moveSelected.cellTuples {
-                    //track.replace
-                    //                    mcp.geometryItem.replace(mcp.geometry.applying(affine),
-                    //                                         at: mcp.track.animation.editKeyframeIndex)
-                }
-            }
+            guard let cellGroup = cellGroup else { return }
+            let affine = affineTransform(with: cellGroup)
+            
         }
     }
 }
@@ -373,7 +406,6 @@ extension CanvasView: PointMovable {
         
     }
     
-    
     func insert(_ point: Point) {
         let p = convertToCurrentLocal(point), inNode = model.editingCellGroup
         guard let nearest = inNode.nearestLineItem(at: p) else { return }
@@ -382,21 +414,26 @@ extension CanvasView: PointMovable {
     func removeNearestPoint(for point: Point) {
         let p = convertToCurrentLocal(point), inNode = model.editingCellGroup
         guard let nearest = inNode.nearestLineItem(at: p) else { return }
-        if nearest.line.controls.count > 2 {
-            replaceLine(nearest.line.removedControl(at: nearest.pointIndex),
-                        oldLine: nearest.line,
-                        at: nearest.lineIndex, in: drawing, in: inNode, time: time)
+        if nearest.linePoint.line.controls.count > 2 {
+            model.editingCellGroup.drawing.lines[nearest.linePoint.lineIndex]
+                .controls.remove(at: nearest.linePoint.pointIndex)
         } else {
-            removeLine(at: nearest.lineIndex, in: drawing, inNode, time: time)
+            model.editingCellGroup.drawing.lines.remove(at: nearest.linePoint.lineIndex)
         }
     }
 }
-final class CanvasViewPointMover<Binder: BinderProtocol>: ViewSelector {
+final class CanvasViewPointMover<Binder: BinderProtocol> {
     var canvasView: CanvasView<Binder>
     
-    private var movePointNearest: CellGroup.Nearest?, movePointOldPoint = Point(), movePointIsSnap = false
+    init(canvasView: CanvasView<Binder>) {
+        self.canvasView = canvasView
+    }
+    
+    private var movePointNearest: CellGroup.Nearest?
+    private var movePointOldPoint = Point(), movePointIsSnap = false
     private var movePointNode: CellGroup?
     private let snapPointSnapDistance = 8.0.cg
+    
     func movePoint(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         movePoint(for: p, pressure: pressure, time: time, phase, isVertex: false)
     }
@@ -420,110 +457,99 @@ final class CanvasViewPointMover<Binder: BinderProtocol>: ViewSelector {
             
             movePointIsSnap = movePointIsSnap ? true : pressure == 1//speed
             
-            if nearest.drawingEdit != nil || nearest.geometryItemEdit != nil {
-                movingPoint(with: nearest, dp: dp, in: cut.currentNode.editTrack)
-            } else {
+            switch nearest.result {
+            case .lineItem(let lineItem):
+                movingPoint(with: lineItem, fp: nearest.point, dp: dp)
+            case .lineCapResult(let lineCapResult):
                 if movePointIsSnap {
-                    movingPoint(with: nearest, bezierSortedResult: b, dp: dp, isVertex: isVertex)
+                    movingPoint(with: lineCapResult,
+                                fp: nearest.point, dp: dp, isVertex: isVertex)
                 } else {
-                    movingLineCap(with: nearest, dp: dp, isVertex: isVertex)
+                    movingLineCap(with: lineCapResult,
+                                  fp: nearest.point, dp: dp, isVertex: isVertex)
                 }
             }
         }
     }
-    private func movingPoint(with nearest: CellGroup.Nearest, dp: Point) {
+    private func movingPoint(with lineItem: CellGroup.LineItem, fp: Point, dp: Point) {
         let snapD = snapPointSnapDistance / canvasView.model.scale
-        if let e = nearest.drawingEdit {
+        let e = lineItem.linePoint
+        switch lineItem.drawingOrCell {
+        case .drawing(let drawing):
             var control = e.line.controls[e.pointIndex]
-            control.point = e.line.editPoint(withEditCenterPoint: nearest.point + dp,
+            control.point = e.line.mainPoint(withMainCenterPoint: fp + dp,
                                              at: e.pointIndex)
             if movePointIsSnap && (e.pointIndex == 1 || e.pointIndex == e.line.controls.count - 2) {
-                control.point = track.snapPoint(control.point,
-                                                editLine: e.drawing.lines[e.lineIndex],
-                                                editPointIndex: e.pointIndex,
-                                                snapDistance: snapD)
+                let cellGroup = canvasView.model.editingCellGroup
+                control.point = cellGroup.snappedPoint(control.point,
+                                                       editLine: drawing.lines[e.lineIndex],
+                                                       editingMaxPointIndex: e.pointIndex,
+                                                       snapDistance: snapD)
             }
-            //            e.drawing.lines[e.lineIndex] = e.line.withReplaced(control, at: e.pointIndex)
-            let np = e.drawing.lines[e.lineIndex].editCenterPoint(at: e.pointIndex)
-            editPoint = CellGroup.EditPoint(nearestLine: e.drawing.lines[e.lineIndex],
-                                            nearestPointIndex: e.pointIndex,
-                                            lines: [e.drawing.lines[e.lineIndex]],
-                                            point: np,
-                                            isSnap: movePointIsSnap)
+//            drawing.lines[e.lineIndex].controls[e.pointIndex] = control
+        default: break
         }
     }
-    private func movingBezierSortedPoint(with nearest: CellGroup.Nearest, dp: Point, isVertex: Bool) {
+    private func movingPoint(with lcr: CellGroup.Nearest.Result.LineCapResult,
+                             fp: Point, dp: Point, isVertex: Bool) {
         let snapD = snapPointSnapDistance * canvasView.model.reciprocalScale
         let grid = 5 * canvasView.model.reciprocalScale
         
-        let bs: CellGroup.LineCapItem?
-        switch nearest.result {
-        case .lineCapResult(let result): bs = result.bezierSortedLineCapItem
-        default: bs = nil
-        }
-        guard let b = bs else { return }
-        
-        var np = track.snapPoint(nearest.point + dp, with: b, snapDistance: snapD, grid: grid)
-        if let e = nearest.drawingEditLineCap, let drawing = b.drawing {
-            var newLines = e.lines
+        let b = lcr.bezierSortedLineCapItem
+        let cellGroup = canvasView.model.editingCellGroup
+        var np = cellGroup.snappedPoint(fp + dp, with: b,
+                                        snapDistance: snapD, grid: grid)
+        switch b.drawingOrCell {
+        case .drawing(let drawing):
+            var newLines = drawing.lines
             if b.lineCap.line.controls.count == 2 {
                 let pointIndex = b.lineCap.pointIndex
                 var control = b.lineCap.line.controls[pointIndex]
-                control.point = track.snapPoint(np, editLine: drawing.lines[b.lineCap.lineIndex],
-                                                editPointIndex: pointIndex, snapDistance: snapD)
-                newLines[b.lineCap.lineIndex] = b.lineCap.line.withReplaced(control, at: pointIndex)
+                control.point = cellGroup.snappedPoint(np,
+                                                       editLine: drawing.lines[b.lineCap.lineIndex],
+                                                       editingMaxPointIndex: pointIndex,
+                                                       snapDistance: snapD)
+                newLines[b.lineCap.lineIndex].controls[pointIndex] = control
                 np = control.point
             } else if isVertex {
-                newLines[b.lineCap.lineIndex] = b.lineCap.line.warpedWith(
-                    deltaPoint: np - nearest.point, isFirst: b.lineCap.isFirst)
+                newLines[b.lineCap.lineIndex]
+                    = b.lineCap.line.warpedWith(deltaPoint: np - fp,
+                                                isFirst: b.lineCap.orientation == .first)
             } else {
                 let pointIndex = b.lineCap.pointIndex
                 var control = b.lineCap.line.controls[pointIndex]
                 control.point = np
-                newLines[b.lineCap.lineIndex] = newLines[b.lineCap.lineIndex].withReplaced(
-                    control, at: b.lineCap.pointIndex)
+                newLines[b.lineCap.lineIndex].controls[b.lineCap.pointIndex] = control
             }
-            //            drawing.lines = newLines
-            editPoint = CellGroup.EditPoint(nearestLine: drawing.lines[b.lineCap.lineIndex],
-                                            nearestPointIndex: b.lineCap.pointIndex,
-                                            lines: e.drawingCaps.map { drawing.lines[$0.lineIndex] },
-                                            point: np,
-                                            isSnap: movePointIsSnap)
+        //            drawing.lines = newLines
+        default: break
         }
     }
-    func movingLineCap(with nearest: CellGroup.Nearest, dp: Point, isVertex: Bool) {
-        let np = nearest.point + dp
-        var editPointLines = [Line]()
-        if let e = nearest.drawingEditLineCap {
-            var newLines = e.drawing.lines
+    func movingLineCap(with lcr: CellGroup.Nearest.Result.LineCapResult,
+                       fp: Point, dp: Point, isVertex: Bool) {
+        let np = fp + dp
+        
+        if let dc = lcr.lineCapsItem.drawingCap {
+            var newLines = dc.drawing.lines
             if isVertex {
-                e.drawingCaps.forEach {
+                dc.drawingLineCaps.forEach {
                     newLines[$0.lineIndex] = $0.line.warpedWith(deltaPoint: dp,
-                                                                isFirst: $0.isFirst)
+                                                                isFirst: $0.orientation == .first)
                 }
             } else {
-                for cap in e.drawingCaps {
-                    var control = cap.isFirst ?
+                for cap in dc.drawingLineCaps {
+                    var control = cap.orientation == .first ?
                         cap.line.controls[0] : cap.line.controls[cap.line.controls.count - 1]
                     control.point = np
-                    newLines[cap.lineIndex] = newLines[cap.lineIndex]
-                        .withReplaced(control, at: cap.isFirst ? 0 : cap.line.controls.count - 1)
+                    switch cap.orientation {
+                    case .first:
+                        newLines[cap.lineIndex].controls[0] = control
+                    case .last:
+                        newLines[cap.lineIndex].controls[cap.line.controls.count - 1] = control
+                    }
                 }
             }
             //            e.drawing.lines = newLines
-            editPointLines = e.drawingCaps.map { newLines[$0.lineIndex] }
-        }
-        
-        track.updateInterpolation()
-        
-        if let b = bezierSortedResult {
-            if let drawing = b.drawing {
-                let newLine = drawing.lines[b.lineCap.lineIndex]
-                editPoint = CellGroup.EditPoint(nearestLine: newLine,
-                                                nearestPointIndex: b.lineCap.pointIndex,
-                                                lines: Array(Set(editPointLines)),
-                                                point: np, isSnap: movePointIsSnap)
-            }
         }
     }
 }

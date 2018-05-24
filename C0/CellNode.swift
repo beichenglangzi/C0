@@ -59,7 +59,7 @@ extension CellGroup {
         return children.reduce(into: imageBounds) { $0.formUnion($1.imageBounds) }
     }
     
-    func worldAffineTransform(at index: TreeIndex<CellGroup>) -> CGAffineTransform {
+    func worldAffineTransform(at index: TreeIndex<CellGroup>) -> AffineTransform {
         return nodes(at: index).reduce(transform.affineTransform) {
             $1.transform.affineTransform.concatenating($0)
         }
@@ -408,6 +408,10 @@ extension CellGroup {
     }
 }
 extension CellGroup {
+    func view(frame: Rect) -> View {
+        
+    }
+    
     //view
     func draw(scene: Scene, viewType: Cut.ViewType,
               scale: Real, rotation: Real,
@@ -670,7 +674,7 @@ extension CellGroup {
         }
         let track = editTrack
         func drawPreviousNextCamera(t: Transform, color: Color) {
-            let affine = transform.affineTransform.inverted().concatenating(t.affineTransform)
+            let affine = transform.affineTransform.inverted() * t.affineTransform
             ctx.saveGState()
             ctx.concatenate(affine)
             drawCameraBorder(bounds: cameraFrame, inColor: color, outColor: Color.cutSubBorder)
@@ -874,12 +878,14 @@ extension CellGroup {
         ctx.setFillColor(color.with(alpha: 1).cg)
         geometrys.forEach { $0.draw(withLineWidth: 1.5 * reciprocalScale, in: ctx) }
     }
+    
     func drawTransparentCellLines(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
         cells.forEach {
             $0.geometry.drawLines(withColor: .getSetBorder, reciprocalScale: reciprocalScale, in: ctx)
             $0.geometry.drawPathLine(withReciprocalScale: reciprocalScale, in: ctx)
         }
     }
+    
     func drawSkinGeometryItem(_ geometryItem: GeometryItem,
                               reciprocalScale: Real, reciprocalAllScale: Real, in ctx: CGContext) {
         geometryItem.geometry.drawSkin(lineColor: .indicated,

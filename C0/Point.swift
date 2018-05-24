@@ -229,6 +229,13 @@ extension Point {
     prefix static func -(p: Point) -> Point {
         return Point(x: -p.x, y: -p.y)
     }
+    static func *(lhs: Point, rha: Point) -> Point {
+        return Point(x: lhs.x * rha.x, y: lhs.y * rha.y)
+    }
+    static func *=(lhs: inout Point, rhs: Point) {
+        lhs.x *= rhs.x
+        lhs.y *= rhs.y
+    }
     static func *(lhs: Real, rhs: Point) -> Point {
         return Point(x: rhs.x * lhs, y: rhs.y * lhs)
     }
@@ -242,7 +249,9 @@ extension Point {
     func rounded() -> Point {
         return Point(x: x.rounded(), y: y.rounded())
     }
-    
+}
+extension Point {
+    //view
     func draw(radius r: Real, lineWidth: Real = 1,
               inColor: Color = .knob, outColor: Color = .getSetBorder, in ctx: CGContext) {
         let rect = Rect(x: x - r, y: y - r, width: r * 2, height: r * 2)

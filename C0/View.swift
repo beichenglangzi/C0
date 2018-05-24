@@ -613,30 +613,32 @@ extension CATransaction {
     }
 }
 
-extension CGAffineTransform {
+extension AffineTransform {
     static func centering(from fromFrame: Rect,
-                          to toFrame: Rect) -> (scale: Real, affine: CGAffineTransform) {
+                          to toFrame: Rect) -> (scale: Real, affine: AffineTransform) {
         guard !fromFrame.isEmpty && !toFrame.isEmpty else {
-            return (1, CGAffineTransform.identity)
+            return (1, AffineTransform.identity)
         }
-        var affine = CGAffineTransform.identity
+        var affine = AffineTransform.identity
         let fromRatio = fromFrame.width / fromFrame.height
         let toRatio = toFrame.width / toFrame.height
         if fromRatio > toRatio {
             let xScale = toFrame.width / fromFrame.size.width
             let y = toFrame.origin.y + (toFrame.height - fromFrame.height * xScale) / 2
-            affine = affine.translatedBy(x: toFrame.origin.x, y: y)
-            affine = affine.scaledBy(x: xScale, y: xScale)
-            return (xScale, affine.translatedBy(x: -fromFrame.origin.x, y: -fromFrame.origin.y))
+            affine.translateBy(x: toFrame.origin.x, y: y)
+            affine.scale(by: xScale)
+            affine.translate(by: -fromFrame.origin)
+            return (xScale, affine)
         } else {
             let yScale = toFrame.height / fromFrame.size.height
             let x = toFrame.origin.x + (toFrame.width - fromFrame.width * yScale) / 2
-            affine = affine.translatedBy(x: x, y: toFrame.origin.y)
-            affine = affine.scaledBy(x: yScale, y: yScale)
-            return (yScale, affine.translatedBy(x: -fromFrame.origin.x, y: -fromFrame.origin.y))
+            affine.translateBy(x: x, y: toFrame.origin.y)
+            affine.scale(by: yScale)
+            affine.translate(by: -fromFrame.origin)
+            return (yScale, affine)
         }
     }
-    func flippedHorizontal(by width: Real) -> CGAffineTransform {
+    func flippedHorizontal(by width: Real) -> AffineTransform {
         return translatedBy(x: width, y: 0).scaledBy(x: -1, y: 1)
     }
 }

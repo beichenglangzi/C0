@@ -19,28 +19,57 @@
 
 import CoreGraphics
 
-protocol Animatable {
-    var keyframeTimings: KeyframeTimingCollection { get }
-    var beginTime: Rational { get }
-    var duration: Rational { get }
+typealias KeyframeIndex = KeyframeTimingCollection.Index
+
+struct LoopFrame: Codable, Hashable {
+    var index: KeyframeIndex, time: Rational, loopCount: Int, loopingCount: Int
+}
+typealias LoopFrameIndex = Array<LoopFrame>.Index
+struct LoopFrameIndexInfo {
+    var loopFrameIndex: LoopFrameIndex, keyframeIndex: KeyframeIndex
+    var keyframeInternalTime: Rational, keyframeDuration: Rational
+}
+struct AnimatableTimeInfo {
+    var time: Rational
+    var isInterpolated: Bool
+    var loopframeIndex: LoopFrameIndex, keyframeIndex: KeyframeIndex
+    var internalRatio: Real
 }
 
-struct Animation<Value: KeyframeValue>: Codable, Animatable {
-    typealias KeyframeIndex = Array<Keyframe<Value>>.Index
-    typealias KeyframeTimingIndex = KeyframeTimingCollection.Index
-    
-    struct LoopFrame: Codable, Hashable {
-        var index: KeyframeIndex, time: Rational, loopCount: Int, loopingCount: Int
-    }
-    typealias LoopFrameIndex = Array<LoopFrame>.Index
-    
+enum Interpolation {
+    case step(LoopFrame)
+    case linear(LoopFrame, LoopFrame)
+    case monospline(LoopFrame, LoopFrame, LoopFrame, LoopFrame)
+    case firstMonospline(LoopFrame, LoopFrame, LoopFrame)
+    case endMonospline(LoopFrame, LoopFrame, LoopFrame)
+}
+
+protocol Animatable {
+    var beginTime: Rational { get }
+    var keyframeTimings: KeyframeTimingCollection { get }
+    var duration: Rational { get }
+    var loopFrames: [LoopFrame] { get }
+    var editingKeyframeIndex: KeyframeIndex { get }
+    var selectedKeyframeIndexes: [KeyframeIndex] { get }
+    func timeInfo(atTime time: Rational) -> AnimatableTimeInfo?
+    func interpolation(atLoopFrameIndex li: LoopFrameIndex) -> Interpolation
+    func indexInfo(atTime t: Rational) -> LoopFrameIndexInfo?
+    func keyframeIndex(atTime t: Rational) -> KeyframeIndex?
+    func loopedKeyframeIndex(atTime t: Rational) -> KeyframeIndex?
+    func time(atKeyframeIndex index: KeyframeIndex) -> Rational
+    func time(atLoopFrameIndex index: LoopFrameIndex) -> Rational
+    var lastKeyframeTime: Rational? { get }
+    var lastLoopedKeyframeTime: Rational? { get }
+}
+
+struct Animation<Value: KeyframeValue>: Codable {
     private var _keyframes: [Keyframe<Value>]
     private var _duration: Rational
     var keyframes: [Keyframe<Value>] {
         get { return _keyframes }
         set {
             _keyframes = newValue
-            self.loopFrames = Animation.loopFrames(with: keyframes, duration: duration)
+            loopFrames = Animation.loopFrames(with: keyframes, duration: duration)
         }
     }
     var beginTime: Rational
@@ -48,50 +77,16 @@ struct Animation<Value: KeyframeValue>: Codable, Animatable {
         get { return _duration }
         set {
             _duration = newValue
-            self.loopFrames = Animation.loopFrames(with: keyframes, duration: duration)
+            loopFrames = Animation.loopFrames(with: keyframes, duration: duration)
         }
     }
     mutating func set(_ keyframes: [Keyframe<Value>], duration: Rational) {
         _keyframes = keyframes
         _duration = duration
-        self.loopFrames = Animation.loopFrames(with: keyframes, duration: duration)
+        loopFrames = Animation.loopFrames(with: keyframes, duration: duration)
     }
     
     private(set) var loopFrames: [LoopFrame]
-    
-    mutating func fit(repeating: Value, with keyframeTimings: [KeyframeTiming]) {
-        if keyframeTimings.count < keyframes.count {
-            keyframes = Array(keyframes[..<keyframeTimings.count])
-        } else if keyframeTimings.count > keyframes.count {
-            keyframes += keyframeTimings[(keyframes.count - 1)...].map {
-                Keyframe(value: repeating, timing: $0)
-            }
-        }
-    }
-
-    var selectedKeyframeIndexes: [KeyframeIndex]
-
-    init(keyframes: [Keyframe<Value>] = [], beginTime: Rational = 0, duration: Rational = 1,
-         selectedKeyframeIndexes: [KeyframeIndex] = []) {
-        
-        _keyframes = keyframes
-        self.beginTime = beginTime
-        _duration = duration
-        self.loopFrames = Animation.loopFrames(with: keyframes, duration: duration)
-        self.selectedKeyframeIndexes = selectedKeyframeIndexes
-    }
-    
-    init(repeating: Value, keyframeTimings: [KeyframeTiming]) {
-        self.init(keyframes: keyframeTimings.map { Keyframe(value: repeating, timing: $0) })
-    }
-    
-    var keyframeTimings: KeyframeTimingCollection {
-        return KeyframeTimingCollection(keyframes: keyframes)
-    }
-    
-    var isEmpty: Bool {
-        return keyframes.isEmpty
-    }
     
     private static func loopFrames(with keyframes: [Keyframe<Value>],
                                    duration: Rational) -> [LoopFrame] {
@@ -141,14 +136,44 @@ struct Animation<Value: KeyframeValue>: Codable, Animatable {
         return loopFrames
     }
     
-    struct TimeInfo {
-        var time: Rational
-        var isInterpolated: Bool
-        var loopframeIndex: LoopFrameIndex, keyframeIndex: KeyframeIndex
-        var internalRatio: Real
+    mutating func fit(repeating: Value, with keyframeTimings: [KeyframeTiming]) {
+        if keyframeTimings.count < keyframes.count {
+            keyframes = Array(keyframes[..<keyframeTimings.count])
+        } else if keyframeTimings.count > keyframes.count {
+            keyframes += keyframeTimings[(keyframes.count - 1)...].map {
+                Keyframe(value: repeating, timing: $0)
+            }
+        }
+    }
+
+    var editingKeyframeIndex: KeyframeIndex
+    var selectedKeyframeIndexes: [KeyframeIndex]
+
+    init(keyframes: [Keyframe<Value>] = [], beginTime: Rational = 0, duration: Rational = 1,
+         editingKeyframeIndex: KeyframeIndex = 0, selectedKeyframeIndexes: [KeyframeIndex] = []) {
+        
+        _keyframes = keyframes
+        self.beginTime = beginTime
+        _duration = duration
+        loopFrames = Animation.loopFrames(with: keyframes, duration: duration)
+        self.editingKeyframeIndex = editingKeyframeIndex
+        self.selectedKeyframeIndexes = selectedKeyframeIndexes
     }
     
-    func timeInfo(atTime time: Rational) -> TimeInfo? {
+    init(repeating: Value, keyframeTimings: [KeyframeTiming]) {
+        self.init(keyframes: keyframeTimings.map { Keyframe(value: repeating, timing: $0) })
+    }
+}
+extension Animation: Animatable {
+    var keyframeTimings: KeyframeTimingCollection {
+        return KeyframeTimingCollection(keyframes: keyframes)
+    }
+    
+    var isEmpty: Bool {
+        return keyframes.isEmpty
+    }
+    
+    func timeInfo(atTime time: Rational) -> AnimatableTimeInfo? {
         guard let indexInfo = self.indexInfo(atTime: time) else {
             return nil
         }
@@ -158,16 +183,16 @@ struct Animation<Value: KeyframeValue>: Codable, Animatable {
         if internalTime == 0 || indexInfo.keyframeDuration == 0
             || li1 + 1 >= loopFrames.count || k1.timing.interpolation == .none {
             
-            return TimeInfo(time: time,
-                            isInterpolated: false,
-                            loopframeIndex: li1, keyframeIndex: lf1.index,
-                            internalRatio: 0)
+            return AnimatableTimeInfo(time: time,
+                                      isInterpolated: false,
+                                      loopframeIndex: li1, keyframeIndex: lf1.index,
+                                      internalRatio: 0)
         } else {
             let lf2 = loopFrames[li1 + 1]
-            return TimeInfo(time: time,
-                            isInterpolated: lf1.time != lf2.time,
-                            loopframeIndex: li1, keyframeIndex: lf1.index,
-                            internalRatio: Real(internalTime / indexInfo.keyframeDuration))
+            return AnimatableTimeInfo(time: time,
+                                      isInterpolated: lf1.time != lf2.time,
+                                      loopframeIndex: li1, keyframeIndex: lf1.index,
+                                      internalRatio: Real(internalTime / indexInfo.keyframeDuration))
         }
     }
     
@@ -178,7 +203,7 @@ struct Animation<Value: KeyframeValue>: Codable, Animatable {
             return nil
         }
     }
-    func interpolatedValue(with timeInfo: TimeInfo) -> Value {
+    func interpolatedValue(with timeInfo: AnimatableTimeInfo) -> Value {
         func value(_ lf: LoopFrame) -> Value {
             return keyframes[lf.index].value
         }
@@ -222,18 +247,13 @@ struct Animation<Value: KeyframeValue>: Codable, Animatable {
         }
     }
     
-    func interpolation(atLoopFrameIndex li: LoopFrameIndex,
-                       step: ((LoopFrame) -> ()),
-                       linear: ((LoopFrame, LoopFrame) -> ()),
-                       monospline: ((LoopFrame, LoopFrame, LoopFrame, LoopFrame) -> ()),
-                       firstMonospline: ((LoopFrame, LoopFrame, LoopFrame) -> ()),
-                       endMonospline: ((LoopFrame, LoopFrame, LoopFrame) -> ())) {
+    func interpolation(atLoopFrameIndex li: LoopFrameIndex) -> Interpolation {
         let lf1 = loopFrames[li], lf2 = loopFrames[li + 1]
         let k1 = keyframes[lf1.index], k2 = keyframes[lf2.index]
         if k1.timing.interpolation == .none || lf2.time - lf1.time == 0 {
-            step(lf1)
+            return .step(lf1)
         } else if k1.timing.interpolation == .linear {
-            linear(lf1, lf2)
+            return .linear(lf1, lf2)
         } else {
             let isUseIndex0 = li - 1 >= 0
                 && k2.timing.interpolation != .bound
@@ -244,25 +264,21 @@ struct Animation<Value: KeyframeValue>: Codable, Animatable {
             if isUseIndex0 {
                 if isUseIndex3 {
                     let lf0 = loopFrames[li - 1], lf3 = loopFrames[li + 2]
-                    monospline(lf0, lf1, lf2, lf3)
+                    return .monospline(lf0, lf1, lf2, lf3)
                 } else {
                     let lf0 = loopFrames[li - 1]
-                    endMonospline(lf0, lf1, lf2)
+                    return .endMonospline(lf0, lf1, lf2)
                 }
             } else if isUseIndex3 {
                 let lf3 = loopFrames[li + 2]
-                firstMonospline(lf1, lf2, lf3)
+                return .firstMonospline(lf1, lf2, lf3)
             } else {
-                linear(lf1, lf2)
+                return .linear(lf1, lf2)
             }
         }
     }
     
-    struct IndexInfo {
-        var loopFrameIndex: LoopFrameIndex, keyframeIndex: KeyframeIndex
-        var keyframeInternalTime: Rational, keyframeDuration: Rational
-    }
-    func indexInfo(atTime t: Rational) -> IndexInfo? {
+    func indexInfo(atTime t: Rational) -> LoopFrameIndexInfo? {
         guard let firstLoopFrame = loopFrames.first else {
             return nil
         }
@@ -271,36 +287,17 @@ struct Animation<Value: KeyframeValue>: Codable, Animatable {
             let li = loopFrames[i]
             let kt = li.time
             if t >= kt {
-                return IndexInfo(loopFrameIndex: i, keyframeIndex: li.index,
-                                 keyframeInternalTime: t - kt, keyframeDuration: oldT - kt)
+                return LoopFrameIndexInfo(loopFrameIndex: i, keyframeIndex: li.index,
+                                          keyframeInternalTime: t - kt,
+                                          keyframeDuration: oldT - kt)
             }
             oldT = kt
         }
-        return IndexInfo(loopFrameIndex: 0, keyframeIndex: 0,
-                         keyframeInternalTime: t - firstLoopFrame.time,
-                         keyframeDuration: oldT - firstLoopFrame.time)
+        return LoopFrameIndexInfo(loopFrameIndex: 0, keyframeIndex: 0,
+                                  keyframeInternalTime: t - firstLoopFrame.time,
+                                  keyframeDuration: oldT - firstLoopFrame.time)
     }
-    func movingKeyframeIndex(atTime time: Rational) -> Int? {
-        guard !keyframes.isEmpty else {
-            return nil
-        }
-        guard keyframes.count > 1 else {
-            return 0
-        }
-        for i in 1..<keyframes.count {
-            if time <= keyframes[i].timing.time {
-                return i - 1
-            }
-        }
-        return keyframes.count - 1
-    }
-    func time(atLoopFrameIndex index: LoopFrameIndex) -> Rational {
-        return loopFrames[index].time
-    }
-    func loopedKeyframeIndex(atTime t: Rational) -> Int? {
-        return indexInfo(atTime: t)?.keyframeIndex
-    }
-    func keyframeIndex(atTime t: Rational) -> Int? {
+    func keyframeIndex(atTime t: Rational) -> KeyframeIndex? {
         guard t < duration && !keyframes.isEmpty else {
             return nil
         }
@@ -311,36 +308,21 @@ struct Animation<Value: KeyframeValue>: Codable, Animatable {
         }
         return 0
     }
-    func movingKeyframeIndex(atTime t: Rational) -> (index: KeyframeIndex?, isSolution: Bool) {
-        if t > duration {
-            return (nil, false)
-        } else if t == duration {
-            return (nil, true)
-        } else {
-            for i in (0..<keyframes.count).reversed() {
-                let time = keyframes[i].timing.time
-                if t == time {
-                    return (i, true)
-                } else if t > time {
-                    return (i + 1, true)
-                }
-            }
-            return (nil, false)
-        }
+    func loopedKeyframeIndex(atTime t: Rational) -> KeyframeIndex? {
+        return indexInfo(atTime: t)?.keyframeIndex
+    }
+    
+    func time(atKeyframeIndex index: KeyframeIndex) -> Rational {
+        return keyframes[index].timing.time
+    }
+    func time(atLoopFrameIndex index: LoopFrameIndex) -> Rational {
+        return loopFrames[index].time
     }
     var lastKeyframeTime: Rational? {
         return keyframes.last?.timing.time
     }
     var lastLoopedKeyframeTime: Rational? {
-        guard !loopFrames.isEmpty else {
-            return nil
-        }
-        let t = loopFrames[loopFrames.count - 1].time
-        if t >= duration {
-            return loopFrames.count >= 2 ? loopFrames[loopFrames.count - 2].time : 0
-        } else {
-            return t
-        }
+        return loopFrames.last?.time
     }
 }
 extension Animation: Equatable {
@@ -443,6 +425,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
                      width: 0, height: sizeType == .small ? smallHeight : height)
         updateLayout()
     }
+    var array: Array<Any>
 
     private static func knobLinePathView(from p: Point, lineColor: Color,
                                          baseWidth: Real, lineHeight: Real,
@@ -639,10 +622,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
         frame.size.height = sizeType == .small ? smallHeight : height
         updateLayout()
     }
-
-    func movingKeyframeIndex(atTime time: Rational) -> (index: Int?, isSolution: Bool) {
-        return model.movingKeyframeIndex(atTime: time)
-    }
+    
     func beatTime(withBaseTime baseTime: BaseTime) -> Rational {
         return baseTime * baseTimeInterval
     }
@@ -716,7 +696,7 @@ extension AnimationView: Selectable {
             $0.pushSelectedKeyframeIndexes(oldSelectedKeyframeIndexes, to: version)
         }
     }
-    func pushSelectedKeyframeIndexes(_ selectedKeyframeIndexes: [Animation<Value>.KeyframeIndex],
+    func pushSelectedKeyframeIndexes(_ selectedKeyframeIndexes: [KeyframeIndex],
                                      to version: Version) {
         version.registerUndo(withTarget: self) {
             [oldSelectedKeyframeIndexes = model.selectedKeyframeIndexes, unowned version] in
@@ -751,7 +731,7 @@ final class AnimationViewSelector<Value: KeyframeValue, Binder: BinderProtocol>:
         self.animationView = animationView
     }
     
-    var beginSelectedKeyframeIndexes = [Animation<Value>.KeyframeIndex]()
+    var beginSelectedKeyframeIndexes = [KeyframeIndex]()
     
     func select(from rect: Rect, _ phase: Phase) {
         select(from: rect, phase, isDeselect: false)
@@ -768,7 +748,7 @@ final class AnimationViewSelector<Value: KeyframeValue, Binder: BinderProtocol>:
             animationView.updateLayout()
         }
     }
-    private func indexes(from rect: Rect) -> [Animation<Value>.KeyframeIndex] {
+    private func indexes(from rect: Rect) -> [KeyframeIndex] {
         let halfTimeInterval = animationView.baseTimeInterval / 2
         let startTime = animationView.time(withX: rect.minX, isBased: false) + halfTimeInterval
         let startIndexInfo = Keyframe.indexInfo(atTime: startTime,
@@ -783,8 +763,7 @@ final class AnimationViewSelector<Value: KeyframeValue, Binder: BinderProtocol>:
             [startIndex] :
             Array(startIndex < endIndex ? (startIndex...endIndex) : (endIndex...startIndex))
     }
-    private func selectedIndex(from rect: Rect,
-                               isDeselect: Bool) -> [Animation<Value>.KeyframeIndex] {
+    private func selectedIndex(from rect: Rect, isDeselect: Bool) -> [KeyframeIndex] {
         let selectedIndexes = indexes(from: rect)
         return isDeselect ?
             Array(Set(beginSelectedKeyframeIndexes).subtracting(Set(selectedIndexes))).sorted() :
@@ -845,14 +824,14 @@ extension AnimationView: Newable {
     }
     
     func pushInsert(_ keyframe: Keyframe<Value>,
-                    at index: Animation<Value>.KeyframeIndex, _ version: Version) {
+                    at index: KeyframeIndex, _ version: Version) {
         version.registerUndo(withTarget: self) { [unowned version] in
             $0.pushRemove(at: index, version)
         }
         model.keyframes.insert(keyframe, at: index)
         //insertView
     }
-    func pushRemove(at index: Animation<Value>.KeyframeIndex, _ version: Version) {
+    func pushRemove(at index: KeyframeIndex, _ version: Version) {
         version.registerUndo(withTarget: self) {
             [keyframe = model.keyframes[index], unowned version] in
             
@@ -862,7 +841,7 @@ extension AnimationView: Newable {
         //removeView
     }
     func pushReplace(_ keyframe: Keyframe<Value>,
-                     at index: Animation<Value>.KeyframeIndex, _ version: Version) {
+                     at index: KeyframeIndex, _ version: Version) {
         version.registerUndo(withTarget: self) {
             [oldKeyframe = model.keyframes[index], unowned version] in
             

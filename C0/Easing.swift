@@ -29,9 +29,9 @@ extension Easing {
         }
         let sb = bezier.split(withT: t)
         let p = sb.b0.p1
-        let b0Affine = CGAffineTransform(scaleX: 1 / p.x, y: 1 / p.y)
-        let b1Affine = CGAffineTransform(scaleX: 1 / (1 - p.x),
-                                         y: 1 / (1 - p.y)).translatedBy(x: -p.x, y: -p.y)
+        let b0Affine = AffineTransform(scaleX: 1 / p.x, y: 1 / p.y)
+        let b1Affine = AffineTransform(scaleX: 1 / (1 - p.x), y: 1 / (1 - p.y))
+            .translated(by: -p)
         let nb0 = Easing(cp0: sb.b0.cp0.applying(b0Affine), cp1: sb.b0.cp1.applying(b0Affine))
         let nb1 = Easing(cp0: sb.b1.cp0.applying(b1Affine), cp1: sb.b1.cp1.applying(b1Affine))
         return (nb0, nb1)

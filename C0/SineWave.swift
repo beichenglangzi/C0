@@ -212,10 +212,13 @@ struct SineWaveTrack: Track, Codable {
         if f1 == f2 {
             step(lf1)
         } else {
-            animation.interpolation(at: li,
-                                    step: step, linear: linear,
-                                    monospline: monospline,
-                                    firstMonospline: firstMonospline, endMonospline: lastMonospline)
+            switch animation.interpolation(atLoopFrameIndex: li) {
+            case .step(let lf1): step(lf1)
+            case .linear(let lf1, let lf2): linear(lf1, lf2)
+            case .monospline(let lf0, let lf1, let lf2, let lf3): monospline(lf0, lf1, lf2, lf3)
+            case .firstMonospline(let lf1, let lf2, let lf3): firstMonospline(lf1, lf2, lf3)
+            case .endMonospline(let lf0, let lf1, let lf2): lastMonospline(lf0, lf1, lf2)
+            }
         }
         return df * d
     }
@@ -223,17 +226,6 @@ struct SineWaveTrack: Track, Codable {
 
 struct SineWaveOption {
     var defaultModel = SineWave()
-    
-    var standardAmplitude = 1.0.cg {
-        didSet {
-            amplitudeOption.transformedModel = { [standardAmplitude] in
-                $0 * standardAmplitude / 10
-            }
-            amplitudeOption.reverseTransformedModel = { [standardAmplitude] in
-                $0 * 10 / standardAmplitude
-            }
-        }
-    }
     var amplitudeOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 10000,
                                      modelInterval: 0.01, numberOfDigits: 2)
     var frequencyOption = RealOption(defaultModel: 8, minModel: 0.1, maxModel: 100000,

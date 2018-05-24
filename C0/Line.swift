@@ -51,7 +51,7 @@ struct Line: Codable {
     }
 }
 extension Line {
-    func applying(_ affine: CGAffineTransform) -> Line {
+    func applying(_ affine: AffineTransform) -> Line {
         return Line(controls: controls.map { Control(point: $0.point.applying(affine),
                                                      pressure: $0.pressure) })
     }
@@ -903,7 +903,7 @@ extension Line: ThumbnailViewable {
     }
     func draw(with bounds: Rect, in ctx: CGContext) {
         let imageBounds = self.visibleImageBounds(withLineWidth: 1)
-        let c = CGAffineTransform.centering(from: imageBounds, to: bounds.inset(by: 5))
+        let c = AffineTransform.centering(from: imageBounds, to: bounds.inset(by: 5))
         ctx.concatenate(c.affine)
         draw(size: 0.5 / c.scale, in: ctx)
     }

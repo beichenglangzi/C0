@@ -368,7 +368,7 @@ extension Cell: ThumbnailViewable {
         return thumbnailView
     }
     func draw(with bounds: Rect, in ctx: CGContext) {
-        let c = CGAffineTransform.centering(from: allImageBounds, to: bounds.inset(by: 3))
+        let c = AffineTransform.centering(from: allImageBounds, to: bounds.inset(by: 3))
         ctx.concatenate(c.affine)
         let scale = 3 * c.scale, rotation = 0.0.cg
         let reciprocalScale = 1 / scale
