@@ -408,15 +408,9 @@ extension CellGroup {
     }
 }
 extension CellGroup {
-    func view(frame: Rect) -> View {
-        
-    }
-    
-    //view
-    func draw(scene: Scene, viewType: Cut.ViewType,
-              scale: Real, rotation: Real,
+    func view(scale: Real, rotation: Real,
               viewScale: Real, viewRotation: Real,
-              in ctx: CGContext) {
+              bounds: Rect) -> View {
         let inScale = scale * transform.scale.x, inRotation = rotation + transform.rotation
         let inViewScale = viewScale * transform.scale.x
         let inViewRotation = viewRotation + transform.rotation
@@ -424,129 +418,19 @@ extension CellGroup {
         
         ctx.concatenate(transform.affineTransform)
         
-        if effect.opacity != 1 || effect.blendType != .normal || effect.blurRadius > 0 || !isEdited {
-            ctx.saveGState()
-            ctx.setAlpha(!isEdited ? 0.2 * effect.opacity : effect.opacity)
-            ctx.setBlendMode(effect.blendType.blendMode)
-            if effect.blurRadius > 0 {
-                let invertCTM = ctx.ctm
-                let bBounds = ctx.boundingBoxOfClipPath.inset(by: -effect.blurRadius).applying(invertCTM)
-                if let bctx = CGContext.bitmap(with: bBounds.size) {
-                    bctx.translateBy(x: -effect.blurRadius, y: -effect.blurRadius)
-                    bctx.concatenate(ctx.ctm)
-                    _draw(scene: scene, viewType: viewType,
-                          reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
-                          scale: inViewScale, rotation: inViewRotation, in: bctx)
-                    children.forEach {
-                        $0.draw(scene: scene, viewType: viewType,
-                                scale: inScale, rotation: inRotation,
-                                viewScale: inViewScale, viewRotation: inViewRotation,
-                                in: bctx)
-                    }
-                    bctx.drawBlur(withBlurRadius: effect.blurRadius, to: ctx)
-                }
-            } else {
-                ctx.beginTransparencyLayer(auxiliaryInfo: nil)
-                _draw(scene: scene, viewType: viewType,
-                      reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
-                      scale: inViewScale, rotation: inViewRotation, in: ctx)
-                children.forEach {
-                    $0.draw(scene: scene, viewType: viewType,
-                            scale: inScale, rotation: inRotation,
-                            viewScale: inViewScale, viewRotation: inViewRotation,
-                            in: ctx)
-                }
-                ctx.endTransparencyLayer()
-            }
-            ctx.restoreGState()
-        } else {
-            _draw(scene: scene, viewType: viewType,
-                  reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
-                  scale: inViewScale, rotation: inViewRotation, in: ctx)
-            children.forEach {
-                $0.draw(scene: scene, viewType: viewType,
-                        scale: inScale, rotation: inRotation,
-                        viewScale: inViewScale, viewRotation: inViewRotation,
-                        in: ctx)
-            }
-        }
-    }
-    
-    private func _draw(scene: Scene, viewType: Cut.ViewType,
-                       reciprocalScale: Real, reciprocalAllScale: Real,
-                       scale: Real, rotation: Real,
-                       in ctx: CGContext) {
-        let isEdit = !isEdited ? false :
-            (viewType != .preview && viewType != .editMaterial && viewType != .changingMaterial)
-        moveWithSineWave: if viewType == .preview && !xSineWave.isEmpty {
+        if viewType == .preview && !xSineWave.isEmpty {
             let waveY = ySineWave.yWith(t: sineWaveT)
             ctx.translateBy(x: waveY, y: 0)
         }
-        guard !isHidden else {
-            return
-        }
-        if isEdit {
-            rootCell.children.forEach {
-                $0.draw(isEdit: isEdit, isUseDraw: false,
-                        reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
-                        scale: scale, rotation: rotation,
-                        in: ctx)
-            }
-            
-            ctx.saveGState()
-            ctx.setAlpha(0.5)
-            ctx.beginTransparencyLayer(auxiliaryInfo: nil)
-            rootCell.children.forEach {
-                $0.draw(isEdit: isEdit, isUseDraw: true,
-                        reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
-                        scale: scale, rotation: rotation,
-                        in: ctx)
-            }
-            ctx.endTransparencyLayer()
-            ctx.restoreGState()
-        } else {
-            rootCell.children.forEach {
-                $0.draw(isEdit: isEdit, isUseDraw: true,
-                        reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalAllScale,
-                        scale: scale, rotation: rotation,
-                        in: ctx)
-            }
-        }
         
-        drawAnimation: do {
-            if isEdit {
-                tracks.forEach {
-                    if $0 === editTrack {
-                        $0.drawing.drawEdit(withReciprocalScale: reciprocalScale, in: ctx)
-                    } else {
-                        ctx.setAlpha(0.5)
-                        $0.drawing.drawEdit(withReciprocalScale: reciprocalScale, in: ctx)
-                        ctx.setAlpha(1)
-                    }
-                }
-            } else {
-                var alpha = 1.0.cg
-                tracks.forEach {
-                    ctx.setAlpha(alpha)
-                    $0.drawing.draw(withReciprocalScale: reciprocalScale, in: ctx)
-                    alpha = max(alpha * 0.4, 0.25)
-                }
-                ctx.setAlpha(1)
-            }
-        }
+        let view = View()
+        view.isHidden = isHidden
+        view.bounds = bounds
+        view.effect = effect
+        view.children = drawing.viewWith() + children.enumerated().map { (i, cellGroup) in view(at: <#T##TreeIndex<CellGroup>#>, bounds: bounds) }
     }
     
-    func drawEdit(_ edit: Edit,
-                  scene: Scene, viewType: Cut.ViewType,
-                  strokeLine: Line?, strokeLineWidth: Real, strokeLineColor: Color,
-                  reciprocalViewScale: Real, scale: Real, rotation: Real,
-                  in ctx: CGContext) {
-        let worldScale = self.worldScale(at: <#T##TreeIndex<CellGroup>#>)
-        let rScale = 1 / worldScale
-        let rAllScale = reciprocalViewScale / worldScale
-        let wat = worldAffineTransform(at: <#T##TreeIndex<CellGroup>#>)
-        ctx.saveGState()
-        ctx.concatenate(wat)
+    func editorView() -> VIew {
         
         if !wat.isIdentity {
             ctx.setStrokeColor(Color.locked.cg)
@@ -557,106 +441,7 @@ extension CellGroup {
             ctx.strokePath()
         }
         
-        drawStroke: do {
-            if let strokeLine = strokeLine {
-                if viewType == .editSelected || viewType == .editDeselected {
-                    let geometry = Geometry(lines: [strokeLine])
-                    if viewType == .editSelected {
-                        geometry.drawSkin(lineColor: .selectBorder, subColor: .select,
-                                          reciprocalScale: rScale, reciprocalAllScale: rAllScale,
-                                          in: ctx)
-                    } else {
-                        geometry.drawSkin(lineColor: .deselectBorder, subColor: .deselect,
-                                          reciprocalScale: rScale, reciprocalAllScale: rAllScale,
-                                          in: ctx)
-                    }
-                } else {
-                    ctx.setFillColor(strokeLineColor.cg)
-                    strokeLine.draw(size: strokeLineWidth * rScale, in: ctx)
-                }
-            }
-        }
         
-        let isEdit = viewType != .preview && viewType != .changingMaterial
-        if isEdit {
-            if viewType == .editPoint || viewType == .editVertex {
-                editTrack.drawTransparentCellLines(withReciprocalScale: rScale, in: ctx)
-            }
-            editTrack.drawPreviousNext(isHiddenPrevious: scene.isHiddenPrevious,
-                                       isHiddenNext: scene.isHiddenNext,
-                                       time: time, reciprocalScale: rScale, in: ctx)
-            
-            for track in tracks {
-                track.drawSelectedCells(opacity: 0.75 * (track != editTrack ? 0.5 : 1),
-                                        color: .selected,
-                                        subColor: .subSelected,
-                                        reciprocalScale: rScale,  in: ctx)
-                let selectedLineIndexes = track.drawing.selectedLineIndexes
-                if !selectedLineIndexes.isEmpty {
-                    let imageBounds = selectedLineIndexes.reduce(into: Rect.null) {
-                        $0.formUnion(track.drawing.lines[$1].imageBounds)
-                    }
-                    ctx.setStrokeColor(Color.selected.with(alpha: 0.8).cg)
-                    ctx.setLineWidth(rScale)
-                    ctx.stroke(imageBounds)
-                }
-            }
-            let isMovePoint = viewType == .editPoint || viewType == .editVertex
-            
-            if viewType == .editMaterial {
-                if let material = edit.editMaterial {
-                    drawMaterial: do {
-                        rootCell.allCells { cell, stop in
-                            if cell.material.id == material.id {
-                                ctx.addPath(cell.geometry.path)
-                            }
-                        }
-                        ctx.setLineWidth(3 * rAllScale)
-                        ctx.setLineJoin(.round)
-                        ctx.setStrokeColor(Color.editMaterial.cg)
-                        ctx.strokePath()
-                        rootCell.allCells { cell, stop in
-                            if cell.material.color == material.color
-                                && cell.material.id != material.id {
-                                
-                                ctx.addPath(cell.geometry.path)
-                            }
-                        }
-                        ctx.setLineWidth(3 * rAllScale)
-                        ctx.setLineJoin(.round)
-                        ctx.setStrokeColor(Color.editMaterialColorOnly.cg)
-                        ctx.strokePath()
-                    }
-                }
-            }
-            
-            if !isMovePoint,
-                let indicatedGeometryItem = edit.indicatedGeometryItem,
-                editTrack.geometryItems.contains(indicatedGeometryItem) {
-                
-                if editTrack.selectedGeometryItems.contains(indicatedGeometryItem), let p = edit.point {
-                    editTrack.selectedGeometryItems.forEach {
-                        drawNearestCellLine(for: p, cell: $0.cell, lineColor: .selected,
-                                            reciprocalAllScale: rAllScale, in: ctx)
-                    }
-                }
-            }
-            if isMovePoint {
-                drawEditPoints(with: edit.editPoint, isEditVertex: viewType == .editVertex,
-                               reciprocalAllScale: rAllScale, in: ctx)
-            }
-            if let editTransform = edit.editTransform {
-                if viewType == .editWarp {
-                    drawWarp(with: editTransform, reciprocalAllScale: rAllScale, in: ctx)
-                } else if viewType == .editTransform {
-                    drawTransform(with: editTransform, reciprocalAllScale: rAllScale, in: ctx)
-                }
-            }
-        }
-        ctx.restoreGState()
-        if viewType != .preview {
-            drawTransform(scene.frame, in: ctx)
-        }
     }
     
     func drawTransform(_ cameraFrame: Rect, in ctx: CGContext) {
@@ -681,13 +466,13 @@ extension CellGroup {
             ctx.restoreGState()
             func strokeBounds() {
                 ctx.move(to: Point(x: cameraFrame.minX, y: cameraFrame.minY))
-                ctx.addLine(to: Point(x: cameraFrame.minX, y: cameraFrame.minY).applying(affine))
+                ctx.addLine(to: Point(x: cameraFrame.minX, y: cameraFrame.minY) * affine)
                 ctx.move(to: Point(x: cameraFrame.minX, y: cameraFrame.maxY))
-                ctx.addLine(to: Point(x: cameraFrame.minX, y: cameraFrame.maxY).applying(affine))
+                ctx.addLine(to: Point(x: cameraFrame.minX, y: cameraFrame.maxY) * affine)
                 ctx.move(to: Point(x: cameraFrame.maxX, y: cameraFrame.minY))
-                ctx.addLine(to: Point(x: cameraFrame.maxX, y: cameraFrame.minY).applying(affine))
+                ctx.addLine(to: Point(x: cameraFrame.maxX, y: cameraFrame.minY) * affine)
                 ctx.move(to: Point(x: cameraFrame.maxX, y: cameraFrame.maxY))
-                ctx.addLine(to: Point(x: cameraFrame.maxX, y: cameraFrame.maxY).applying(affine))
+                ctx.addLine(to: Point(x: cameraFrame.maxX, y: cameraFrame.maxY) * affine)
             }
             ctx.setStrokeColor(color.cg)
             strokeBounds()
@@ -713,19 +498,6 @@ extension CellGroup {
         drawCameraBorder(bounds: cameraFrame, inColor: Color.locked, outColor: Color.cutSubBorder)
     }
     
-    struct EditPoint: Equatable {
-        var nearestLine: Line, nearestPointIndex: Int, lines: [Line], point: Point, isSnap: Bool
-        
-        func draw(withReciprocalAllScale reciprocalAllScale: Real,
-                  lineColor: Color, in ctx: CGContext) {
-            for line in lines {
-                ctx.setFillColor((line == nearestLine ? lineColor : Color.subSelected).cg)
-                line.draw(size: 2 * reciprocalAllScale, in: ctx)
-            }
-            point.draw(radius: 3 * reciprocalAllScale, lineWidth: reciprocalAllScale,
-                       inColor: isSnap ? .snap : lineColor, outColor: .controlPointIn, in: ctx)
-        }
-    }
     private static let editPointRadius = 0.5.cg, lineEditPointRadius = 1.5.cg
     private static let pointEditPointRadius = 3.0.cg
     func drawEditPoints(with editPoint: EditPoint?, isEditVertex: Bool,
@@ -854,45 +626,6 @@ extension CellGroup {
                        inColor: v.value ? .controlPointJointIn : .controlPointCapIn,
                        outColor: .controlPointOut, in: ctx)
         }
-    }
-    
-    func drawSelectedCells(opacity: Real, color: Color, subColor: Color,
-                           reciprocalScale: Real, in ctx: CGContext) {
-        guard !selectedGeometryItems.isEmpty else { return }
-        ctx.setAlpha(opacity)
-        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
-        var geometrys = [Geometry]()
-        ctx.setFillColor(subColor.with(alpha: 1).cg)
-        func setPaths(with geometryItem: GeometryItem) {
-            let cell = geometryItem.cell
-            if !cell.geometry.isEmpty {
-                cell.geometry.addPath(in: ctx)
-                ctx.fillPath()
-                geometrys.append(cell.geometry)
-            }
-        }
-        selectedGeometryItems.forEach { setPaths(with: $0) }
-        ctx.endTransparencyLayer()
-        ctx.setAlpha(1)
-        
-        ctx.setFillColor(color.with(alpha: 1).cg)
-        geometrys.forEach { $0.draw(withLineWidth: 1.5 * reciprocalScale, in: ctx) }
-    }
-    
-    func drawTransparentCellLines(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
-        cells.forEach {
-            $0.geometry.drawLines(withColor: .getSetBorder, reciprocalScale: reciprocalScale, in: ctx)
-            $0.geometry.drawPathLine(withReciprocalScale: reciprocalScale, in: ctx)
-        }
-    }
-    
-    func drawSkinGeometryItem(_ geometryItem: GeometryItem,
-                              reciprocalScale: Real, reciprocalAllScale: Real, in ctx: CGContext) {
-        geometryItem.geometry.drawSkin(lineColor: .indicated,
-                                       subColor: Color.subIndicated.multiply(alpha: 0.2),
-                                       skinLineWidth: animation.isInterpolated ? 3 : 1,
-                                       reciprocalScale: reciprocalScale,
-                                       reciprocalAllScale: reciprocalAllScale, in: ctx)
     }
 }
 extension CellGroup: Referenceable {

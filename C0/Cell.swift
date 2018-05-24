@@ -221,7 +221,6 @@ extension Cell {
     }
 }
 extension Cell {
-    //view
     func colorAndLineColor(withIsEdit isEdit: Bool,
                            isIndicated: Bool,
                            isInterpolated: Bool) -> (color: Color, lineColor: Color) {
@@ -247,6 +246,7 @@ extension Cell {
         }
     }
     
+    //view
     func draw(isEdit: Bool = false, isUseDraw: Bool = false,
               reciprocalScale: Real, reciprocalAllScale: Real,
               scale: Real, rotation: Real, in ctx: CGContext) {

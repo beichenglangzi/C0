@@ -129,6 +129,10 @@ extension Rect {
         self = union(other)
     }
     
+    static func *(lhs: Rect, rhs: AffineTransform) -> Rect {
+        return lhs.applying(rhs)
+    }
+    
     var midPoint: Point {
         return Point(x: midX, y: midY)
     }
@@ -263,7 +267,7 @@ struct RotatedRect: Codable, Equatable {
             let nextP = chps[i == chps.count - 1 ? 0 : i + 1]
             let angle = p.tangential(nextP)
             let affine = AffineTransform(rotationAngle: -angle)
-            let ps = chps.map { $0.applying(affine) }
+            let ps = chps.map { $0 * affine }
             let bounds = Rect.boundingBox(with: ps)
             let area = bounds.width * bounds.height
             if area < minArea {
@@ -272,7 +276,7 @@ struct RotatedRect: Codable, Equatable {
                 minBounds = bounds
             }
         }
-        centerPoint = minBounds.midPoint.applying(AffineTransform(rotationAngle: minAngle))
+        centerPoint = minBounds.midPoint * AffineTransform(rotationAngle: minAngle)
         size = minBounds.size
         angle = minAngle
     }
@@ -286,21 +290,21 @@ struct RotatedRect: Codable, Equatable {
             .translated(by: Point(x: -size.width / 2, y: -size.height / 2))
     }
     func convertToLocal(p: Point) -> Point {
-        return p.applying(affineTransform.inverted())
+        return p * affineTransform.inverted()
     }
     var minXMidYPoint: Point {
-        return Point(x: 0, y: size.height / 2).applying(affineTransform)
+        return Point(x: 0, y: size.height / 2) * affineTransform
     }
     var maxXMidYPoint: Point {
-        return Point(x: size.width, y: size.height / 2).applying(affineTransform)
+        return Point(x: size.width, y: size.height / 2) * affineTransform
     }
     var midXMinYPoint: Point {
-        return Point(x: size.width / 2, y: 0).applying(affineTransform)
+        return Point(x: size.width / 2, y: 0) * affineTransform
     }
     var midXMaxYPoint: Point {
-        return Point(x: size.width / 2, y: size.height).applying(affineTransform)
+        return Point(x: size.width / 2, y: size.height) * affineTransform
     }
     var midXMidYPoint: Point {
-        return Point(x: size.width / 2, y: size.height / 2).applying(affineTransform)
+        return Point(x: size.width / 2, y: size.height / 2) * affineTransform
     }
 }

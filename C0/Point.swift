@@ -242,6 +242,9 @@ extension Point {
     static func *(lhs: Point, rhs: Real) -> Point {
         return Point(x: lhs.x * rhs, y: lhs.y * rhs)
     }
+    static func *(lhs: Point, rhs: AffineTransform) -> Point {
+        return lhs.applying(rhs)
+    }
     static func /(lhs: Point, rhs: Real) -> Point {
         return Point(x: lhs.x / rhs, y: lhs.y / rhs)
     }
@@ -251,14 +254,15 @@ extension Point {
     }
 }
 extension Point {
-    //view
-    func draw(radius r: Real, lineWidth: Real = 1,
-              inColor: Color = .knob, outColor: Color = .getSetBorder, in ctx: CGContext) {
-        let rect = Rect(x: x - r, y: y - r, width: r * 2, height: r * 2)
-        ctx.setFillColor(outColor.cg)
-        ctx.fillEllipse(in: rect.insetBy(dx: -lineWidth, dy: -lineWidth))
-        ctx.setFillColor(inColor.cg)
-        ctx.fillEllipse(in: rect)
+    func view(radius r: Real, lineWidth: Real = 1,
+              fillColor: Color = .knob, lineColor: Color = .getSetBorder) -> View {
+        let view = View.knob()
+        view.fillColor = fillColor
+        view.lineColor = lineColor
+        view.lineWidth = lineWidth
+        view.cornerRadius = r
+        view.frame = Rect(x: x - r, y: y - r, width: r * 2, height: r * 2)
+        return view
     }
 }
 extension Point: Hashable {

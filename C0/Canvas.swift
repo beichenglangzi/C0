@@ -125,17 +125,11 @@ final class CanvasView<T: BinderProtocol>: View, BindableReceiver {
     func updateWithModel() {
         
     }
-    var editPoint: CellGroup.EditPoint? {
-        didSet {
-            if editPoint != oldValue {
-                displayLinkDraw()
-            }
-        }
-    }
+    
     func updateEditPoint(with point: Point) {
         
     }
-    var currentTransform: AffineTransform {
+    var screenToEditingCellGroupTransform: AffineTransform {
         var affine = AffineTransform.identity
         affine *= model.editingWorldAffieTransform
         affine *= model.transform.affineTransform
@@ -143,20 +137,20 @@ final class CanvasView<T: BinderProtocol>: View, BindableReceiver {
         return affine
     }
     func convertToCurrentLocal(_ r: Rect) -> Rect {
-        let transform = currentTransform
-        return transform.isIdentity ? r : r.applying(transform.inverted())
+        let transform = screenToEditingCellGroupTransform
+        return transform.isIdentity ? r : r * transform.inverted()
     }
     func convertFromCurrentLocal(_ r: Rect) -> Rect {
-        let transform = currentTransform
-        return transform.isIdentity ? r : r.applying(transform)
+        let transform = screenToEditingCellGroupTransform
+        return transform.isIdentity ? r : r * transform
     }
     func convertToCurrentLocal(_ p: Point) -> Point {
-        let transform = currentTransform
-        return transform.isIdentity ? p : p.applying(transform.inverted())
+        let transform = screenToEditingCellGroupTransform
+        return transform.isIdentity ? p : p * transform.inverted()
     }
     func convertFromCurrentLocal(_ p: Point) -> Point {
-        let transform = currentTransform
-        return transform.isIdentity ? p : p.applying(transform)
+        let transform = screenToEditingCellGroupTransform
+        return transform.isIdentity ? p : p * transform
     }
     func displayLinkDraw(inCurrentLocalBounds rect: Rect) {
         displayLinkDraw(convertFromCurrentLocal(rect))
@@ -227,8 +221,8 @@ final class CanvasViewSelector<Binder: BinderProtocol>: ViewSelector {
     }
     func select(from rect: Rect, _ phase: Phase, isDeselect: Bool) {
         func unionWithStrokeLine(with drawing: Drawing) -> [Array<Line>.Index] {
-            let transform = canvasView.currentTransform.inverted()
-            let lines = [Line].rectangle(rect).map { $0.applying(transform) }
+            let affine = canvasView.screenToEditingCellGroupTransform.inverted()
+            let lines = [Line].rectangle(rect).map { $0 * affine }
             let geometry = Geometry(lines: lines)
             let lineIndexes = drawing.lines.enumerated().compactMap {
                 geometry.intersects($1) ? $0 : nil
@@ -352,7 +346,7 @@ final class CanvasViewTransformer<Binder: BinderProtocol> {
             let angle = theta < 0 ? theta + .pi : theta - .pi
             var pAffine = AffineTransform(rotationAngle: -angle)
             pAffine.translate(by: -anchorPoint)
-            let newOldP = oldPoint.applying(pAffine), newP = point.applying(pAffine)
+            let newOldP = oldPoint * pAffine, newP = point * pAffine
             let scaleX = newP.x / newOldP.x, skewY = (newP.y - newOldP.y) / newOldP.x
             var affine = AffineTransform(translation: anchorPoint)
             affine.rotate(by: angle)

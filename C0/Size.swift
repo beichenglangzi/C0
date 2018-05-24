@@ -63,6 +63,9 @@ extension Size {
     static func *(lhs: Size, rhs: Real) -> Size {
         return Size(width: lhs.width * rhs, height: lhs.height * rhs)
     }
+    static func *(lhs: Size, rhs: AffineTransform) -> Size {
+        return lhs.applying(rhs)
+    }
     
     static let effectiveFieldSizeOfView = Size(width: tan(.pi * (30.0 / 2) / 180),
                                                height: tan(.pi * (20.0 / 2) / 180))

@@ -147,8 +147,8 @@ struct Geometry: Equatable {
     }
 }
 extension Geometry {
-    func applying(_ affine: AffineTransform) -> Geometry {
-        return Geometry(lines: lines.map { $0.applying(affine) })
+    static func *(lhs: Geometry, rhs: AffineTransform) -> Geometry {
+        return Geometry(lines: lhs.lines.map { $0 * rhs })
     }
     func warpedWith(deltaPoint dp: Point, controlPoint: Point,
                     minDistance: Real, maxDistance: Real) -> Geometry {

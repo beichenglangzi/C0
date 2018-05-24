@@ -51,9 +51,10 @@ struct Line: Codable {
     }
 }
 extension Line {
-    func applying(_ affine: AffineTransform) -> Line {
-        return Line(controls: controls.map { Control(point: $0.point.applying(affine),
-                                                     pressure: $0.pressure) })
+    static func *(lhs: Line, rhs: AffineTransform) -> Line {
+        return Line(controls: lhs.controls.map {
+            Control(point: $0.point * rhs, pressure: $0.pressure)
+        })
     }
     func reversed() -> Line {
         return Line(controls: controls.reversed())
