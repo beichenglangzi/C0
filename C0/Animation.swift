@@ -419,31 +419,33 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
         self.height = height
         self.smallHeight = smallHeight
         self.sizeType = sizeType
+        keyframesView = ObjectsView(binder: binder,
+                                    keyPath: keyPath.appending(path: \Model.keyframes),
+                                    sizeType: sizeType, abstractType: .normal)
         
         super.init()
         frame = Rect(x: origin.x, y: origin.y,
                      width: 0, height: sizeType == .small ? smallHeight : height)
         updateLayout()
     }
-    var array: Array<Any>
 
     private static func knobLinePathView(from p: Point, lineColor: Color,
                                          baseWidth: Real, lineHeight: Real,
                                          lineWidth: Real = 4, linearLineWidth: Real = 2,
                                          with interpolation: KeyframeTiming.Interpolation) -> View {
-        let path = CGMutablePath()
+        var path = Path()
         switch interpolation {
         case .spline:
             break
         case .bound:
-            path.addRect(Rect(x: p.x - linearLineWidth / 2, y: p.y - lineHeight / 2,
-                              width: linearLineWidth, height: lineHeight / 2))
+            path.append(Rect(x: p.x - linearLineWidth / 2, y: p.y - lineHeight / 2,
+                             width: linearLineWidth, height: lineHeight / 2))
         case .linear:
-            path.addRect(Rect(x: p.x - linearLineWidth / 2, y: p.y - lineHeight / 2,
-                              width: linearLineWidth, height: lineHeight))
+            path.append(Rect(x: p.x - linearLineWidth / 2, y: p.y - lineHeight / 2,
+                             width: linearLineWidth, height: lineHeight))
         case .step:
-            path.addRect(Rect(x: p.x - lineWidth / 2, y: p.y - lineHeight / 2,
-                              width: lineWidth, height: lineHeight))
+            path.append(Rect(x: p.x - lineWidth / 2, y: p.y - lineHeight / 2,
+                             width: lineWidth, height: lineHeight))
         }
         let view = View(path: path)
         view.fillColor = lineColor
@@ -465,10 +467,10 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
                                             baseWidth: Real,
                                             lineWidth: Real, maxLineWidth: Real,
                                             position: Point, width: Real) -> View {
-        let path = CGMutablePath()
+        var path = Path()
         if keyframe.timing.easing.isLinear {
-            path.addRect(Rect(x: position.x, y: position.y - lineWidth / 2,
-                              width: width, height: lineWidth))
+            path.append(Rect(x: position.x, y: position.y - lineWidth / 2,
+                             width: width, height: lineWidth))
         } else {
             let b = keyframe.timing.easing.bezier, bw = width
             let bx = position.x, count = Int(width / 5.0)
@@ -482,7 +484,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
             }
             let ps0 = points.map { Point(x: $0.x, y: position.y + $0.y) }
             let ps1 = points.reversed().map { Point(x: $0.x, y: position.y - $0.y) }
-            path.addLines(between: ps0 + ps1)
+            path.append(PathLine(points: ps0 + ps1))
         }
         let view = View(path: path)
         view.fillColor = lineColor
@@ -526,22 +528,20 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
                 keyLineViews.append(knobLine)
 
                 if li.loopCount > 0 {
-                    let path = CGMutablePath()
+                    var path = Path()
                     if i > 0 && model.loopFrames[i - 1].loopCount < li.loopCount {
-                        path.move(to: Point(x: x, y: midY + height / 2 - 4))
-                        path.addLine(to: Point(x: x + 3, y: midY + height / 2 - 1))
-                        path.addLine(to: Point(x: x, y: midY + height / 2 - 1))
-                        path.closeSubpath()
+                        path.append(PathLine(points: [Point(x: x, y: midY + height / 2 - 4),
+                                                      Point(x: x + 3, y: midY + height / 2 - 1),
+                                                      Point(x: x, y: midY + height / 2 - 1)]))
                     }
-                    path.addRect(Rect(x: x, y: midY + height / 2 - 2, width: width, height: 1))
+                    path.append(Rect(x: x, y: midY + height / 2 - 2, width: width, height: 1))
                     if li.loopingCount > 0 {
                         if i > 0 && model.loopFrames[i - 1].loopingCount < li.loopingCount {
-                            path.move(to: Point(x: x, y: 1))
-                            path.addLine(to: Point(x: x + 3, y: 1))
-                            path.addLine(to: Point(x: x, y: 4))
-                            path.closeSubpath()
+                            path.append(PathLine(points: [Point(x: x, y: 1),
+                                                          Point(x: x + 3, y: 1),
+                                                          Point(x: x, y: 4)]))
                         }
-                        path.addRect(Rect(x: x, y: 1, width: width, height: 1))
+                        path.append(Rect(x: x, y: 1, width: width, height: 1))
                     }
 
                     let layer = View(path: path)
@@ -569,9 +569,9 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
                 view.frame = Rect(x: position.x, y: 0, width: width, height: height)
                 selectedViews.append(view)
             } else if li.index >= selectedStartIndex && li.index < selectedEndIndex {
-                let path = CGMutablePath(), h = 2.0.cg
-                path.addRect(Rect(x: position.x, y: 0, width: width, height: h))
-                path.addRect(Rect(x: position.x, y: height - h, width: width, height: h))
+                var path = Path(), h = 2.0.cg
+                path.append(Rect(x: position.x, y: 0, width: width, height: h))
+                path.append(Rect(x: position.x, y: height - h, width: width, height: h))
                 let view = View(path: path)
                 view.fillColor = .select
                 view.lineColor = .selectBorder

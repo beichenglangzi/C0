@@ -26,6 +26,7 @@ struct Text: Codable, Equatable {
     init() {
         baseLanguageCode = "en"
         base = ""
+        values = [:]
     }
     init(baseLanguageCode: String, base: String, values: [String: String]) {
         self.baseLanguageCode = baseLanguageCode
@@ -138,15 +139,9 @@ final class TextFormView: View {
                      frameAlignment: TextAlignment = .left, alignment: TextAlignment = .natural,
                      frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
         
-        self.text = text
-        
-        self.padding = padding
-        textMaterial = TextMaterial(font: font, color: color,
-                                    lineColor: lineColor, lineWidth: lineWidth,
-                                    frameAlignment: frameAlignment, alignment: alignment)
-        textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
-                              frameWidth: textFrameWidth)
-        
+        let textMaterial = TextMaterial(font: font, color: color,
+                                        lineColor: lineColor, lineWidth: lineWidth,
+                                        frameAlignment: frameAlignment, alignment: alignment)
         self.init(text: text, textMaterial: textMaterial,
                   frame: frame, padding: padding, isSizeToFit: isSizeToFit)
     }
@@ -155,6 +150,9 @@ final class TextFormView: View {
         
         self.text = text
         self.textMaterial = textMaterial
+        self.isSizeToFit = isSizeToFit
+        self.padding = padding
+        let textFrameWidth = TextFormView.textFrameWidthWith(frame: frame, padding: padding)
         textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
         
@@ -187,6 +185,9 @@ final class TextFormView: View {
     }
     
     var textFrameWidth: Real? {
+        return TextFormView.textFrameWidthWith(frame: frame, padding: padding)
+    }
+    private static func textFrameWidthWith(frame: Rect, padding: Real) -> Real? {
         return frame.width == 0 ? nil : frame.width - padding * 2
     }
     

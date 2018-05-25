@@ -103,13 +103,7 @@ struct TextFrame {
             self.lines = TextFrame.lineWith(attributedString: attributedString,
                                             frameWidth: frameWidth)
             
-            if let firstLine = lines.first, let lastLine = lines.last {
-                baselineDelta = -lastLine.origin.y - baseFont.descent
-                height = firstLine.origin.y + baseFont.ascent
-            } else {
-                baselineDelta = -baseFont.descent
-                height = baseFont.ascent
-            }
+            (baselineDelta, height) = TextFrame.baselineWith(lines, baseFont: baseFont)
         }
     }
     
@@ -131,6 +125,7 @@ struct TextFrame {
         self.frameWidth = frameWidth
         lines = TextFrame.lineWith(attributedString: attributedString, frameWidth: frameWidth)
         typographicBounds = TextFrame.typographicBounds(with: lines)
+        (baselineDelta, height) = TextFrame.baselineWith(lines, baseFont: baseFont)
     }
     init(string: String = "", textMaterial: TextMaterial, frameWidth: Real? = nil) {
         let border: TextBorder?
@@ -146,6 +141,16 @@ struct TextFrame {
         let attributedString = NSMutableAttributedString(string: string, attributes: attributes)
         self.init(attributedString: attributedString,
                   baseFont: textMaterial.font, frameWidth: frameWidth)
+    }
+    
+    private static func baselineWith(_ lines: [TextLine],
+                                     baseFont: Font) -> (baselineDelta: Real, height: Real) {
+        if let firstLine = lines.first, let lastLine = lines.last {
+            return (-lastLine.origin.y - baseFont.descent,
+                    firstLine.origin.y + baseFont.ascent)
+        } else {
+            return (-baseFont.descent, baseFont.ascent)
+        }
     }
     
     func bounds(padding: Real) -> Rect {

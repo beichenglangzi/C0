@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import CoreGraphics
+import func CoreGraphics.sqrt
 
 protocol Strokable {
     var viewScale: Real { get }
@@ -148,7 +148,7 @@ final class ViewStroker<Binder: BinderProtocol> {
         
         func speedTWith(distance: Real, deltaTime: Second, scale: Real) -> Real {
             let speed = ((distance / scale) / deltaTime).clip(min: minSpeed, max: maxSpeed)
-            return pow((speed - minSpeed) / (maxSpeed - minSpeed), 1 / exp)
+            return ((speed - minSpeed) / (maxSpeed - minSpeed)) ** (1 / exp)
         }
         func isAppendPointWith(distance: Real, deltaTime: Second,
                                _ temps: [Temp], scale: Real) -> Bool {
@@ -163,7 +163,7 @@ final class ViewStroker<Binder: BinderProtocol> {
             let ap = temps.first!.control.point, bp = temps.last!.control.point
             for tc in temps {
                 let speed = tc.speed.clip(min: minSpeed, max: maxSpeed)
-                let t = pow((speed - minSpeed) / (maxSpeed - minSpeed), 1 / exp)
+                let t = ((speed - minSpeed) / (maxSpeed - minSpeed)) ** (1 / exp)
                 let maxD = minDistance + (maxDistance - minDistance) * t
                 if tc.control.point.distanceWithLine(ap: ap, bp: bp) > maxD / scale {
                     return true

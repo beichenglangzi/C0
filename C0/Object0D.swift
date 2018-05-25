@@ -58,7 +58,7 @@ final class GetterView<T: GetterOption, U: BinderProtocol>: View, BindableGetter
         self.option = option
         
         self.sizeType = sizeType
-        optionStringView = TextFormView(text: option.displayText(with: model),
+        optionStringView = TextFormView(text: option.displayText(with: binder[keyPath: keyPath]),
                                         font: Font.default(with: sizeType),
                                         frameAlignment: .right, alignment: .right)
         
@@ -125,6 +125,13 @@ final class MiniView<T: Object0D, U: BinderProtocol>: View, BindableGetterReceiv
         self.sizeType = sizeType
         classNameView = TextFormView(text: Model.name, font: Font.bold(with: sizeType))
         
+        let thumbnailFrame = MiniView.thumbnailFrame(withBounds: Rect(origin: Point(),
+                                                                      size: frame.size),
+                                                     leftWidth: classNameView.frame.width,
+                                                     sizeType: sizeType)
+        thumbnailView = MiniView.thumbnailViewWith(model: binder[keyPath: keyPath],
+                                                   frame: thumbnailFrame, sizeType: sizeType)
+        
         super.init()
         children = [classNameView, thumbnailView]
         self.frame = frame
@@ -142,28 +149,37 @@ final class MiniView<T: Object0D, U: BinderProtocol>: View, BindableGetterReceiv
                         classNameView.frame.width + MiniView.defaultThumbnailWidth)
         return Rect(x: 0, y: 0, width: width, height: classNameView.frame.height + padding * 2)
     }
-    func thumbnailFrame(withBounds bounds: Rect) -> Rect {
+    static func thumbnailFrame(withBounds bounds: Rect,
+                               leftWidth: Real, sizeType: SizeType) -> Rect {
         let padding = Layout.padding(with: sizeType)
-        return Rect(x: classNameView.frame.maxX + padding,
+        return Rect(x: leftWidth + padding,
                     y: padding,
-                    width: bounds.width - classNameView.frame.width - padding * 3,
+                    width: bounds.width - leftWidth - padding * 3,
                     height: bounds.height - padding * 2)
     }
     override func updateLayout() {
         let padding = Layout.padding(with: sizeType)
         classNameView.frame.origin = Point(x: padding,
                                            y: bounds.height - classNameView.frame.height - padding)
-        thumbnailView.frame = thumbnailFrame(withBounds: bounds)
+        thumbnailView.frame = MiniView.thumbnailFrame(withBounds: bounds,
+                                                      leftWidth: classNameView.frame.width,
+                                                      sizeType: sizeType)
     }
     func updateWithModel() {
-        let thumbnailFrame = self.thumbnailFrame(withBounds: bounds)
+        let thumbnailFrame = MiniView.thumbnailFrame(withBounds: bounds,
+                                                     leftWidth: classNameView.frame.width,
+                                                     sizeType: sizeType)
+        thumbnailView = MiniView.thumbnailViewWith(model: model,
+                                                   frame: thumbnailFrame, sizeType: sizeType)
+    }
+    static func thumbnailViewWith(model: Model, frame: Rect, sizeType: SizeType) -> View {
         if let thumbnailViewable = model as? ThumbnailViewable {
-            thumbnailView = thumbnailViewable.thumbnailView(withFrame: thumbnailFrame, sizeType)
+            return thumbnailViewable.thumbnailView(withFrame: frame, sizeType)
         } else {
             let view = View(isLocked: true)
-            view.frame = thumbnailFrame
+            view.frame = frame
             view.lineColor = .formBorder
-            thumbnailView = view
+            return view
         }
     }
 }

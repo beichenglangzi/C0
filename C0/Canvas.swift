@@ -17,8 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import CoreGraphics
-
 struct Canvas: Codable {
     var frame: Rect
     var transform: Transform {
@@ -56,33 +54,21 @@ struct Canvas: Codable {
         self.rootCellGroup = rootCellGroup
         self.editingCellGroupTreeIndex = editingCellGroupTreeIndex
         reciprocalScale = 1 / transform.scale.x
+        editingWorldAffieTransform
+            = rootCellGroup.worldAffineTransform(at: editingCellGroupTreeIndex)
     }
 }
 extension Canvas {
-    func image(with size: Size) -> Image? {
-        guard let ctx = CGContext.bitmap(with: size, CGColorSpace.default) else {
-            return nil
-        }
-        let scale = size.width / frame.size.width
-        let viewTransform = Transform(translation: Point(x: size.width / 2, y: size.height / 2),
-                                      scale: Point(x: scale, y: scale),
-                                      rotation: 0)
-        let drawView = View(drawClosure: { ctx, _ in
-            ctx.concatenate(viewTransform.affineTransform)
-            self.draw(in: ctx)
-        })
-        drawView.render(in: ctx)
-        return ctx.renderImage
+    func view() -> View {
+        return View()
     }
-}
-extension Canvas {
     //view
-    func draw(in ctx: CGContext) {
-        ctx.saveGState()
-        ctx.concatenate(transform.affineTransform)
-        rootCellGroup.draw
-        ctx.restoreGState()
-    }
+//    func draw(in ctx: CGContext) {
+//        ctx.saveGState()
+//        ctx.concatenate(transform.affineTransform)
+//        rootCellGroup.draw
+//        ctx.restoreGState()
+//    }
 }
 extension Canvas: Referenceable {
     static let name = Text(english: "Canvas", japanese: "キャンバス")
@@ -205,7 +191,7 @@ extension CanvasView: Selectable {
 }
 final class CanvasViewSelector<Binder: BinderProtocol>: ViewSelector {
     var canvasView: CanvasView<Binder>
-    var cellGroup: CellGroup?, cellGroupIndex: CellGroup.Index
+    var cellGroup: CellGroup?, cellGroupIndex = CellGroup.Index()
     var selectedLineIndexes = [Int]()
     var drawing: Drawing?
     
@@ -284,13 +270,13 @@ extension CanvasView: Transformable {
     }
     
     func move(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        <#code#>
+        
     }
     func transform(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        <#code#>
+        
     }
     func warp(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        <#code#>
+        
     }
 }
 final class CanvasViewTransformer<Binder: BinderProtocol> {

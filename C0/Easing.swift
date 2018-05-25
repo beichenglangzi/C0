@@ -48,13 +48,13 @@ extension Easing {
     var isLinear: Bool {
         return cp0.x == cp0.y && cp1.x == cp1.y
     }
-    func path(in pb: Rect) -> CGPath {
+    func path(in pb: Rect) -> Path {
         let b = bezier
         let cp0 = Point(x: pb.minX + b.cp0.x * pb.width, y: pb.minY + b.cp0.y * pb.height)
         let cp1 = Point(x: pb.minX + b.cp1.x * pb.width, y: pb.minY + b.cp1.y * pb.height)
-        let path = CGMutablePath()
-        path.move(to: Point(x: pb.minX, y: pb.minY))
-        path.addCurve(to: Point(x: pb.maxX, y: pb.maxY), control1: cp0, control2: cp1)
+        var path = Path()
+//        path.move(to: Point(x: pb.minX, y: pb.minY))
+//        path.addCurve(to: Point(x: pb.maxX, y: pb.maxY), control1: cp0, control2: cp1)
         return path
     }
 }
@@ -79,7 +79,7 @@ extension Easing: ThumbnailViewable {
     }
     func draw(with bounds: Rect, in ctx: CGContext) {
         let path = self.path(in: bounds.inset(by: 5))
-        ctx.addPath(path)
+        ctx.addPath(path.cg)
         ctx.setStrokeColor(Color.font.cg)
         ctx.setLineWidth(1)
         ctx.strokePath()
@@ -114,19 +114,19 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
     }
     private let classXNameView: TextFormView, classYNameView: TextFormView
     private let controlLinePathView: View = {
-        let controlLine = View(path: CGMutablePath())
+        let controlLine = View(path: Path())
         controlLine.lineColor = .content
         controlLine.lineWidth = 1
         return controlLine
     } ()
     private let easingLinePathView: View = {
-        let easingLinePathView = View(path: CGMutablePath())
+        let easingLinePathView = View(path: Path())
         easingLinePathView.lineColor = .content
         easingLinePathView.lineWidth = 2
         return easingLinePathView
     } ()
     private let axisPathView: View = {
-        let axisPathView = View(path: CGMutablePath())
+        let axisPathView = View(path: Path())
         axisPathView.lineColor = .content
         axisPathView.lineWidth = 1
         return axisPathView
@@ -164,14 +164,15 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
                              y: padding + (bounds.height - padding * 2) / 2,
                              width: (bounds.width - padding * 2) / 2,
                              height: (bounds.height - padding * 2) / 2)
-        let path = CGMutablePath()
+        var path = Path()
         let sp = Layout.smallPadding
-        path.addLines(between: [Point(x: padding + cp0View.padding,
-                                      y: bounds.height - padding - classYNameView.frame.height - sp),
-                                Point(x: padding + cp0View.padding,
-                                      y: padding + cp0View.padding),
-                                Point(x: bounds.width - padding - classXNameView.frame.width - sp,
-                                      y: padding + cp0View.padding)])
+        let p0 = Point(x: padding + cp0View.padding,
+                       y: bounds.height - padding - classYNameView.frame.height - sp)
+        let p1 = Point(x: padding + cp0View.padding,
+                       y: padding + cp0View.padding)
+        let p2 = Point(x: bounds.width - padding - classXNameView.frame.width - sp,
+                       y: padding + cp0View.padding)
+        path.append(PathLine(points: [p0, p1, p2]))
         axisPathView.path = path
         classXNameView.frame.origin = Point(x: bounds.width - padding - classXNameView.frame.width,
                                             y: padding)
@@ -185,13 +186,13 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
         cp1View.updateWithModel()
         easingLinePathView.path = model.path(in: bounds.insetBy(dx: padding + cp0View.padding,
                                                                 dy: padding + cp0View.padding))
-        let knobLinePath = CGMutablePath()
-        knobLinePath.addLines(between: [Point(x: cp0View.frame.minX + cp0View.padding,
-                                              y: cp0View.frame.minY + cp0View.padding),
-                                        cp0View.knobView.position + cp0View.frame.origin])
-        knobLinePath.addLines(between: [Point(x: cp1View.frame.maxX - cp1View.padding,
-                                              y: cp1View.frame.maxY - cp1View.padding),
-                                        cp1View.knobView.position + cp1View.frame.origin])
+        var knobLinePath = Path()
+        knobLinePath.append(PathLine(points: [Point(x: cp0View.frame.minX + cp0View.padding,
+                                                    y: cp0View.frame.minY + cp0View.padding),
+                                              cp0View.knobView.position + cp0View.frame.origin]))
+        knobLinePath.append(PathLine(points: [Point(x: cp1View.frame.maxX - cp1View.padding,
+                                                    y: cp1View.frame.maxY - cp1View.padding),
+                                              cp1View.knobView.position + cp1View.frame.origin]))
         controlLinePathView.path = knobLinePath
     }
 }

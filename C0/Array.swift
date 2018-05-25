@@ -26,12 +26,8 @@ struct ArrayIndex<T>: Codable, Hashable {
 }
 extension Array {
     subscript(arrayIndex: ArrayIndex<Element>) -> Element {
-        get {
-            return self[arrayIndex.index]
-        }
-        set {
-            self[arrayIndex.index] = newValue
-        }
+        get { return self[arrayIndex.index] }
+        set { self[arrayIndex.index] = newValue }
     }
 }
 
@@ -106,8 +102,15 @@ final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableRe
          frame: Rect = Rect(), sizeType: SizeType = .regular,
          abstractType: AbstractType = .normal) {
         
+        self.binder = binder
+        self.keyPath = keyPath
+        
         self.sizeType = sizeType
         self.abstractType = abstractType
+        
+        modelViews = ObjectsView.modelViewsWith(model: binder[keyPath: keyPath],
+                                                binder: binder, keyPath: keyPath,
+                                                sizeType: sizeType, type: abstractType)
         
         super.init()
         isClipped = true
@@ -120,12 +123,18 @@ final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableRe
         layoutClosure?(model, modelViews)
     }
     func updateChildren() {
-        modelViews = model.enumerated().map { (i, element) in
+        modelViews = ObjectsView.modelViewsWith(model: model,
+                                                binder: binder, keyPath: keyPath,
+                                                sizeType: sizeType, type: abstractType)
+        self.children = modelViews
+    }
+    static func modelViewsWith(model: Model, binder: Binder, keyPath: BinderKeyPath,
+                               sizeType: SizeType, type: AbstractType) -> [View] {
+        return model.enumerated().map { (i, element) in
             return element.abstractViewWith(binder: binder,
                                             keyPath: keyPath.appending(path: \Model[i]),
-                                            frame: Rect(), sizeType, type: abstractType)
+                                            frame: Rect(), sizeType, type: type)
         }
-        self.children = modelViews
     }
     func updateWithModel() {
         updateChildren()
@@ -215,10 +224,8 @@ final class ArrayCountView<T: ArrayCountElement, U: BinderProtocol>: View, Binda
     
     override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
-        return Rect(x: 0,
-                    y: 0,
-                    width: classNameView.frame.width + countNameView.frame.width + width + padding * 3,
-                    height: h)
+        let w = classNameView.frame.width + countNameView.frame.width + width + padding * 3
+        return Rect(x: 0, y: 0, width: w, height: h)
     }
     override func updateLayout() {
         let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)

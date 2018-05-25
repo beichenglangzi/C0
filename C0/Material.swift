@@ -138,7 +138,7 @@ extension Material.MaterialType: DisplayableText {
 }
 
 struct MaterialTrack: Track, Codable {
-    private(set) var animation = Animation<Material>()
+    var animation = Animation<Material>()
     var animatable: Animatable {
         return animation
     }
@@ -191,11 +191,12 @@ final class MaterialView<T: BinderProtocol>: View, BindableReceiver {
     private let lineColorNameView = TextFormView(text: Text(english: "Line Color:",
                                                             japanese: "線のカラー:"))
     
-    init(binder: T, keyPath: BinderKeyPath,
+    init(binder: T, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
         self.binder = binder
         self.keyPath = keyPath
+        self.option = option
         
         typeView = EnumView(binder: binder, keyPath: keyPath.appending(path: \Model.type),
                             option: option.typeOption, sizeType: sizeType)

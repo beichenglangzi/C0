@@ -69,7 +69,7 @@ final class SceneVideoEncoder: MediaEncoder {
                                          scale: Point(x: scale, y: scale),
                                          rotation: 0)
         drawView.bounds.size = size
-        drawView.drawClosure = { [unowned self] ctx, _ in self.scene.canvas.draw(in: ctx) }
+//        drawView.drawClosure = { [unowned self] ctx, _ in self.scene.canvas.draw(in: ctx) }
     }
     
     func write(to url: URL,
@@ -258,7 +258,7 @@ final class SceneImageEncoder: MediaEncoder {
     func write(to url: URL,
                progressClosure: @escaping (Real, inout Bool) -> (),
                completionClosure: @escaping (Error?) -> ()) throws {
-        let image = canvas.image(with: size)
+        let image = canvas.view().renderImage(with: size)
         try image?.write(fileType, to: url)
         completionClosure(nil)
     }
@@ -295,6 +295,8 @@ final class MediaEncoderView<T: MediaEncoder>: View {
     init(encoder: T, frame: Rect = Rect(), sizeType: SizeType = .regular) {
         self.encoder = encoder
         self.sizeType = sizeType
+        textView = TextFormView(text: Text(),
+                                textMaterial: TextMaterial(font: Font.default(with: sizeType)))
         
         super.init()
         stopView.model = { [unowned self] _ in self.stop() }

@@ -392,8 +392,6 @@ final class C0Document: NSDocument, NSWindowDelegate {
         }
         setupWindow(with: preference)
         
-        undoManager = c0View.desktopView.sceneView.binder.version
-        
         let isWriteClosure: (DataModel, Bool) -> Void = { [unowned self] (_, isWrite) in
             if isWrite {
                 self.updateChangeCount(.changeDone)
@@ -402,8 +400,8 @@ final class C0Document: NSDocument, NSWindowDelegate {
         c0View.desktopBinder.diffDesktopDataModel.didChangeIsWriteClosure = isWriteClosure
         preferenceDataModel.didChangeIsWriteClosure = isWriteClosure
         
-        c0View.desktopView.copiedObjectsView.push(NSPasteboard.general.copiedObjects,
-                                                  to: c0View.desktopView.version)
+//        c0View.desktopView.copiedObjectsView.push(NSPasteboard.general.copiedObjects,
+//                                                  to: c0View.desktopView.version)
         c0View.desktopView.copiedObjectsView.notifications.append({ [unowned self] _, _ in
             self.didSetCopiedObjects()
         })
@@ -580,16 +578,16 @@ final class C0View: NSView, NSTextInputClient {
     private let isSimpleReferenceKey = "isSimpleReferenceKey"
     
     override init(frame frameRect: NSRect) {
-        sender = Sender(rootView: desktopView)
         desktopBinder = DesktopBinder(rootModel: Desktop())
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
+        sender = Sender(rootView: desktopView)
         super.init(frame: frameRect)
         setup()
     }
     required init?(coder: NSCoder) {
-        sender = Sender(rootView: desktopView)
         desktopBinder = DesktopBinder(rootModel: Desktop())
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
+        sender = Sender(rootView: desktopView)
         super.init(coder: coder)
         setup()
     }

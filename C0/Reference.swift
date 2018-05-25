@@ -60,6 +60,20 @@ extension Reference: ThumbnailViewable {
         return name.thumbnailView(withFrame: frame, sizeType)
     }
 }
+extension Reference: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Reference>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> View {
+        switch type {
+        case .normal:
+            return ReferenceView(binder: binder, keyPath: keyPath,
+                                 frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
 
 final class ReferenceView<T: BinderProtocol>: View, BindableReceiver {
     typealias Model = Reference

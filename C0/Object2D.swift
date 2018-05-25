@@ -120,6 +120,7 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
         
         self.sizeType = sizeType
         boundsPadding = Layout.padding(with: sizeType)
+        boundsView = View()
         boundsView.lineColor = .formBorder
         let font = Font.default(with: .small)
         xNameView = TextFormView(text: "x:", font: font)
@@ -160,6 +161,10 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
         yView.frame.origin = Point(x: x, y: y)
         x -= yNameView.frame.width
         yNameView.frame.origin = Point(x: x, y: y + padding)
+        boundsView.frame = Rect(x: padding,
+                                y: padding,
+                                width: bounds.width - valueFrame.width - padding * 3,
+                                height: bounds.height - padding * 2)
         updateWithModel()
     }
     func updateWithModel() {

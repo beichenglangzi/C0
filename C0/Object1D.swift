@@ -73,7 +73,7 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
         self.option = option
         
         self.sizeType = sizeType
-        optionStringView = TextFormView(text: option.displayText(with: model),
+        optionStringView = TextFormView(text: option.displayText(with: binder[keyPath: keyPath]),
                                         font: Font.default(with: sizeType),
                                         frameAlignment: .right, alignment: .right)
         
@@ -457,8 +457,8 @@ extension Slidable1DView {
                                                      endPoint: Point(x: 1, y: 0)))
         backgroundView.frame = frame
         
-        let checkerboardView = View(path: CGPath.checkerboard(with: Size(square: checkerWidth),
-                                                              in: frame))
+        let checkerboardView = View(path: Path.checkerboard(with: Size(square: checkerWidth),
+                                                            in: frame))
         checkerboardView.fillColor = .content
         
         return [backgroundView, checkerboardView]
@@ -542,7 +542,7 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
         self.width = width
         knobView = sizeType == .small ? View.knob(radius: 4) : View.knob()
         
-        super.init(path: CGMutablePath(), isLocked: false)
+        super.init(path: Path(), isLocked: false)
         fillColor = nil
         lineWidth = 0.5
         append(child: knobView)
@@ -551,14 +551,15 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     
     override func updateLayout() {
         let cp = Point(x: bounds.midX, y: bounds.midY), r = bounds.width / 2
-        let path = CGMutablePath()
-        path.addArc(center: cp, radius: r,
-                    startAngle: 0, endAngle: 2 * .pi,
-                    clockwise: true)
-        path.move(to: cp + Point(x: r - width, y: 0))
-        path.addArc(center: cp, radius: r - width,
-                    startAngle: 0, endAngle: 2 * .pi,
-                    clockwise: false)
+        let fp0 = cp + Point(x: r, y: 0)
+        let arc0 = PathLine.Arc(centerPoint: cp, endAngle: 2 * .pi,
+                                circularOrientation: .clockwise)
+        let fp1 = cp + Point(x: r - width, y: 0)
+        let arc1 = PathLine.Arc(centerPoint: cp, endAngle: 2 * .pi,
+                                circularOrientation: .counterClockwise)
+        var path = Path()
+        path.append(PathLine(firstPoint: fp0, elements: [.arc(arc0)]))
+        path.append(PathLine(firstPoint: fp1, elements: [.arc(arc1)]))
         self.path = path
         updateWithModel()
     }

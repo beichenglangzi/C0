@@ -131,7 +131,7 @@ extension Subtitle: ThumbnailViewable {
 }
 
 struct SubtitleTrack: Track, Codable {
-    private(set) var animation = Animation<Subtitle>()
+    var animation = Animation<Subtitle>()
     var animatable: Animatable {
         return animation
     }

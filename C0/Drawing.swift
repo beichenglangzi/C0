@@ -97,46 +97,18 @@ extension Drawing {
     }
 }
 extension Drawing {
-    func viewWith() -> View {
-        return viewWith(lineColor: lineColor, lineWidth: lineWidth)
+    var view: View {
+        return viewWith(lineWidth: lineWidth, lineColor: lineColor)
     }
-    func viewWith(lineColor: Color, lineWidth: Real) -> View {
-        
+    func viewWith(lineWidth: Real, lineColor: Color) -> View {
+        let view = View()
+        view.children = lines.compactMap { $0.view(lineWidth: lineWidth, fillColor: lineColor) }
+        return view
     }
-    func draftViewWith(lineColor: Color, lineWidth: Real) -> View {
-        
-    }
-    func selectedViewWith(lineColor: Color, lineWidth: Real) -> View {
-        
-    }
-    
-    //view
-    func drawEdit(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
-        drawEdit(lineWidth: lineWidth * reciprocalScale, lineColor: lineColor, in: ctx)
-    }
-    func draw(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
-        draw(lineWidth: lineWidth * reciprocalScale, lineColor: lineColor, in: ctx)
-    }
-    func drawEdit(lineWidth: Real, lineColor: Color, in ctx: CGContext) {
-        drawDraft(lineWidth: lineWidth, lineColor: Color.draft, in: ctx)
-        draw(lineWidth: lineWidth, lineColor: lineColor, in: ctx)
-        drawSelectedLines(lineWidth: lineWidth + 1.5, lineColor: Color.selected, in: ctx)
-    }
-    func drawDraft(lineWidth: Real, lineColor: Color, in ctx: CGContext) {
-        ctx.setFillColor(lineColor.cg)
-        draftLines.forEach { $0.draw(size: lineWidth, in: ctx) }
-    }
-    func draw(lineColor: Color, in ctx: CGContext) {
-        ctx.setFillColor(lineColor.cg)
-        lines.forEach { $0.draw(size: lineWidth, in: ctx) }
-    }
-    func draw(lineWidth: Real, lineColor: Color, in ctx: CGContext) {
-        ctx.setFillColor(lineColor.cg)
-        lines.forEach { $0.draw(size: lineWidth, in: ctx) }
-    }
-    func drawSelectedLines(lineWidth: Real, lineColor: Color, in ctx: CGContext) {
-        ctx.setFillColor(lineColor.cg)
-        selectedLineIndexes.forEach { lines[$0].draw(size: lineWidth, in: ctx) }
+    func draftViewWith(lineWidth: Real, lineColor: Color) -> View {
+        let view = View()
+        view.children = draftLines.compactMap { $0.view(lineWidth: lineWidth, fillColor: lineColor) }
+        return view
     }
 }
 extension Drawing: Referenceable {
@@ -150,10 +122,12 @@ extension Drawing: ThumbnailViewable {
     }
     func draw(with bounds: Rect, in ctx: CGContext) {
         let imageBounds = self.imageBounds(withLineWidth: 1)
-        let c = AffineTransform.centering(from: imageBounds, to: bounds.inset(by: 5))
-        ctx.concatenate(c.affine)
-        draw(lineWidth: 0.5 / c.scale, lineColor: Color.strokeLine, in: ctx)
-        drawDraft(lineWidth: 0.5 / c.scale, lineColor: Color.draft, in: ctx)
+        let centering = AffineTransform.centering(from: imageBounds, to: bounds.inset(by: 5))
+        let view = View()
+        view.bounds = bounds
+//        ctx.concatenate(centering.affine)
+//        draw(lineWidth: 0.5 / centering.scale, lineColor: Color.strokeLine, in: ctx)
+//        drawDraft(lineWidth: 0.5 / centering.scale, lineColor: Color.draft, in: ctx)
     }
 }
 
@@ -172,7 +146,7 @@ extension LinesTrack {
         func viewWith(lineColor: Color, at i: Int) -> View {
             let drawing = animation.keyframes[i].value.drawing
             let lineWidth = drawing.lineWidth * reciprocalScale
-            return drawing.viewWith(lineColor: .next, lineWidth: lineWidth)
+            return drawing.viewWith(lineWidth: lineWidth, lineColor: .next)
         }
         if !isHiddenPrevious && index - 1 >= 0 {
             views.append(viewWith(lineColor: .previous, at: index - 1))
@@ -273,6 +247,12 @@ final class DrawingView<T: BinderProtocol>: View, BindableReceiver {
         
         self.sizeType = sizeType
         classNameView = TextFormView(text: Model.name, font: Font.bold(with: sizeType))
+        linesView = ArrayCountView(binder: binder,
+                                   keyPath: keyPath.appending(path: \Model.lines),
+                                   sizeType: sizeType)
+        draftLinesView = ArrayCountView(binder: binder,
+                                        keyPath: keyPath.appending(path: \Model.draftLines),
+                                        sizeType: sizeType)
         
         super.init()
         changeToDraftView.model = { [unowned self] in self.changeToDraft($0) }

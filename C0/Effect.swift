@@ -123,7 +123,7 @@ struct EffectOption {
 }
 
 struct EffectTrack: Track, Codable {
-    private(set) var animation = Animation<Effect>()
+    var animation = Animation<Effect>()
     var animatable: Animatable {
         return animation
     }

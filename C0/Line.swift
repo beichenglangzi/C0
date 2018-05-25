@@ -48,6 +48,10 @@ struct Line: Codable {
     }
     init(controls: [Control]) {
         self.controls = controls
+        imageBounds = Line.imageBounds(with: controls)
+        firstAngle = controls[0].point.tangential(controls[1].point)
+        lastAngle = controls[controls.count - 2].point
+            .tangential(controls[controls.count - 1].point)
     }
 }
 extension Line {
@@ -327,22 +331,6 @@ extension Line {
         let bounds = lines.reduce(into: firstBounds) { $0.formUnion($1.imageBounds) }
         return Line.visibleImageBoundsWith(imageBounds: bounds, lineWidth: lineWidth)
     }
-    static func path(with lines: [Line], length: Real = 0) -> CGPath {
-        guard !lines.isEmpty else {
-            return CGMutablePath()
-        }
-        let path = CGMutablePath()
-        for (i, line) in lines.enumerated() {
-            line.appendBezierCurves(withIsMove: i == 0, in: path)
-            let nextLine = lines[i + 1 < lines.count ? i + 1 : 0]
-            if length > 0 && line.lastPoint != nextLine.firstPoint {
-                path.addLine(to: line.lastExtensionPoint(withLength: length))
-                path.addLine(to: nextLine.firstExtensionPoint(withLength: length))
-            }
-        }
-        path.closeSubpath()
-        return path
-    }
     
     static func visibleLineWidth(withLineWidth lineWidth: Real) -> Real {
         return lineWidth * sqrt(2) / 2
@@ -457,23 +445,22 @@ extension Line {
         return bs
     }
     
-    func appendBezierCurves(withIsMove isMove: Bool, in path: CGMutablePath) {
-        guard let fp = controls.first?.point, let lp = controls.last?.point else { return }
-        if isMove {
-            path.move(to: fp)
-        } else {
-            path.addLine(to: fp)
+    var bezierCurveElementsTuple: (firstPoint: Point, elements: [PathLine.Element])? {
+        guard let fp = controls.first?.point, let lp = controls.last?.point else {
+            return nil
         }
+        var elements = [PathLine.Element]()
         if controls.count >= 3 {
             for i in 2..<controls.count - 1 {
                 let control = controls[i], oldControl = controls[i - 1]
-                path.addQuadCurve(to: oldControl.point.mid(control.point),
-                                  control: oldControl.point)
+                let p = oldControl.point.mid(control.point)
+                elements.append(.bezier2(point: p, control: oldControl.point))
             }
-            path.addQuadCurve(to: lp, control: controls[controls.count - 2].point)
+            elements.append(.bezier2(point: lp, control: controls[controls.count - 2].point))
         } else {
-            path.addLine(to: lp)
+            elements.append(.linear(lp))
         }
+        return (fp, elements)
     }
     
     static func maxDistance²(at p: Point, with lines: [Line]) -> Real {
@@ -567,22 +554,6 @@ extension Line {
     func isReverse(from other: Line) -> Bool {
         let l0 = other.lastPoint, f1 = firstPoint, l1 = lastPoint
         return hypot²(l1.x - l0.x, l1.y - l0.y) < hypot²(f1.x - l0.x, f1.y - l0.y)
-    }
-    
-    func firstExtensionPoint(withLength length: Real) -> Point {
-        return extensionPointWith(p0: controls[1].point, p1: controls[0].point, length: length)
-    }
-    func lastExtensionPoint(withLength length: Real) -> Point {
-        return extensionPointWith(p0: controls[controls.count - 2].point,
-                                  p1: controls[controls.count - 1].point, length: length)
-    }
-    private func extensionPointWith(p0: Point, p1: Point, length: Real) -> Point {
-        guard p0 != p1 else {
-            return p1
-        }
-        let x = p1.x - p0.x, y = p1.y - p0.y
-        let reciprocalD = 1 / hypot(x, y)
-        return Point(x: p1.x + x * length * reciprocalD, y: p1.y + y * length * reciprocalD)
     }
     
     func angle(withPreviousLine preLine: Line) -> Real {
@@ -682,82 +653,47 @@ extension Line {
     }
 }
 extension Line {
-    //view
-    static func drawMainPointsWith(lines: [Line], inColor: Color = .controlEditPointIn,
-                                   outColor: Color = .controlPointOut,
-                                   skinLineWidth: Real = 1, skinRadius: Real = 1.5,
-                                   reciprocalScale s: Real, in ctx: CGContext) {
-        let lineWidth = skinLineWidth * s * 0.5, mor = skinRadius * s
-        lines.forEach { line in
-            for (i, p) in line.mainPointSequence.enumerated() {
-                if i != 0 && i != line.controls.count {
-                    p.draw(radius: mor, lineWidth: lineWidth,
-                           inColor: inColor, outColor: outColor, in: ctx)
-                }
-            }
-        }
-    }
-    static func drawCapPointsWith(lines: [Line],
-                                  inColor: Color = .controlPointCapIn,
-                                  outColor: Color = .controlPointOut,
-                                  jointInColor: Color = .controlPointJointIn,
-                                  jointOutColor: Color = .controlPointOut,
-                                  unionInColor: Color = .controlPointUnionIn,
-                                  unionOutColor: Color = .controlPointOut,
-                                  skinLineWidth: Real = 1, skinRadius: Real = 1.5,
-                                  reciprocalScale s: Real, in ctx: CGContext) {
-        let lineWidth = skinLineWidth * s * 0.5, mor = skinRadius * s
-        guard var oldLine = lines.last else { return }
-        for line in lines {
-            let isUnion = oldLine.lastPoint == line.firstPoint
-            if isUnion {
-                if oldLine.controls[oldLine.controls.count - 2].point
-                    .mid(line.controls[1].point).isApproximatelyEqual(other: line.firstPoint) {
-                    line.firstPoint.draw(radius: mor, lineWidth: lineWidth,
-                                         inColor: unionInColor, outColor: unionOutColor, in: ctx)
-                } else {
-                    line.firstPoint.draw(radius: mor, lineWidth: lineWidth,
-                                         inColor:  jointInColor, outColor: jointOutColor, in: ctx)
-                }
-            } else {
-                oldLine.lastPoint.draw(radius: mor, lineWidth: lineWidth,
-                                       inColor: inColor, outColor: outColor, in: ctx)
-                line.firstPoint.draw(radius: mor, lineWidth: lineWidth,
-                                     inColor: inColor, outColor: outColor, in: ctx)
-            }
-            oldLine = line
-        }
-    }
-    func draw(size: Real, in ctx: CGContext) {
+    func view(lineWidth size: Real, fillColor: Color) -> View? {
         let s = size / 2
-        guard ctx.boundingBoxOfClipPath.intersects(imageBounds.inset(by: -s)) else { return }
         if controls.count <= 2 {
-            guard controls.count == 2 else { return }
+            guard controls.count == 2 else {
+                return nil
+            }
             let firstTheta = firstAngle + .pi / 2
-            let pres = s * controls[0].pressure, pres2 = s * controls[1].pressure
-            let dp = Point(x: pres * cos(firstTheta), y: pres * sin(firstTheta))
-            ctx.move(to: controls[0].point + dp)
-            ctx.addArc(center: controls[controls.count - 1].point,
-                       radius: pres2,
-                       startAngle: firstTheta, endAngle: firstTheta - .pi,
-                       clockwise: true)
-            ctx.addArc(center: controls[0].point,
-                       radius: pres,
-                       startAngle: firstTheta - .pi, endAngle: firstTheta - .pi * 2,
-                       clockwise: true)
-            ctx.fillPath()
+            let pres0 = s * controls[0].pressure, pres1 = s * controls[1].pressure
+            let dp0 = Point(x: pres0 * cos(firstTheta), y: pres0 * sin(firstTheta))
+            let dp1 = Point(x: pres1 * cos(firstTheta), y: pres1 * sin(firstTheta))
+            
+            let fp = controls[0].point + dp0
+            let p0 = controls[1].point + dp1
+            let arc0 = PathLine.Arc(centerPoint: controls[controls.count - 1].point,
+                                    endAngle: firstTheta - .pi,
+                                    circularOrientation: .clockwise)
+            let p1 = controls[0].point - dp0
+            let arc1 = PathLine.Arc(centerPoint: controls[0].point,
+                                    endAngle: firstTheta - .pi * 2,
+                                    circularOrientation: .clockwise)
+            let pathLine = PathLine(firstPoint: fp, elements: [.linear(p0), .arc(arc0),
+                                                               .linear(p1), .arc(arc1)])
+            
+            var path = Path()
+            path.append(pathLine)
+            let view = View(path: path)
+            view.fillColor = fillColor
+            return view
         } else {
             let firstTheta = firstAngle + .pi / 2, pres = s * controls[0].pressure
-            var ps = [Point](), previousPressure = controls[0].pressure
-            ctx.move(to: controls[0].point + Point(x: pres * cos(firstTheta),
-                                                   y: pres * sin(firstTheta)))
+            var previousPressure = controls[0].pressure
+            var es = [PathLine.Element](), res = [PathLine.Element]()
+            let fp = controls[0].point + Point(x: pres * cos(firstTheta),
+                                               y: pres * sin(firstTheta))
             if controls.count == 3 {
                 let bezier = self.bezier(at: 0)
                 let pr0 = s * controls[0].pressure
                 let pr1 = s * controls[1].pressure, pr2 = s * controls[2].pressure
                 let length = bezier.p0.distance(bezier.cp) + bezier.cp.distance(bezier.p1)
                 let count = Int(length)
-                if count != 0 {
+                if count > 0 {
                     let splitDeltaT = 1 / length
                     var t = 0.0.cg
                     for _ in 0..<count {
@@ -768,8 +704,8 @@ extension Line {
                             Real.linear(pr1, pr2, t: (t - 0.5) * 2)
                         let dp = bezier.difference(withT: t)
                             .perpendicularDeltaPoint(withDistance: pres)
-                        ctx.addLine(to: p + dp)
-                        ps.append(p - dp)
+                        es.append(.linear(p + dp))
+                        res.append(.linear(p - dp))
                     }
                 }
             } else {
@@ -779,7 +715,7 @@ extension Line {
                         controls[controls.count - 1].pressure :
                         (controls[i + 1].pressure + controls[i + 2].pressure) / 2
                     let count = Int(length)
-                    if count != 0 {
+                    if count > 0 {
                         let splitDeltaT = 1 / length
                         var t = 0.0.cg
                         for _ in 0..<count {
@@ -788,26 +724,33 @@ extension Line {
                             let pres = Real.linear(s * previousPressure, s * nextPressure, t: t)
                             let dp = bezier.difference(withT: t)
                                 .perpendicularDeltaPoint(withDistance: pres)
-                            ctx.addLine(to: p + dp)
-                            ps.append(p - dp)
+                            es.append(.linear(p + dp))
+                            res.append(.linear(p - dp))
                         }
                     }
                     previousPressure = nextPressure
                 }
             }
+            
+            let lp = controls[controls.count - 1].point
             let lastTheta = lastAngle + .pi / 2, pres2 = s * controls[controls.count - 1].pressure
-            ctx.addArc(center: controls[controls.count - 1].point,
-                       radius: pres2,
-                       startAngle: lastTheta, endAngle: lastTheta - .pi,
-                       clockwise: true)
-            for p in ps.reversed() {
-                ctx.addLine(to: p)
-            }
-            ctx.addArc(center: controls[0].point,
-                       radius: pres,
-                       startAngle: firstTheta - .pi, endAngle: firstTheta - .pi * 2,
-                       clockwise: true)
-            ctx.fillPath()
+            es.append(.linear(lp + Point(x: pres2 * cos(lastTheta),
+                                         y: pres2 * sin(lastTheta))))
+            
+            es.append(.arc(PathLine.Arc(centerPoint: controls[controls.count - 1].point,
+                                        endAngle: lastTheta - .pi,
+                                        circularOrientation: .clockwise)))
+            es += res.reversed()
+            es.append(.arc(PathLine.Arc(centerPoint: controls[0].point,
+                                        endAngle: firstTheta - .pi * 2,
+                                        circularOrientation: .clockwise)))
+            
+            var path = Path()
+            path.append(PathLine(firstPoint: fp, elements: es))
+            
+            let view = View(path: path)
+            view.fillColor = fillColor
+            return view
         }
     }
 }
@@ -881,18 +824,15 @@ extension Line: Interpolatable {
         })
     }
     private func control(at i: Int, maxCount: Int) -> Control {
-        if controls.count == maxCount {
-            return controls[i]
+        guard controls.count != maxCount else { return controls[i] }
+        let d = maxCount - controls.count
+        let minD = d / 2
+        if i < minD {
+            return controls[0]
+        } else if i > maxCount - (d - minD) - 1 {
+            return controls[controls.count - 1]
         } else {
-            let d = maxCount - controls.count
-            let minD = d / 2
-            if i < minD {
-                return controls[0]
-            } else if i > maxCount - (d - minD) - 1 {
-                return controls[controls.count - 1]
-            } else {
-                return controls[i - minD]
-            }
+            return controls[i - minD]
         }
     }
 }
@@ -906,7 +846,30 @@ extension Line: ThumbnailViewable {
         let imageBounds = self.visibleImageBounds(withLineWidth: 1)
         let c = AffineTransform.centering(from: imageBounds, to: bounds.inset(by: 5))
         ctx.concatenate(c.affine)
-        draw(size: 0.5 / c.scale, in: ctx)
+//        draw(size: 0.5 / c.scale, in: ctx)
+    }
+}
+
+extension Array where Element == Line {
+    func mainPointsViewWith(fillColor: Color = .controlEditPointIn,
+                            lineColor: Color = .controlPointOut,
+                            unionInColor: Color = .controlPointUnionIn,
+                            unionOutColor: Color = .controlPointOut,
+                            skinLineWidth: Real = 1, skinRadius: Real = 1.5,
+                            reciprocalScale s: Real) -> [View] {
+        var pointViews = [Point: View]()
+        let lineWidth = skinLineWidth * s * 0.5, mor = skinRadius * s
+        forEach { line in
+            for p in line.mainPointSequence {
+                if let view = pointViews[p] {
+                    view.fillColor = unionOutColor
+                } else {
+                    pointViews[p] = p.view(radius: mor, lineWidth: lineWidth,
+                                           fillColor: fillColor, lineColor: lineColor)
+                }
+            }
+        }
+        return [View](pointViews.values)
     }
 }
 

@@ -25,9 +25,23 @@ struct Desktop: Codable {
     var isSimpleReference = false
     var reference: Reference?
     var objects = [Object]()
+    var version = Version()
 }
 extension Desktop: Referenceable {
     static let name = Text(english: "Desktop", japanese: "デスクトップ")
+}
+extension Desktop {
+    static let isHiddenActionManagerOption
+        = BoolOption(defaultModel: false, cationModel: nil,
+                     name: Text(english: "Action Manager", japanese: "アクション管理"),
+                     info: .hidden)
+    private static let isrInfo
+        = BoolOption.Info(trueName: Text(english: "Outline",  japanese: "概略"),
+                          falseName: Text(english: "detail", japanese: "詳細"))
+    static let isSimpleReferenceOption
+        = BoolOption(defaultModel: false, cationModel: nil,
+                     name: Text(english: "Reference", japanese: "情報"),
+                     info: isrInfo)
 }
 
 final class DesktopBinder: BinderProtocol {
@@ -36,8 +50,6 @@ final class DesktopBinder: BinderProtocol {
             dataModel.isWrite = true
         }
     }
-    
-    var version = Version()
     
     init(rootModel: Desktop) {
         self.rootModel = rootModel
@@ -78,19 +90,6 @@ final class DesktopBinder: BinderProtocol {
     let objectsDataModelKey = "objects"
     var objectsDataModel: DataModel
 }
-extension Desktop {
-    static let isHiddenActionManagerOption
-        = BoolOption(defaultModel: false, cationModel: nil,
-                     name: Text(english: "Action Manager", japanese: "アクション管理"),
-                     info: .hidden)
-    private static let isrInfo
-        = BoolOption.Info(trueName: Text(english: "Outline",  japanese: "概略"),
-                          falseName: Text(english: "detail", japanese: "詳細"))
-    static let isSimpleReferenceOption
-        = BoolOption(defaultModel: false, cationModel: nil,
-                     name: Text(english: "Reference", japanese: "情報"),
-                     info: isrInfo)
-}
 
 /**
  Issue: sceneViewを取り除く
@@ -111,11 +110,9 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
     let copiedObjectsView: ObjectsView<Object, Binder>
     let isHiddenActionManagerView: BoolView<Binder>
     let isSimpleReferenceView: BoolView<Binder>
-    let referenceView: ReferenceView<Binder>
+    let referenceOptionalView: OptionalGetterView<Reference, Binder>
     let objectsView: ObjectsView<Object, Binder>
     let actionManagerView = SenderView()
-    
-    let sceneView: SceneView<Binder>
 
     var versionWidth = 120.0.cg
     var actionWidth = ActionManagableView.defaultWidth {
@@ -140,14 +137,31 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         isSimpleReferenceView = BoolView(binder: binder, keyPath: isrKeyPath,
                                          option: Model.isSimpleReferenceOption,
                                          sizeType: sizeType)
+        versionView = VersionView(binder: binder,
+                                  keyPath: keyPath.appending(path: \Model.version),
+                                  sizeType: sizeType)
+        copiedObjectsView = ObjectsView(binder: binder,
+                                        keyPath: keyPath.appending(path: \Model.copiedObjects),
+                                        sizeType: sizeType, abstractType: .mini)
+        referenceOptionalView
+            = OptionalGetterView(binder: binder,
+                                 keyPath: keyPath.appending(path: \Model.reference),
+                                 sizeType: sizeType, type: .normal)
+        objectsView = ObjectsView(binder: binder,
+                                  keyPath: keyPath.appending(path: \Model.objects),
+                                  sizeType: sizeType, abstractType: .normal)
         
         super.init()
         fillColor = .background
         
-        objectsView.children = [sceneView]
+//        objectsView.children = [sceneView]
         children = [versionView, copiedObjectsNameView, copiedObjectsView,
                     isHiddenActionManagerView, isSimpleReferenceView,
-                    actionManagerView, referenceView, objectsView]
+                    actionManagerView, referenceOptionalView, objectsView]
+        
+        isHiddenActionManagerView.notifications.append({ [unowned self] _, _ in
+            self.updateLayout()
+        })
     }
 
     var locale = Locale.current {
@@ -186,11 +200,11 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         isHiddenActionManagerView.frame = Rect(x: isSimpleReferenceView.frame.maxX, y: headerY,
                                                width: ihamvw, height: topViewsHeight)
         if model.isSimpleReference {
-            referenceView.frame = Rect(x: isHiddenActionManagerView.frame.maxX, y: headerY,
+            referenceOptionalView.frame = Rect(x: isHiddenActionManagerView.frame.maxX, y: headerY,
                                   width: actionWidth, height: topViewsHeight)
         } else {
             let h = model.isHiddenActionManager ? bounds.height - padding * 2 : referenceHeight
-            referenceView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
+            referenceOptionalView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
                                   y: bounds.height - h - padding,
                                   width: actionWidth,
                                   height: h)
@@ -216,8 +230,8 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         }
         objectsView.bounds.origin = Point(x: -round((objectsView.frame.width / 2)),
                                           y: -round((objectsView.frame.height / 2)))
-        sceneView.frame.origin = Point(x: -round(sceneView.frame.width / 2),
-                                       y: -round(sceneView.frame.height / 2))
+//        sceneView.frame.origin = Point(x: -round(sceneView.frame.width / 2),
+//                                       y: -round(sceneView.frame.height / 2))
         
         updateWithModel()
     }
@@ -248,12 +262,12 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
     }
 }
 extension DesktopView: ReferenceViewer {
-    var reference: Reference {
-        get { return referenceView.model }
-        set { referenceView.model = newValue }
+    var reference: Reference? {
+        get { return referenceOptionalView.model }
+        set { referenceOptionalView.model = newValue }
     }
     func push(_ reference: Reference, to version: Version) {
-        referenceView.push(reference, to: version)
+        referenceOptionalView.push(reference, to: version)
     }
 }
 extension DesktopView: Queryable {

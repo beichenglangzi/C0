@@ -23,7 +23,7 @@ import func CoreGraphics.exp
 struct TempoTrack: Track, Codable {
     static let defaultTempo = BPM(60)
     
-    private(set) var animation = Animation<BPM>() {
+    var animation = Animation<BPM>() {
         didSet { updateKeySeconds() }
     }
     var animatable: Animatable {

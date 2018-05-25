@@ -22,7 +22,9 @@ import CoreGraphics
 protocol KeyframeProtocol {
     var timing: KeyframeTiming { get }
 }
-protocol KeyframeValue: Codable, Equatable, Interpolatable, Initializable, Referenceable {
+protocol KeyframeValue
+: Codable, Equatable, Interpolatable, Initializable, Referenceable, AbstractViewable {
+
     var defaultLabel: KeyframeTiming.Label { get }
 }
 extension KeyframeValue {
@@ -221,7 +223,14 @@ final class KeyframeView<Value: KeyframeValue, T: BinderProtocol>: View, Bindabl
         
         self.binder = binder
         self.keyPath = keyPath
-        
+        let keyValueKeyPath = keyPath.appending(path: \Model.value)
+        keyValueView = binder[keyPath: keyPath].value.abstractViewWith(binder: binder,
+                                                                       keyPath: keyValueKeyPath,
+                                                                       frame: Rect(),
+                                                                       sizeType, type: .normal)
+        keyframeTimingView = KeyframeTimingView(binder: binder,
+                                                keyPath: keyPath.appending(path: \Model.timing),
+                                                sizeType: sizeType)
         super.init()
         
     }

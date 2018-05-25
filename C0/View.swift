@@ -104,7 +104,7 @@ class View {
         caGradientLayer.endPoint = gradient.endPoint
     }
     
-    init(path: CGPath, isLocked: Bool = true) {
+    init(path: Path, isLocked: Bool = true) {
         self.isLocked = isLocked
         let caShapeLayer = CAShapeLayer()
         var actions = CALayer.disabledAnimationActions
@@ -114,19 +114,19 @@ class View {
         caShapeLayer.fillColor = nil
         caShapeLayer.lineWidth = 0
         caShapeLayer.strokeColor = lineColor?.cg
-        caShapeLayer.path = path
+        caShapeLayer.path = path.cg
         caLayer = caShapeLayer
     }
-    var path: CGPath? {
+    var path: Path? {
         get {
-            guard let caShapeLayer = caLayer as? CAShapeLayer else {
+            guard let caShapeLayer = caLayer as? CAShapeLayer, let path = caShapeLayer.path else {
                 return nil
             }
-            return caShapeLayer.path
+            return Path(path)
         }
         set {
             guard let caShapeLayer = caLayer as? CAShapeLayer else { fatalError() }
-            caShapeLayer.path = newValue
+            caShapeLayer.path = newValue?.cg
             changed(frame)
         }
     }
@@ -515,6 +515,22 @@ class View {
         closure(self)
         (subIndicatedParent ?? parent)?.allSubIndicatedParentsAndSelf(closure: closure)
     }
+    
+    func renderImage(with size: Size) -> Image? {
+        guard let ctx = CGContext.bitmap(with: size, CGColorSpace.default) else {
+            return nil
+        }
+        let scale = size.width / frame.size.width
+        let viewTransform = Transform(translation: Point(x: size.width / 2, y: size.height / 2),
+                                      scale: Point(x: scale, y: scale),
+                                      rotation: 0)
+        let drawView = View(drawClosure: { ctx, _ in
+            ctx.concatenate(viewTransform.affineTransform)
+            self.draw(in: ctx)
+        })
+        drawView.render(in: ctx)
+        return ctx.renderImage
+    }
 }
 extension View: Equatable {
     static func ==(lhs: View, rhs: View) -> Bool {
@@ -569,7 +585,6 @@ private final class C0DrawLayer: CALayer {
         CATransaction.commit()
     }
 }
-
 extension CALayer {
     static let disabledAnimationActions = ["backgroundColor": NSNull(),
                                            "content": NSNull(),
@@ -613,42 +628,6 @@ extension CATransaction {
     }
 }
 
-extension AffineTransform {
-    static func centering(from fromFrame: Rect,
-                          to toFrame: Rect) -> (scale: Real, affine: AffineTransform) {
-        guard !fromFrame.isEmpty && !toFrame.isEmpty else {
-            return (1, AffineTransform.identity)
-        }
-        var affine = AffineTransform.identity
-        let fromRatio = fromFrame.width / fromFrame.height
-        let toRatio = toFrame.width / toFrame.height
-        if fromRatio > toRatio {
-            let xScale = toFrame.width / fromFrame.size.width
-            let y = toFrame.origin.y + (toFrame.height - fromFrame.height * xScale) / 2
-            affine.translateBy(x: toFrame.origin.x, y: y)
-            affine.scale(by: xScale)
-            affine.translate(by: -fromFrame.origin)
-            return (xScale, affine)
-        } else {
-            let yScale = toFrame.height / fromFrame.size.height
-            let x = toFrame.origin.x + (toFrame.width - fromFrame.width * yScale) / 2
-            affine.translateBy(x: x, y: toFrame.origin.y)
-            affine.scale(by: yScale)
-            affine.translate(by: -fromFrame.origin)
-            return (yScale, affine)
-        }
-    }
-    func flippedHorizontal(by width: Real) -> AffineTransform {
-        return translatedBy(x: width, y: 0).scaledBy(x: -1, y: 1)
-    }
-}
-extension CGPath {
-    static func checkerboard(with size: Size, in frame: Rect) -> CGPath {
-        let path = CGMutablePath()
-        path.addRects([Rect].checkerboard(with: size, in: frame))
-        return path
-    }
-}
 extension CGContext {
     static func bitmap(with size: Size,
                        _ cs: CGColorSpace? = CGColorSpace(name: CGColorSpace.sRGB)) -> CGContext? {
@@ -660,68 +639,68 @@ extension CGContext {
                          bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue)
     }
 }
-extension CGContext {
-    func drawBlurWith(color fillColor: Color, width: Real, strength: Real,
-                      isLuster: Bool, path: CGPath, scale: Real, rotation: Real) {
-        let nFillColor: Color
-        if fillColor.alpha < 1 {
-            saveGState()
-            setAlpha(Real(fillColor.alpha))
-            nFillColor = fillColor.with(alpha: 1)
-        } else {
-            nFillColor = fillColor
-        }
-        let pathBounds = path.boundingBoxOfPath.insetBy(dx: -width, dy: -width)
-        let lineColor = strength == 1 ? nFillColor : nFillColor.multiply(alpha: strength)
-        beginTransparencyLayer(in: boundingBoxOfClipPath.intersection(pathBounds),
-                               auxiliaryInfo: nil)
-        if isLuster {
-            setShadow(offset: Size(), blur: width * scale, color: lineColor.cg)
-        } else {
-            let shadowY = hypot(pathBounds.size.width, pathBounds.size.height)
-            translateBy(x: 0, y: shadowY)
-            let shadowOffset = Size(width: shadowY * scale * sin(rotation),
-                                    height: -shadowY * scale * cos(rotation))
-            setShadow(offset: shadowOffset, blur: width * scale / 2, color: lineColor.cg)
-            setLineWidth(width)
-            setLineJoin(.round)
-            setStrokeColor(lineColor.cg)
-            addPath(path)
-            strokePath()
-            translateBy(x: 0, y: -shadowY)
-        }
-        setFillColor(nFillColor.cg)
-        addPath(path)
-        fillPath()
-        endTransparencyLayer()
-        if fillColor.alpha < 1 {
-            restoreGState()
-        }
-    }
-    func drawBlur(withBlurRadius blurRadius: Real, to ctx: CGContext) {
-        guard let image = makeImage() else { return }
-        let ciImage = CIImage(cgImage: image)
-        let cictx = CIContext(cgContext: ctx, options: nil)
-        let filter = CIFilter(name: "CIGaussianBlur")
-        filter?.setValue(ciImage, forKey: kCIInputImageKey)
-        filter?.setValue(Float(blurRadius), forKey: kCIInputRadiusKey)
-        if let outputImage = filter?.outputImage {
-            cictx.draw(outputImage,
-                       in: ctx.boundingBoxOfClipPath,
-                       from: Rect(origin: Point(), size: image.size))
-        }
-    }
-}
+//extension CGContext {
+//    func drawBlurWith(color fillColor: Color, width: Real, strength: Real,
+//                      isLuster: Bool, path: CGPath, scale: Real, rotation: Real) {
+//        let nFillColor: Color
+//        if fillColor.alpha < 1 {
+//            saveGState()
+//            setAlpha(Real(fillColor.alpha))
+//            nFillColor = fillColor.with(alpha: 1)
+//        } else {
+//            nFillColor = fillColor
+//        }
+//        let pathBounds = path.boundingBoxOfPath.insetBy(dx: -width, dy: -width)
+//        let lineColor = strength == 1 ? nFillColor : nFillColor.multiply(alpha: strength)
+//        beginTransparencyLayer(in: boundingBoxOfClipPath.intersection(pathBounds),
+//                               auxiliaryInfo: nil)
+//        if isLuster {
+//            setShadow(offset: Size(), blur: width * scale, color: lineColor.cg)
+//        } else {
+//            let shadowY = hypot(pathBounds.size.width, pathBounds.size.height)
+//            translateBy(x: 0, y: shadowY)
+//            let shadowOffset = Size(width: shadowY * scale * sin(rotation),
+//                                    height: -shadowY * scale * cos(rotation))
+//            setShadow(offset: shadowOffset, blur: width * scale / 2, color: lineColor.cg)
+//            setLineWidth(width)
+//            setLineJoin(.round)
+//            setStrokeColor(lineColor.cg)
+//            addPath(path)
+//            strokePath()
+//            translateBy(x: 0, y: -shadowY)
+//        }
+//        setFillColor(nFillColor.cg)
+//        addPath(path)
+//        fillPath()
+//        endTransparencyLayer()
+//        if fillColor.alpha < 1 {
+//            restoreGState()
+//        }
+//    }
+//    func drawBlur(withBlurRadius blurRadius: Real, to ctx: CGContext) {
+//        guard let image = makeImage() else { return }
+//        let ciImage = CIImage(cgImage: image)
+//        let cictx = CIContext(cgContext: ctx, options: nil)
+//        let filter = CIFilter(name: "CIGaussianBlur")
+//        filter?.setValue(ciImage, forKey: kCIInputImageKey)
+//        filter?.setValue(Float(blurRadius), forKey: kCIInputRadiusKey)
+//        if let outputImage = filter?.outputImage {
+//            cictx.draw(outputImage,
+//                       in: ctx.boundingBoxOfClipPath,
+//                       from: Rect(origin: Point(), size: image.size))
+//        }
+//    }
+//}
 
-private extension BlendType {
-    var cgBlendMode: CGBlendMode {
-        switch self {
-        case .normal: return .normal
-        case .addition: return .plusLighter
-        case .subtract: return .plusDarker
-        }
-    }
-}
+//private extension BlendType {
+//    var cgBlendMode: CGBlendMode {
+//        switch self {
+//        case .normal: return .normal
+//        case .addition: return .plusLighter
+//        case .subtract: return .plusDarker
+//        }
+//    }
+//}
 
 final class DisplayLink {
     var closure: ((Second) -> ())?
@@ -748,7 +727,7 @@ final class DisplayLink {
     
     init?(queue: DispatchQueue = DispatchQueue.main) {
         source = DispatchSource.makeUserDataAddSource(queue: queue)
-        let acv: CVDisplayLink?
+        var acv: CVDisplayLink?
         var success = CVDisplayLinkCreateWithActiveCGDisplays(&acv)
         guard let cv = acv else {
             return nil

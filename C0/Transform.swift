@@ -67,6 +67,35 @@ extension AffineTransform {
         lhs = lhs.concatenating(rhs)
     }
 }
+extension AffineTransform {
+    static func centering(from fromFrame: Rect,
+                          to toFrame: Rect) -> (scale: Real, affine: AffineTransform) {
+        guard !fromFrame.isEmpty && !toFrame.isEmpty else {
+            return (1, AffineTransform.identity)
+        }
+        var affine = AffineTransform.identity
+        let fromRatio = fromFrame.width / fromFrame.height
+        let toRatio = toFrame.width / toFrame.height
+        if fromRatio > toRatio {
+            let xScale = toFrame.width / fromFrame.size.width
+            let y = toFrame.origin.y + (toFrame.height - fromFrame.height * xScale) / 2
+            affine.translateBy(x: toFrame.origin.x, y: y)
+            affine.scale(by: xScale)
+            affine.translate(by: -fromFrame.origin)
+            return (xScale, affine)
+        } else {
+            let yScale = toFrame.height / fromFrame.size.height
+            let x = toFrame.origin.x + (toFrame.width - fromFrame.width * yScale) / 2
+            affine.translateBy(x: x, y: toFrame.origin.y)
+            affine.scale(by: yScale)
+            affine.translate(by: -fromFrame.origin)
+            return (yScale, affine)
+        }
+    }
+    func flippedHorizontal(by width: Real) -> AffineTransform {
+        return translatedBy(x: width, y: 0).scaledBy(x: -1, y: 1)
+    }
+}
 
 struct Transform: Codable, Initializable {//OrderedAfineTransform items
     var translation: Point {
@@ -206,7 +235,7 @@ extension Transform: Referenceable {
 extension Transform: KeyframeValue {}
 
 struct TransformTrack: Track, Codable {
-    private(set) var animation = Animation<Transform>()
+    var animation = Animation<Transform>()
     var animatable: Animatable {
         return animation
     }

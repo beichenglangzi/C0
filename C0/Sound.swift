@@ -45,10 +45,6 @@ struct Sound {
         bookmark = try? url.bookmarkData()
         name = url.lastPathComponent
     }
-    
-    private enum CodingKeys: String, CodingKey {
-        case bookmark, name,volume, isHidden
-    }
 }
 extension Sound {
     func samples(withSampleRate sampleRate: Float64 = basicSampleRate) -> [Float] {
@@ -129,6 +125,9 @@ extension Sound: Equatable {
     }
 }
 extension Sound: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case bookmark, name,volume, isHidden
+    }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         bookmark = try values.decode(Data.self, forKey: .bookmark)
@@ -222,7 +221,7 @@ extension Sound {
 }
 
 struct SoundTrack: Track, Codable {
-    private(set) var animation = Animation<Sound>()
+    var animation = Animation<Sound>()
     var animatable: Animatable {
         return animation
     }
@@ -266,7 +265,7 @@ final class SoundWaveformView: View {
             frame.size.width = x(withDoubleBeatTime: duration)
         }
     }
-    let waveformView = View(path: CGMutablePath())
+    let waveformView = View(path: Path())
     
     init(height: Real = 12) {
         super.init()
@@ -295,12 +294,12 @@ final class SoundWaveformView: View {
             func y(withSample sample: SoundSample) -> Real {
                 return midY + halfH * Real(sample)
             }
-            let path = CGMutablePath()
-            path.addLines(between: (0..<count).map { i in
+            var path = Path()
+            path.append(PathLine(points: (0..<count).map { i in
                 let xt = Real(i) * rc
                 let si = Int(Real(samples.count - 1) * xt)
                 return Point(x: frame.width * xt, y: y(withSample: samples[si]))
-            })
+            }))
             waveformView.lineColor = .content
             waveformView.lineWidth = 1
             waveformView.path = path
@@ -325,15 +324,15 @@ final class SoundWaveformView: View {
                 dBFSs = cacheDBFSs
             }
             
-            let path = CGMutablePath()
-            path.move(to: Point(x: bounds.width, y: 0))
-            path.addLine(to: Point(x: 0, y: 0))
+            var points = [Point(x: bounds.width, y: 0), Point(x: 0, y: 0)]
             let rc = 1 / Real(dBFSs.count - 1)
             dBFSs.enumerated().forEach { i, spl in
                 let xt = Real(i) * rc
                 let yt = 1 + Real(spl).clip(min: -30, max: 0) / 30
-                path.addLine(to: Point(x: frame.width * xt, y: frame.height * yt))
+                points.append(Point(x: frame.width * xt, y: frame.height * yt))
             }
+            var path = Path()
+            path.append(PathLine(points: points))
             waveformView.fillColor = .content
             waveformView.path = path
         }

@@ -65,7 +65,7 @@ enum Layout {
         var view: View? {
             switch self {
             case .view(let view): return view
-            default: break
+            default: return nil
             }
         }
         var width: Real {

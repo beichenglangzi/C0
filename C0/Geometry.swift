@@ -19,30 +19,48 @@
 
 import CoreGraphics
 
-struct Geometry: Equatable {
+struct Geometry {
     var lines = [Line]() {
         didSet {
-            path = Line.path(with: lines, length: 0.5)
+            path = Geometry.path(with: lines)
         }
     }
-    private(set) var path: CGPath
+    private(set) var path: Path
+    
+    private static func path(with lines: [Line]) -> Path {
+        guard let fp = lines.first?.firstPoint else {
+            return Path()
+        }
+        var elements = [PathLine.Element]()
+        for (i, line) in lines.enumerated() {
+            guard let lineElementsTuple = line.bezierCurveElementsTuple else { continue }
+            if i > 0 {
+                elements.append(.linear(lineElementsTuple.firstPoint))
+            }
+            elements += lineElementsTuple.elements
+        }
+        var path = Path()
+        path.append(PathLine(firstPoint: fp, elements: elements))
+        return path
+    }
     
     init(lines: [Line] = []) {
         self.lines = lines
+        path = Geometry.path(with: lines)
     }
     
     private static let distance = 6.0.cg, vertexLineLength = 10.0.cg, minSnapRatio = 0.0625.cg
     init(lines: [Line], scale: Real) {
         guard let firstLine = lines.first else {
             self.lines = []
-            self.path = CGMutablePath()
+            self.path = Path()
             return
         }
         guard lines.count > 1 else {
             let snapedPointLines = Geometry.snapedPointLinesWith(lines: [firstLine.autoPressure()],
                                                                  scale: scale)
             self.lines = snapedPointLines
-            self.path = Line.path(with: snapedPointLines)
+            self.path = Geometry.path(with: snapedPointLines)
             return
         }
         
@@ -116,7 +134,7 @@ struct Geometry: Equatable {
         let newLines = Geometry.snapedPointLinesWith(lines: cellLines.map { $0.autoPressure() },
                                                      scale: scale)
         self.lines = newLines
-        self.path = Line.path(with: newLines)
+        self.path = Geometry.path(with: newLines)
     }
     static func snapedPointLinesWith(lines: [Line], scale: Real) -> [Line] {
         guard var oldLine = lines.last else {
@@ -316,7 +334,7 @@ extension Geometry {
         guard !isEmpty && imageBounds.intersects(bounds) else {
             return false
         }
-        if !path.isEmpty {
+        if !isEmpty {
             if path.contains(bounds.origin)
                 || path.contains(Point(x: bounds.maxX, y: bounds.minY))
                 || path.contains(Point(x: bounds.minX, y: bounds.maxY))
@@ -422,56 +440,21 @@ extension Geometry {
     }
 }
 extension Geometry {
-    //view
-    func clip(in ctx: CGContext, closure: () -> Void) {
-        guard !path.isEmpty else { return }
-        ctx.saveGState()
-        ctx.addPath(path)
-        ctx.clip()
-        closure()
-        ctx.restoreGState()
+    func fillView(fillColor: Color) -> View {
+        let view = View(path: path)
+        view.fillColor = fillColor
+        return view
     }
-    func addPath(in ctx: CGContext) {
-        guard !path.isEmpty else { return }
-        ctx.addPath(path)
+    func linesView(lineWidth: Real, fillColor: Color) -> View {
+        let view = View()
+        view.children = lines.compactMap { $0.view(lineWidth: lineWidth, fillColor: fillColor) }
+        return view
     }
-    func fillPath(in ctx: CGContext) {
-        guard !path.isEmpty else { return }
-        ctx.addPath(path)
-        ctx.fillPath()
-    }
-    func fillPath(with color: Color, _ path: CGPath, in ctx: CGContext) {
-        ctx.setFillColor(color.cg)
-        ctx.addPath(path)
-        ctx.fillPath()
-    }
-    func drawLines(withColor color: Color, reciprocalScale: Real, in ctx: CGContext) {
-        ctx.setFillColor(color.cg)
-        draw(withLineWidth: 0.5 * reciprocalScale, in: ctx)
-    }
-    func drawPathLine(withReciprocalScale reciprocalScale: Real, in ctx: CGContext) {
-        ctx.setLineWidth(0.5 * reciprocalScale)
-        ctx.setStrokeColor(Color.getSetBorder.cg)
-        for (i, line) in lines.enumerated() {
-            let nextLine = lines[i + 1 < lines.count ? i + 1 : 0]
-            if line.lastPoint != nextLine.firstPoint {
-                ctx.move(to: line.lastExtensionPoint(withLength: 0.5))
-                ctx.addLine(to: nextLine.firstExtensionPoint(withLength: 0.5))
-            }
-        }
-        ctx.strokePath()
-    }
-    func drawSkin(lineColor: Color, subColor: Color, backColor: Color = .getSetBorder,
-                  skinLineWidth: Real = 1,
-                  reciprocalScale: Real, reciprocalAllScale: Real, in ctx: CGContext) {
-        fillPath(with: subColor, path, in: ctx)
-        ctx.setFillColor(backColor.cg)
-        draw(withLineWidth: 1 * reciprocalAllScale, in: ctx)
-        ctx.setFillColor(lineColor.cg)
-        draw(withLineWidth: skinLineWidth * reciprocalScale, in: ctx)
-    }
-    func draw(withLineWidth lineWidth: Real, in ctx: CGContext) {
-        lines.forEach { $0.draw(size: lineWidth, in: ctx) }
+    func view(lineWidth: Real, lineColor: Color, fillColor: Color) -> View {
+        let view = View(path: path)
+        view.fillColor = fillColor
+        view.children = lines.compactMap { $0.view(lineWidth: lineWidth, fillColor: lineColor) }
+        return view
     }
     
     static func view(with geometries: [Geometry], color: Color) -> View {
@@ -480,7 +463,7 @@ extension Geometry {
             color.alpha = 1
             return color
         } ()
-        let view = View(path: CGMutablePath())
+        let view = View(path: Path())
         view.effect.opacity = color.alpha
         view.children = geometries.map {
             let gv = View(path: $0.path, isLocked: true)
@@ -488,6 +471,11 @@ extension Geometry {
             return gv
         }
         return view
+    }
+}
+extension Geometry: Equatable {
+    static func == (lhs: Geometry, rhs: Geometry) -> Bool {
+        return lhs.lines == rhs.lines
     }
 }
 extension Geometry: Interpolatable {

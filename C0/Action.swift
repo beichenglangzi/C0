@@ -850,7 +850,7 @@ final class RotatableActionManager: ActionManagable {
 }
 
 protocol ReferenceViewer: class {
-    var reference: Reference { get }
+    var reference: Reference? { get }
     func push(_ reference: Reference, to version: Version)
 }
 protocol Queryable {

@@ -19,13 +19,13 @@
 
 import struct Foundation.Locale
 import struct Foundation.Date
-import CoreGraphics
+import class CoreGraphics.CGContext
 
-struct Player {
-    var time: Second, isEnableDelay: Bool, volume: Real, isMute: Bool
-    var playRange = -1.0...5.0, isUsingRange: Bool
-    var isPlaying: Bool
-    var playingTime: Second, playingFrameRate: FPS
+struct Player: Codable {
+    var time = Second(0), isEnableDelay = false, volume = 1.0.cg, isMute = false
+    var playRange: ClosedRange<Double> = -0.5...2.0, isUsingRange = false
+    var isPlaying = false
+    var playingTime = Second(0), playingFrameRate = FPS(0)
     
     static func minuteSecondString(withSecond s: Int, frameRate: FPS) -> String {
         if s >= 60 {
@@ -41,7 +41,8 @@ extension Player: Referenceable {
     static let name = Text(english: "Player", japanese: "プレイヤー")
 }
 extension Player {
-    static let playingFrameRate = RealGetterOption(numberOfDigits: 1, unit: " fps")
+    static let playingFrameRateOption = RealGetterOption(numberOfDigits: 1, unit: " fps")
+    static let timeOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1)
 }
 
 final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
@@ -154,7 +155,13 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
         self.binder = binder
         self.keyPath = keyPath
         self.sceneKeyPath = sceneKeyPath
+        playingFrameRateView = RealGetterView(binder: binder,
+                                              keyPath: keyPath.appending(path: \Model.playingFrameRate),
+                                              option: Model.playingFrameRateOption,
+                                              sizeType: sizeType)
         
+        timeView = SlidableRealView(binder: binder, keyPath: keyPath.appending(path: \Model.time),
+                                    option: Model.timeOption, sizeType: sizeType)
         super.init()
         drawView.drawClosure = { [unowned self] ctx, _ in self.draw(in: ctx) }
         
@@ -177,7 +184,9 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
     static func sliderView(with bounds: Rect, padding: Real) -> View {
         let shapeRect = Rect(x: padding, y: bounds.midY - 1,
                              width: bounds.width - padding * 2, height: 2)
-        let view = View(path: CGPath(rect: shapeRect, transform: nil))
+        var path = Path()
+        path.append(shapeRect)
+        let view = View(path: path)
         view.fillColor = .content
         return view
     }
@@ -235,7 +244,7 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
             let deltaTime = Second(newTimestamp - oldTimestamp)
             if deltaTime >= 1 {
                 let newPlayingFrameRate = min(scene.timeline.frameRate,
-                                              FPS(round(Second(playingDrawnCount) / deltaTime)))
+                                              FPS((Second(playingDrawnCount) / deltaTime)).rounded())
                 if newPlayingFrameRate != playingFrameRate {
                     playingFrameRate = newPlayingFrameRate
                 }

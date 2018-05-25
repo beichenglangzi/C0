@@ -130,7 +130,9 @@ final class StringGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
         self.isSizeToFit = isSizeToFit
         self.padding = padding
         self.textMaterial = textMaterial
-        textFrame = TextFrame(string: model, textMaterial: textMaterial,
+        
+        let textFrameWidth = StringGetterView.textFrameWidthWith(frame: frame, padding: padding)
+        textFrame = TextFrame(string: binder[keyPath: keyPath], textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
         
         super.init(drawClosure: { $1.draw(in: $0) })
@@ -159,6 +161,9 @@ final class StringGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
     }
     
     var textFrameWidth: Real? {
+        return StringGetterView.textFrameWidthWith(frame: frame, padding: padding)
+    }
+    private static func textFrameWidthWith(frame: Rect, padding: Real) -> Real? {
         return frame.width == 0 ? nil : frame.width - padding * 2
     }
     
@@ -227,6 +232,7 @@ final class StringView<T: BinderProtocol>: View, BindableReceiver {
         
         self.isSizeToFit = isSizeToFit
         self.padding = padding
+        self.textMaterial = textMaterial
         
         defaultAttributes = NSAttributedString.attributesWith(font: textMaterial.font,
                                                               color: textMaterial.color, border: nil,
@@ -234,7 +240,9 @@ final class StringView<T: BinderProtocol>: View, BindableReceiver {
         markedAttributes = NSAttributedString.attributesWith(font: .default,
                                                              color: .gray, border: nil)
         
-        textFrame = TextFrame(string: model, textMaterial: textMaterial, frameWidth: textFrameWidth)
+        let textFrameWidth = StringView.textFrameWidthWith(frame: frame, padding: padding)
+        textFrame = TextFrame(string: binder[keyPath: keyPath], textMaterial: textMaterial,
+                              frameWidth: textFrameWidth)
         
         super.init(drawClosure: { $1.draw(in: $0) }, isLocked: false)
         
@@ -262,6 +270,9 @@ final class StringView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     var textFrameWidth: Real? {
+        return StringView.textFrameWidthWith(frame: frame, padding: padding)
+    }
+    private static func textFrameWidthWith(frame: Rect, padding: Real) -> Real? {
         return frame.width == 0 ? nil : frame.width - padding * 2
     }
     

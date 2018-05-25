@@ -76,7 +76,7 @@ extension Expression: Referenceable {
     static let name = Text(english: "Expression", japanese: "数式")
 }
 
-final class ExpressionView<T: BinderProtocol>: View, BindableReceiver {
+final class ExpressionView<T: BinderProtocol>: View, BindableGetterReceiver {
     typealias Model = Expression
     typealias Binder = T
     var binder: Binder {

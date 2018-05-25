@@ -100,6 +100,7 @@ struct Scene: Codable {
     var canvas: Canvas
     var materials: [MaterialMap]
     var colors: [ColorMap]
+    var player: Player
     var version = Version()
     
     init(name: Text = Text(english: "Untitled", japanese: "名称未設定"),
@@ -107,7 +108,10 @@ struct Scene: Codable {
          timeline: Timeline = Timeline(),
          isHiddenSubtitles: Bool = false,
          isHiddenPrevious: Bool = true, isHiddenNext: Bool = true,
-         canvas: Canvas = Canvas()) {
+         materials: [MaterialMap] = [],
+         colors: [ColorMap] = [],
+         canvas: Canvas = Canvas(),
+         player: Player = Player()) {
 
         self.name = name
         self.renderingVerticalResolution = renderingVerticalResolution
@@ -116,6 +120,9 @@ struct Scene: Codable {
         self.isHiddenPrevious = isHiddenPrevious
         self.isHiddenNext = isHiddenNext
         self.canvas = canvas
+        self.materials = materials
+        self.colors = colors
+        self.player = player
     }
 }
 extension Scene {
@@ -124,16 +131,17 @@ extension Scene {
     }
     
     func canvas(atTime time: Beat) -> Canvas {
-        
+        fatalError()
     }
 }
 extension Scene {
     static let renderingVerticalResolutionOption = IntOption(defaultModel: 1080,
                                                              minModel: 1, maxModel: 10000,
                                                              modelInterval: 1, exp: 1, unit: " p")
-    static let isHiddenSubtitlesOption = BoolOption(defaultModel: false, cationModel: true,
-                                                    name: Text(english: "Subtitles", japanese: "字幕"),
-                                                    info: .hidden)
+    static let isHiddenSubtitlesOption
+        = BoolOption(defaultModel: false, cationModel: true,
+                     name: Text(english: "Subtitles", japanese: "字幕"),
+                     info: .hidden)
     static let isHiddenPreviousOption = BoolOption(defaultModel: true, cationModel: false,
                                                    name: Text(english: "Previous", japanese: "前"),
                                                    info: .hidden)
@@ -193,7 +201,7 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
         self.keyPath = keyPath
         versionView = VersionView(binder: binder, keyPath: keyPath.appending(path: \Model.version))
         
-        let defaultSize = model.canvas.frame.size
+        let defaultSize = binder[keyPath: keyPath].canvas.frame.size
         let sizeWidthOption = RealOption(defaultModel: defaultSize.width,
                                          minModel: 1, maxModel: 100000, modelInterval: 1, exp: 1,
                                          numberOfDigits: 0, unit: "")
@@ -220,6 +228,15 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
         isHiddenNextView = BoolView(binder: binder,
                                     keyPath: keyPath.appending(path: \Scene.isHiddenNext),
                                     option: Scene.isHiddenNextOption)
+        timelineView = TimelineView(binder: binder,
+                                    keyPath: keyPath.appending(path: \Model.timeline),
+                                    sizeType: sizeType)
+        canvasView = CanvasView(binder: binder,
+                                keyPath: keyPath.appending(path: \Model.canvas),
+                                sizeType: sizeType)
+        playerView = ScenePlayerView(binder: binder,
+                                     keyPath: keyPath.appending(path: \Model.player),
+                                     sceneKeyPath: keyPath, sizeType: sizeType)
         
         super.init()
         bounds = defaultBounds

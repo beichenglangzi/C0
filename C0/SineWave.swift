@@ -87,7 +87,7 @@ extension SineWave: ThumbnailViewable {
 }
 
 struct SineWaveTrack: Track, Codable {
-    private(set) var animation = Animation<SineWave>() {
+    var animation = Animation<SineWave>() {
         didSet {
             updateKeyPhases()
         }

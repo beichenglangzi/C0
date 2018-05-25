@@ -63,7 +63,7 @@ extension Cell {
         return isEmpty
     }
     var imageBounds: Rect {
-        return geometry.path.isEmpty ?
+        return geometry.isEmpty ?
             Rect.null : Line.visibleImageBoundsWith(imageBounds: geometry.path.boundingBoxOfPath,
                                                     lineWidth: material.lineWidth * 2)
     }
@@ -221,12 +221,8 @@ extension Cell {
     }
 }
 extension Cell {
-    func colorAndLineColor(withIsEdit isEdit: Bool,
-                           isIndicated: Bool,
-                           isInterpolated: Bool) -> (color: Color, lineColor: Color) {
-        guard isEdit else {
-            return (material.color, material.lineColor)
-        }
+    func eiditngColorAndLineColor(isIndicated: Bool,
+                                  isInterpolated: Bool) -> (color: Color, lineColor: Color) {
         let mColor = isIndicated ?
             Color.linear(material.color, .subIndicated, t: 0.5) :
             material.color
@@ -246,102 +242,24 @@ extension Cell {
         }
     }
     
-    //view
-    func draw(isEdit: Bool = false, isUseDraw: Bool = false,
-              reciprocalScale: Real, reciprocalAllScale: Real,
-              scale: Real, rotation: Real, in ctx: CGContext) {
-        let isEditAndUseDraw = isEdit && isUseDraw
-        if isEditAndUseDraw && !self.isInterpolated {
-            children.forEach {
-                $0.draw(isEdit: isEdit, isUseDraw: isUseDraw,
-                        reciprocalScale: reciprocalScale,
-                        reciprocalAllScale: reciprocalAllScale,
-                        scale: scale, rotation: rotation,
-                        in: ctx)
-            }
-            return
+    func view() -> View {
+        guard !isHidden, !geometry.isEmpty else {
+            let view = View()
+            view.isHidden = isHidden
+            return view
         }
-        let geometry = !isEdit || isEditAndUseDraw ? drawGeometry : self.geometry
-        let isInterpolated = isEditAndUseDraw
-        guard !isHidden, !geometry.isEmpty else { return }
-        let isEditUnlocked = isEdit && !isLocked
-        if material.opacity < 1 {
-            ctx.saveGState()
-            ctx.setAlpha(material.opacity)
+        guard !children.isEmpty else {
+            return geometry.view(lineWidth: material.lineWidth,
+                                 lineColor: material.lineColor, fillColor: material.color)
         }
-        let (color, lineColor) = colorAndLineColor(withIsEdit: isEdit, isIndicated: false,
-                                                   isInterpolated: isInterpolated)
-        let path = geometry.path
-        if material.type == .normal || material.type == .lineless {
-            if children.isEmpty {
-                geometry.fillPath(with: color, path, in: ctx)
-            } else {
-                func clipFillPath(color: Color, path: CGPath,
-                                  in ctx: CGContext, clipping: () -> Void) {
-                    ctx.saveGState()
-                    ctx.addPath(path)
-                    ctx.clip()
-                    let b = ctx.boundingBoxOfClipPath.intersection(imageBounds)
-                    ctx.beginTransparencyLayer(in: b, auxiliaryInfo: nil)
-                    ctx.setFillColor(color.cg)
-                    ctx.fill(imageBounds)
-                    clipping()
-                    ctx.endTransparencyLayer()
-                    ctx.restoreGState()
-                }
-                clipFillPath(color: color, path: path, in: ctx) {
-                    children.forEach {
-                        $0.draw(isEdit: isEdit, isUseDraw: isUseDraw,
-                                reciprocalScale: reciprocalScale,
-                                reciprocalAllScale: reciprocalAllScale,
-                                scale: scale, rotation: rotation,
-                                in: ctx)
-                    }
-                }
-            }
-            if material.type == .normal {
-                ctx.setFillColor(lineColor.cg)
-                geometry.draw(withLineWidth: material.lineWidth * reciprocalScale, in: ctx)
-            } else if material.lineWidth > Material.defaultLineWidth {
-                func drawStrokePath(path: CGPath, lineWidth: Real, color: Color) {
-                    ctx.setLineWidth(lineWidth)
-                    ctx.setStrokeColor(color.cg)
-                    ctx.setLineJoin(.round)
-                    ctx.addPath(path)
-                    ctx.strokePath()
-                }
-                drawStrokePath(path: path, lineWidth: material.lineWidth, color: lineColor)
-            }
-        } else {
-            ctx.saveGState()
-//            ctx.setBlendMode(material.type.blendType.blendMode)
-            ctx.drawBlurWith(color: color, width: material.lineWidth,
-                             strength: 1,
-                             isLuster: material.type == .luster, path: path,
-                             scale: scale, rotation: rotation)
-            if !children.isEmpty {
-                ctx.addPath(path)
-                ctx.clip()
-                children.forEach {
-                    $0.draw(isEdit: isEdit, isUseDraw: isUseDraw,
-                            reciprocalScale: reciprocalScale,
-                            reciprocalAllScale: reciprocalAllScale,
-                            scale: scale, rotation: rotation,
-                            in: ctx)
-                }
-            }
-            ctx.restoreGState()
-        }
-        if isEditUnlocked {
-            ctx.setFillColor(Color.getSetBorder.cg)
-            if material.type != .normal {
-                geometry.draw(withLineWidth: 0.5 * reciprocalScale, in: ctx)
-            }
-            geometry.drawPathLine(withReciprocalScale: reciprocalScale, in: ctx)
-        }
-        if material.opacity < 1 {
-            ctx.restoreGState()
-        }
+        let view = geometry.fillView(fillColor: material.color)
+        view.isHidden = isHidden
+        view.isClipped = true
+        let linesView = geometry.linesView(lineWidth: material.lineWidth,
+                                           fillColor: material.lineColor)
+        view.children = children.map { $0.view() } + [linesView]
+//        view.effect
+        return view
     }
     
     func indexViews() -> [View] {
@@ -372,17 +290,17 @@ extension Cell: ThumbnailViewable {
         ctx.concatenate(c.affine)
         let scale = 3 * c.scale, rotation = 0.0.cg
         let reciprocalScale = 1 / scale
-        if geometry.isEmpty {
-            children.forEach {
-                $0.draw(reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalScale,
-                        scale: scale, rotation: rotation,
-                        in: ctx)
-            }
-        } else {
-            draw(reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalScale,
-                 scale: scale, rotation: rotation,
-                 in: ctx)
-        }
+//        if geometry.isEmpty {
+//            children.forEach {
+//                $0.draw(reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalScale,
+//                        scale: scale, rotation: rotation,
+//                        in: ctx)
+//            }
+//        } else {
+//            draw(reciprocalScale: reciprocalScale, reciprocalAllScale: reciprocalScale,
+//                 scale: scale, rotation: rotation,
+//                 in: ctx)
+//        }
     }
 }
 
