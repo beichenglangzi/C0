@@ -19,87 +19,100 @@
 
 import func CoreGraphics.sqrt
 
-protocol Strokable {
-    var viewScale: Real { get }
-    func insertWillStorkeObject(at p: Point, _ version: Version)
+protocol ViewStroker: class {
+    var strokableView: View & Strokable { get }
     func stroke(for p: Point, pressure: Real, time: Second, _ phase: Phase)
-    func captureWillEraseObject(to version: Version)
     func lassoErase(for p: Point, pressure: Real, time: Second, _ phase: Phase)
 }
-final class StrokableActionManager: ActionManagable {
-    typealias Receiver = View & Strokable
-    
-    var strokeAction = Action(name: Text(english: "Stroke", japanese: "ストローク"),
-                              quasimode: Quasimode([Dragger.EventType.subDrag]))
-    var lassoEraseAction = Action(name: Text(english: "Lasso Erase", japanese: "囲み消し"),
-                                  quasimode: Quasimode(modifier: [Inputter.EventType.shift],
-                                                       [Dragger.EventType.subDrag]))
+
+protocol Strokable {
+    var viewScale: Real { get }
+    func insertWillStorkeObject(at p: Point, to version: Version)
+    func captureWillEraseObject(at p: Point, to version: Version)
+    func makeViewStroker() -> ViewStroker
+}
+
+struct StrokableActionManager: SubActionManagable {
+    let strokeAction = Action(name: Text(english: "Stroke", japanese: "ストローク"),
+                              quasimode: Quasimode([DragEvent.EventType.subDrag]))
+    let lassoEraseAction = Action(name: Text(english: "Lasso Erase", japanese: "囲み消し"),
+                                  quasimode: Quasimode(modifier: [InputEvent.EventType.shift],
+                                                       [DragEvent.EventType.subDrag]))
     var actions: [Action] {
         return [strokeAction, lassoEraseAction]
     }
+}
+extension StrokableActionManager: SubSendable {
+    func makeSubSender() -> SubSender {
+        return StrokableSender(actionManager: self)
+    }
+}
+
+final class StrokableSender: SubSender {
+    typealias Receiver = View & Strokable
     
-    private final class Stroker {
-        weak var receiver: Receiver?
-        func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View) {
-            if phase == .began {
-                if let receiver = rootView.at(event.rootLocation, Receiver.self),
-                    let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+    typealias ActionManager = StrokableActionManager
+    var actionManager: ActionManager
+    
+    init(actionManager: ActionManager) {
+        self.actionManager = actionManager
+    }
+    
+    private var viewStroker: ViewStroker?
+    
+    func send(_ actionMap: ActionMap, from sender: Sender) {
+        switch actionMap.action {
+        case actionManager.strokeAction:
+            if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
+                if actionMap.phase == .began,
+                    let receiver = sender.mainIndicatedView as? Receiver {
                     
-                    self.receiver = receiver
-                    let p = receiver.convertFromRoot(event.rootLocation)
-                    receiver.insertWillStorkeObject(at: p, version)
+                    viewStroker = receiver.makeViewStroker()
+                    let p = receiver.convertFromRoot(eventValue.rootLocation)
+                    receiver.insertWillStorkeObject(at: p, to: sender.indicatedVersionView.version)
+                }
+                guard let viewStroker = viewStroker else { return }
+                let p = viewStroker.strokableView.convertFromRoot(eventValue.rootLocation)
+                viewStroker.stroke(for: p, pressure: eventValue.pressure,
+                                   time: eventValue.time, actionMap.phase)
+                if actionMap.phase == .ended {
+                    self.viewStroker = nil
                 }
             }
-            guard let receiver = receiver else { return }
-            let p = receiver.convertFromRoot(event.rootLocation)
-            receiver.stroke(for: p, pressure: event.pressure, time: event.time, phase)
-            if phase == .ended {
-                self.receiver = nil
-            }
-        }
-    }
-    private var stroker = Stroker()
-    
-    private final class LassoEraser {
-        weak var receiver: Receiver?
-        func send(_ event: Dragger.Event, _ phase: Phase, in rootView: View) {
-            if phase == .began {
-                if let receiver = rootView.at(event.rootLocation, Receiver.self),
-                    let version = receiver.withSelfAndAllParents(with: Versionable.self)?.version {
+        case actionManager.lassoEraseAction:
+            if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
+                if actionMap.phase == .began,
+                    let receiver = sender.mainIndicatedView as? Receiver {
                     
-                    self.receiver = receiver
-                    receiver.captureWillEraseObject(to: version)
+                    viewStroker = receiver.makeViewStroker()
+                    let p = receiver.convertFromRoot(eventValue.rootLocation)
+                    receiver.captureWillEraseObject(at: p, to: sender.indicatedVersionView.version)
+                }
+                guard let viewStroker = viewStroker else { return }
+                let p = viewStroker.strokableView.convertFromRoot(eventValue.rootLocation)
+                viewStroker.lassoErase(for: p, pressure: eventValue.pressure,
+                                       time: eventValue.time, actionMap.phase)
+                if actionMap.phase == .ended {
+                    self.viewStroker = nil
                 }
             }
-            guard let receiver = receiver else { return }
-            let p = receiver.convertFromRoot(event.rootLocation)
-            receiver.lassoErase(for: p, pressure: event.pressure, time: event.time, phase)
-            if phase == .ended {
-                self.receiver = nil
-            }
-        }
-    }
-    private var lassoEraser = LassoEraser()
-    
-    func send(_ eventMap: EventMap, in rootView: View) {
-        if let (draggerEvent, phase) = eventMap.sendableTuple(with: strokeAction, .subDrag) {
-            stroker.send(draggerEvent, phase, in: rootView)
-        }
-        if let (draggerEvent, phase) = eventMap.sendableTuple(with: lassoEraseAction, .subDrag) {
-            lassoEraser.send(draggerEvent, phase, in: rootView)
+        default: break
         }
     }
 }
 
-protocol StrokerViewable: Strokable {
+protocol ZoomableStrokable: Strokable {
     var viewScale: Real { get }
     func convertToCurrentLocal(_ point: Point) -> Point
 }
-final class ViewStroker<Binder: BinderProtocol> {
-    var stokerViewable: StrokerViewable
+final class BasicViewStroker: ViewStroker {
+    var view: View & ZoomableStrokable
+    var strokableView: View & Strokable {
+        return view
+    }
     
-    init(stokerViewable: StrokerViewable) {
-        self.stokerViewable = stokerViewable
+    init(zoomableSstokableView: View & ZoomableStrokable) {
+        self.view = zoomableSstokableView
     }
     
     var line: Line?
@@ -211,12 +224,12 @@ final class ViewStroker<Binder: BinderProtocol> {
         }
     }
     
-    func stroke(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
+    func stroke(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: true)
     }
     func stroke(for point: Point, pressure: Real, time: Second, _ phase: Phase,
                 isAppendLine: Bool) {
-        let p = stokerViewable.convertToCurrentLocal(point)
+        let p = view.convertToCurrentLocal(point)
         switch phase {
         case .began:
             let fc = Line.Control(point: p, pressure: pressure)
@@ -248,10 +261,10 @@ final class ViewStroker<Binder: BinderProtocol> {
                 temps = [Temp(control: lc, speed: speed)]
                 oldTempTime = time
                 tempDistance = 0
-            } else if interval.isAppendPointWith(distance: tempDistance / stokerViewable.viewScale,
+            } else if interval.isAppendPointWith(distance: tempDistance / view.viewScale,
                                                  deltaTime: time - oldTempTime,
                                                  temps,
-                                                 scale: stokerViewable.viewScale) {
+                                                 scale: view.viewScale) {
                 line.controls[line.controls.count - 2] = lc
                 temps = [Temp(control: lc, speed: speed)]
                 oldTempTime = time
@@ -266,23 +279,23 @@ final class ViewStroker<Binder: BinderProtocol> {
             oldPoint = p
         case .ended:
             guard var line = line else { return }
-            if !interval.isAppendPointWith(distance: tempDistance / stokerViewable.viewScale,
+            if !interval.isAppendPointWith(distance: tempDistance / view.viewScale,
                                            deltaTime: time - oldTempTime,
                                            temps,
-                                           scale: stokerViewable.viewScale) {
+                                           scale: view.viewScale) {
                 line.controls.remove(at: line.controls.count - 2)
             }
             line.controls[line.controls.count - 1]
                 = Line.Control(point: p, pressure: line.controls.last!.pressure)
             line = short.shortedLineWith(line, deltaTime: time - beginTime,
-                                         scale: stokerViewable.viewScale)
+                                         scale: view.viewScale)
             self.line = line
         }
     }
     
     var lines = [Line]()
     
-    func lassoErase(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
+    func lassoErase(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
         _ = stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: false)
         switch phase {
         case .began:

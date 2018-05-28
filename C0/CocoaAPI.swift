@@ -21,7 +21,8 @@ import Cocoa
 
 struct Hash {
     static func uniformityHashValue(with hashValues: [Int]) -> Int {
-        return Int(bitPattern: hashValues.reduce(into: UInt(bitPattern: 0), unionHashValues))
+        return Int(bitPattern: hashValues.reduce(into: UInt(bitPattern: 0),
+                                                 unionHashValues))
     }
     static func unionHashValues(_ lhs: inout UInt, _ rhs: Int) {
         #if arch(arm64) || arch(x86_64)
@@ -31,195 +32,6 @@ struct Hash {
         #endif
         let urhs = UInt(bitPattern: rhs)
         lhs ^= urhs &+ magicValue &+ (lhs << 6) &+ (lhs >> 2)
-    }
-}
-
-struct Font {
-    static let small = Font(monospacedSize: 8)
-    static let `default` = Font(monospacedSize: 11)
-    static let smallBold = Font(boldMonospacedSize: 8)
-    static let bold = Font(boldMonospacedSize: 11)
-    static let smallItalic = Font(italicMonospacedSize: 8)
-    static let italic = Font(italicMonospacedSize: 11)
-    
-    static let action = Font(boldMonospacedSize: 9)
-    static let subtitle = Font(boldMonospacedSize: 20)
-    
-    static func `default`(with sizeType: SizeType) -> Font {
-        return sizeType == .small ? small : self.default
-    }
-    static func bold(with sizeType: SizeType) -> Font {
-        return sizeType == .small ? smallBold : bold
-    }
-    static func italic(with sizeType: SizeType) -> Font {
-        return sizeType == .small ? smallItalic : italic
-    }
-    
-    var name: String {
-        didSet {
-            updateWith(name: name, size: size)
-        }
-    }
-    var size: Real {
-        didSet {
-            updateWith(name: name, size: size)
-        }
-    }
-    private(set) var ascent: Real, descent: Real, leading: Real, ctFont: CTFont
-    
-    init(size: Real) {
-        self.init(NSFont.systemFont(ofSize: size))
-    }
-    init(boldSize size: Real) {
-        self.init(NSFont.boldSystemFont(ofSize: size))
-    }
-    init(monospacedSize size: Real) {
-        self.init(NSFont.monospacedDigitSystemFont(ofSize: size, weight: .medium))
-    }
-    init(boldMonospacedSize size: Real) {
-        self.init(NSFont.monospacedDigitSystemFont(ofSize: size, weight: .heavy))
-    }
-    init(italicMonospacedSize size: Real) {
-        let font = NSFont.monospacedDigitSystemFont(ofSize: size, weight: .medium)
-        self.init(NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask))
-    }
-    init(name: String, size: Real) {
-        self.init(CTFontCreateWithName(name as CFString, size, nil))
-    }
-    init(_ ctFont: CTFont) {
-        name = CTFontCopyFullName(ctFont) as String
-        size = CTFontGetSize(ctFont)
-        ascent = CTFontGetAscent(ctFont)
-        descent = -CTFontGetDescent(ctFont)
-        leading = -CTFontGetLeading(ctFont)
-        self.ctFont = ctFont
-    }
-    
-    private mutating func updateWith(name: String, size: Real) {
-        ctFont = CTFontCreateWithName(name as CFString, size, nil)
-        ascent = CTFontGetAscent(ctFont)
-        descent = -CTFontGetDescent(ctFont)
-        leading = -CTFontGetLeading(ctFont)
-    }
-    
-    func ceilHeight(withPadding padding: Real) -> Real {
-        return ceil(ascent - descent) + padding * 2
-    }
-}
-
-extension NSImage {
-    convenience init(size: Size, closure: (CGContext) -> Void) {
-        self.init(size: size)
-        lockFocus()
-        if let ctx = NSGraphicsContext.current?.cgContext {
-            closure(ctx)
-        }
-        unlockFocus()
-    }
-}
-
-struct TextInputContext {
-    private static var currentContext: NSTextInputContext? {
-        return NSTextInputContext.current
-    }
-    static func invalidateCharacterCoordinates() {
-        currentContext?.invalidateCharacterCoordinates()
-    }
-    static func discardMarkedText() {
-        currentContext?.discardMarkedText()
-    }
-}
-
-protocol FileTypeProtocol {
-    var utType: String { get }
-}
-extension URL {
-    struct File {
-        var url: URL, name: Text, isExtensionHidden: Bool
-        
-        var attributes: [FileAttributeKey: Any] {
-            return [.extensionHidden: isExtensionHidden]
-        }
-    }
-    static func file(message: Text? = nil,
-                     name: Text? = nil,
-                     fileTypes: [FileTypeProtocol],
-                     completionClosure closure: @escaping (URL.File) -> (Void)) {
-        guard let window = NSApp.mainWindow else { return }
-        let savePanel = NSSavePanel()
-        savePanel.message = message?.currentString
-        if let name = name {
-            savePanel.nameFieldStringValue = name.currentString
-        }
-        savePanel.canSelectHiddenExtension = true
-        savePanel.allowedFileTypes = fileTypes.map { $0.utType }
-        savePanel.beginSheetModal(for: window) { [unowned savePanel] result in
-            if result == .OK, let url = savePanel.url {
-                closure(URL.File(url: url,
-                                 name: Text(savePanel.nameFieldStringValue),
-                                 isExtensionHidden: savePanel.isExtensionHidden))
-            }
-        }
-    }
-}
-
-private struct C0Coder {
-    static let appUTI = Bundle.main.bundleIdentifier ?? "smdls.C0."
-    
-    static func typeKey(from object: Any) -> String {
-        return appUTI + String(describing: type(of: object))
-    }
-    static func typeKey<T>(from type: T.Type) -> String {
-        return appUTI + String(describing: type)
-    }
-    
-    static func decode(from data: Data, forKey key: String) -> Any? {
-        if let object = NSKeyedUnarchiver.unarchiveObject(with: data) {
-            return object
-        }
-        
-        let decoder = JSONDecoder()
-        switch key {
-        case typeKey(from: KeyframeTiming.self):
-            return try? decoder.decode(KeyframeTiming.self, from: data)
-        case typeKey(from: Easing.self):
-            return try? decoder.decode(Easing.self, from: data)
-        case typeKey(from: Transform.self):
-            return try? decoder.decode(Transform.self, from: data)
-        case typeKey(from: SineWave.self):
-            return try? decoder.decode(SineWave.self, from: data)
-        case typeKey(from: Effect.self):
-            return try? decoder.decode(Effect.self, from: data)
-        case typeKey(from: Line.self):
-            return try? decoder.decode(Line.self, from: data)
-        case typeKey(from: Color.self):
-            return try? decoder.decode(Color.self, from: data)
-        case typeKey(from: URL.self):
-            return try? decoder.decode(URL.self, from: data)
-        case typeKey(from: Real.self):
-            return try? decoder.decode(URL.self, from: data)
-        case typeKey(from: Size.self):
-            return try? decoder.decode(URL.self, from: data)
-        case typeKey(from: Point.self):
-            return try? decoder.decode(URL.self, from: data)
-        case typeKey(from: Bool.self):
-            return try? decoder.decode(URL.self, from: data)
-        case typeKey(from: [Line].self):
-            return try? decoder.decode([Line].self, from: data)
-        default:
-            return nil
-        }
-    }
-    static func encode(_ object: Any, forKey key: String) -> Data? {
-        if let codable = object as? [Line] {
-            return codable.jsonData
-        } else if object is [Action] {
-            return nil
-        } else if let codable = object as? Encodable {
-            return codable.jsonData
-        } else {
-            return nil
-        }
     }
 }
 
@@ -303,6 +115,14 @@ final class C0Application: NSApplication {
         if let url = URL(string: "https://github.com/smdls/C0") {
             NSWorkspace.shared.open(url)
         }
+    }
+}
+
+final class TestDocument {
+    let documentURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    init() {
+        let fileURL = documentURL.appendingPathComponent("C0Database.c0db")
+        try? FileWrapper().write(to: fileURL, options: .withNameUpdating, originalContentsURL: nil)
     }
 }
 
@@ -472,7 +292,8 @@ extension NSPasteboard {
                 copiedObjects.append(object)
             }
         }
-        if let urls = readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
+        if let urls = readObjects(forClasses: [NSURL.self],
+                                  options: nil) as? [URL], !urls.isEmpty {
             urls.forEach { copiedObjects.append(Object($0)) }
         }
         if let string = string(forType: .string) {
@@ -498,6 +319,7 @@ extension NSPasteboard {
         }
         return copiedObjects
     }
+    
     func set(copiedObjects: [Object]) {
         guard !copiedObjects.isEmpty else {
             clearContents()
@@ -511,7 +333,8 @@ extension NSPasteboard {
             } else {
                 let typeName = String(describing: type(of: object.value))
                 if let data = object.jsonData {
-                    typesAndDatas.append((NSPasteboard.PasteboardType(rawValue: typeName), data))
+                    let pasteboardType = NSPasteboard.PasteboardType(rawValue: typeName)
+                    typesAndDatas.append((pasteboardType, data))
                 }
             }
         }
@@ -550,7 +373,8 @@ protocol CocoaKeyInputtable {
     func characterFraction(for p: Point) -> Real
     func characterOffset(for p: Point) -> Real
     func baselineDelta(at i: Int) -> Real
-    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> Rect
+    func firstRect(forCharacterRange range: NSRange,
+                   actualRange: NSRangePointer?) -> Rect
     func definition(characterIndex: Int) -> String?
     func insertNewline()
     func insertTab()
@@ -559,7 +383,8 @@ protocol CocoaKeyInputtable {
     func moveLeft()
     func moveRight()
     func deleteCharacters(in range: NSRange)
-    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange)
+    func setMarkedText(_ string: Any, selectedRange: NSRange,
+                       replacementRange: NSRange)
     func unmarkText()
     func attributedSubstring(forProposedRange range: NSRange,
                              actualRange: NSRangePointer?) -> NSAttributedString?
@@ -575,12 +400,13 @@ final class C0View: NSView, NSTextInputClient {
     let desktopView: DesktopView<DesktopBinder>
     
     private let isHiddenActionManagerKey = "isHiddenActionManagerKey"
-    private let isSimpleReferenceKey = "isSimpleReferenceKey"
     
     override init(frame frameRect: NSRect) {
         desktopBinder = DesktopBinder(rootModel: Desktop())
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
         sender = Sender(rootView: desktopView)
+        dragManager = DragManager(sender: sender, clickType: .click, dragType: .drag)
+        subDragManager = DragManager(sender: sender, clickType: .subClick, dragType: .subDrag)
         super.init(frame: frameRect)
         setup()
     }
@@ -588,6 +414,8 @@ final class C0View: NSView, NSTextInputClient {
         desktopBinder = DesktopBinder(rootModel: Desktop())
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
         sender = Sender(rootView: desktopView)
+        dragManager = DragManager(sender: sender, clickType: .click, dragType: .drag)
+        subDragManager = DragManager(sender: sender, clickType: .subClick, dragType: .subDrag)
         super.init(coder: coder)
         setup()
     }
@@ -597,26 +425,14 @@ final class C0View: NSView, NSTextInputClient {
         wantsLayer = true
         guard let layer = layer else { return }
         
+        desktopView.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }
+        
         desktopView.isHiddenActionManagerView.notifications.append({ [unowned self] view, _ in
-            UserDefaults.standard.set(view.model, forKey: self.isHiddenActionManagerKey)
+            UserDefaults.standard.set(view.model,
+                                      forKey: self.isHiddenActionManagerKey)
         })
         desktopView.model.isHiddenActionManager
             = UserDefaults.standard.bool(forKey: isHiddenActionManagerKey)
-        
-        desktopView.isSimpleReferenceView.notifications.append({ [unowned self] view, _ in
-            UserDefaults.standard.set(view.model, forKey: self.isSimpleReferenceKey)
-        })
-        desktopView.model.isSimpleReference
-            = UserDefaults.standard.bool(forKey: isSimpleReferenceKey)
-        
-        desktopView.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }
-        
-        sender.indicatableActionManager.indicatedViewBinding = { [unowned self] in
-            self.didSet($0.indicatedView, oldIndicatedView: $0.oldIndicatedView)
-        }
-        desktopView.changedFrame = { [unowned self] in
-            self.sender.indicatableActionManager.updateIndicatedView(with: $0, in: self.desktopView)
-        }
         
         let nc = NotificationCenter.default
         localToken = nc.addObserver(forName: NSLocale.currentLocaleDidChangeNotification,
@@ -686,15 +502,17 @@ final class C0View: NSView, NSTextInputClient {
         return convertFromLayer(window.convertToScreen(convert(r, to: nil)))
     }
     
-    func draggerEventWith(pointing nsEvent: NSEvent, _ phase: Phase) -> Dragger.Event {
-        return Dragger.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
-                             pressure: 1, phase: phase)
+    func dragEventValueWith(pointing nsEvent: NSEvent, _ phase: Phase) -> DragEvent.Value {
+        return DragEvent.Value(rootLocation: screenPoint(with: nsEvent),
+                               time: nsEvent.timestamp.cg,
+                               pressure: 1, phase: phase)
     }
-    func draggerEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Dragger.Event {
-        return Dragger.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
-                             pressure: Real(nsEvent.pressure), phase: phase)
+    func dragEventValueWith(_ nsEvent: NSEvent, _ phase: Phase) -> DragEvent.Value {
+        return DragEvent.Value(rootLocation: screenPoint(with: nsEvent),
+                               time: nsEvent.timestamp.cg,
+                               pressure: Real(nsEvent.pressure), phase: phase)
     }
-    func scrollerEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Scroller.Event {
+    func scrollEventValueWith(_ nsEvent: NSEvent, _ phase: Phase) -> ScrollEvent.Value {
         var scrollMomentumPhase: Phase? {
             if nsEvent.momentumPhase.contains(.began) {
                 return .began
@@ -706,24 +524,27 @@ final class C0View: NSView, NSTextInputClient {
                 return nil
             }
         }
-        return Scroller.Event(rootLocation: screenPoint(with: nsEvent),
-                              time: nsEvent.timestamp.cg,
-                              scrollDeltaPoint: Point(x: nsEvent.scrollingDeltaX,
-                                                      y: -nsEvent.scrollingDeltaY),
-                              phase: phase,
-                              momentumPhase: scrollMomentumPhase)
+        return ScrollEvent.Value(rootLocation: screenPoint(with: nsEvent),
+                                 time: nsEvent.timestamp.cg,
+                                 scrollDeltaPoint: Point(x: nsEvent.scrollingDeltaX,
+                                                         y: -nsEvent.scrollingDeltaY),
+                                 phase: phase,
+                                 momentumPhase: scrollMomentumPhase)
     }
-    func pincherEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Pincher.Event {
-        return Pincher.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
-                             magnification: nsEvent.magnification, phase: phase)
+    func pinchEventValueWith(_ nsEvent: NSEvent, _ phase: Phase) -> PinchEvent.Value {
+        return PinchEvent.Value(rootLocation: screenPoint(with: nsEvent),
+                                time: nsEvent.timestamp.cg,
+                                magnification: nsEvent.magnification, phase: phase)
     }
-    func rotaterEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Rotater.Event {
-        return Rotater.Event(rootLocation: screenPoint(with: nsEvent), time: nsEvent.timestamp.cg,
-                             rotationQuantity: Real(nsEvent.rotation), phase: phase)
+    func rotateEventValueWith(_ nsEvent: NSEvent, _ phase: Phase) -> RotateEvent.Value {
+        return RotateEvent.Value(rootLocation: screenPoint(with: nsEvent),
+                                 time: nsEvent.timestamp.cg,
+                                 rotationQuantity: Real(nsEvent.rotation), phase: phase)
     }
-    func inputterEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> Inputter.Event {
-        return Inputter.Event(rootLocation: cursorPoint, time: nsEvent.timestamp.cg,
-                              pressure: 1, phase: phase)
+    func inputEventValueWith(_ nsEvent: NSEvent, _ phase: Phase) -> InputEvent.Value {
+        return InputEvent.Value(rootLocation: cursorPoint,
+                                time: nsEvent.timestamp.cg,
+                                pressure: 1, phase: phase)
     }
     
     func didSet(_ indicatedView: View?, oldIndicatedView: View?) {
@@ -733,15 +554,18 @@ final class C0View: NSView, NSTextInputClient {
     }
     
     override func flagsChanged(with nsEvent: NSEvent) {
-        let newInputterTypes = nsEvent.modifierKeys, oldInputters = sender.eventMap.inputters
-        newInputterTypes.forEach { newInputterType in
-            if !oldInputters.contains(where: { newInputterType == $0.type }) {
-                sender.send(Inputter(type: newInputterType, event: inputterEventWith(nsEvent, .began)))
+        let inputEventTypes = nsEvent.modifierKeys
+        let oldInputEvents = sender.eventMap.events(InputEvent.self)
+        inputEventTypes.forEach { inputEventType in
+            if !oldInputEvents.contains(where: { inputEventType == $0.type }) {
+                sender.send(InputEvent(type: inputEventType,
+                                       value: inputEventValueWith(nsEvent, .began)))
             }
         }
-        oldInputters.forEach { oldInptter in
-            if !newInputterTypes.contains(where: { oldInptter.type == $0 }) {
-                sender.send(Inputter(type: oldInptter.type, event: inputterEventWith(nsEvent, .ended)))
+        oldInputEvents.forEach { oldInputEvent in
+            if !inputEventTypes.contains(where: { oldInputEvent.type == $0 }) {
+                sender.send(InputEvent(type: oldInputEvent.type,
+                                       value: inputEventValueWith(nsEvent, .ended)))
             }
         }
     }
@@ -749,12 +573,12 @@ final class C0View: NSView, NSTextInputClient {
     override func keyDown(with nsEvent: NSEvent) {
         guard !nsEvent.isARepeat else { return }
         if let key = nsEvent.key {
-            sender.send(Inputter(type: key, event: inputterEventWith(nsEvent, .began)))
+            sender.send(InputEvent(type: key, value: inputEventValueWith(nsEvent, .began)))
         }
     }
     override func keyUp(with nsEvent: NSEvent) {
         if let key = nsEvent.key {
-            sender.send(Inputter(type: key, event: inputterEventWith(nsEvent, .ended)))
+            sender.send(InputEvent(type: key, value: inputEventValueWith(nsEvent, .ended)))
         }
     }
     
@@ -762,69 +586,105 @@ final class C0View: NSView, NSTextInputClient {
         mouseMoved(with: nsEvent)
     }
     override func mouseMoved(with nsEvent: NSEvent) {
-        sender.send(Dragger(type: .pointing, event: draggerEventWith(pointing: nsEvent, .began)))
+        sender.send(DragEvent(type: .pointing,
+                              value: dragEventValueWith(pointing: nsEvent, .began)))
     }
+    
+    private final class DragManager {
+        var sender: Sender
+        let clickTime: TimeInterval
+        let clickType: InputEvent.EventType, dragType: DragEvent.EventType
+        
+        init(sender: Sender,
+             clickTime: TimeInterval = 0.2,
+             clickType: InputEvent.EventType, dragType: DragEvent.EventType) {
+            
+            self.sender = sender
+            self.clickTime = clickTime
+            self.clickType = clickType
+            self.dragType = dragType
+        }
+        
+        private var workItem: DispatchWorkItem?, beganDragEvent: DragEvent?
+        
+        func mouseDown(with nsEvent: NSEvent, _ view: C0View) {
+            sender.send(DragEvent(type: .pointing,
+                                  value: view.dragEventValueWith(pointing: nsEvent, .began)))
+            let beganDragEvent = DragEvent(type: dragType,
+                                           value: view.dragEventValueWith(nsEvent, .began))
+            self.beganDragEvent = beganDragEvent
+            let workItem = DispatchWorkItem() { [unowned self] in
+                self.sender.send(beganDragEvent)
+                self.workItem?.cancel()
+                self.workItem = nil
+            }
+            self.workItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + clickTime,
+                                          execute: workItem)
+        }
+        func mouseDragged(with nsEvent: NSEvent, _ view: C0View) {
+            sender.send(DragEvent(type: .pointing,
+                                  value: view.dragEventValueWith(pointing: nsEvent, .began)))
+            if workItem != nil {
+                workItem?.perform()
+            }
+            sender.send(DragEvent(type: dragType,
+                                  value: view.dragEventValueWith(nsEvent, .changed)))
+        }
+        func mouseUp(with nsEvent: NSEvent, _ view: C0View) {
+            let endedDragEvent = DragEvent(type: dragType,
+                                           value: view.dragEventValueWith(nsEvent, .ended))
+            if workItem != nil {
+                workItem?.cancel()
+                self.workItem = nil
+                
+                guard let beganDragEvent = beganDragEvent else { return }
+                if beganDragEvent.value.rootLocation != endedDragEvent.value.rootLocation {
+                    sender.send(DragEvent(type: .pointing,
+                                          value: view.dragEventValueWith(pointing: nsEvent, .began)))
+                    sender.send(beganDragEvent)
+                    sender.send(endedDragEvent)
+                } else {
+                    func clickEventWith(_ dragEvent: DragEvent, _ phase: Phase) -> InputEvent {
+                        let value = InputEvent.Value(rootLocation: dragEvent.value.rootLocation,
+                                                     time: dragEvent.value.time,
+                                                     pressure: dragEvent.value.pressure,
+                                                     phase: phase)
+                        return InputEvent(type: clickType, value: value)
+                    }
+                    sender.send(clickEventWith(beganDragEvent, .began))
+                    sender.send(clickEventWith(beganDragEvent, .ended))
+                }
+            } else {
+                sender.send(DragEvent(type: .pointing,
+                                      value: view.dragEventValueWith(pointing: nsEvent, .began)))
+                sender.send(endedDragEvent)
+            }
+        }
+    }
+    
+    private let subDragManager: DragManager
     
     override func rightMouseDown(with nsEvent: NSEvent) {
-        sender.send(Dragger(type: .subDrag, event: draggerEventWith(nsEvent, .began)))
+        subDragManager.mouseDown(with: nsEvent, self)
     }
     override func rightMouseDragged(with nsEvent: NSEvent) {
-        sender.send(Dragger(type: .subDrag, event: draggerEventWith(nsEvent, .changed)))
+        subDragManager.mouseDragged(with: nsEvent, self)
     }
     override func rightMouseUp(with nsEvent: NSEvent) {
-        sender.send(Dragger(type: .subDrag, event: draggerEventWith(nsEvent, .ended)))
-        sender.send(Dragger(type: .pointing, event: draggerEventWith(pointing: nsEvent, .began)))
+        subDragManager.mouseUp(with: nsEvent, self)
     }
     
-    private var workItem: DispatchWorkItem?
-    private var beginDragger: Dragger?
-    var clickTime = 0.2
+    private let dragManager: DragManager
+    
     override func mouseDown(with nsEvent: NSEvent) {
-        sender.send(Dragger(type: .pointing, event: draggerEventWith(pointing: nsEvent, .began)))
-        let beginDragger = Dragger(type: .drag, event: draggerEventWith(nsEvent, .began))
-        self.beginDragger = beginDragger
-        let workItem = DispatchWorkItem() { [unowned self] in
-            self.sender.send(beginDragger)
-            self.workItem?.cancel()
-            self.workItem = nil
-        }
-        self.workItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + clickTime, execute: workItem)
+        dragManager.mouseDown(with: nsEvent, self)
     }
     override func mouseDragged(with nsEvent: NSEvent) {
-        sender.send(Dragger(type: .pointing, event: draggerEventWith(pointing: nsEvent, .began)))
-        if workItem != nil {
-            workItem?.perform()
-        }
-        sender.send(Dragger(type: .drag, event: draggerEventWith(nsEvent, .changed)))
+        dragManager.mouseDragged(with: nsEvent, self)
     }
     override func mouseUp(with nsEvent: NSEvent) {
-        let endDragger = Dragger(type: .drag, event: draggerEventWith(nsEvent, .ended))
-        if workItem != nil {
-            workItem?.cancel()
-            self.workItem = nil
-            
-            guard let beginDragger = beginDragger else { return }
-            if beginDragger.event.rootLocation != endDragger.event.rootLocation {
-                sender.send(Dragger(type: .pointing,
-                                    event: draggerEventWith(pointing: nsEvent, .began)))
-                sender.send(beginDragger)
-                sender.send(endDragger)
-            } else {
-                func clickInputterWith(_ dragger: Dragger, _ phase: Phase) -> Inputter {
-                    return Inputter(type: .click,
-                                    event: Inputter.Event(rootLocation: dragger.event.rootLocation,
-                                                          time: dragger.event.time,
-                                                          pressure: dragger.event.pressure,
-                                                          phase: phase))
-                }
-                sender.send(clickInputterWith(beginDragger, .began))
-                sender.send(clickInputterWith(beginDragger, .ended))
-            }
-        } else {
-            sender.send(Dragger(type: .pointing, event: draggerEventWith(pointing: nsEvent, .began)))
-            sender.send(endDragger)
-        }
+        dragManager.mouseUp(with: nsEvent, self)
     }
     
     private var beginTouchesNormalizedPosition = Point()
@@ -843,15 +703,18 @@ final class C0View: NSView, NSTextInputClient {
         guard nsEvent.phase != .mayBegin && nsEvent.phase != .cancelled else { return }
         let phase: Phase = nsEvent.phase == .began ?
             .began : (nsEvent.phase == .ended ? .ended : .changed)
-        let type: Scroller.EventType = beginTouchesNormalizedPosition.y > 0.85 ?
+        let type: ScrollEvent.EventType = beginTouchesNormalizedPosition.y > 0.85 ?
             .upperScroll : .scroll
         switch phase {
         case .began:
-            sender.send(Scroller(type: type, event: scrollerEventWith(nsEvent, .began)))
+            sender.send(ScrollEvent(type: type,
+                                    value: scrollEventValueWith(nsEvent, .began)))
         case .changed:
-            sender.send(Scroller(type: type, event: scrollerEventWith(nsEvent, .changed)))
+            sender.send(ScrollEvent(type: type,
+                                    value: scrollEventValueWith(nsEvent, .changed)))
         case .ended:
-            sender.send(Scroller(type: type, event: scrollerEventWith(nsEvent, .ended)))
+            sender.send(ScrollEvent(type: type,
+                                    value: scrollEventValueWith(nsEvent, .ended)))
         }
     }
     
@@ -863,16 +726,19 @@ final class C0View: NSView, NSTextInputClient {
         if nsEvent.phase == .began {
             if blockGesture == .none {
                 blockGesture = .pinch
-                sender.send(Pincher(type: .pinch, event: pincherEventWith(nsEvent, .began)))
+                sender.send(PinchEvent(type: .pinch,
+                                       value: pinchEventValueWith(nsEvent, .began)))
             }
         } else if nsEvent.phase == .ended {
             if blockGesture == .pinch {
                 blockGesture = .none
-                sender.send(Pincher(type: .pinch, event: pincherEventWith(nsEvent, .ended)))
+                sender.send(PinchEvent(type: .pinch,
+                                       value: pinchEventValueWith(nsEvent, .ended)))
             }
         } else {
             if blockGesture == .pinch {
-                sender.send(Pincher(type: .pinch, event: pincherEventWith(nsEvent, .changed)))
+                sender.send(PinchEvent(type: .pinch,
+                                       value: pinchEventValueWith(nsEvent, .changed)))
             }
         }
     }
@@ -880,23 +746,26 @@ final class C0View: NSView, NSTextInputClient {
         if nsEvent.phase == .began {
             if blockGesture == .none {
                 blockGesture = .rotate
-                sender.send(Rotater(type: .rotate, event: rotaterEventWith(nsEvent, .began)))
+                sender.send(RotateEvent(type: .rotate,
+                                        value: rotateEventValueWith(nsEvent, .began)))
             }
         } else if nsEvent.phase == .ended {
             if blockGesture == .rotate {
                 blockGesture = .none
-                sender.send(Rotater(type: .rotate, event: rotaterEventWith(nsEvent, .ended)))
+                sender.send(RotateEvent(type: .rotate,
+                                        value: rotateEventValueWith(nsEvent, .ended)))
             }
         } else {
             if blockGesture == .rotate {
-                sender.send(Rotater(type: .rotate, event: rotaterEventWith(nsEvent, .changed)))
+                sender.send(RotateEvent(type: .rotate,
+                                        value: rotateEventValueWith(nsEvent, .changed)))
             }
         }
     }
     
     override func quickLook(with nsEvent: NSEvent) {
-        sender.send(Inputter(type: .tap, event: inputterEventWith(nsEvent, .began)))
-        sender.send(Inputter(type: .tap, event: inputterEventWith(nsEvent, .ended)))
+        sender.send(InputEvent(type: .tap, value: inputEventValueWith(nsEvent, .began)))
+        sender.send(InputEvent(type: .tap, value: inputEventValueWith(nsEvent, .ended)))
     }
     
     func sentKeyInput() {
@@ -904,8 +773,8 @@ final class C0View: NSView, NSTextInputClient {
             inputContext?.handleEvent(nsEvent)
         }
     }
-    var indicatedVView: View? {
-        return sender.indicatableActionManager.indicatedView
+    var indicatedVView: View {
+        return sender.mainIndicatedView
     }
     var editingStringView: CocoaKeyInputtable? {
         return indicatedVView as? CocoaKeyInputtable
@@ -921,7 +790,7 @@ final class C0View: NSView, NSTextInputClient {
     }
     func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
         editingStringView?.setMarkedText(string, selectedRange: selectedRange,
-                                    replacementRange: replacementRange)
+                                         replacementRange: replacementRange)
     }
     func unmarkText() {
         editingStringView?.unmarkText()
@@ -931,13 +800,14 @@ final class C0View: NSView, NSTextInputClient {
     }
     func attributedSubstring(forProposedRange range: NSRange,
                              actualRange: NSRangePointer?) -> NSAttributedString? {
-        return editingStringView?.attributedSubstring(forProposedRange: range, actualRange: actualRange)
+        return editingStringView?.attributedSubstring(forProposedRange: range,
+                                                      actualRange: actualRange)
     }
     func insertText(_ string: Any, replacementRange: NSRange) {
         editingStringView?.insertText(string, replacementRange: replacementRange)
     }
     func characterIndex(for point: NSPoint) -> Int {
-        if let indicatedVView = indicatedVView, let stringView = editingStringView {
+        if let stringView = editingStringView {
             let p = indicatedVView.convertFromRoot(convertFromTopScreen(point))
             return stringView.editingCharacterIndex(for: p)
         } else {
@@ -945,7 +815,7 @@ final class C0View: NSView, NSTextInputClient {
         }
     }
     func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
-        if let indicatedVView = indicatedVView, let stringView = editingStringView {
+        if let stringView = editingStringView {
             let rect = stringView.firstRect(forCharacterRange: range, actualRange: actualRange)
             return convertToTopScreen(indicatedVView.convertToRoot(rect))
         } else {
@@ -956,7 +826,7 @@ final class C0View: NSView, NSTextInputClient {
         return editingStringView?.attributedString ?? NSAttributedString()
     }
     func fractionOfDistanceThroughGlyph(for point: NSPoint) -> Real {
-        if let indicatedVView = indicatedVView, let stringView = editingStringView {
+        if let stringView = editingStringView {
             let p = indicatedVView.convertFromRoot(convertFromTopScreen(point))
             return stringView.characterFraction(for: p)
         } else {
@@ -993,6 +863,73 @@ final class C0View: NSView, NSTextInputClient {
     }
 }
 
+extension CTFont {
+    static func systemFont(ofSize size: Real) -> CTFont {
+        return NSFont.systemFont(ofSize: size)
+    }
+    static func boldSystemFont(ofSize size: Real) -> CTFont {
+        return NSFont.boldSystemFont(ofSize: size)
+    }
+    static func monospacedSystemFont(ofSize size: Real) -> CTFont {
+        return NSFont.monospacedDigitSystemFont(ofSize: size, weight: .medium)
+    }
+    static func boldMonospacedSystemFont(ofSize size: Real) -> CTFont {
+        return NSFont.monospacedDigitSystemFont(ofSize: size, weight: .heavy)
+    }
+    static func italicMonospacedSystemFont(ofSize size: Real) -> CTFont {
+        let font = NSFont.monospacedDigitSystemFont(ofSize: size, weight: .medium)
+        return NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+    }
+    static func boldItalicMonospacedSystemFont(ofSize size: Real) -> CTFont {
+        let font = NSFont.monospacedDigitSystemFont(ofSize: size, weight: .heavy)
+        return NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+    }
+}
+
+struct TextInputContext {
+    private static var currentContext: NSTextInputContext? {
+        return NSTextInputContext.current
+    }
+    static func invalidateCharacterCoordinates() {
+        currentContext?.invalidateCharacterCoordinates()
+    }
+    static func discardMarkedText() {
+        currentContext?.discardMarkedText()
+    }
+}
+
+protocol FileTypeProtocol {
+    var utType: String { get }
+}
+extension URL {
+    struct File {
+        var url: URL, name: Text, isExtensionHidden: Bool
+        
+        var attributes: [FileAttributeKey: Any] {
+            return [.extensionHidden: isExtensionHidden]
+        }
+    }
+    static func file(message: Text? = nil,
+                     name: Text? = nil,
+                     fileTypes: [FileTypeProtocol],
+                     completionClosure closure: @escaping (URL.File) -> (Void)) {
+        guard let window = NSApp.mainWindow else { return }
+        let savePanel = NSSavePanel()
+        savePanel.message = message?.currentString
+        if let name = name {
+            savePanel.nameFieldStringValue = name.currentString
+        }
+        savePanel.canSelectHiddenExtension = true
+        savePanel.allowedFileTypes = fileTypes.map { $0.utType }
+        savePanel.beginSheetModal(for: window) { [unowned savePanel] result in
+            if result == .OK, let url = savePanel.url {
+                closure(URL.File(url: url,
+                                 name: Text(savePanel.nameFieldStringValue),
+                                 isExtensionHidden: savePanel.isExtensionHidden))
+            }
+        }
+    }
+}
 extension URL {
     func isConforms(type otherType: String) -> Bool {
         if let type = type {
@@ -1004,8 +941,8 @@ extension URL {
 }
 
 extension NSEvent {
-    var modifierKeys: [Inputter.EventType] {
-        var modifierKeys = [Inputter.EventType]()
+    var modifierKeys: [InputEvent.EventType] {
+        var modifierKeys = [InputEvent.EventType]()
         if modifierFlags.contains(.shift) {
             modifierKeys.append(.shift)
         }
@@ -1021,7 +958,7 @@ extension NSEvent {
         return modifierKeys
     }
     
-    var key: Inputter.EventType? {
+    var key: InputEvent.EventType? {
         switch keyCode {
         case 0: return .a
         case 1: return .s

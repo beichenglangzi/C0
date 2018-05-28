@@ -89,7 +89,8 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((Discrete2DView<ModelOption, Binder>, BasicNotification) -> ())]()
+    var notifications = [((Discrete2DView<ModelOption, Binder>,
+                           BasicPhaseNotification<Model>) -> ())]()
     
     var option: ModelOption {
         didSet { updateWithModel() }
@@ -177,7 +178,7 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
         knobView.position = Point(x: x.rounded(), y: y.rounded())
     }
     
-    private func model(at p: Point, first fp: Point, old oldModel: Model) -> Model {
+    func model(at p: Point, first fp: Point, old oldModel: Model) -> Model {
         func t(withDelta delta: Real) -> Real {
             guard abs(delta) > minDelta else {
                 return 0
@@ -187,13 +188,6 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
         let xt =  t(withDelta: p.x - fp.x), yt = t(withDelta: p.y - fp.y)
         let ratio2D = Ratio2D(x: xt, y: yt)
         return option.model(withDelta: ratio2D, oldModel: oldModel)
-    }
-    
-    private var pointMovableOldModel: Model?, isMovable = false
-}
-extension Discrete2DView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
     }
 }
 extension Discrete2DView: Assignable {
@@ -212,19 +206,9 @@ extension Discrete2DView: Assignable {
         }
     }
 }
-extension Discrete2DView: PointMovable {
-    func captureWillMovePoint(at p: Point, to version: Version) {
-        capture(model, to: version)
-        self.pointMovableOldModel = model
-    }
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        guard let oldModel = pointMovableOldModel else { return }
-        switch phase {
-        case .began: knobView.fillColor = .editing
-        case .changed: break
-        case .ended: knobView.fillColor = .knob
-        }
-        model = option.clippedModel(model(at: p, first: fp, old: oldModel))
+extension Discrete2DView: BasicDiscretePointMovable {
+    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
+        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }
 }
 
@@ -238,7 +222,8 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>: View, Slidable
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((Slidable2DView<ModelOption, Binder>, BasicNotification) -> ())]()
+    var notifications = [((Slidable2DView<ModelOption, Binder>,
+                           BasicPhaseNotification<Model>) -> ())]()
     
     var option: ModelOption {
         didSet { updateWithModel() }
@@ -271,7 +256,8 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>: View, Slidable
         let inBounds = bounds.inset(by: padding)
         let x = (p.x - inBounds.origin.x) / inBounds.width
         let y = (p.y - inBounds.origin.y) / inBounds.height
-        return option.model(withRatio: Ratio2D(x: x, y: y))
+        let model = option.model(withRatio: Ratio2D(x: x, y: y))
+        return option.clippedModel(model)
     }
     func position(from model: Model) -> Point {
         let inBounds = bounds.inset(by: padding)
@@ -279,11 +265,6 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>: View, Slidable
         let x = inBounds.width * ratio2D.x + inBounds.origin.x
         let y = inBounds.height * ratio2D.y + inBounds.origin.y
         return Point(x: x, y: y)
-    }
-}
-extension Slidable2DView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
     }
 }
 extension Slidable2DView: Assignable {
@@ -307,16 +288,8 @@ extension Slidable2DView: Runnable {
         push(option.clippedModel(model(at: p)), to: version)
     }
 }
-extension Slidable2DView: PointMovable {
-    func captureWillMovePoint(at p: Point, to version: Version) {
-        capture(model, to: version)
-    }
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        switch phase {
-        case .began: knobView.fillColor = .editing
-        case .changed: break
-        case .ended: knobView.fillColor = .knob
-        }
-        model = option.clippedModel(model(at: p))
+extension Slidable2DView: BasicSlidablePointMovable {
+    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
+        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }
 }

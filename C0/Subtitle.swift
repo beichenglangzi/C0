@@ -112,7 +112,7 @@ extension Subtitle: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Subtitle>,
                                               frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> View {
+                                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return string.abstractViewWith(binder: binder,

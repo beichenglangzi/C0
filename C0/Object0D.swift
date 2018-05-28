@@ -75,7 +75,7 @@ final class GetterView<T: GetterOption, U: BinderProtocol>: View, BindableGetter
     }
     override func updateLayout() {
         optionStringView.frame.origin = Point(x: bounds.width - optionStringView.frame.width,
-                                            y: bounds.height - optionStringView.frame.height)
+                                              y: bounds.height - optionStringView.frame.height)
         updateWithModel()
     }
     func updateWithModel() {
@@ -83,11 +83,7 @@ final class GetterView<T: GetterOption, U: BinderProtocol>: View, BindableGetter
     }
     private func updateString() {
         optionStringView.text = option.displayText(with: model)
-    }
-}
-extension GetterView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
+        bounds = optionStringView.bounds
     }
 }
 extension GetterView: Copiable {
@@ -186,11 +182,6 @@ final class MiniView<T: Object0D, U: BinderProtocol>: View, BindableGetterReceiv
 extension MiniView: Localizable {
     func update(with locale: Locale) {
         updateLayout()
-    }
-}
-extension MiniView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
     }
 }
 extension MiniView: Copiable {

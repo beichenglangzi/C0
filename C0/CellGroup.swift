@@ -662,16 +662,16 @@ struct CellGroupChildren: KeyframeValue {
     }
 }
 extension CellGroupChildren: Referenceable {
-    static let name = Text(english: "Cell Node Children Keyframe Value",
-                           japanese: "セルノード子キーフレーム値")
+    static let name = Text(english: "Cell Group Children",
+                           japanese: "セルグループチルドレン")
 }
 extension CellGroupChildren: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, CellGroupChildren>,
-                                              frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> View {
+    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, CellGroupChildren>,
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> ModelView where T : BinderProtocol {
         switch type {
-        case .normal: return View()
+        case .normal: return CellGroupChildrenView(binder: binder, keyPath: keyPath,
+                                                   frame: frame, sizeType: sizeType)
         case .mini: return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
         }
     }
@@ -703,7 +703,10 @@ final class CellGroupView<T: BinderProtocol>: View, BindableReceiver {
     }
     private let classNameView: TextFormView
     private let isHiddenView: BoolView<Binder>
-    init(binder: T, keyPath: BinderKeyPath, frame: Rect = Rect(), sizeType: SizeType = .regular) {
+    
+    init(binder: Binder, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
         self.binder = binder
         self.keyPath = keyPath
         
@@ -736,13 +739,46 @@ extension CellGroupView: Localizable {
         updateLayout()
     }
 }
-extension CellGroupView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-}
 extension CellGroupView: Copiable {
     func copiedObjects(at p: Point) -> [Object] {
         return [Object(model)]
     }
+}
+
+final class CellGroupChildrenView<T: BinderProtocol>: View, BindableGetterReceiver {
+    typealias Model = CellGroupChildren
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var notifications = [((CellGroupView<Binder>, BasicNotification) -> ())]()
+    
+    var sizeType: SizeType {
+        didSet { updateLayout() }
+    }
+    private let classNameView: TextFormView
+    
+    init(binder: Binder, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        self.sizeType = sizeType
+        classNameView = TextFormView(text: CellGroupChildren.name, font: Font.bold(with: sizeType))
+        
+        super.init()
+        children = [classNameView]
+        self.frame = frame
+    }
+    
+    override func updateLayout() {
+        let padding = Layout.padding(with: sizeType)
+        classNameView.frame.origin = Point(x: padding,
+                                           y: bounds.height - classNameView.frame.height - padding)
+    }
+    func updateWithModel() {}
 }

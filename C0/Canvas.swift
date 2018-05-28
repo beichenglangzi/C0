@@ -232,11 +232,6 @@ final class CanvasViewSelector<Binder: BinderProtocol>: ViewSelector {
         }
     }
 }
-extension CanvasView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-}
 extension CanvasView: Assignable {
     func reset(for p: Point, _ version: Version) {
         push(defaultModel, to: version)
@@ -265,21 +260,26 @@ extension CanvasView: Newable {
     }
 }
 extension CanvasView: Transformable {
-    func captureWillMoveObject(to version: Version) {
+    func captureWillMoveObject(at p: Point, to version: Version) {
         
     }
     
-    func move(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        
+    func makeViewTransformer() -> ViewTransformer {
+        return CanvasViewTransformer(canvasView: self)
     }
-    func transform(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        
-    }
-    func warp(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        
+    
+    func makeViewMover() -> ViewMover {
+        return CanvasViewTransformer(canvasView: self)
     }
 }
-final class CanvasViewTransformer<Binder: BinderProtocol> {
+final class CanvasViewTransformer<Binder: BinderProtocol>: ViewTransformer, ViewMover {
+    var transformableView: View & Transformable {
+        return canvasView
+    }
+    var movableView: View & Movable {
+        return canvasView
+    }
+    
     var canvasView: CanvasView<Binder>
     
     init(canvasView: CanvasView<Binder>) {
@@ -290,13 +290,13 @@ final class CanvasViewTransformer<Binder: BinderProtocol> {
     enum TransformEditType {
         case move, transform, warp
     }
-    func move(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
+    func move(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
         move(for: p, pressure: pressure, time: time, phase, type: .move)
     }
-    func transform(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
+    func transform(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
         move(for: p, pressure: pressure, time: time, phase, type: .transform)
     }
-    func warp(for p: Point, pressure: Real, time: Second, _ phase: Phase, _ version: Version) {
+    func warp(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
         move(for: p, pressure: pressure, time: time, phase, type: .warp)
     }
     let transformAngleTime = Second(0.1)
@@ -378,11 +378,22 @@ final class CanvasViewTransformer<Binder: BinderProtocol> {
     }
 }
 
-extension CanvasView: PointMovable {
-    func captureWillMovePoint(at p: Point, to version: Version) {
+extension CanvasView: Strokable, ZoomableStrokable {
+    func insertWillStorkeObject(at p: Point, to version: Version) {
         
     }
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+    
+    func captureWillEraseObject(at p: Point, to version: Version) {
+        
+    }
+    
+    func makeViewStroker() -> ViewStroker {
+        return BasicViewStroker(zoomableSstokableView: self)
+    }
+}
+
+extension CanvasView: VertexMovable {
+    func captureWillMovePoint(at p: Point, to version: Version) {
         
     }
     
@@ -401,47 +412,62 @@ extension CanvasView: PointMovable {
             model.editingCellGroup.drawing.lines.remove(at: nearest.linePoint.lineIndex)
         }
     }
+    
+    func makeViewPointMover() -> ViewPointMover {
+        return CanvasViewPointMover(canvasView: self)
+    }
+    func makeViewVertexMover() -> ViewVertexMover {
+        return CanvasViewPointMover(canvasView: self)
+    }
 }
-final class CanvasViewPointMover<Binder: BinderProtocol> {
+
+final class CanvasViewPointMover<Binder: BinderProtocol>: ViewPointMover, ViewVertexMover {
     var canvasView: CanvasView<Binder>
+    
+    var pointMovableView: View & PointMovable {
+        return canvasView
+    }
+    var vertexMovableView: View & VertexMovable {
+        return canvasView
+    }
     
     init(canvasView: CanvasView<Binder>) {
         self.canvasView = canvasView
     }
     
-    private var movePointNearest: CellGroup.Nearest?
-    private var movePointOldPoint = Point(), movePointIsSnap = false
-    private var movePointNode: CellGroup?
-    private let snapPointSnapDistance = 8.0.cg
+    private var nearest: CellGroup.Nearest?
+    private var oldPoint = Point(), isSnap = false
+    private var cellGroup: CellGroup?
+    private let snapDistance = 8.0.cg
     
-    func movePoint(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
-        movePoint(for: p, pressure: pressure, time: time, phase, isVertex: false)
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        movePoint(for: p, first: fp, pressure: pressure, time: time, phase, isVertex: false)
     }
-    func moveVertex(for p: Point, pressure: Real, time: Second, _ phase: Phase) {
-        movePoint(for: p, pressure: pressure, time: time, phase, isVertex: true)
+    func moveVertex(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        movePoint(for: p, first: fp, pressure: pressure, time: time, phase, isVertex: true)
     }
-    func movePoint(for point: Point, pressure: Real, time: Second, _ phase: Phase,
-                   isVertex: Bool) {
+    func movePoint(for point: Point, first fp: Point, pressure: Real,
+                   time: Second, _ phase: Phase, isVertex: Bool) {
         let p = canvasView.convertToCurrentLocal(point)
         switch phase {
         case .began:
             let cellGroup = canvasView.model.editingCellGroup
             guard let nearest = cellGroup.nearest(at: p, isVertex: isVertex) else { return }
-            movePointNearest = nearest
-            movePointIsSnap = false
-            movePointNode = cellGroup
-            movePointOldPoint = p
+            self.nearest = nearest
+            isSnap = false
+            self.cellGroup = cellGroup
+            oldPoint = p
         case .changed, .ended:
-            guard let nearest = movePointNearest else { return }
-            let dp = p - movePointOldPoint
+            guard let nearest = nearest else { return }
+            let dp = p - oldPoint
             
-            movePointIsSnap = movePointIsSnap ? true : pressure == 1//speed
+            isSnap = isSnap ? true : pressure == 1//speed
             
             switch nearest.result {
             case .lineItem(let lineItem):
                 movingPoint(with: lineItem, fp: nearest.point, dp: dp)
             case .lineCapResult(let lineCapResult):
-                if movePointIsSnap {
+                if isSnap {
                     movingPoint(with: lineCapResult,
                                 fp: nearest.point, dp: dp, isVertex: isVertex)
                 } else {
@@ -452,14 +478,14 @@ final class CanvasViewPointMover<Binder: BinderProtocol> {
         }
     }
     private func movingPoint(with lineItem: CellGroup.LineItem, fp: Point, dp: Point) {
-        let snapD = snapPointSnapDistance / canvasView.model.scale
+        let snapD = snapDistance / canvasView.model.scale
         let e = lineItem.linePoint
         switch lineItem.drawingOrCell {
         case .drawing(let drawing):
             var control = e.line.controls[e.pointIndex]
             control.point = e.line.mainPoint(withMainCenterPoint: fp + dp,
                                              at: e.pointIndex)
-            if movePointIsSnap && (e.pointIndex == 1 || e.pointIndex == e.line.controls.count - 2) {
+            if isSnap && (e.pointIndex == 1 || e.pointIndex == e.line.controls.count - 2) {
                 let cellGroup = canvasView.model.editingCellGroup
                 control.point = cellGroup.snappedPoint(control.point,
                                                        editLine: drawing.lines[e.lineIndex],
@@ -472,7 +498,7 @@ final class CanvasViewPointMover<Binder: BinderProtocol> {
     }
     private func movingPoint(with lcr: CellGroup.Nearest.Result.LineCapResult,
                              fp: Point, dp: Point, isVertex: Bool) {
-        let snapD = snapPointSnapDistance * canvasView.model.reciprocalScale
+        let snapD = snapDistance * canvasView.model.reciprocalScale
         let grid = 5 * canvasView.model.reciprocalScale
         
         let b = lcr.bezierSortedLineCapItem

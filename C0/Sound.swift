@@ -175,7 +175,7 @@ extension Sound: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Sound>,
                                               frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> View {
+                                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return SoundView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
@@ -394,11 +394,6 @@ final class SoundView<T: BinderProtocol>: View, BindableReceiver {
 extension SoundView: Localizable {
     func update(with locale: Locale) {
         updateLayout()
-    }
-}
-extension SoundView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
     }
 }
 extension SoundView: Assignable {

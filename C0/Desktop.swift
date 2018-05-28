@@ -22,8 +22,6 @@ import Foundation
 struct Desktop: Codable {
     var copiedObjects = [Object]()
     var isHiddenActionManager = false
-    var isSimpleReference = false
-    var reference: Reference?
     var objects = [Object]()
     var version = Version()
 }
@@ -31,17 +29,9 @@ extension Desktop: Referenceable {
     static let name = Text(english: "Desktop", japanese: "デスクトップ")
 }
 extension Desktop {
-    static let isHiddenActionManagerOption
-        = BoolOption(defaultModel: false, cationModel: nil,
-                     name: Text(english: "Action Manager", japanese: "アクション管理"),
-                     info: .hidden)
-    private static let isrInfo
-        = BoolOption.Info(trueName: Text(english: "Outline",  japanese: "概略"),
-                          falseName: Text(english: "detail", japanese: "詳細"))
-    static let isSimpleReferenceOption
-        = BoolOption(defaultModel: false, cationModel: nil,
-                     name: Text(english: "Reference", japanese: "情報"),
-                     info: isrInfo)
+    static let isHiddenActionManagerOption = BoolOption(defaultModel: false, cationModel: nil,
+                                                        name: ActionManager.name,
+                                                        info: .hidden)
 }
 
 final class DesktopBinder: BinderProtocol {
@@ -78,6 +68,7 @@ final class DesktopBinder: BinderProtocol {
             }
         }
     }
+    
     let diffDesktopDataModelKey = "diffDesktop"
     var diffDesktopDataModel: DataModel {
         didSet {
@@ -87,6 +78,7 @@ final class DesktopBinder: BinderProtocol {
             diffDesktopDataModel.dataClosure = { [unowned self] in self.rootModel.jsonData }
         }
     }
+    
     let objectsDataModelKey = "objects"
     var objectsDataModel: DataModel
 }
@@ -109,13 +101,11 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
     let copiedObjectsNameView = TextFormView(text: Text(english: "Copied:", japanese: "コピー済み:"))
     let copiedObjectsView: ObjectsView<Object, Binder>
     let isHiddenActionManagerView: BoolView<Binder>
-    let isSimpleReferenceView: BoolView<Binder>
-    let referenceOptionalView: OptionalGetterView<Reference, Binder>
     let objectsView: ObjectsView<Object, Binder>
-    let actionManagerView = SenderView()
+    let actionManagerView: ActionManagerView<Binder>
 
-    var versionWidth = 120.0.cg
-    var actionWidth = ActionManagableView.defaultWidth {
+    var versionWidth = 100.0.cg
+    var actionWidth = Layout.propertyWidth {
         didSet { updateLayout() }
     }
     var topViewsHeight = Layout.basicHeight {
@@ -133,20 +123,12 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
                                              option: Model.isHiddenActionManagerOption,
                                              sizeType: sizeType)
         
-        let isrKeyPath = keyPath.appending(path: \Model.isSimpleReference)
-        isSimpleReferenceView = BoolView(binder: binder, keyPath: isrKeyPath,
-                                         option: Model.isSimpleReferenceOption,
-                                         sizeType: sizeType)
         versionView = VersionView(binder: binder,
                                   keyPath: keyPath.appending(path: \Model.version),
                                   sizeType: sizeType)
         copiedObjectsView = ObjectsView(binder: binder,
                                         keyPath: keyPath.appending(path: \Model.copiedObjects),
                                         sizeType: sizeType, abstractType: .mini)
-        referenceOptionalView
-            = OptionalGetterView(binder: binder,
-                                 keyPath: keyPath.appending(path: \Model.reference),
-                                 sizeType: sizeType, type: .normal)
         objectsView = ObjectsView(binder: binder,
                                   keyPath: keyPath.appending(path: \Model.objects),
                                   sizeType: sizeType, abstractType: .normal)
@@ -154,12 +136,11 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         super.init()
         fillColor = .background
         
-//        objectsView.children = [sceneView]
         children = [versionView, copiedObjectsNameView, copiedObjectsView,
-                    isHiddenActionManagerView, isSimpleReferenceView,
-                    actionManagerView, referenceOptionalView, objectsView]
+                    isHiddenActionManagerView, actionManagerView, objectsView]
         
         isHiddenActionManagerView.notifications.append({ [unowned self] _, _ in
+            self.actionManagerView.isHidden = self.model.isHiddenActionManager
             self.updateLayout()
         })
     }
@@ -181,8 +162,6 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
     }
     override func updateLayout() {
         let padding = Layout.basicPadding
-        let referenceHeight = 80.0.cg
-        let isrw = isSimpleReferenceView.defaultBounds.width
         let ihamvw = isHiddenActionManagerView.defaultBounds.width
         let headerY = bounds.height - topViewsHeight - padding
         versionView.frame = Rect(x: padding, y: headerY,
@@ -190,39 +169,25 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         copiedObjectsNameView.frame.origin = Point(x: versionView.frame.maxX + padding,
                                                    y: headerY + padding)
         let conw = copiedObjectsNameView.frame.width
-        let cw = max(bounds.width - actionWidth - versionWidth - isrw - ihamvw - conw - padding * 3,
+        let cw = max(bounds.width - actionWidth - versionWidth - ihamvw - conw - padding * 3,
                      0)
         copiedObjectsView.frame = Rect(x: copiedObjectsNameView.frame.maxX, y: headerY,
                                        width: cw, height: topViewsHeight)
         updateCopiedObjectViewPositions()
-        isSimpleReferenceView.frame = Rect(x: copiedObjectsView.frame.maxX, y: headerY,
-                                           width: isrw, height: topViewsHeight)
-        isHiddenActionManagerView.frame = Rect(x: isSimpleReferenceView.frame.maxX, y: headerY,
+        isHiddenActionManagerView.frame = Rect(x: copiedObjectsNameView.frame.maxX, y: headerY,
                                                width: ihamvw, height: topViewsHeight)
-        if model.isSimpleReference {
-            referenceOptionalView.frame = Rect(x: isHiddenActionManagerView.frame.maxX, y: headerY,
-                                  width: actionWidth, height: topViewsHeight)
-        } else {
-            let h = model.isHiddenActionManager ? bounds.height - padding * 2 : referenceHeight
-            referenceOptionalView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
-                                  y: bounds.height - h - padding,
-                                  width: actionWidth,
-                                  height: h)
-        }
-        if !model.isHiddenActionManager {
-            let h = model.isSimpleReference ?
-                bounds.height - isSimpleReferenceView.frame.height - padding * 2 :
-                bounds.height - referenceHeight - padding * 2
-            actionManagerView.frame = Rect(x: isHiddenActionManagerView.frame.maxX, y: padding,
-                                           width: actionWidth, height: h)
-        }
-
-        if model.isHiddenActionManager && model.isSimpleReference {
+        
+        if model.isHiddenActionManager {
             objectsView.frame = Rect(x: padding,
                                      y: padding,
                                      width: bounds.width - padding * 2,
                                      height: bounds.height - topViewsHeight - padding * 2)
         } else {
+            let h = bounds.height - padding * 2
+            actionManagerView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
+                                           y: padding,
+                                           width: actionWidth,
+                                           height: h)
             objectsView.frame = Rect(x: padding,
                                      y: padding,
                                      width: bounds.width - (padding * 2 + actionWidth),
@@ -236,7 +201,6 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         updateWithModel()
     }
     func updateWithModel() {
-        isSimpleReferenceView.updateWithModel()
         isHiddenActionManagerView.updateWithModel()
     }
 
@@ -259,20 +223,6 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         let padding = Layout.smallPadding
         _ = Layout.leftAlignment(copiedObjectsView.children.map { .view($0) },
                                  minX: padding, y: padding)
-    }
-}
-extension DesktopView: ReferenceViewer {
-    var reference: Reference? {
-        get { return referenceOptionalView.model }
-        set { referenceOptionalView.model = newValue }
-    }
-    func push(_ reference: Reference, to version: Version) {
-        referenceOptionalView.push(reference, to: version)
-    }
-}
-extension DesktopView: Queryable {
-    static var referenceableType: Referenceable.Type{
-        return Model.self
     }
 }
 extension DesktopView: Versionable {

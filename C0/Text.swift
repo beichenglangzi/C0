@@ -20,6 +20,20 @@
 import struct Foundation.Locale
 import class CoreGraphics.CGContext
 
+protocol Localizable: class {
+    func update(with locale: Locale)
+}
+
+protocol Referenceable {
+    static var uninheritanceName: Text { get }
+    static var name: Text { get }
+}
+extension Referenceable {
+    static var uninheritanceName: Text {
+        return name
+    }
+}
+
 struct Text: Codable, Equatable {
     var baseLanguageCode: String, base: String, values: [String: String]
     
@@ -111,10 +125,6 @@ extension Text: ThumbnailViewable {
     }
 }
 
-struct TextOption {
-    var defaultModel = Text()
-}
-
 final class TextFormView: View {
     var text: Text {
         didSet { updateWithModel() }
@@ -152,7 +162,8 @@ final class TextFormView: View {
         self.textMaterial = textMaterial
         self.isSizeToFit = isSizeToFit
         self.padding = padding
-        let textFrameWidth = TextFormView.textFrameWidthWith(frame: frame, padding: padding)
+        let textFrameWidth = TextFormView.textFrameWidthWith(frame: frame, padding: padding,
+                                                             isSizeToFit: isSizeToFit)
         textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
         
@@ -172,7 +183,9 @@ final class TextFormView: View {
         return textFrame.bounds(padding: padding)
     }
     override func updateLayout() {
-        updateWithModel()
+        textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
+                              frameWidth: textFrameWidth)
+        displayLinkDraw()
     }
     func updateWithModel() {
         textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
@@ -185,10 +198,11 @@ final class TextFormView: View {
     }
     
     var textFrameWidth: Real? {
-        return TextFormView.textFrameWidthWith(frame: frame, padding: padding)
+        return TextFormView.textFrameWidthWith(frame: frame, padding: padding,
+                                               isSizeToFit: isSizeToFit)
     }
-    private static func textFrameWidthWith(frame: Rect, padding: Real) -> Real? {
-        return frame.width == 0 ? nil : frame.width - padding * 2
+    private static func textFrameWidthWith(frame: Rect, padding: Real, isSizeToFit: Bool) -> Real? {
+        return isSizeToFit ? nil : frame.width - padding * 2
     }
     
     override func draw(in ctx: CGContext) {
@@ -199,5 +213,90 @@ extension TextFormView: Localizable {
     func update(with locale: Locale) {
         updateWithModel()
         sizeToFit()
+    }
+}
+
+final class TextGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
+    typealias Model = Text
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    
+    var textMaterial: TextMaterial {
+        didSet { updateWithModel() }
+    }
+    var isSizeToFit: Bool {
+        didSet {
+            if isSizeToFit { sizeToFit() }
+        }
+    }
+    var padding: Real {
+        didSet { updateLayout() }
+    }
+    private var textFrame: TextFrame
+    
+    init(binder: Binder, keyPath: BinderKeyPath, textMaterial: TextMaterial = TextMaterial(),
+         frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        self.isSizeToFit = isSizeToFit
+        self.padding = padding
+        self.textMaterial = textMaterial
+        
+        let textFrameWidth = TextGetterView.textFrameWidthWith(frame: frame, padding: padding,
+                                                               isSizeToFit: isSizeToFit)
+        textFrame = TextFrame(string: binder[keyPath: keyPath].currentString,
+                              textMaterial: textMaterial,
+                              frameWidth: textFrameWidth)
+        
+        super.init(drawClosure: { $1.draw(in: $0) })
+        
+        noIndicatedLineColor = .getBorder
+        indicatedLineColor = .indicated
+        
+        self.frame = frame
+        if isSizeToFit { sizeToFit() }
+    }
+    
+    override var defaultBounds: Rect {
+        return textFrame.bounds(padding: padding)
+    }
+    override func updateLayout() {
+        textFrame = TextFrame(string: model.currentString, textMaterial: textMaterial,
+                              frameWidth: textFrameWidth)
+        displayLinkDraw()
+    }
+    func updateWithModel() {
+        textFrame = TextFrame(string: model.currentString, textMaterial: textMaterial,
+                              frameWidth: textFrameWidth)
+        if isSizeToFit { sizeToFit() }
+        displayLinkDraw()
+    }
+    func sizeToFit() {
+        frame = textMaterial.fitFrameWith(defaultBounds: defaultBounds, frame: frame)
+    }
+    
+    var textFrameWidth: Real? {
+        return TextGetterView.textFrameWidthWith(frame: frame, padding: padding,
+                                                 isSizeToFit: isSizeToFit)
+    }
+    private static func textFrameWidthWith(frame: Rect, padding: Real,
+                                           isSizeToFit: Bool) -> Real? {
+        return isSizeToFit ? nil : frame.width - padding * 2
+    }
+    
+    override func draw(in ctx: CGContext) {
+        textFrame.draw(in: bounds.inset(by: padding), in: ctx)
+    }
+}
+extension TextGetterView: Copiable {
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
     }
 }

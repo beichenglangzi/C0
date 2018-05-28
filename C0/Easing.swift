@@ -196,15 +196,6 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
         controlLinePathView.path = knobLinePath
     }
 }
-extension EasingView: ViewQueryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-    static var viewDescription: Text {
-        return Text(english: "Ring: Hue, Width: Saturation, Height: Luminance",
-                    japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
-    }
-}
 extension EasingView: Assignable {
     func reset(for p: Point, _ version: Version) {
         push(defaultModel, to: version)

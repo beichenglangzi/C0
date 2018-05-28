@@ -50,7 +50,8 @@ class View {
         view.radius = radius
         return view
     }
-    static func discreteKnob(_ size: Size = Size(width: 10, height: 10), lineWidth: Real = 1) -> View {
+    static func discreteKnob(_ size: Size = Size(width: 10, height: 10),
+                             lineWidth: Real = 1) -> View {
         let view = View(isLocked: true)
         view.fillColor = .knob
         view.lineColor = .getSetBorder
@@ -86,13 +87,15 @@ class View {
     }
     var gradient: Gradient? {
         didSet {
-            guard let gradient = gradient, let caGradientLayer = caLayer as? CAGradientLayer else {
-                fatalError()
+            guard let gradient = gradient,
+                let caGradientLayer = caLayer as? CAGradientLayer else {
+                    fatalError()
             }
             View.update(with: gradient, in: caGradientLayer)
         }
     }
-    private static func update(with gradient: Gradient, in caGradientLayer: CAGradientLayer) {
+    private static func update(with gradient: Gradient,
+                               in caGradientLayer: CAGradientLayer) {
         if gradient.values.isEmpty {
             caGradientLayer.colors = nil
             caGradientLayer.locations = nil
@@ -119,8 +122,9 @@ class View {
     }
     var path: Path? {
         get {
-            guard let caShapeLayer = caLayer as? CAShapeLayer, let path = caShapeLayer.path else {
-                return nil
+            guard let caShapeLayer = caLayer as? CAShapeLayer,
+                let path = caShapeLayer.path else {
+                    return nil
             }
             return Path(path)
         }
@@ -132,7 +136,8 @@ class View {
     }
     
     init(drawClosure: ((CGContext, View) -> ())?,
-         fillColor: Color? = .background, lineColor: Color? = .getSetBorder, isLocked: Bool = true) {
+         fillColor: Color? = .background, lineColor: Color? = .getSetBorder,
+         isLocked: Bool = true) {
         
         self.isLocked = isLocked
         let caDrawLayer = C0DrawLayer()
@@ -168,9 +173,7 @@ class View {
     private(set) weak var parent: View?
     private var _children = [View]()
     var children: [View] {
-        get {
-            return _children
-        }
+        get { return _children }
         set {
             let oldChildren = _children
             oldChildren.forEach { child in
@@ -256,9 +259,7 @@ class View {
         }
     }
     var position: Point {
-        get {
-            return caLayer.position
-        }
+        get { return caLayer.position }
         set {
             caLayer.position = newValue
             changed(frame)
@@ -278,9 +279,7 @@ class View {
     }
     
     var isHidden: Bool {
-        get {
-            return caLayer.isHidden
-        }
+        get { return caLayer.isHidden }
         set {
             caLayer.isHidden = newValue
             changed(frame)
@@ -314,9 +313,7 @@ class View {
     }
     
     var radius: Real {
-        get {
-            return min(bounds.width, bounds.height) / 2
-        }
+        get { return min(bounds.width, bounds.height) / 2 }
         set {
             frame = Rect(x: position.x - newValue, y: position.y - newValue,
                          width: newValue * 2, height: newValue * 2)
@@ -324,20 +321,12 @@ class View {
         }
     }
     var cornerRadius: Real {
-        get {
-            return caLayer.cornerRadius
-        }
-        set {
-            caLayer.cornerRadius = newValue
-        }
+        get { return caLayer.cornerRadius }
+        set { caLayer.cornerRadius = newValue }
     }
     var isClipped: Bool {
-        get {
-            return caLayer.masksToBounds
-        }
-        set {
-            caLayer.masksToBounds = newValue
-        }
+        get { return caLayer.masksToBounds }
+        set { caLayer.masksToBounds = newValue }
     }
     
     var image: Image? {
@@ -373,9 +362,7 @@ class View {
         }
     }
     var contentsScale: Real {
-        get {
-            return caLayer.contentsScale
-        }
+        get { return caLayer.contentsScale }
         set {
             guard newValue != caLayer.contentsScale else { return }
             caLayer.contentsScale = newValue
@@ -790,7 +777,7 @@ enum SizeType {
 
 protocol ConcreteViewable {
     func concreteViewWith<T: BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Self>,
-                                             frame: Rect, _ sizeType: SizeType) -> View
+                                             frame: Rect, _ sizeType: SizeType) -> ModelView
 }
 
 enum AbstractType {
@@ -799,7 +786,7 @@ enum AbstractType {
 protocol AbstractViewable {
     func abstractViewWith<T: BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Self>,
                                              frame: Rect, _ sizeType: SizeType,
-                                             type: AbstractType) -> View
+                                             type: AbstractType) -> ModelView
 }
 protocol ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View

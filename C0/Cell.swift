@@ -369,8 +369,3 @@ extension CellView: Copiable {
         return [Object(model)]
     }
 }
-extension CellView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-}

@@ -69,7 +69,7 @@ extension SineWave: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, SineWave>,
                                               frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> View {
+                                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return SineWaveView(binder: binder, keyPath: keyPath, option: SineWaveOption(),
@@ -319,11 +319,6 @@ final class SineWaveView<T: BinderProtocol>: View, BindableReceiver {
 extension SineWaveView: Localizable {
     func update(with locale: Locale) {
         updateLayout()
-    }
-}
-extension SineWaveView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
     }
 }
 extension SineWaveView: Assignable {

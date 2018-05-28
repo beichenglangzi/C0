@@ -683,11 +683,6 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
         case insert(Int), remove(Range<Int>), replace(Int)
     }
 }
-extension AnimationView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-}
 extension AnimationView: Selectable {
     func captureSelections(to version: Version) {
         version.registerUndo(withTarget: self) {
@@ -813,10 +808,11 @@ extension AnimationView: Newable {
         let indexes = model.selectedKeyframeIndexes
         for (i, index) in indexes.enumerated() {
             if index >= ii.index {
-                let movedIndexes = indexes.map { $0 > ii.index ? $0 + 1 : $0 }
-                let intertedIndexes = index == ii.index ?
-                    movedIndexes.withInserted(index + 1, at: i + 1) : movedIndexes
-                pushSelectedKeyframeIndexes(intertedIndexes, to: version)
+                var movedIndexes = indexes.map { $0 > ii.index ? $0 + 1 : $0 }
+                if index == ii.index {
+                    movedIndexes.insert(index + 1, at: i + 1)
+                }
+                pushSelectedKeyframeIndexes(movedIndexes, to: version)
                 break
             }
         }

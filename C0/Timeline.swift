@@ -517,15 +517,6 @@ extension TimelineView: Localizable {
         updateLayout()
     }
 }
-extension TimelineView: ViewQueryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-    static var viewDescription: Text {
-        return Text(english: "Select time: Left and right scroll\nSelect track: Up and down scroll",
-                    japanese: "時間選択: 左右スクロール\nトラック選択: 上下スクロール")
-    }
-}
 extension TimelineView: Assignable {
     func reset(for p: Point, _ version: Version) {
         push(defaultModel, to: version)

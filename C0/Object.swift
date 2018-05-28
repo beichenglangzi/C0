@@ -73,7 +73,7 @@ extension Object: Referenceable {
 extension Object: AbstractViewable {
     func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
                              frame: Rect, _ sizeType: SizeType,
-                             type: AbstractType) -> View where T : BinderProtocol {
+                             type: AbstractType) -> ModelView where T : BinderProtocol {
         switch value {
         case (let value as Bool):
             return value.abstractViewWith(binder: binder,

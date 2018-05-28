@@ -24,43 +24,11 @@ typealias AbstractElement = AbstractViewable & Codable & Referenceable
 struct ArrayIndex<T>: Codable, Hashable {
     var index = 0
 }
+
 extension Array {
     subscript(arrayIndex: ArrayIndex<Element>) -> Element {
         get { return self[arrayIndex.index] }
         set { self[arrayIndex.index] = newValue }
-    }
-}
-
-extension Array {
-    func withRemovedFirst() -> Array {
-        var array = self
-        array.removeFirst()
-        return array
-    }
-    func withRemovedLast() -> Array {
-        var array = self
-        array.removeLast()
-        return array
-    }
-    func withRemoved(at i: Int) -> Array {
-        var array = self
-        array.remove(at: i)
-        return array
-    }
-    func withAppend(_ element: Element) -> Array {
-        var array = self
-        array.append(element)
-        return array
-    }
-    func withInserted(_ element: Element, at i: Int) -> Array {
-        var array = self
-        array.insert(element, at: i)
-        return array
-    }
-    func withReplaced(_ element: Element, at i: Int) -> Array {
-        var array = self
-        array[i] = element
-        return array
     }
 }
 extension Array: Referenceable where Element: Referenceable {
@@ -156,11 +124,6 @@ final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableRe
         push(model, to: version)
     }
 }
-extension ObjectsView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return [Model].self
-    }
-}
 extension ObjectsView: Assignable {
     func reset(for p: Point, _ version: Version) {
         push(defaultModel, to: version)
@@ -244,11 +207,6 @@ final class ArrayCountView<T: ArrayCountElement, U: BinderProtocol>: View, Binda
 extension ArrayCountView: Localizable {
     func update(with locale: Locale) {
         updateLayout()
-    }
-}
-extension ArrayCountView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
     }
 }
 extension ArrayCountView: Copiable {

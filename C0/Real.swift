@@ -157,7 +157,7 @@ extension Real: Referenceable {
 extension Real: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Real>,
                                               frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> View {
+                                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return DiscreteRealView(binder: binder, keyPath: keyPath,

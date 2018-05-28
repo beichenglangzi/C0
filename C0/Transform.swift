@@ -356,11 +356,6 @@ extension TransformView: Localizable {
         updateLayout()
     }
 }
-extension TransformView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-}
 extension TransformView: Assignable {
     func reset(for p: Point, _ version: Version) {
         push(option.defaultModel, to: version)
@@ -387,7 +382,7 @@ extension Transform: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Transform>,
                                               frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> View {
+                                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return TransformView(binder: binder, keyPath: keyPath, option: TransformOption(),

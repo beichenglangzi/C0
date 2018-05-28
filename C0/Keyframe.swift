@@ -70,7 +70,7 @@ extension Keyframe: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Keyframe>,
                                               frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> View {
+                                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return KeyframeView(binder: binder, keyPath: keyPath,
@@ -108,9 +108,6 @@ extension KeyframeTiming: ThumbnailViewable {
 extension KeyframeTiming.Interpolation: Referenceable {
     static let uninheritanceName = Text(english: "Interpolation", japanese: "補間")
     static let name = KeyframeTiming.name.spacedUnion(uninheritanceName)
-    static let classDescription
-        = Text(english: "\"Bound\": Uses \"Spline\" without interpolation on previous, Not previous and next: Use \"Linear\"",
-               japanese: "バウンド: 前方側の補間をしないスプライン補間, 前後が足りない場合: リニア補間を使用")
 }
 extension KeyframeTiming.Interpolation: DisplayableText {
     var displayText: Text {
@@ -131,9 +128,6 @@ extension KeyframeTiming.Interpolation: DisplayableText {
 extension KeyframeTiming.Loop: Referenceable {
     static let uninheritanceName = Text(english: "Loop", japanese: "ループ")
     static let name = KeyframeTiming.name.spacedUnion(uninheritanceName)
-    static let classDescription
-        = Text(english: "Loop from \"Began Loop\" keyframe to \"Ended Loop\" keyframe on \"Ended Loop\" keyframe",
-               japanese: "「ループ開始」キーフレームから「ループ終了」キーフレームの間を「ループ終了」キーフレーム上でループ")
 }
 extension KeyframeTiming.Loop: DisplayableText {
     var displayText: Text {
@@ -243,11 +237,6 @@ final class KeyframeView<Value: KeyframeValue, T: BinderProtocol>: View, Bindabl
         keyframeTimingView.updateWithModel()
     }
 }
-extension KeyframeView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-}
 extension KeyframeView: Assignable {
     func reset(for p: Point, _ version: Version) {
         var model = Model()
@@ -335,11 +324,6 @@ final class KeyframeTimingView<T: BinderProtocol>: View, BindableReceiver {
         loopView.updateWithModel()
         interpolationView.updateWithModel()
         easingView.updateWithModel()
-    }
-}
-extension KeyframeTimingView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
     }
 }
 extension KeyframeTimingView: Assignable {

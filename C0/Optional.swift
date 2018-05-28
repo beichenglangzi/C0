@@ -23,7 +23,7 @@ extension Optional: Referenceable {
     }
 }
 
-final class OptionalGetterView<Wrapped: AbstractViewable, U: BinderProtocol>
+final class OptionalGetterView<Wrapped: AbstractViewable & Referenceable, U: BinderProtocol>
 : View, BindableReceiver {
 
     typealias Model = Optional<Wrapped>
@@ -42,7 +42,8 @@ final class OptionalGetterView<Wrapped: AbstractViewable, U: BinderProtocol>
     var type: AbstractType {
         didSet { updateLayout() }
     }
-    var wrappedView: View?
+    
+    var wrappedView: ModelView?
     var noneNameView: TextFormView
     
     init(binder: Binder, keyPath: BinderKeyPath,
@@ -51,10 +52,10 @@ final class OptionalGetterView<Wrapped: AbstractViewable, U: BinderProtocol>
         self.binder = binder
         self.keyPath = keyPath
         
-        
         self.sizeType = sizeType
         self.type = type
-        noneNameView = TextFormView(text: Text(english: "None", japanese: "なし"),
+        let name = Wrapped.name + ": " + Text(english: "None", japanese: "なし")
+        noneNameView = TextFormView(text: name,
                                     textMaterial: TextMaterial(font: Font.default(with: sizeType)))
         
         super.init()
@@ -88,17 +89,14 @@ final class OptionalGetterView<Wrapped: AbstractViewable, U: BinderProtocol>
                                                            sizeType, type: type)
                 self.wrappedView = wrappedView
                 children = [wrappedView]
+                updateLayout()
             }
+            wrappedView?.updateWithModel()
         } else {
             if children.first != noneNameView {
                 children = [noneNameView]
+                updateLayout()
             }
         }
     }
 }
-extension OptionalGetterView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-}
-

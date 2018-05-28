@@ -17,8 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
-
 extension ClosedRange: Codable where Bound: Codable {
     private enum CodingKeys: String, CodingKey {
         case lowerBound, upperBound

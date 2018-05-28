@@ -54,9 +54,6 @@ final class ClosureView: View {
 private struct _Closure: Referenceable {
     static let name = Text(english: "Closure", japanese: "クロージャ")
 }
-extension ClosureView: Queryable {
-    static let referenceableType: Referenceable.Type = _Closure.self
-}
 extension ClosureView: Runnable {
     func run(for p: Point, _ version: Version) {
         model(version)

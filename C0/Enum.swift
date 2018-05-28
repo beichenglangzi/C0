@@ -59,7 +59,8 @@ final class EnumView<T: EnumType, U: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((EnumView<Model, Binder>, BasicNotification) -> ())]()
+    var notifications = [((EnumView<Model, Binder>,
+                           BasicPhaseNotification<Model>) -> ())]()
     
     var option: ModelOption {
         didSet { updateWithModel() }
@@ -155,11 +156,6 @@ extension EnumView: Localizable {
         updateLayout()
     }
 }
-extension EnumView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-}
 extension EnumView: Assignable {
     func reset(for p: Point, _ version: Version) {
         push(option.defaultModel, to:  version)
@@ -181,16 +177,8 @@ extension EnumView: Runnable {
         push(model(at: p), to: version)
     }
 }
-extension EnumView: PointMovable {
-    func captureWillMovePoint(at p: Point, to version: Version) {
-        capture(model, to: version)
-    }
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        switch phase {
-        case .began: knobView.fillColor = .editing
-        case .changed: break
-        case .ended: knobView.fillColor = knobLineColor
-        }
-        model = self.model(at: p)
+extension EnumView: BasicSlidablePointMovable {
+    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
+        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }
 }

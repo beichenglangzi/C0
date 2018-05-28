@@ -44,7 +44,7 @@ extension Bool: ThumbnailViewable {
 extension Bool: AbstractViewable {
     func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Bool>,
                              frame: Rect, _ sizeType: SizeType,
-                             type: AbstractType) -> View where T : BinderProtocol {
+                             type: AbstractType) -> ModelView where T : BinderProtocol {
         switch type {
         case .normal:
             return BoolView(binder: binder, keyPath: keyPath, option: BoolOption(),
@@ -82,13 +82,13 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((BoolView<Binder>, BasicNotification) -> ())]()
+    var notifications = [((BoolView<Binder>, BasicPhaseNotification<Model>) -> ())]()
     
     var option: ModelOption {
         didSet {
-            parentStringView.text = option.name
-            parentTrueNameView.text = option.info.trueName
-            parentFalseNameView.text = option.info.falseName
+            optionStringView.text = option.name
+            optionTrueNameView.text = option.info.trueName
+            optionFalseNameView.text = option.info.falseName
             updateWithModel()
         }
     }
@@ -96,9 +96,9 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
     var sizeType: SizeType {
         didSet { updateLayout() }
     }
-    let parentStringView: TextFormView
-    let parentTrueNameView: TextFormView
-    let parentFalseNameView: TextFormView
+    let optionStringView: TextFormView
+    let optionTrueNameView: TextFormView
+    let optionFalseNameView: TextFormView
     let knobView: View
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
@@ -110,56 +110,53 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
         
         self.sizeType = sizeType
         let font = Font.default(with: sizeType)
-        parentStringView = TextFormView(text: option.name.isEmpty ? "" : option.name + ":", font: font)
-        parentTrueNameView = TextFormView(text: option.info.trueName, font: font)
-        parentFalseNameView = TextFormView(text: option.info.falseName, font: font)
+        optionStringView = TextFormView(text: option.name.isEmpty ? "" : option.name + ":",
+                                        font: font)
+        optionTrueNameView = TextFormView(text: option.info.trueName, font: font)
+        optionFalseNameView = TextFormView(text: option.info.falseName, font: font)
         knobView = View.discreteKnob()
         
         super.init()
-        children = [parentStringView, knobView, parentTrueNameView, parentFalseNameView]
+        children = [optionStringView, knobView, optionTrueNameView, optionFalseNameView]
         self.frame = frame
     }
     
     override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType)
-        let width = parentStringView.frame.width
-            + parentFalseNameView.frame.width + parentTrueNameView.frame.width + padding * 4
+        let width = optionStringView.frame.width
+            + optionFalseNameView.frame.width + optionTrueNameView.frame.width + padding * 4
         return Rect(x: 0, y: 0,
-                    width: width, height: parentStringView.frame.height + padding * 2)
+                    width: width, height: optionStringView.frame.height + padding * 2)
     }
     override func updateLayout() {
         let padding = Layout.padding(with: sizeType)
-        parentStringView.frame.origin = Point(x: padding, y: padding)
-        parentFalseNameView.frame.origin = Point(x: parentStringView.frame.maxX + padding, y: padding)
-        parentTrueNameView.frame.origin = Point(x: parentFalseNameView.frame.maxX + padding,
+        optionStringView.frame.origin = Point(x: padding, y: padding)
+        optionFalseNameView.frame.origin = Point(x: optionStringView.frame.maxX + padding,
+                                                 y: padding)
+        optionTrueNameView.frame.origin = Point(x: optionFalseNameView.frame.maxX + padding,
                                                 y: padding)
         updateWithModel()
     }
     func updateWithModel() {
         knobView.frame = model ?
-            parentTrueNameView.frame.inset(by: -1) :
-            parentFalseNameView.frame.inset(by: -1)
+            optionTrueNameView.frame.inset(by: -1) :
+            optionFalseNameView.frame.inset(by: -1)
         if option.cationModel != nil {
             knobView.lineColor = knobLineColor
         }
-        parentFalseNameView.fillColor = model ? .background : .knob
-        parentTrueNameView.fillColor = model ? .knob : .background
-        parentFalseNameView.lineColor = model ? .subContent : .knob
-        parentTrueNameView.lineColor = model ? .knob : .subContent
-        parentFalseNameView.textMaterial.color = model ? .subLocked : .locked
-        parentTrueNameView.textMaterial.color = model ? .locked : .subLocked
+        optionFalseNameView.fillColor = model ? .background : .knob
+        optionTrueNameView.fillColor = model ? .knob : .background
+        optionFalseNameView.lineColor = model ? .subContent : .knob
+        optionTrueNameView.lineColor = model ? .knob : .subContent
+        optionFalseNameView.textMaterial.color = model ? .subLocked : .locked
+        optionTrueNameView.textMaterial.color = model ? .locked : .subLocked
     }
     
     var knobLineColor: Color {
         return option.cationModel == model ? .warning : .getSetBorder
     }
     func model(at p: Point) -> Bool {
-        return parentFalseNameView.frame.distance²(p) > parentTrueNameView.frame.distance²(p)
-    }
-}
-extension BoolView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
+        return optionFalseNameView.frame.distance²(p) > optionTrueNameView.frame.distance²(p)
     }
 }
 extension BoolView: Assignable {
@@ -184,16 +181,8 @@ extension BoolView: Runnable {
         push(model, to: version)
     }
 }
-extension BoolView: PointMovable {
-    func captureWillMovePoint(at p: Point, to version: Version) {
-        capture(model, to: version)
-    }
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        switch phase {
-        case .began: knobView.fillColor = .editing
-        case .changed: break
-        case .ended: knobView.fillColor = knobLineColor
-        }
-        model = self.model(at: p)
+extension BoolView: BasicSlidablePointMovable {
+    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
+        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }
 }

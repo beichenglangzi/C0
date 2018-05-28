@@ -102,7 +102,7 @@ extension Color {
     
     static let background = Color(white: 0.94)
     static let getSetBorder = Color(white: 0.7)
-    static let getBorder = Color(red: 1.0, green: 0.5, blue: 0.5)
+    static let getBorder = Color(white: 0.8)
     static let formBorder = Color(white: 0.84)
     static let bindingBorder = Color(red: 1.0, green: 0.0, blue: 1.0)
     static let content = Color(white: 0.35)
@@ -113,6 +113,9 @@ extension Color {
     static let subLocked = Color(white: 0.65)
     static let editing = Color(white: 0.88)
     static let translucentEdit = Color(white: 0, alpha: 0.1)
+    static let mainFocus = Color(red: 0.1, green: 0.6, blue: 0.9)
+    static let zoomingFocus = Color(red: 0.1, green: 0.3, blue: 0.5)
+    static let versioniongFocus = Color(red: 0.05, green: 0.1, blue: 0.3)
     static let indicated = Color(red: 0.1, green: 0.6, blue: 0.9)
     static let noBorderIndicated = Color(red: 0.85, green: 0.9, blue: 0.94)
     static let subIndicated = Color(red: 0.6, green: 0.95, blue: 1)
@@ -145,9 +148,6 @@ extension Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
     }
     func with(alpha: Real) -> Color {
-        return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
-    }
-    func withNewID() -> Color {
         return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
     }
     
@@ -677,15 +677,6 @@ final class ColorView<T: BinderProtocol>: View, BindableReceiver {
         hueCircle = HueCircle(lineWidth: hueLineWidth,
                               bounds: hueDrawView.bounds,
                               colorSpace: model.colorSpace)
-    }
-}
-extension ColorView: ViewQueryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-    static var viewDescription: Text {
-        return Text(english: "Ring: Hue, Width: Saturation, Height: Luminance",
-                    japanese: "輪: 色相, 横: 彩度, 縦: 輝度")
     }
 }
 extension ColorView: Assignable {

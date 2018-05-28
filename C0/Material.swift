@@ -48,7 +48,7 @@ extension Material: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Material>,
                                               frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> View {
+                                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return MaterialView(binder: binder, keyPath: keyPath,
@@ -263,11 +263,6 @@ final class MaterialView<T: BinderProtocol>: View, BindableReceiver {
 extension MaterialView: Localizable {
     func update(with locale: Locale) {
         updateLayout()
-    }
-}
-extension MaterialView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
     }
 }
 extension MaterialView: Assignable {

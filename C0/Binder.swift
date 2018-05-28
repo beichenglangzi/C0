@@ -43,8 +43,21 @@ enum BasicNotification: NotificationProtocol {
         return .didChange
     }
 }
+enum BasicPhaseNotification<Model>: NotificationProtocol {
+    case didChange
+    case didChangeFromPhase(Phase, beginModel: Model)
+    
+    static var _didChange: BasicPhaseNotification {
+        return .didChange
+    }
+}
 
-protocol BindableReceiver: class {
+protocol Modeler: class {
+    func updateWithModel()
+}
+typealias ModelView = View & Modeler
+
+protocol BindableReceiver: Modeler {
     associatedtype Model
     associatedtype Binder: BinderProtocol
     associatedtype BinderKeyPath: ReferenceWritableKeyPath<Binder, Model>
@@ -53,16 +66,13 @@ protocol BindableReceiver: class {
     var binder: Binder { get set }
     var keyPath: BinderKeyPath { get set }
     var notifications: [((Self, Notification) -> ())] { get }
-    func updateWithModel()
     func push(_ model: Model, to version: Version)
     func capture(_ model: Model, to version: Version)
 }
 extension BindableReceiver {
     typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
     var model: Model {
-        get {
-            return binder[keyPath: keyPath]
-        }
+        get { return binder[keyPath: keyPath] }
         set {
             binder[keyPath: keyPath] = newValue
             notifications.forEach { $0(self, ._didChange) }
@@ -83,14 +93,13 @@ extension BindableReceiver {
     }
 }
 
-protocol BindableGetterReceiver: class {
+protocol BindableGetterReceiver: Modeler {
     associatedtype Model
     associatedtype Binder: BinderProtocol
     associatedtype BinderKeyPath: KeyPath<Binder, Model>
     var model: Model { get }
     var binder: Binder { get set }
     var keyPath: BinderKeyPath { get set }
-    func updateWithModel()
 }
 extension BindableGetterReceiver {
     typealias BinderKeyPath = KeyPath<Binder, Model>

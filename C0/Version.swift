@@ -25,8 +25,8 @@ final class Version: UndoManager {
     var undoedDiffCount: Int {
         return undoedIndex - index
     }
-    var indexBinding: ((Version, Int) -> ())?
-    var undoedIndexBinding: ((Version, Int) -> ())?
+    var indexNotification: ((Version, Int) -> ())?
+    var undoedIndexNotification: ((Version, Int) -> ())?
     
     private var undoGroupToken: NSObjectProtocol?
     private var undoToken: NSObjectProtocol?, redoToken: NSObjectProtocol?
@@ -43,8 +43,8 @@ final class Version: UndoManager {
                 if undoManager.groupingLevel == 0 {
                     self.undoedIndex += 1
                     self.index = self.undoedIndex
-                    self.indexBinding?(self, self.index)
-                    self.undoedIndexBinding?(self, self.undoedIndex)
+                    self.indexNotification?(self, self.index)
+                    self.undoedIndexNotification?(self, self.undoedIndex)
                 }
             }
         }
@@ -54,7 +54,7 @@ final class Version: UndoManager {
         let undoClosure: (Notification) -> () = { [unowned self] in
             if let undoManager = $0.object as? UndoManager, undoManager == self {
                 self.undoedIndex -= 1
-                self.undoedIndexBinding?(self, self.undoedIndex)
+                self.undoedIndexNotification?(self, self.undoedIndex)
             }
         }
         undoToken = nc.addObserver(forName: .NSUndoManagerDidUndoChange,
@@ -63,7 +63,7 @@ final class Version: UndoManager {
         let redoClosure: (Notification) -> () = { [unowned self] in
             if let undoManager = $0.object as? UndoManager, undoManager == self {
                 self.undoedIndex += 1
-                self.undoedIndexBinding?(self, self.undoedIndex)
+                self.undoedIndexNotification?(self, self.undoedIndex)
             }
         }
         redoToken = nc.addObserver(forName: .NSUndoManagerDidRedoChange,
@@ -137,6 +137,9 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
         isClipped = true
         children = [classNameView, indexView]
         self.frame = frame
+        
+        model.indexNotification = { [unowned self] _, _ in self.updateWithVersionIndex() }
+        model.undoedIndexNotification = { [unowned self] _, _ in self.updateWithVersionIndex() }
     }
     
     override var defaultBounds: Rect {
@@ -152,8 +155,8 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
         _ = Layout.leftAlignment(items, minX: classNameView.frame.maxX + padding, height: frame.height)
     }
     func updateWithModel() {
-        model.indexBinding = { [unowned self] _, _ in self.updateWithVersionIndex() }
-        model.undoedIndexBinding = { [unowned self] _, _ in self.updateWithVersionIndex() }
+        model.indexNotification = { [unowned self] _, _ in self.updateWithVersionIndex() }
+        model.undoedIndexNotification = { [unowned self] _, _ in self.updateWithVersionIndex() }
         updateWithVersionIndex()
     }
     private func updateWithVersionIndex() {
@@ -184,12 +187,47 @@ extension VersionView: Localizable {
         updateLayout()
     }
 }
-extension VersionView: ViewQueryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
+
+protocol Versionable {
+    var version: Version { get }
+}
+struct VersionableActionManager: SubActionManagable {
+    let undoAction = Action(name: Text(english: "Undo", japanese: "取り消す"),
+                            quasimode: Quasimode(modifier: [InputEvent.EventType.command],
+                                                 [InputEvent.EventType.z]))
+    let redoAction = Action(name: Text(english: "Redo", japanese: "やり直す"),
+                            quasimode: Quasimode(modifier: [InputEvent.EventType.shift,
+                                                            InputEvent.EventType.command],
+                                                 [InputEvent.EventType.z]))
+    var actions: [Action] {
+        return [undoAction, redoAction]
     }
-    static var viewDescription: Text {
-        return Text(english: "Show undoable count and undoed count in parent view",
-                    japanese: "親表示での取り消し可能回数、取り消し済み回数を表示")
+}
+extension VersionableActionManager: SubSendable {
+    func makeSubSender() -> SubSender {
+        return VersionableSender(actionManager: self)
+    }
+}
+
+final class VersionableSender: SubSender {
+    typealias Receiver = View & Versionable
+    typealias ActionManager = VersionableActionManager
+    
+    var actionManager: ActionManager
+    
+    init(actionManager: ActionManager) {
+        self.actionManager = actionManager
+    }
+    
+    func send(_ actionMap: ActionMap, from sender: Sender) {
+        switch actionMap.action {
+        case actionManager.undoAction:
+            sender.stopAllEvents()
+            sender.indicatedVersionView.version.undo()
+        case actionManager.redoAction:
+            sender.stopAllEvents()
+            sender.indicatedVersionView.version.redo()
+        default: break
+        }
     }
 }

@@ -64,7 +64,7 @@ extension Effect: Referenceable {
 extension Effect: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Effect>,
                                               frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> View {
+                                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return EffectView(binder: binder, keyPath: keyPath,
@@ -219,11 +219,6 @@ final class EffectView<T: BinderProtocol>: View, BindableReceiver {
 extension EffectView: Localizable {
     func update(with locale: Locale) {
         updateLayout()
-    }
-}
-extension EffectView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
     }
 }
 extension EffectView: Assignable {

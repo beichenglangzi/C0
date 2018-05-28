@@ -395,11 +395,6 @@ extension SceneView: Localizable {
         updateLayout()
     }
 }
-extension SceneView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-}
 extension SceneView: Versionable {
     var version: Version {
         return versionView.model

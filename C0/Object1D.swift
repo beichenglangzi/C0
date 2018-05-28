@@ -48,9 +48,7 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
     var notifications = [((Assignable1DView<ModelOption, Binder>, BasicNotification) -> ())]()
     
     var model: Model {
-        get {
-            return option.reverseTransformedModel(binder[keyPath: keyPath])
-        }
+        get { return binder[keyPath: keyPath] }
         set {
             binder[keyPath: keyPath] = option.transformedModel(newValue)
             notifications.forEach { $0(self, ._didChange) }
@@ -100,14 +98,6 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
         optionStringView.text = option.displayText(with: model)
     }
 }
-extension Assignable1DView: ViewQueryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-    static var viewDescription: Text {
-        return Text(english: "Assignable", japanese: "代入可能")
-    }
-}
 extension Assignable1DView: Assignable {
     func reset(for p: Point, _ version: Version) {
         push(option.defaultModel, to: version)
@@ -140,22 +130,13 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    enum Notification: NotificationProtocol {
-        case didChange
-        case didChangeFromPhase(Phase, beginModel: Model)
-        
-        static var _didChange: Notification {
-            return .didChange
-        }
-    }
-    var notifications = [((Discrete1DView<ModelOption, Binder>, Notification) -> ())]()
+    var notifications = [((Discrete1DView<ModelOption, Binder>,
+                           BasicPhaseNotification<Model>) -> ())]()
     
     var model: Model {
-        get {
-            return option.reverseTransformedModel(binder[keyPath: keyPath])
-        }
+        get { return binder[keyPath: keyPath] }
         set {
-            binder[keyPath: keyPath] = option.transformedModel(newValue)
+            binder[keyPath: keyPath] = newValue
             notifications.forEach { $0(self, Notification.didChange) }
             updateWithModel()
         }
@@ -235,7 +216,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
         }
     }
     
-    private func model(at p: Point, first fp: Point, old oldModel: Model) -> Model {
+    func model(at p: Point, first fp: Point, old oldModel: Model) -> Model {
         let delta: Real
         switch xyOrientation {
         case .horizontal(let horizontal):
@@ -244,16 +225,6 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
             delta = vertical == .bottomToTop ? p.y - fp.y : fp.y - p.y
         }
         return option.model(withDelta: delta / interval, oldModel: oldModel)
-    }
-    
-    private var pointMovableBiginModel: Model?
-}
-extension Discrete1DView: ViewQueryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-    static var viewDescription: Text {
-        return Text(english: "Discrete Slider", japanese: "離散スライダー")
     }
 }
 extension Discrete1DView: Assignable {
@@ -272,23 +243,9 @@ extension Discrete1DView: Assignable {
         }
     }
 }
-extension Discrete1DView: PointMovable {
-    func captureWillMovePoint(at p: Point, to version: Version) {
-        capture(model, to: version)
-        pointMovableBiginModel = model
-    }
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        guard let beginModel = pointMovableBiginModel else { return }
-        switch phase {
-        case .began: knobView.fillColor = .editing
-        case .changed: break
-        case .ended: knobView.fillColor = .knob
-        }
-        
-        let newValue = option.clippedModel(model(at: p, first: fp, old: beginModel))
-        binder[keyPath: keyPath] = option.transformedModel(newValue)
-        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beginModel)) }
-        updateWithModel()
+extension Discrete1DView: BasicDiscretePointMovable {
+    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
+        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }
 }
 
@@ -304,20 +261,11 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    enum Notification: NotificationProtocol {
-        case didChange
-        case didChangeFromPhase(Phase, beginModel: Model)
-        
-        static var _didChange: Notification {
-            return .didChange
-        }
-    }
-    var notifications = [((Slidable1DView<ModelOption, Binder>, Notification) -> ())]()
+    var notifications = [((Slidable1DView<ModelOption, Binder>,
+                           BasicPhaseNotification<Model>) -> ())]()
     
     var model: Model {
-        get {
-            return option.reverseTransformedModel(binder[keyPath: keyPath])
-        }
+        get { return binder[keyPath: keyPath] }
         set {
             binder[keyPath: keyPath] = option.transformedModel(newValue)
             notifications.forEach { $0(self, .didChange) }
@@ -393,16 +341,6 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
         }
         return option.model(withRatio: t)
     }
-    
-    private var pointMovableBiginModel: Model?
-}
-extension Slidable1DView: ViewQueryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-    static var viewDescription: Text {
-        return Text(english: "Slider", japanese: "スライダー")
-    }
 }
 extension Slidable1DView: Assignable {
     func reset(for p: Point, _ version: Version) {
@@ -425,23 +363,9 @@ extension Slidable1DView: Runnable {
         push(option.clippedModel(model(at: p)), to: version)
     }
 }
-extension Slidable1DView: PointMovable {
-    func captureWillMovePoint(at p: Point, to version: Version) {
-        capture(model, to: version)
-        pointMovableBiginModel = model
-    }
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        guard let beginModel = pointMovableBiginModel else { return }
-        switch phase {
-        case .began: knobView.fillColor = .editing
-        case .changed: break
-        case .ended: knobView.fillColor = .knob
-        }
-        
-        let newValue = option.clippedModel(model(at: p))
-        binder[keyPath: keyPath] = option.transformedModel(newValue)
-        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beginModel)) }
-        updateWithModel()
+extension Slidable1DView: BasicSlidablePointMovable {
+    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
+        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }
 }
 extension Slidable1DView {
@@ -482,20 +406,11 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    enum Notification: NotificationProtocol {
-        case didChange
-        case didChangeFromPhase(Phase, beginModel: Model)
-        
-        static var _didChange: Notification {
-            return .didChange
-        }
-    }
-    var notifications = [((Circular1DView<ModelOption, Binder>, Notification) -> ())]()
+    var notifications = [((Circular1DView<ModelOption, Binder>,
+                           BasicPhaseNotification<Model>) -> ())]()
     
     var model: Model {
-        get {
-            return option.reverseTransformedModel(binder[keyPath: keyPath])
-        }
+        get { return binder[keyPath: keyPath] }
         set {
             binder[keyPath: keyPath] = option.transformedModel(newValue)
             notifications.forEach { $0(self, .didChange) }
@@ -572,24 +487,15 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     }
     func model(at p: Point) -> Model {
         guard !bounds.isEmpty else {
-            return model
+            return self.model
         }
         let cp = Point(x: bounds.midX, y: bounds.midY)
         let theta = cp.tangential(p)
         let ct = (theta > startAngle ?
             theta - startAngle : theta - startAngle + 2 * .pi) / (2 * .pi)
         let t = circularOrientation == .clockwise ? 1 - ct : ct
-        return option.model(withRatio: t)
-    }
-    
-    private var pointMovableBiginModel: Model?
-}
-extension Circular1DView: ViewQueryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-    static var viewDescription: Text {
-        return Text(english: "Circular Slider", japanese: "円状スライダー")
+        let model = option.model(withRatio: t)
+        return option.clippedModel(model)
     }
 }
 extension Circular1DView: Assignable {
@@ -610,25 +516,11 @@ extension Circular1DView: Assignable {
 }
 extension Circular1DView: Runnable {
     func run(for p: Point, _ version: Version) {
-        push(option.clippedModel(model(at: p)), to: version)
+        push(model(at: p), to: version)
     }
 }
-extension Circular1DView: PointMovable {
-    func captureWillMovePoint(at p: Point, to version: Version) {
-        capture(model, to: version)
-        pointMovableBiginModel = model
-    }
-    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        guard let beginModel = pointMovableBiginModel else { return }
-        switch phase {
-        case .began: knobView.fillColor = .editing
-        case .changed: break
-        case .ended: knobView.fillColor = .knob
-        }
-        
-        let newValue = option.clippedModel(model(at: p))
-        binder[keyPath: keyPath] = option.transformedModel(newValue)
-        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beginModel)) }
-        updateWithModel()
+extension Circular1DView: BasicSlidablePointMovable {
+    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
+        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }
 }

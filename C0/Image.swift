@@ -140,11 +140,6 @@ final class ImageView<T: BinderProtocol>: View, BindableReceiver {
     private var dragType = DragType.move, downPosition = Point(), oldFrame = Rect()
     private var resizeWidth = 10.0.cg, ratio = 1.0.cg
 }
-extension ImageView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-}
 extension ImageView: Movable {
     func captureWillMoveObject(to version: Version) {}
     func move(for point: Point, first fp: Point, pressure: Real,

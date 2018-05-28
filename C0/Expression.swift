@@ -106,8 +106,3 @@ final class ExpressionView<T: BinderProtocol>: View, BindableGetterReceiver {
         children = [TextFormView(text: Text(model.displayString))]
     }
 }
-extension ExpressionView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-}

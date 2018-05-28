@@ -204,7 +204,7 @@ extension Lines: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Lines>,
                                               frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> View {
+                                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return DrawingView(binder: binder, keyPath: keyPath.appending(path: \Lines.drawing),
@@ -306,11 +306,6 @@ extension DrawingView {
         let lines = model.lines
         model.lines = model.draftLines
         model.draftLines = lines
-    }
-}
-extension DrawingView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
     }
 }
 extension DrawingView: Assignable {

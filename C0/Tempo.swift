@@ -129,7 +129,8 @@ struct TempoTrack: Track, Codable {
             }
         }
         func monospline(_ lf0: LoopFrame, _ lf1: LoopFrame, _ lf2: LoopFrame, _ lf3: LoopFrame) {
-            let te0 = animation.keyframes[lf0.index].value, te3 = animation.keyframes[lf3.index].value
+            let te0 = animation.keyframes[lf0.index].value
+            let te3 = animation.keyframes[lf3.index].value
             var ms = Monospline(x0: Real(lf0.time), x1: Real(lf1.time),
                                 x2: Real(lf2.time), x3: Real(lf3.time), t: 0)
             let easing = animation.keyframes[lf1.index].timing.easing
@@ -199,7 +200,8 @@ struct TempoTrack: Track, Codable {
             }
         }
         func monospline(_ lf0: LoopFrame, _ lf1: LoopFrame, _ lf2: LoopFrame, _ lf3: LoopFrame) {
-            let te0 = animation.keyframes[lf0.index].value, te3 = animation.keyframes[lf3.index].value
+            let te0 = animation.keyframes[lf0.index].value
+            let te3 = animation.keyframes[lf3.index].value
             var ms = Monospline(x0: Real(lf0.time), x1: Real(lf1.time),
                                 x2: Real(lf2.time), x3: Real(lf3.time), t: 0)
             let easing = animation.keyframes[lf1.index].timing.easing

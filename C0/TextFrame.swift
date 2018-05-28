@@ -23,6 +23,81 @@ import class Foundation.NSAttributedString
 import class Foundation.NSMutableAttributedString
 import CoreText
 
+struct Font {
+    static let small = Font(monospacedSize: 8)
+    static let `default` = Font(monospacedSize: 11)
+    static let smallBold = Font(boldMonospacedSize: 8)
+    static let bold = Font(boldMonospacedSize: 11)
+    static let smallItalic = Font(italicMonospacedSize: 8)
+    static let italic = Font(italicMonospacedSize: 11)
+    
+    static let action = Font(boldMonospacedSize: 9)
+    static let subtitle = Font(boldMonospacedSize: 20)
+    
+    static func `default`(with sizeType: SizeType) -> Font {
+        return sizeType == .small ? small : self.default
+    }
+    static func bold(with sizeType: SizeType) -> Font {
+        return sizeType == .small ? smallBold : bold
+    }
+    static func italic(with sizeType: SizeType) -> Font {
+        return sizeType == .small ? smallItalic : italic
+    }
+    
+    var name: String {
+        didSet {
+            updateWith(name: name, size: size)
+        }
+    }
+    var size: Real {
+        didSet {
+            updateWith(name: name, size: size)
+        }
+    }
+    private(set) var ascent: Real, descent: Real, leading: Real, ctFont: CTFont
+    
+    init(size: Real) {
+        self.init(CTFont.systemFont(ofSize: size))
+    }
+    init(boldSize size: Real) {
+        self.init(CTFont.boldSystemFont(ofSize: size))
+    }
+    init(monospacedSize size: Real) {
+        self.init(CTFont.monospacedSystemFont(ofSize: size))
+    }
+    init(boldMonospacedSize size: Real) {
+        self.init(CTFont.boldMonospacedSystemFont(ofSize: size))
+    }
+    init(italicMonospacedSize size: Real) {
+        self.init(CTFont.italicMonospacedSystemFont(ofSize: size))
+    }
+    init(boldItalicMonospacedSize size: Real) {
+        self.init(CTFont.boldItalicMonospacedSystemFont(ofSize: size))
+    }
+    init(name: String, size: Real) {
+        self.init(CTFontCreateWithName(name as CFString, size, nil))
+    }
+    init(_ ctFont: CTFont) {
+        name = CTFontCopyFullName(ctFont) as String
+        size = CTFontGetSize(ctFont)
+        ascent = CTFontGetAscent(ctFont)
+        descent = -CTFontGetDescent(ctFont)
+        leading = -CTFontGetLeading(ctFont)
+        self.ctFont = ctFont
+    }
+    
+    private mutating func updateWith(name: String, size: Real) {
+        ctFont = CTFontCreateWithName(name as CFString, size, nil)
+        ascent = CTFontGetAscent(ctFont)
+        descent = -CTFontGetDescent(ctFont)
+        leading = -CTFontGetLeading(ctFont)
+    }
+    
+    func ceilHeight(withPadding padding: Real) -> Real {
+        return ceil(ascent - descent) + padding * 2
+    }
+}
+
 enum TextAlignment {
     case left, center, right, natural, justified
     fileprivate var ct: CTTextAlignment {
@@ -390,7 +465,7 @@ struct TextRun {
             CTRunDraw(ctRun, ctx, CTRunGetStringRange(ctRun))
             ctx.restoreGState()
         }
-        CTRunDraw(ctRun, ctx, CTRunGetStringRange(ctRun))
+        CTRunDraw(ctRun, ctx, CFRangeMake(0, 0))
     }
 }
 

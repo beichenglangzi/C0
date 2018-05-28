@@ -279,11 +279,6 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
         }
     }
 }
-extension ScenePlayerView: Queryable {
-    static var referenceableType: Referenceable.Type {
-        return Model.self
-    }
-}
 extension ScenePlayerView: Localizable {
     func update(with locale: Locale) {
         updateLayout()
