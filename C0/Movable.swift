@@ -62,28 +62,28 @@ protocol Transformable: Movable {
 struct MovableActionManager: SubActionManagable {
     let removeEditPointAction = Action(name: Text(english: "Remove Edit Point",
                                                   japanese: "編集点を削除"),
-                                       quasimode: Quasimode(modifier: [InputEvent.EventType.control],
-                                                            [InputEvent.EventType.x]))
+                                       quasimode: Quasimode(modifier: [.input(.control)],
+                                                            [.input(.x)]))
     let insertEditPointAction = Action(name: Text(english: "Insert Edit Point",
                                                   japanese: "編集点を追加"),
-                                       quasimode: Quasimode(modifier: [InputEvent.EventType.control],
-                                                            [InputEvent.EventType.d]))
+                                       quasimode: Quasimode(modifier: [.input(.control)],
+                                                            [.input(.d)]))
     let moveEditPointAction = Action(name: Text(english: "Move Edit Point", japanese: "編集点を移動"),
-                                     quasimode: Quasimode([DragEvent.EventType.drag]))
+                                     quasimode: Quasimode([.drag(.drag)]))
     let moveVertexAction = Action(name: Text(english: "Move Vertex", japanese: "頂点を移動"),
-                                  quasimode: Quasimode(modifier: [InputEvent.EventType.shift,
-                                                                  InputEvent.EventType.control],
-                                                       [DragEvent.EventType.drag]))
+                                  quasimode: Quasimode(modifier: [.input(.control)],
+                                                       [.drag(.drag)]))
     let moveAction = Action(name: Text(english: "Move", japanese: "移動"),
-                            quasimode: Quasimode(modifier: [InputEvent.EventType.control],
-                                                 [DragEvent.EventType.drag]))
+                            quasimode: Quasimode(modifier: [.input(.shift),
+                                                            .input(.control)],
+                                                 [.drag(.drag)]))
     let transformAction = Action(name: Text(english: "Transform", japanese: "変形"),
-                                 quasimode: Quasimode(modifier: [InputEvent.EventType.option],
-                                                      [DragEvent.EventType.drag]))
+                                 quasimode: Quasimode(modifier: [.input(.option)],
+                                                      [.drag(.drag)]))
     let warpAction = Action(name: Text(english: "Warp", japanese: "歪曲"),
-                            quasimode: Quasimode(modifier: [InputEvent.EventType.shift,
-                                                            InputEvent.EventType.option],
-                                                 [DragEvent.EventType.drag]))
+                            quasimode: Quasimode(modifier: [.input(.shift),
+                                                            .input(.option)],
+                                                 [.drag(.drag)]))
     
     var actions: [Action] {
         return [removeEditPointAction, insertEditPointAction,
@@ -118,6 +118,7 @@ final class MovableSender: SubSender {
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
         case actionManager.removeEditPointAction:
+            guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? PointEditableReceiver {
                 
@@ -126,6 +127,7 @@ final class MovableSender: SubSender {
                 receiver.removeNearestPoint(for: p, sender.indicatedVersionView.version)
             }
         case actionManager.insertEditPointAction:
+            guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? PointEditableReceiver {
                 
@@ -258,7 +260,7 @@ final class BasicDiscreteViewPointMover<T: View & BasicDiscretePointMovable>: Vi
 
 protocol BasicSlidablePointMovable: BindableReceiver, PointMovable {
     var knobView: View { get }
-    var knobLineColor: Color { get }
+    var knobFillColor: Color { get }
     func model(at p: Point) -> Model
     func didChangeFromMovePoint(_ phase: Phase, beganModel: Model)
 }
@@ -266,8 +268,8 @@ extension BasicSlidablePointMovable {
     func captureWillMovePoint(at p: Point, to version: Version) {
         capture(model, to: version)
     }
-    var knobLineColor: Color {
-        return .getSetBorder
+    var knobFillColor: Color {
+        return .knob
     }
 }
 extension BasicSlidablePointMovable where Self: View {
@@ -292,7 +294,7 @@ final class BasicSlidableViewPointMover<T: View & BasicSlidablePointMovable>: Vi
         switch phase {
         case .began: view.knobView.fillColor = .editing
         case .changed: break
-        case .ended: view.knobView.fillColor = view.knobLineColor
+        case .ended: view.knobView.fillColor = view.knobFillColor
         }
         
         view.binder[keyPath: view.keyPath] = view.model(at: p)

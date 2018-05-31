@@ -57,6 +57,28 @@ extension Int: ThumbnailViewable {
         return String(self).thumbnailView(withFrame: frame, sizeType)
     }
 }
+extension Int: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Int>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return DiscreteIntView(binder: binder, keyPath: keyPath,
+                                   option: IntOption(defaultModel: 0,
+                                                     minModel: .min, maxModel: .max),
+                                   frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Int: ObjectViewable {}
+extension Int: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 struct IntGetterOption: GetterOption {
     typealias Model = Int

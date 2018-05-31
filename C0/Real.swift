@@ -154,6 +154,11 @@ extension Real: Referenceable {
     static let name = Text(english: "Real Number (\(MemoryLayout<Real>.size * 8)bit)",
                            japanese: "実数 (\(MemoryLayout<Real>.size * 8)bit)")
 }
+extension Real: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return String(self).thumbnailView(withFrame: frame, sizeType)
+    }
+}
 extension Real: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Real>,
                                               frame: Rect, _ sizeType: SizeType,
@@ -162,18 +167,19 @@ extension Real: AbstractViewable {
         case .normal:
             return DiscreteRealView(binder: binder, keyPath: keyPath,
                                     option: RealOption(defaultModel: 0,
-                                                       minModel: -Real.infinity,
-                                                       maxModel: Real.infinity),
+                                                       minModel: -.infinity,
+                                                       maxModel: .infinity),
                                     frame: frame, sizeType: sizeType)
         case .mini:
             return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
         }
     }
 }
-extension Real: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return String(self).thumbnailView(withFrame: frame, sizeType)
-    }
+extension Real: ObjectViewable {}
+extension Real: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
 }
 extension Real {
     init?(_ string: String) {

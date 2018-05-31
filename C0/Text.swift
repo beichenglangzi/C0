@@ -124,6 +124,27 @@ extension Text: ThumbnailViewable {
                             frame: frame, isSizeToFit: false)
     }
 }
+extension Text: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Text>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return TextView(binder: binder, keyPath: keyPath, option: TextOption(),
+                            textMaterial: TextMaterial(font: Font.default(with: sizeType)),
+                            frame: frame)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Text: ObjectViewable {}
+extension Text: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 final class TextFormView: View {
     var text: Text {
@@ -135,13 +156,17 @@ final class TextFormView: View {
     }
     var isSizeToFit: Bool {
         didSet {
+            textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
+                                  frameWidth: textFrameWidth)
             if isSizeToFit { sizeToFit() }
         }
     }
     var padding: Real {
         didSet { updateLayout() }
     }
-    private var textFrame: TextFrame
+    private var textFrame: TextFrame {
+        didSet { displayLinkDraw() }
+    }
     
     convenience init(text: Text = "",
                      font: Font = .default, color: Color = .locked,
@@ -175,7 +200,6 @@ final class TextFormView: View {
             sizeToFit()
         } else {
             self.frame = frame
-            displayLinkDraw()
         }
     }
     
@@ -183,15 +207,17 @@ final class TextFormView: View {
         return textFrame.bounds(padding: padding)
     }
     override func updateLayout() {
-        textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
-                              frameWidth: textFrameWidth)
-        displayLinkDraw()
+        if !isSizeToFit {
+            textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
+                                  frameWidth: textFrameWidth)
+        }
     }
     func updateWithModel() {
         textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
-        if isSizeToFit { sizeToFit() }
-        displayLinkDraw()
+        if isSizeToFit {
+            sizeToFit()
+        }
     }
     func sizeToFit() {
         frame = textMaterial.fitFrameWith(defaultBounds: defaultBounds, frame: frame)
@@ -212,7 +238,6 @@ final class TextFormView: View {
 extension TextFormView: Localizable {
     func update(with locale: Locale) {
         updateWithModel()
-        sizeToFit()
     }
 }
 
@@ -237,7 +262,9 @@ final class TextGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
     var padding: Real {
         didSet { updateLayout() }
     }
-    private var textFrame: TextFrame
+    private var textFrame: TextFrame {
+        didSet { displayLinkDraw() }
+    }
     
     init(binder: Binder, keyPath: BinderKeyPath, textMaterial: TextMaterial = TextMaterial(),
          frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
@@ -255,7 +282,7 @@ final class TextGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
                               textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
         
-        super.init(drawClosure: { $1.draw(in: $0) })
+        super.init(drawClosure: { $1.draw(in: $0) }, isLocked: false)
         
         noIndicatedLineColor = .getBorder
         indicatedLineColor = .indicated
@@ -268,15 +295,17 @@ final class TextGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
         return textFrame.bounds(padding: padding)
     }
     override func updateLayout() {
-        textFrame = TextFrame(string: model.currentString, textMaterial: textMaterial,
-                              frameWidth: textFrameWidth)
-        displayLinkDraw()
+        if !isSizeToFit {
+            textFrame = TextFrame(string: model.currentString, textMaterial: textMaterial,
+                                  frameWidth: textFrameWidth)
+        }
     }
     func updateWithModel() {
         textFrame = TextFrame(string: model.currentString, textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
-        if isSizeToFit { sizeToFit() }
-        displayLinkDraw()
+        if isSizeToFit {
+            sizeToFit()
+        }
     }
     func sizeToFit() {
         frame = textMaterial.fitFrameWith(defaultBounds: defaultBounds, frame: frame)
@@ -293,6 +322,11 @@ final class TextGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
     
     override func draw(in ctx: CGContext) {
         textFrame.draw(in: bounds.inset(by: padding), in: ctx)
+    }
+}
+extension TextGetterView: Localizable {
+    func update(with locale: Locale) {
+        updateWithModel()
     }
 }
 extension TextGetterView: Copiable {

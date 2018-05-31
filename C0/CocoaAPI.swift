@@ -200,6 +200,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
         
         if let desktopDataModel = rootDataModel.children[c0View.desktopBinder.dataModelKey] {
             c0View.desktopBinder.dataModel = desktopDataModel
+            c0View.desktopView.updateWithModel()
         } else {
             rootDataModel.insert(c0View.desktopBinder.dataModel)
         }
@@ -212,16 +213,15 @@ final class C0Document: NSDocument, NSWindowDelegate {
         }
         setupWindow(with: preference)
         
-        let isWriteClosure: (DataModel, Bool) -> Void = { [unowned self] (_, isWrite) in
-            if isWrite {
-                self.updateChangeCount(.changeDone)
-            }
+        let isWriteClosure: (DataModel, Bool) -> Void = { [unowned self] (_, _) in
+            self.updateChangeCount(.changeDone)
         }
+        c0View.desktopBinder.dataModel.didChangeIsWriteClosure = isWriteClosure
         c0View.desktopBinder.diffDesktopDataModel.didChangeIsWriteClosure = isWriteClosure
         preferenceDataModel.didChangeIsWriteClosure = isWriteClosure
         
-//        c0View.desktopView.copiedObjectsView.push(NSPasteboard.general.copiedObjects,
-//                                                  to: c0View.desktopView.version)
+        c0View.desktopView.copiedObjectsView.push(NSPasteboard.general.copiedObjects,
+                                                  to: c0View.desktopView.version)
         c0View.desktopView.copiedObjectsView.notifications.append({ [unowned self] _, _ in
             self.didSetCopiedObjects()
         })
@@ -402,7 +402,9 @@ final class C0View: NSView, NSTextInputClient {
     private let isHiddenActionManagerKey = "isHiddenActionManagerKey"
     
     override init(frame frameRect: NSRect) {
-        desktopBinder = DesktopBinder(rootModel: Desktop())
+        var desktop = Desktop()
+        desktop.objects.append(Object(Scene()))
+        desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
         sender = Sender(rootView: desktopView)
         dragManager = DragManager(sender: sender, clickType: .click, dragType: .drag)
@@ -411,7 +413,9 @@ final class C0View: NSView, NSTextInputClient {
         setup()
     }
     required init?(coder: NSCoder) {
-        desktopBinder = DesktopBinder(rootModel: Desktop())
+        var desktop = Desktop()
+        desktop.objects.append(Object(Scene()))
+        desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
         sender = Sender(rootView: desktopView)
         dragManager = DragManager(sender: sender, clickType: .click, dragType: .drag)
@@ -502,10 +506,10 @@ final class C0View: NSView, NSTextInputClient {
         return convertFromLayer(window.convertToScreen(convert(r, to: nil)))
     }
     
-    func dragEventValueWith(pointing nsEvent: NSEvent, _ phase: Phase) -> DragEvent.Value {
+    func dragEventValueWith(pointing nsEvent: NSEvent) -> DragEvent.Value {
         return DragEvent.Value(rootLocation: screenPoint(with: nsEvent),
                                time: nsEvent.timestamp.cg,
-                               pressure: 1, phase: phase)
+                               pressure: 1, phase: .changed)
     }
     func dragEventValueWith(_ nsEvent: NSEvent, _ phase: Phase) -> DragEvent.Value {
         return DragEvent.Value(rootLocation: screenPoint(with: nsEvent),
@@ -586,8 +590,7 @@ final class C0View: NSView, NSTextInputClient {
         mouseMoved(with: nsEvent)
     }
     override func mouseMoved(with nsEvent: NSEvent) {
-        sender.send(DragEvent(type: .pointing,
-                              value: dragEventValueWith(pointing: nsEvent, .began)))
+        sender.sendPointing(dragEventValueWith(pointing: nsEvent))
     }
     
     private final class DragManager {
@@ -608,8 +611,7 @@ final class C0View: NSView, NSTextInputClient {
         private var workItem: DispatchWorkItem?, beganDragEvent: DragEvent?
         
         func mouseDown(with nsEvent: NSEvent, _ view: C0View) {
-            sender.send(DragEvent(type: .pointing,
-                                  value: view.dragEventValueWith(pointing: nsEvent, .began)))
+            sender.sendPointing(view.dragEventValueWith(pointing: nsEvent))
             let beganDragEvent = DragEvent(type: dragType,
                                            value: view.dragEventValueWith(nsEvent, .began))
             self.beganDragEvent = beganDragEvent
@@ -623,8 +625,7 @@ final class C0View: NSView, NSTextInputClient {
                                           execute: workItem)
         }
         func mouseDragged(with nsEvent: NSEvent, _ view: C0View) {
-            sender.send(DragEvent(type: .pointing,
-                                  value: view.dragEventValueWith(pointing: nsEvent, .began)))
+            sender.sendPointing(view.dragEventValueWith(pointing: nsEvent))
             if workItem != nil {
                 workItem?.perform()
             }
@@ -640,8 +641,7 @@ final class C0View: NSView, NSTextInputClient {
                 
                 guard let beganDragEvent = beganDragEvent else { return }
                 if beganDragEvent.value.rootLocation != endedDragEvent.value.rootLocation {
-                    sender.send(DragEvent(type: .pointing,
-                                          value: view.dragEventValueWith(pointing: nsEvent, .began)))
+                    sender.sendPointing(view.dragEventValueWith(pointing: nsEvent))
                     sender.send(beganDragEvent)
                     sender.send(endedDragEvent)
                 } else {
@@ -656,8 +656,7 @@ final class C0View: NSView, NSTextInputClient {
                     sender.send(clickEventWith(beganDragEvent, .ended))
                 }
             } else {
-                sender.send(DragEvent(type: .pointing,
-                                      value: view.dragEventValueWith(pointing: nsEvent, .began)))
+                sender.sendPointing(view.dragEventValueWith(pointing: nsEvent))
                 sender.send(endedDragEvent)
             }
         }
@@ -895,6 +894,47 @@ struct TextInputContext {
     }
     static func discardMarkedText() {
         currentContext?.discardMarkedText()
+    }
+}
+
+protocol DynamicCodable: Codable {
+    var dynamicCoder: DynamicCoder { get }
+}
+class DynamicCoder: NSObject, NSCoding {
+    class func value(from data: Data) -> DynamicCodable? {
+        return nil
+    }
+    static func valueWithType<T: DynamicCodable>(_ type: T.Type,
+                                                 from data: Data) -> DynamicCodable? {
+        return try? JSONDecoder().decode(type, from: data)
+    }
+    
+    required init?(coder decoder: NSCoder) {
+        guard let data = decoder.decodeData() else {
+            return nil
+        }
+        guard let value = DynamicCoder.value(from: data) else {
+            return nil
+        }
+        self.value = value
+        super.init()
+    }
+    func encode(with encoder: NSCoder) {
+        if let data = value.jsonData {
+            encoder.encode(data)
+        }
+    }
+    
+    static func with(data: Data) -> DynamicCoder? {
+        return NSKeyedUnarchiver.unarchiveObject(with: data) as? DynamicCoder
+    }
+    var data: Data {
+        return NSKeyedArchiver.archivedData(withRootObject: self)
+    }
+    
+    var value: DynamicCodable
+    init(_ value: DynamicCodable) {
+        self.value = value
     }
 }
 

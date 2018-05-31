@@ -120,7 +120,8 @@ enum Layout {
     static func leftAlignment(_ items: [Item], minX: Real = basicPadding,
                               y: Real = 0, height: Real, paddingWidth: Real = 0) -> Size {
         let width = items.reduce(minX) { x, item in
-            item.view?.frame.origin = Point(x: x, y: y + ((height - item.bounds.height) / 2).rounded())
+            item.view?.frame.origin = Point(x: x,
+                                            y: y + ((height - item.bounds.height) / 2).rounded())
             return x + item.width + paddingWidth
         }
         return Size(width: width, height: height)

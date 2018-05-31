@@ -19,7 +19,7 @@
 
 import struct Foundation.Locale
 
-typealias Object0D = Codable & Referenceable
+typealias Object0D = Object.Value
 
 protocol GetterOption {
     associatedtype Model: Object0D
@@ -71,19 +71,19 @@ final class GetterView<T: GetterOption, U: BinderProtocol>: View, BindableGetter
     }
     
     override var defaultBounds: Rect {
-        return optionStringView.defaultBounds
+        return Rect(origin: Point(), size: optionStringView.defaultBounds.size)
     }
     override func updateLayout() {
-        optionStringView.frame.origin = Point(x: bounds.width - optionStringView.frame.width,
-                                              y: bounds.height - optionStringView.frame.height)
-        updateWithModel()
+        optionStringView.frame.origin
+            = Point(x: bounds.width - optionStringView.frame.width,
+                    y: bounds.height - optionStringView.frame.height)
     }
     func updateWithModel() {
         updateString()
     }
     private func updateString() {
         optionStringView.text = option.displayText(with: model)
-        bounds = optionStringView.bounds
+        bounds.size = optionStringView.bounds.size
     }
 }
 extension GetterView: Copiable {

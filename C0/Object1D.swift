@@ -20,7 +20,7 @@
 import struct Foundation.Locale
 import CoreGraphics
 
-typealias Object1D = Codable & Referenceable
+typealias Object1D = Object.Value
 
 protocol Object1DOption: GetterOption {
     var defaultModel: Model { get }
@@ -61,7 +61,7 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
     }
     
     var sizeType: SizeType
-    let optionStringView: TextFormView
+    let optionTextView: TextFormView
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
@@ -71,31 +71,30 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
         self.option = option
         
         self.sizeType = sizeType
-        optionStringView = TextFormView(text: option.displayText(with: binder[keyPath: keyPath]),
-                                        font: Font.default(with: sizeType),
-                                        frameAlignment: .right, alignment: .right)
+        optionTextView = TextFormView(text: option.displayText(with: binder[keyPath: keyPath]),
+                                      font: Font.default(with: sizeType),
+                                      frameAlignment: .right, alignment: .right)
         
         super.init()
         noIndicatedLineColor = .getBorder
         indicatedLineColor = .indicated
         isClipped = true
-        children = [optionStringView]
+        children = [optionTextView]
         self.frame = frame
     }
     
     override var defaultBounds: Rect {
-        return optionStringView.defaultBounds
+        return optionTextView.defaultBounds
     }
     override func updateLayout() {
-        optionStringView.frame.origin = Point(x: bounds.width - optionStringView.frame.width,
-                                              y: bounds.height - optionStringView.frame.height)
-        updateWithModel()
+        optionTextView.frame.origin = Point(x: bounds.width - optionTextView.frame.width,
+                                            y: bounds.height - optionTextView.frame.height)
     }
     func updateWithModel() {
         updateString()
     }
     private func updateString() {
-        optionStringView.text = option.displayText(with: model)
+        optionTextView.text = option.displayText(with: model)
     }
 }
 extension Assignable1DView: Assignable {
@@ -193,16 +192,9 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
         let y = ((bounds.height - optionStringView.frame.height) / 2).rounded()
         optionStringView.frame.origin = Point(x: x, y: y)
         
-        updateWithModel()
+        updateknobLayout()
     }
-    func updateWithModel() {
-        updateString()
-        updateknob()
-    }
-    private func updateString() {
-        optionStringView.text = option.displayText(with: model)
-    }
-    private func updateknob() {
+    private func updateknobLayout() {
         let t = option.ratioFromDefaultModel(with: model)
         switch xyOrientation {
         case .horizontal(let horizontal):
@@ -214,6 +206,13 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
             let y = knobLineFrame.height * tt + knobLineFrame.minY
             knobView.position = Point(x: knobPadding, y: y.rounded())
         }
+    }
+    func updateWithModel() {
+        updateString()
+        updateknobLayout()
+    }
+    private func updateString() {
+        optionStringView.text = option.displayText(with: model)
     }
     
     func model(at p: Point, first fp: Point, old oldModel: Model) -> Model {
@@ -312,9 +311,9 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     }
     
     override func updateLayout() {
-        updateWithModel()
+        updateKnobLayout()
     }
-    func updateWithModel() {
+    private func updateKnobLayout() {
         let t = option.ratioFromDefaultModel(with: model)
         switch xyOrientation {
         case .horizontal(let horizontal):
@@ -326,6 +325,9 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
             let y = (bounds.height - padding * 2) * tt + padding
             knobView.position = Point(x: bounds.midX, y: y)
         }
+    }
+    func updateWithModel() {
+        updateKnobLayout()
     }
     func model(at point: Point) -> Model {
         let t: Real
@@ -476,14 +478,17 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
         path.append(PathLine(firstPoint: fp0, elements: [.arc(arc0)]))
         path.append(PathLine(firstPoint: fp1, elements: [.arc(arc1)]))
         self.path = path
-        updateWithModel()
+        updateKnobLayout()
     }
-    func updateWithModel() {
+    private func updateKnobLayout() {
         let t = option.ratioFromDefaultModel(with: model)
         let theta = circularOrientation == .clockwise ?
             startAngle - t * (2 * .pi) : startAngle + t * (2 * .pi)
         let cp = Point(x: bounds.midX, y: bounds.midY), r = bounds.width / 2 - width / 2
         knobView.position = cp + r * Point(x: cos(theta), y: sin(theta))
+    }
+    func updateWithModel() {
+        updateKnobLayout()
     }
     func model(at p: Point) -> Model {
         guard !bounds.isEmpty else {

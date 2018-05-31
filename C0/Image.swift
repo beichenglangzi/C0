@@ -133,41 +133,58 @@ final class ImageView<T: BinderProtocol>: View, BindableReceiver {
     func updateWithModel() {
         self.image = model
     }
+}
+extension ImageView: Movable {
+    func captureWillMoveObject(at p: Point, to version: Version) {}
+    
+    func makeViewMover() -> ViewMover {
+        return ImageViewMover(imageView: self)
+    }
+    
+}
+final class ImageViewMover<Binder: BinderProtocol>: ViewMover {
+    var movableView: View & Movable {
+        return imageView
+    }
+    var imageView: ImageView<Binder>
+    
+    init(imageView: ImageView<Binder>) {
+        self.imageView = imageView
+    }
     
     private enum DragType {
         case move, resizeMinXMinY, resizeMaxXMinY, resizeMinXMaxY, resizeMaxXMaxY
     }
     private var dragType = DragType.move, downPosition = Point(), oldFrame = Rect()
     private var resizeWidth = 10.0.cg, ratio = 1.0.cg
-}
-extension ImageView: Movable {
-    func captureWillMoveObject(to version: Version) {}
+    
     func move(for point: Point, first fp: Point, pressure: Real,
               time: Second, _ phase: Phase) {
-        guard let parent = parent else { return }
-        let p = parent.convert(point, from: self), ip = point
+        guard let parent = imageView.parent else { return }
+        let p = parent.convert(point, from: imageView), ip = point
         switch phase {
         case .began:
             if Rect(x: 0, y: 0, width: resizeWidth, height: resizeWidth).contains(ip) {
                 dragType = .resizeMinXMinY
-            } else if Rect(x:  bounds.width - resizeWidth, y: 0,
+            } else if Rect(x: imageView.bounds.width - resizeWidth, y: 0,
                            width: resizeWidth, height: resizeWidth).contains(ip) {
                 dragType = .resizeMaxXMinY
-            } else if Rect(x: 0, y: bounds.height - resizeWidth,
+            } else if Rect(x: 0, y: imageView.bounds.height - resizeWidth,
                            width: resizeWidth, height: resizeWidth).contains(ip) {
                 dragType = .resizeMinXMaxY
-            } else if Rect(x: bounds.width - resizeWidth, y: bounds.height - resizeWidth,
+            } else if Rect(x: imageView.bounds.width - resizeWidth,
+                           y: imageView.bounds.height - resizeWidth,
                            width: resizeWidth, height: resizeWidth).contains(ip) {
                 dragType = .resizeMaxXMaxY
             } else {
                 dragType = .move
             }
             downPosition = p
-            oldFrame = frame
-            ratio = frame.height / frame.width
+            oldFrame = imageView.frame
+            ratio = imageView.frame.height / imageView.frame.width
         case .changed, .ended:
             let dp =  p - downPosition
-            var frame = self.frame
+            var frame = imageView.frame
             switch dragType {
             case .move:
                 frame.origin = Point(x: oldFrame.origin.x + dp.x, y: oldFrame.origin.y + dp.y)
@@ -188,7 +205,7 @@ extension ImageView: Movable {
                 frame.size.width = oldFrame.width + dp.x
                 frame.size.height = frame.size.width * ratio
             }
-            self.frame = phase == .ended ? frame.integral : frame
+            imageView.frame = phase == .ended ? frame.integral : frame
         }
     }
 }

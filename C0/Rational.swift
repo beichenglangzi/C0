@@ -95,6 +95,13 @@ extension Rational {
         }
     }
     
+    static var min: Rational {
+        return Rational(Int.min)
+    }
+    static var max: Rational {
+        return Rational(Int.max)
+    }
+    
     var magnitude: Rational {
         return Rational(abs(p), q)
     }
@@ -161,6 +168,29 @@ extension Rational: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return description.thumbnailView(withFrame: frame, sizeType)
     }
+}
+extension Rational: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Rational>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return DiscreteRationalView(binder: binder, keyPath: keyPath,
+                                        option: RationalOption(defaultModel: 0,
+                                                               minModel: .min, maxModel: .max,
+                                                               isInfinitesimal: false),
+                                        frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Rational: ObjectViewable {}
+extension Rational: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
 }
 extension Rational: LosslessStringConvertible {
     init?(_ description: String) {

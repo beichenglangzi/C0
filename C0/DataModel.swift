@@ -47,6 +47,13 @@ extension Decodable {
         self.init(jsonData: jsonData)
     }
 }
+extension Decodable {
+    static func decode<Key>(values: KeyedDecodingContainer<Key>,
+                            forKey key: Key) throws -> Self where Key: CodingKey {
+        return try values.decode(Self.self, forKey: key)
+    }
+}
+
 extension Encodable {
     var jsonData: Data? {
         return try? JSONEncoder().encode(self)
@@ -56,6 +63,13 @@ extension Encodable {
             return nil
         }
         return String(data: data, encoding: .utf8)
+    }
+}
+extension Encodable {
+    func encode<CodingKeys>(forKey key: KeyedEncodingContainer<CodingKeys>.Key,
+                            in container: inout KeyedEncodingContainer<CodingKeys>) throws
+        where CodingKeys: CodingKey {
+            try container.encode(self, forKey: key)
     }
 }
 

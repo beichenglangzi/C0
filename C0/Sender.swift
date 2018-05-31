@@ -25,37 +25,34 @@ protocol SubSendable {
 }
 
 /**
- Issue: コピー・ペーストなどのアクション対応を拡大
- Issue: プロトコルアクション設計を拡大
+ Issue: プロトコルアクション設計の対応範囲を拡げる
  */
 final class Sender {
-    var rootView: View
+    typealias UndoableView = View & Undoable
+    typealias ZoomableView = View & Zoomable
+    
+    var rootView: View & Undoable
     var mainIndicatedView: View {
         didSet {
-            var allParents = [View]()
-            mainIndicatedView.allSubIndicatedParentsAndSelf { allParents.append($0) }
-            oldValue.allSubIndicatedParentsAndSelf { view in
-                if let index = allParents.index(where: { $0 === view }) {
-                    allParents.remove(at: index)
-                } else {
-                    view.isSubIndicated = false
-                }
+            guard mainIndicatedView != oldValue else { return }
+            
+            if let view = mainIndicatedView.withSelfAndAllParents(with: UndoableView.self) {
+                self.indicatedVersionView = view
             }
-            allParents.forEach { $0.isSubIndicated = true }
+            if let view = mainIndicatedView.withSelfAndAllParents(with: ZoomableView.self) {
+                self.indicatedZoomableView = view
+            }
             
             oldValue.isIndicated = false
             mainIndicatedView.isIndicated = true
         }
     }
-    var indicatedVersionView: View & Versionable
-    var indicatedZoomableView: View
-    var actionManager: ActionManager {
-        didSet {
-            actions = actionManager.actions
-            subSenders = actionManager.subActionManagers.map { $0.makeSubSender() }
-        }
-    }
-    var subSenders: [SubSender]
+    var oldMainIndicatedViewColor: Color?
+    var indicatedVersionView: UndoableView
+    var indicatedZoomableView: ZoomableView?
+    
+    let actionManager = ActionManager()
+    let subSenders: [SubSender]
     
     func updateIndicatedView(with frame: Rect) {
         if frame.contains(self.currentRootLocation) {
@@ -72,39 +69,67 @@ final class Sender {
     var eventMap = EventMap()
     var actionMaps = [ActionMap]()
     
-    private var actions: [Action]
-    
-    init(rootView: View = View(), actionManager: ActionManager = ActionManager()) {
+    init(rootView: View & Undoable) {
         self.rootView = rootView
-        rootView.changedFrame = { [unowned self] in self.updateIndicatedView(with: $0) }
-        
-        self.actionManager = actionManager
-        actions = actionManager.actions
         subSenders = actionManager.subActionManagers.map { $0.makeSubSender() }
+        
+        mainIndicatedView = rootView
+        oldMainIndicatedViewColor = mainIndicatedView.lineColor
+        indicatedVersionView = rootView
+        
+        rootView.changedFrame = { [unowned self] in self.updateIndicatedView(with: $0) }
+    }
+    
+    func sendPointing(_ eventValue: DragEvent.Value) {
+        let event = DragEvent(type: .pointing, value: eventValue)
+        let action = actionManager.selectableActionManager.indicateAction
+        changedOnlySend(event, action)
+    }
+    func changedOnlySend<T: Event>(_ event: T, _ action: Action) {
+        let actionMap = ActionMap(action: action, phase: .changed, events: [event])
+        subSenders.forEach { $0.send(actionMap, from: self) }
     }
     
     func send<T: Event>(_ event: T) {
         switch event.value.phase {
         case .began:
             eventMap.append(event)
-            if let actionMap = eventMap.actionMapWith(event, actions) {
+            if let actionMap = eventMap.actionMapWith(event, actionManager.actions) {
+                actionMaps.append(actionMap)
                 subSenders.forEach { $0.send(actionMap, from: self) }
             }
         case .changed:
             eventMap.replace(event)
-            if let actionMap = eventMap.actionMapWith(event, actions) {
+            if let index = actionMapIndex(with: event) {
+                actionMaps[index].replace(event)
+                let actionMap = actionMaps[index]
                 subSenders.forEach { $0.send(actionMap, from: self) }
             }
         case .ended:
-            if let actionMap = eventMap.actionMapWith(event, actions) {
+            eventMap.replace(event)
+            if let index = actionMapIndex(with: event) {
+                actionMaps[index].replace(event)
+                let actionMap = actionMaps[index]
                 subSenders.forEach { $0.send(actionMap, from: self) }
+                actionMaps.remove(at: index)
             }
             eventMap.remove(event)
         }
     }
     
+    func actionMapIndex<T: Event>(with event: T) -> Array<ActionMap>.Index? {
+        return actionMaps.index(where: { $0.contains(event) })
+    }
+    
     func stopEditableEvents() {
-        
+        actionMaps.forEach {
+            if $0.action.isEditable {
+                var actionMap = $0
+                actionMap.phase = .ended
+                subSenders.forEach { $0.send(actionMap, from: self) }
+            }
+        }
+        actionMaps = []
     }
     func stopAllEvents() {
         actionMaps.forEach {

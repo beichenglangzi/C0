@@ -21,19 +21,19 @@ enum Phase: Int8, Codable {
     case began, changed, ended
 }
 
-protocol EventValueProtocol: Codable {
+protocol EventValueProtocol {
     var rootLocation: Point { get }
     var time: Second { get }
     var phase: Phase { get }
 }
-protocol EventTypeProtocol: Codable {
+protocol EventTypeProtocol {
     var name: Text { get }
 }
 protocol EventProtocol {
     var protocolType: EventTypeProtocol { get }
     var protocolValue: EventValueProtocol { get }
 }
-protocol Event: EventProtocol, Codable {
+protocol Event: EventProtocol {
     associatedtype EventType: EventTypeProtocol, Equatable
     associatedtype Value: EventValueProtocol
     var type: EventType { get }
@@ -159,6 +159,67 @@ struct ActionMap {
     func eventValuesWith<T: Event>(_ type: T.Type) -> [T.Value] {
         return events.compactMap { ($0 as? T)?.value }
     }
+    func contains<T: Event>(_ event: T) -> Bool {
+        func isEqual(_ lhsProtocol: EventProtocol) -> Bool {
+            let rhs = event.type
+            if let lhs = lhsProtocol.protocolType as? T.EventType {
+                return lhs == rhs
+            } else {
+                return false
+            }
+        }
+        return events.contains(where: isEqual)
+    }
+    mutating func replace<T: Event>(_ event: T) {
+        func isEqual(_ lhsProtocol: EventProtocol) -> Bool {
+            let rhs = event.type
+            if let lhs = lhsProtocol.protocolType as? T.EventType {
+                return lhs == rhs
+            } else {
+                return false
+            }
+        }
+        if let index = events.index(where: isEqual) {
+            events[index] = event
+            phase = event.value.phase
+        }
+    }
+}
+
+enum AlgebraicEventType: EventTypeProtocol {
+    case input(InputEvent.EventType)
+    case drag(DragEvent.EventType)
+    case scroll(ScrollEvent.EventType)
+    case pinch(PinchEvent.EventType)
+    case rotate(RotateEvent.EventType)
+    
+    var name: Text {
+        switch self {
+        case .input(let inputType): return inputType.name
+        case .drag(let dragType): return dragType.name
+        case .scroll(let scrollType): return scrollType.name
+        case .pinch(let pinchType): return pinchType.name
+        case .rotate(let rotateType): return rotateType.name
+        }
+    }
+    
+    func contains(_ eventType: EventTypeProtocol) -> Bool {
+        func contains<T: Event>(_ algebraicEventType: T.EventType,
+                                _ algebraicType: T.Type) -> Bool {
+            if let eventType = eventType as? T.EventType {
+                return algebraicEventType == eventType
+            } else {
+                return false
+            }
+        }
+        switch self {
+        case .input(let inputType): return contains(inputType, InputEvent.self)
+        case .drag(let dragType): return contains(dragType, DragEvent.self)
+        case .scroll(let scrollType): return contains(scrollType, ScrollEvent.self)
+        case .pinch(let pinchType): return contains(pinchType, PinchEvent.self)
+        case .rotate(let rotateType): return contains(rotateType, RotateEvent.self)
+        }
+    }
 }
 
 struct EventMap {
@@ -187,8 +248,8 @@ struct EventMap {
         return nil
     }
     func event<T: Event>(with eventType: T.EventType, type: T.Type) -> T.Value? {
-        for editor in events {
-            if let e = editor as? T, e.type == eventType {
+        for event in events {
+            if let e = event as? T, e.type == eventType {
                 return e.value
             }
         }
@@ -199,35 +260,48 @@ struct EventMap {
     }
     
     func actionMapWith<T: Event>(_ event: T, _ actions: [Action]) -> ActionMap? {
-        func containsEventType(with action: Action) -> Bool {
-            for actionEventType in action.quasimode.eventTypeProtocols {
-                if let actionTEventType = actionEventType as? T.EventType,
-                    actionTEventType == event.type {
-                    
+        func containsEventType(with algebraicEventTypes: [AlgebraicEventType]) -> Bool {
+            for algebraicEventType in algebraicEventTypes {
+                if algebraicEventType.contains(event.type) {
                     return true
                 }
             }
             return false
         }
-        var hitAction: Action?
+        func containsEvents(with algebraicEventTypes: [AlgebraicEventType]) -> Bool {
+            for algebraicEventType in algebraicEventTypes {
+                func containsEventType(_ eventProtocol: EventProtocol) -> Bool {
+                    return algebraicEventType.contains(eventProtocol.protocolType)
+                }
+                if !events.contains(where: containsEventType) {
+                    return false
+                }
+            }
+            return true
+        }
+        
+        var hitActions = [Action]()
         for action in actions {
-            if containsEventType(with: action) {
-                hitAction = action
-                break
+            guard containsEventType(with: action.quasimode.eventTypes) else { continue }
+            if containsEvents(with: action.quasimode.allEventTypes) {
+                hitActions.append(action)
             }
         }
-        guard let action = hitAction else {
+        let maxAction = hitActions.max {
+            $0.quasimode.allEventTypes.count < $1.quasimode.allEventTypes.count
+        }
+        guard let action = maxAction else {
             return nil
         }
         
-        let actionEventTypes = action.quasimode.eventTypeProtocols
+        let actionEventTypes = action.quasimode.eventTypes
         var actionEvents = [EventProtocol]()
         actionEvents.reserveCapacity(actionEventTypes.count)
         for actionEventType in actionEventTypes {
-            func isEqualProtocolTypes(_ event: EventProtocol) -> Bool {
-                return event.protocolType.name.base == actionEventType.name.base
+            func containsEventType(_ eventProtocol: EventProtocol) -> Bool {
+                return actionEventType.contains(eventProtocol.protocolType)
             }
-            if let index = events.index(where: isEqualProtocolTypes) {
+            if let index = events.index(where: containsEventType) {
                 actionEvents.append(events[index])
             } else {
                 return nil

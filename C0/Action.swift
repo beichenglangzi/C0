@@ -19,24 +19,21 @@
 
 import struct Foundation.Locale
 
-enum Focus {
-    case main, zooming, versioning
-}
-
 struct Action {
-    let name: Text, description: Text, quasimode: Quasimode
+    let name: Text, description: Text, quasimode: Quasimode, isEditable: Bool
     
-    init(name: Text = "", description: Text = "", quasimode: Quasimode) {
+    init(name: Text = "", description: Text = "", quasimode: Quasimode, isEditable: Bool = true) {
         self.name = name
         self.description = description
         self.quasimode = quasimode
+        self.isEditable = isEditable
     }
     
     func isSubset(of other: Action) -> Bool {
-        let types = quasimode.allEventTypeProtocols
-        let otherTypes = other.quasimode.allEventTypeProtocols
+        let types = quasimode.allEventTypes
+        let otherTypes = other.quasimode.allEventTypes
         for type in types {
-            if !otherTypes.contains(where: { $0.name == type.name }) {
+            if !otherTypes.contains(where: { $0.name.base == type.name.base }) {
                 return false
             }
         }
@@ -64,22 +61,20 @@ protocol SubActionManagable: SubSendable {
 struct ActionManager {
     let selectableActionManager = SelectableActionManager()
     let zoomableActionManager = ZoomableActionManager()
-    let versionableActionManager = VersionableActionManager()
+    let undoableActionManager = UndoableActionManager()
     let assignableActionManager = AssignableActionManager()
     let runnableActionManager = RunnableActionManager()
     let strokableActionManager = StrokableActionManager()
     let movableActionManager = MovableActionManager()
     
-    var actions: [Action] {
-        return selectableActionManager.actions
-            + zoomableActionManager.actions
-            + versionableActionManager.actions
-            + assignableActionManager.actions
-            + runnableActionManager.actions
-            + strokableActionManager.actions
-            + movableActionManager.actions
-        
-//        return subActionManagers.flatMap { $0.actions }
+    let subActionManagers: [SubActionManagable]
+    let actions: [Action]
+    
+    init() {
+        subActionManagers = [selectableActionManager, zoomableActionManager,
+                             undoableActionManager, assignableActionManager,
+                             runnableActionManager, strokableActionManager, movableActionManager]
+        actions = subActionManagers.flatMap { $0.actions }
     }
 }
 extension ActionManager: Referenceable {
@@ -133,6 +128,11 @@ final class ActionView<T: BinderProtocol>: View, BindableGetterReceiver {
         quasimodeView.updateWithModel()
     }
 }
+extension ActionView: Localizable {
+    func update(with locale: Locale) {
+        updateLayout()
+    }
+}
 
 final class SubActionManagableView<T: SubActionManagable, U: BinderProtocol>
 : View, BindableGetterReceiver {
@@ -155,19 +155,6 @@ final class SubActionManagableView<T: SubActionManagable, U: BinderProtocol>
         
         super.init()
         bounds = defaultBounds
-    }
-    
-    static var defaultWidth: Real {
-        return 80 + Layout.basicPadding * 2
-    }
-    
-    override var defaultBounds: Rect {
-        let padding = Layout.basicPadding
-        let actionHeight = Layout.basicTextHeight + Layout.smallPadding * 2
-        let height = actionHeight * Real(model.actions.count) + padding * 2
-        return Rect(x: 0, y: 0, width: SubActionManagableView.defaultWidth, height: height)
-    }
-    override func updateLayout() {
         let padding = Layout.basicPadding
         let ah = Layout.basicTextHeight + Layout.smallPadding * 2
         let aw = bounds.width - padding * 2
@@ -177,6 +164,23 @@ final class SubActionManagableView<T: SubActionManagable, U: BinderProtocol>
             return ActionView(binder: binder,
                               keyPath: keyPath.appending(path: \Model.actions[$0]),
                               frame: Rect(x: padding, y: y, width: aw, height: ah))
+        }
+    }
+    
+    override var defaultBounds: Rect {
+        let padding = Layout.basicPadding
+        let actionHeight = Layout.basicTextHeight + Layout.smallPadding * 2
+        let height = actionHeight * Real(model.actions.count) + padding * 2
+        return Rect(x: 0, y: 0, width: Layout.propertyWidth, height: height)
+    }
+    override func updateLayout() {
+        let padding = Layout.basicPadding
+        let ah = Layout.basicTextHeight + Layout.smallPadding * 2
+        let aw = bounds.width - padding * 2
+        var y = bounds.height - padding
+        children.forEach {
+            y -= ah
+            $0.frame = Rect(x: padding, y: y, width: aw, height: ah)
         }
     }
     func updateWithModel() {}
@@ -197,9 +201,17 @@ final class ActionManagerView<T: BinderProtocol>: View, BindableGetterReceiver {
     }
     var notifications = [((ActionManagerView<Binder>, BasicNotification) -> ())]()
     
-    
+    let selectableActionManagerView: SubActionManagableView<SelectableActionManager, Binder>
+    let zoomableActionManagerView: SubActionManagableView<ZoomableActionManager, Binder>
+    let undoableActionManagerView: SubActionManagableView<UndoableActionManager, Binder>
+    let assignableActionManagerView: SubActionManagableView<AssignableActionManager, Binder>
+    let runnableActionManagerView: SubActionManagableView<RunnableActionManager, Binder>
+    let strokableActionManagerView: SubActionManagableView<StrokableActionManager, Binder>
+    let movableActionManagerView: SubActionManagableView<MovableActionManager, Binder>
+    let subActionManagableViews: [View]
     
     let classNameView = TextFormView(text: ActionManager.name, font: .bold)
+    var width = 200.0.cg
     
     init(binder: Binder, keyPath: BinderKeyPath,
          frame: Rect = Rect()) {
@@ -207,21 +219,43 @@ final class ActionManagerView<T: BinderProtocol>: View, BindableGetterReceiver {
         self.binder = binder
         self.keyPath = keyPath
         
-        actionManagableViews = model.subActionManagers.map {
-            SubActionManagableView(actionMangable: $0)
-        }
+        let selectableKeyPath = keyPath.appending(path: \.selectableActionManager)
+        selectableActionManagerView = SubActionManagableView(binder: binder,
+                                                             keyPath: selectableKeyPath)
+        let zoomableKeyPath = keyPath.appending(path: \.zoomableActionManager)
+        zoomableActionManagerView = SubActionManagableView(binder: binder,
+                                                           keyPath: zoomableKeyPath)
+        let undoableKeyPath = keyPath.appending(path: \.undoableActionManager)
+        undoableActionManagerView = SubActionManagableView(binder: binder,
+                                                              keyPath: undoableKeyPath)
+        let assignableKeyPath = keyPath.appending(path: \.assignableActionManager)
+        assignableActionManagerView = SubActionManagableView(binder: binder,
+                                                             keyPath: assignableKeyPath)
+        let runnableKeyPath = keyPath.appending(path: \.runnableActionManager)
+        runnableActionManagerView = SubActionManagableView(binder: binder,
+                                                           keyPath: runnableKeyPath)
+        let strokableKeyPath = keyPath.appending(path: \.strokableActionManager)
+        strokableActionManagerView = SubActionManagableView(binder: binder,
+                                                            keyPath: strokableKeyPath)
+        let movableKeyPath = keyPath.appending(path: \.movableActionManager)
+        movableActionManagerView = SubActionManagableView(binder: binder,
+                                                          keyPath: movableKeyPath)
+        subActionManagableViews = [selectableActionManagerView, zoomableActionManagerView,
+                                   undoableActionManagerView, assignableActionManagerView,
+                                   runnableActionManagerView, strokableActionManagerView,
+                                   movableActionManagerView]
         
         super.init()
-        children = [classNameView] + actionManagableViews
+        children = [classNameView] + subActionManagableViews
         self.frame = frame
     }
     
     override var defaultBounds: Rect {
         let padding = Layout.basicPadding
-        let ah = actionManagableViews.reduce(0.0.cg) { $0 + $1.bounds.height }
+        let ah = subActionManagableViews.reduce(0.0.cg) { $0 + $1.bounds.height }
         let height = classNameView.frame.height + padding * 3 + ah
         return Rect(x: 0, y: 0,
-                    width: SubActionManagableView.defaultWidth + padding * 2, height: height)
+                    width: width + padding * 2, height: height)
     }
     override func updateLayout() {
         let padding = Layout.basicPadding
@@ -229,18 +263,13 @@ final class ActionManagerView<T: BinderProtocol>: View, BindableGetterReceiver {
         var y = bounds.height - classNameView.frame.height - padding
         classNameView.frame.origin = Point(x: padding, y: y)
         y -= padding
-        _ = actionManagableViews.reduce(y) {
+        _ = subActionManagableViews.reduce(y) {
             let ny = $0 - $1.frame.height
             $1.frame = Rect(x: padding, y: ny, width: w, height: $1.frame.height)
             return ny
         }
     }
-    func updateWithModel() {
-        actionManagableViews = model.subActionManagers.map {
-            SubActionManagableView(actionMangable: $0)
-        }
-        children = [classNameView] + actionManagableViews
-    }
+    func updateWithModel() {}
 }
 extension ActionManagerView: Localizable {
     func update(with locale: Locale) {

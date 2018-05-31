@@ -19,7 +19,7 @@
 
 import struct Foundation.Locale
 
-protocol Object2D: Codable & Referenceable {
+protocol Object2D: Object.Value {
     associatedtype XModel: Codable & Referenceable
     associatedtype YModel: Codable & Referenceable
     init(xModel: XModel, yModel: YModel)
@@ -166,16 +166,19 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
                                 y: padding,
                                 width: bounds.width - valueFrame.width - padding * 3,
                                 height: bounds.height - padding * 2)
-        updateWithModel()
+        updateKnobLayout()
     }
-    func updateWithModel() {
-        xView.updateWithModel()
-        yView.updateWithModel()
+    private func updateKnobLayout() {
         let inBounds = boundsView.bounds.inset(by: boundsPadding)
         let ratio2D = option.ratio2DFromDefaultModel(with: model)
         let x = inBounds.width * ratio2D.x + inBounds.minX
         let y = inBounds.height * ratio2D.y + inBounds.minY
         knobView.position = Point(x: x.rounded(), y: y.rounded())
+    }
+    func updateWithModel() {
+        updateKnobLayout()
+        xView.updateWithModel()
+        yView.updateWithModel()
     }
     
     func model(at p: Point, first fp: Point, old oldModel: Model) -> Model {
@@ -247,10 +250,13 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>: View, Slidable
     }
     
     override func updateLayout() {
-        updateWithModel()
+        updateKnobLayout()
+    }
+    private func updateKnobLayout() {
+        knobView.position = position(from: model)
     }
     func updateWithModel() {
-        knobView.position = position(from: model)
+        updateKnobLayout()
     }
     func model(at p: Point) -> Model {
         let inBounds = bounds.inset(by: padding)

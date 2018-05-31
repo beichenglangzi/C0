@@ -60,7 +60,8 @@ class View {
         return view
     }
     
-    fileprivate var caLayer: CALayer
+//    fileprivate
+    var caLayer: CALayer
     init() {
         caLayer = CALayer.interface()
     }
@@ -81,6 +82,9 @@ class View {
         actions["endPoint"] = NSNull()
         let caGradientLayer = CAGradientLayer()
         caGradientLayer.actions = actions
+        caGradientLayer.anchorPoint = Point()
+        caGradientLayer.borderWidth = 0.5
+        caGradientLayer.borderColor = Color.getSetBorder.cg
         caLayer = caGradientLayer
         self.gradient = gradient
         View.update(with: gradient, in: caGradientLayer)
@@ -114,6 +118,7 @@ class View {
         actions["fillColor"] = NSNull()
         actions["strokeColor"] = NSNull()
         caShapeLayer.actions = actions
+        caShapeLayer.anchorPoint = Point()
         caShapeLayer.fillColor = nil
         caShapeLayer.lineWidth = 0
         caShapeLayer.strokeColor = lineColor?.cg
@@ -232,37 +237,39 @@ class View {
     var defaultBounds: Rect {
         return Rect()
     }
-    private var isUseDidSetBounds = true, isUseDidSetFrame = true
-    var bounds = Rect() {
-        didSet {
-            guard isUseDidSetBounds && bounds != oldValue else { return }
-            if frame.size != bounds.size {
-                isUseDidSetFrame = false
-                frame.size = bounds.size
-                isUseDidSetFrame = true
+    private var _bounds = Rect(), _frame = Rect()
+    var bounds: Rect {
+        get { return _bounds }
+        set {
+            guard newValue != _bounds else { return }
+            _bounds = newValue
+            caLayer.bounds = newValue
+            if _frame.size != newValue.size {
+                _frame.size = newValue.size
+                changed(_frame)
             }
-            caLayer.bounds = bounds
             updateLayout()
         }
     }
-    var frame = Rect() {
-        didSet {
-            guard isUseDidSetFrame && frame != oldValue else { return }
-            if bounds.size != frame.size {
-                isUseDidSetBounds = false
-                bounds.size = frame.size
-                isUseDidSetBounds = true
+    var frame: Rect {
+        get { return _frame }
+        set {
+            guard newValue != _frame else { return }
+            _frame = newValue
+            if _bounds.size != newValue.size {
+                _bounds.size = newValue.size
             }
-            caLayer.frame = frame
-            changed(frame)
+            caLayer.frame = newValue
+            changed(newValue)
             updateLayout()
         }
     }
     var position: Point {
-        get { return caLayer.position }
+        get { return _frame.midPoint }
         set {
-            caLayer.position = newValue
-            changed(frame)
+            _frame.origin = Point(x: newValue.x - _frame.width / 2,
+                                  y: newValue.y - _frame.height / 2)
+            changed(_frame)
             updateLayout()
         }
     }
@@ -592,6 +599,7 @@ extension CALayer {
                           borderColor: Color? = .getSetBorder) -> CALayer {
         let layer = CALayer()
         layer.isOpaque = true
+        layer.anchorPoint = Point()
         layer.actions = disabledAnimationActions
         layer.borderWidth = borderColor == nil ? 0.0 : 0.5
         layer.backgroundColor = backgroundColor?.cg

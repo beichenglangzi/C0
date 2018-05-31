@@ -90,6 +90,7 @@ extension TreeNode {
     }
     
     func nodes(at treeIndex: Index) -> [Self] {
+        guard !treeIndex.indexPath.isEmpty else { return [self] }
         var nodes = [Self]()
         nodes.reserveCapacity(treeIndex.indexPath.count)
         self.nodes(at: treeIndex, index: 0, nodes: &nodes)

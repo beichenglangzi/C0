@@ -34,10 +34,10 @@ protocol Strokable {
 
 struct StrokableActionManager: SubActionManagable {
     let strokeAction = Action(name: Text(english: "Stroke", japanese: "ストローク"),
-                              quasimode: Quasimode([DragEvent.EventType.subDrag]))
+                              quasimode: Quasimode([.drag(.subDrag)]))
     let lassoEraseAction = Action(name: Text(english: "Lasso Erase", japanese: "囲み消し"),
-                                  quasimode: Quasimode(modifier: [InputEvent.EventType.shift],
-                                                       [DragEvent.EventType.subDrag]))
+                                  quasimode: Quasimode(modifier: [.input(.shift)],
+                                                       [.drag(.subDrag)]))
     var actions: [Action] {
         return [strokeAction, lassoEraseAction]
     }

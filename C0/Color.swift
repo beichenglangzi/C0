@@ -653,7 +653,6 @@ final class ColorView<T: BinderProtocol>: View, BindableReceiver {
         hueCircle = HueCircle(lineWidth: hueLineWidth,
                               bounds: hueDrawView.bounds,
                               colorSpace: model.colorSpace)
-        updateWithModel()
     }
     func updateWithModel() {
         if model.colorSpace != hueCircle.colorSpace {

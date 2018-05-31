@@ -24,10 +24,13 @@ protocol BinderProtocol: class {
 }
 
 final class BasicBinder<Model>: BinderProtocol {
-    var rootModel: Model
+    var rootModel: Model {
+        didSet { notification?(self, .didChange) }
+    }
     init(rootModel: Model) {
         self.rootModel = rootModel
     }
+    var notification: ((BasicBinder<Model>, BasicNotification) -> ())?
 }
 
 /**
@@ -81,13 +84,13 @@ extension BindableReceiver {
     }
     
     func push(_ model: Model, to version: Version) {
-        version.registerUndo(withTarget: self) { [oldModel = model, unowned version] in
+        version.registerUndo(withTarget: self) { [oldModel = self.model, unowned version] in
             $0.push(oldModel, to: version)
         }
         self.model = model
     }
     func capture(_ model: Model, to version: Version) {
-        version.registerUndo(withTarget: self) { [oldModel = model, unowned version] in
+        version.registerUndo(withTarget: self) { [oldModel = self.model, unowned version] in
             $0.push(oldModel, to: version)
         }
     }

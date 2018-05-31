@@ -395,7 +395,7 @@ extension SceneView: Localizable {
         updateLayout()
     }
 }
-extension SceneView: Versionable {
+extension SceneView: Undoable {
     var version: Version {
         return versionView.model
     }

@@ -38,27 +38,27 @@ protocol Newable {
 }
 
 struct AssignableActionManager: SubActionManagable {
-    let resetAction = Action(name: Text(english: "Reset", japanese: "リセット"),
-                             quasimode: Quasimode(modifier: [InputEvent.EventType.shift,
-                                                             InputEvent.EventType.command],
-                                                  [InputEvent.EventType.x]))
     let cutAction = Action(name: Text(english: "Cut", japanese: "カット"),
-                           quasimode: Quasimode(modifier: [InputEvent.EventType.command],
-                                                [InputEvent.EventType.x]))
+                           quasimode: Quasimode(modifier: [.input(.command)],
+                                                [.input(.x)]))
+    let resetAction = Action(name: Text(english: "Reset", japanese: "リセット"),
+                             quasimode: Quasimode(modifier: [.input(.shift),
+                                                             .input(.command)],
+                                                  [.input(.x)]))
     let copyAction = Action(name: Text(english: "Copy", japanese: "コピー"),
-                            quasimode: Quasimode(modifier: [InputEvent.EventType.command],
-                                                 [InputEvent.EventType.c]))
+                            quasimode: Quasimode(modifier: [.input(.command)],
+                                                 [.input(.c)]))
     let pasteAction = Action(name: Text(english: "Paste", japanese: "ペースト"),
-                             quasimode: Quasimode(modifier: [InputEvent.EventType.command],
-                                                  [InputEvent.EventType.v]))
+                             quasimode: Quasimode(modifier: [.input(.command)],
+                                                  [.input(.v)]))
     let addAction = Action(name: Text(english: "Add", japanese: "加算"),
-                           quasimode: Quasimode(modifier: [InputEvent.EventType.command],
-                                                [InputEvent.EventType.d]))
+                           quasimode: Quasimode(modifier: [.input(.command)],
+                                                [.input(.d)]))
     let newAction = Action(name: Text(english: "New", japanese: "新規"),
-                           quasimode: Quasimode(modifier: [InputEvent.EventType.command],
-                                                [InputEvent.EventType.e]))
+                           quasimode: Quasimode(modifier: [.input(.command)],
+                                                [.input(.e)]))
     var actions: [Action] {
-        return [resetAction, cutAction, copyAction, pasteAction, addAction, newAction]
+        return [cutAction, resetAction, copyAction, pasteAction, addAction, newAction]
     }
 }
 extension AssignableActionManager: SubSendable {
@@ -84,6 +84,7 @@ final class AssignableSender: SubSender {
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
         case actionManager.resetAction:
+            guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? Receiver {
                 
@@ -92,6 +93,7 @@ final class AssignableSender: SubSender {
                 receiver.reset(for: p, sender.indicatedVersionView.version)
             }
         case actionManager.cutAction:
+            guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? CollectionReceiver,
                 let viewer = receiver.withSelfAndAllParents(with: CopiedObjectViewer.self) {
@@ -105,6 +107,7 @@ final class AssignableSender: SubSender {
                 }
             }
         case actionManager.copyAction:
+            guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? CopiableReceiver,
                 let viewer = receiver.withSelfAndAllParents(with: CopiedObjectViewer.self) {
@@ -117,6 +120,7 @@ final class AssignableSender: SubSender {
                 }
             }
         case actionManager.pasteAction:
+            guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? Receiver,
                 let viewer = receiver.withSelfAndAllParents(with: CopiedObjectViewer.self) {
@@ -126,6 +130,7 @@ final class AssignableSender: SubSender {
                 receiver.paste(viewer.copiedObjects, for: p, sender.indicatedVersionView.version)
             }
         case actionManager.addAction:
+            guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? CollectionReceiver,
                 let viewer = receiver.withSelfAndAllParents(with: CopiedObjectViewer.self) {
@@ -135,6 +140,7 @@ final class AssignableSender: SubSender {
                 receiver.add(viewer.copiedObjects, for: p, sender.indicatedVersionView.version)
             }
         case actionManager.newAction:
+            guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? NewableReceiver {
                 

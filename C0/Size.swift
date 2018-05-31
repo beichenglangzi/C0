@@ -79,6 +79,29 @@ extension Size: ThumbnailViewable {
         return (jsonString ?? "").thumbnailView(withFrame: frame, sizeType)
     }
 }
+extension Size: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Size>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            let valueOption = PointOption.XOption(defaultModel: 0,
+                                                  minModel: -.infinity, maxModel: .infinity)
+            return DiscreteSizeView(binder: binder, keyPath: keyPath,
+                                    option: SizeOption(xOption: valueOption,
+                                                       yOption: valueOption),
+                                    frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Size: ObjectViewable {}
+extension Size: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 extension Size: Object2D {
     typealias XModel = Real

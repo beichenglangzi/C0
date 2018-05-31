@@ -23,7 +23,7 @@ protocol Runnable {
 
 struct RunnableActionManager: SubActionManagable {
     let runAction = Action(name: Text(english: "Run", japanese: "実行"),
-                           quasimode: Quasimode([InputEvent.EventType.click]))
+                           quasimode: Quasimode([.input(.click)]))
     var actions: [Action] {
         return [runAction]
     }
@@ -47,6 +47,7 @@ final class RunnableSender: SubSender {
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
         case actionManager.runAction:
+            guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? Receiver {
                 

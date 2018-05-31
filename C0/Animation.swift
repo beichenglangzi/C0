@@ -367,7 +367,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
     
     var defaultModel = Model()
     
-    var keyframesView: ObjectsView<Keyframe<Value>, Binder>
+    var keyframesView: ArrayView<Keyframe<Value>, Binder>
     
     private var knobViews = [View]()
     let editView: View = {
@@ -419,9 +419,9 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
         self.height = height
         self.smallHeight = smallHeight
         self.sizeType = sizeType
-        keyframesView = ObjectsView(binder: binder,
-                                    keyPath: keyPath.appending(path: \Model.keyframes),
-                                    sizeType: sizeType, abstractType: .normal)
+        keyframesView = ArrayView(binder: binder,
+                                  keyPath: keyPath.appending(path: \Model.keyframes),
+                                  sizeType: sizeType, abstractType: .normal)
         
         super.init()
         frame = Rect(x: origin.x, y: origin.y,
@@ -608,12 +608,12 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
     private func updateWithBeginTime() {
         for (i, li) in model.loopFrames.enumerated() {
             if i > 0 {
-                knobViews[i - 1].lineColor = ((li.time + beginBaseTime) / baseTimeInterval).isInteger ?
-                    Color.getSetBorder : Color.warning
+                let isInteger = ((li.time + beginBaseTime) / baseTimeInterval).isInteger
+                knobViews[i - 1].lineColor = isInteger ? .getSetBorder : .warning
             }
         }
-        knobViews.last?.lineColor = ((model.duration + beginBaseTime) / baseTimeInterval).isInteger ?
-            Color.getSetBorder : Color.warning
+        let isInteger = ((model.duration + beginBaseTime) / baseTimeInterval).isInteger
+        knobViews.last?.lineColor = isInteger ? .getSetBorder : .warning
     }
     func updateWithModel() {
         

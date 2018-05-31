@@ -298,6 +298,29 @@ extension Point: ThumbnailViewable {
         return (jsonString ?? "").thumbnailView(withFrame: frame, sizeType)
     }
 }
+extension Point: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Point>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            let valueOption = PointOption.XOption(defaultModel: 0,
+                                                  minModel: -.infinity, maxModel: .infinity)
+            return DiscretePointView(binder: binder, keyPath: keyPath,
+                                     option: PointOption(xOption: valueOption,
+                                                         yOption: valueOption),
+                                     frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Point: ObjectViewable {}
+extension Point: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 extension Array where Element == Point {
     var convexHull: [Point] {

@@ -42,6 +42,7 @@
 		23607F741F81293300A671B0 /* Material.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23607F731F81293300A671B0 /* Material.swift */; };
 		2362CA3920BBB5B300021CDE /* Runnable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2362CA3820BBB5B300021CDE /* Runnable.swift */; };
 		2362CA3B20BC5C9C00021CDE /* CocoaString.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2362CA3A20BC5C9C00021CDE /* CocoaString.swift */; };
+		2362CA7720BEFC3E00021CDE /* Undoable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2362CA7620BEFC3E00021CDE /* Undoable.swift */; };
 		2377466A207B3EE100037921 /* Rect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23774669207B3EE100037921 /* Rect.swift */; };
 		2377466C207B45F800037921 /* URL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2377466B207B45F800037921 /* URL.swift */; };
 		239059E12077BC7800BE4A2E /* Point.swift in Sources */ = {isa = PBXBuildFile; fileRef = 239059E02077BC7800BE4A2E /* Point.swift */; };
@@ -124,6 +125,7 @@
 		23607F731F81293300A671B0 /* Material.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Material.swift; sourceTree = "<group>"; };
 		2362CA3820BBB5B300021CDE /* Runnable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Runnable.swift; sourceTree = "<group>"; };
 		2362CA3A20BC5C9C00021CDE /* CocoaString.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CocoaString.swift; sourceTree = "<group>"; };
+		2362CA7620BEFC3E00021CDE /* Undoable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Undoable.swift; sourceTree = "<group>"; };
 		23774669207B3EE100037921 /* Rect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rect.swift; sourceTree = "<group>"; };
 		2377466B207B45F800037921 /* URL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URL.swift; sourceTree = "<group>"; };
 		239059E02077BC7800BE4A2E /* Point.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Point.swift; sourceTree = "<group>"; };
@@ -260,6 +262,7 @@
 				23E895CD20AEDEE900DD18D2 /* Strokable.swift */,
 				2362CA3820BBB5B300021CDE /* Runnable.swift */,
 				23157D9220B93DD80032EB82 /* Assignable.swift */,
+				2362CA7620BEFC3E00021CDE /* Undoable.swift */,
 				23244AA120B1144100A06F42 /* Zoomable.swift */,
 				23157D8820B930350032EB82 /* Selectable.swift */,
 				23157D9020B93A1E0032EB82 /* Sender.swift */,
@@ -377,6 +380,7 @@
 				23B45B2A2010F56900C2AA5B /* Enum.swift in Sources */,
 				23C031E620A5BFC000F46E48 /* Object2D.swift in Sources */,
 				23157D9320B93DD80032EB82 /* Assignable.swift in Sources */,
+				2362CA7720BEFC3E00021CDE /* Undoable.swift in Sources */,
 				23A6FC851FE7608800B8214B /* Bezier.swift in Sources */,
 				235E86BD1F83D9D7009AC966 /* Animation.swift in Sources */,
 				234A96E01EDE880F00A841C6 /* Text.swift in Sources */,

@@ -126,7 +126,7 @@ extension Sound: Equatable {
 }
 extension Sound: Codable {
     private enum CodingKeys: String, CodingKey {
-        case bookmark, name,volume, isHidden
+        case bookmark, name, volume, isHidden
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)

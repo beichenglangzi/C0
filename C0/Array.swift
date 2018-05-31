@@ -19,7 +19,8 @@
 
 import struct Foundation.Locale
 
-typealias AbstractElement = AbstractViewable & Codable & Referenceable
+typealias AbstractElement = Object.Value & AbstractViewable
+typealias ObjectElement = Object.Value
 
 struct ArrayIndex<T>: Codable, Hashable {
     var index = 0
@@ -37,13 +38,57 @@ extension Array: Referenceable where Element: Referenceable {
     }
 }
 
+//extension Array: Object.Value & AbstractViewable where Element == Object {
+//    func abstractViewWith<T>(binder: T,
+//                             keyPath: ReferenceWritableKeyPath<T, Array<Element>>,
+//                             frame: Rect, _ sizeType: SizeType,
+//                             type: AbstractType) -> ModelView where T: BinderProtocol {
+//        switch type {
+//        case .normal:
+//            return ObjectsView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+//        case .mini:
+//            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+//        }
+//    }
+//    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
+//                           frame: Rect, _ sizeType: SizeType,
+//                           type: AbstractType) -> ModelView where T: BinderProtocol {
+//        return ObjectView(binder: binder, keyPath: keyPath, value: self, type: type)
+//    }
+//}
+extension Array: AbstractViewable where Element: Object.Value & AbstractViewable {
+    func abstractViewWith<T>(binder: T,
+                             keyPath: ReferenceWritableKeyPath<T, Array<Element>>,
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> ModelView where T: BinderProtocol {
+        switch type {
+        case .normal:
+            return ArrayView(binder: binder, keyPath: keyPath, frame: frame,
+                             sizeType: sizeType, abstractType: type)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Array: ObjectViewable where Element: Object.Value & AbstractViewable {
+//    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
+//                           frame: Rect, _ sizeType: SizeType,
+//                           type: AbstractType) -> ModelView where T: BinderProtocol {
+//        return ObjectView(binder: binder, keyPath: keyPath, value: self,
+//                          frame: frame, sizeType: sizeType, type: type)
+//    }
+}
+extension Array: ObjectDecodable where Element: ObjectDecodable {
+    static var appendObjectType: () { return () }
+}
+
 enum ArrayNotification<Model> {
     case insert(Int, Model)
     case remove(Int)
     case move(Int, Model)
 }
 
-final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableReceiver {
+final class ArrayView<T: AbstractElement, U: BinderProtocol>: View, BindableReceiver {
     typealias ModelElement = T
     typealias Model = [ModelElement]
     typealias Binder = U
@@ -53,7 +98,7 @@ final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableRe
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((ObjectsView<ModelElement, Binder>, BasicNotification) -> ())]()
+    var notifications = [((ArrayView<ModelElement, Binder>, BasicNotification) -> ())]()
     
     var defaultModel = Model()
     
@@ -76,9 +121,9 @@ final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableRe
         self.sizeType = sizeType
         self.abstractType = abstractType
         
-        modelViews = ObjectsView.modelViewsWith(model: binder[keyPath: keyPath],
-                                                binder: binder, keyPath: keyPath,
-                                                sizeType: sizeType, type: abstractType)
+        modelViews = ArrayView.modelViewsWith(model: binder[keyPath: keyPath],
+                                              binder: binder, keyPath: keyPath,
+                                              sizeType: sizeType, type: abstractType)
         
         super.init()
         isClipped = true
@@ -91,9 +136,9 @@ final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableRe
         layoutClosure?(model, modelViews)
     }
     func updateChildren() {
-        modelViews = ObjectsView.modelViewsWith(model: model,
-                                                binder: binder, keyPath: keyPath,
-                                                sizeType: sizeType, type: abstractType)
+        modelViews = ArrayView.modelViewsWith(model: model,
+                                              binder: binder, keyPath: keyPath,
+                                              sizeType: sizeType, type: abstractType)
         self.children = modelViews
     }
     static func modelViewsWith(model: Model, binder: Binder, keyPath: BinderKeyPath,
@@ -124,7 +169,7 @@ final class ObjectsView<T: AbstractElement, U: BinderProtocol>: View, BindableRe
         push(model, to: version)
     }
 }
-extension ObjectsView: Assignable {
+extension ArrayView: Assignable {
     func reset(for p: Point, _ version: Version) {
         push(defaultModel, to: version)
     }
@@ -141,7 +186,130 @@ extension ObjectsView: Assignable {
     }
 }
 
-typealias ArrayCountElement = Equatable & Codable & Referenceable
+//final class ObjectsView<T: BinderProtocol>: View, BindableReceiver {
+//    typealias ModelElement = Object
+//    typealias Model = [ModelElement]
+//    typealias Binder = T
+//    var binder: Binder {
+//        didSet { updateWithModel() }
+//    }
+//    var keyPath: BinderKeyPath {
+//        didSet { updateWithModel() }
+//    }
+//    var notifications = [((ObjectsView<Binder>, BasicNotification) -> ())]()
+//
+//    var defaultModel = Model()
+//
+//    var sizeType: SizeType {
+//        didSet { updateLayout() }
+//    }
+//    var abstractType: AbstractType {
+//        didSet { updateChildren() }
+//    }
+//
+//    var modelViews: [View]
+//
+//    init(binder: Binder, keyPath: BinderKeyPath,
+//         frame: Rect = Rect(), sizeType: SizeType = .regular,
+//         abstractType: AbstractType = .normal) {
+//
+//        self.binder = binder
+//        self.keyPath = keyPath
+//
+//        self.sizeType = sizeType
+//        self.abstractType = abstractType
+//
+//        modelViews = ObjectsView.modelViewsWith(model: binder[keyPath: keyPath],
+//                                                binder: binder, keyPath: keyPath,
+//                                                sizeType: sizeType, type: abstractType)
+//
+//        super.init()
+//        isClipped = true
+//        self.children = modelViews
+//        self.frame = frame
+//    }
+//
+////    var layoutClosure: ((Model, [View]) -> ())? = {
+////    }
+//    override func updateLayout() {
+//        let padding = Layout.padding(with: sizeType)
+//        var x = padding
+//        //test
+//        modelViews.forEach {
+//            let db = $0.defaultBounds
+//            $0.frame = Rect(x: x,
+//                            y: padding,
+//                            width: db.width,
+//                            height: abstractType == .mini ? bounds.height - padding * 2 : db.height)
+//            x += db.width
+//        }
+////        layoutClosure?(model, modelViews)
+//    }
+//    func updateChildren() {
+//        modelViews = ObjectsView.modelViewsWith(model: model,
+//                                                binder: binder, keyPath: keyPath,
+//                                                sizeType: sizeType, type: abstractType)
+//        self.children = modelViews
+//        updateLayout()
+//    }
+//    static func modelViewsWith(model: Model, binder: Binder, keyPath: BinderKeyPath,
+//                               sizeType: SizeType, type: AbstractType) -> [View] {
+//        return model.enumerated().map { (i, element) in
+//            return element.value.objectViewWith(binder: binder,
+//                                                keyPath: keyPath.appending(path: \Model[i]),
+//                                                frame: Rect(), sizeType, type: type)
+//        }
+//    }
+//    func updateWithModel() {
+//        updateChildren()
+//    }
+//
+//    func append(_ element: ModelElement, _ version: Version) {
+//        var model = self.model
+//        model.append(element)
+//        push(model, to: version)
+//    }
+//    func insert(_ element: ModelElement, at index: Int, _ version: Version) {
+//        var model = self.model
+//        model.insert(element, at: index)
+//        push(model, to: version)
+//    }
+//    func remove(at index: Int, _ version: Version) {
+//        var model = self.model
+//        model.remove(at: index)
+//        push(model, to: version)
+//    }
+//}
+//extension ObjectsView: Assignable {
+//    func reset(for p: Point, _ version: Version) {
+//        push(defaultModel, to: version)
+//    }
+//    func copiedObjects(at p: Point) -> [Object] {
+//        return [Object(model)]
+//    }
+//    func paste(_ objects: [Any], for p: Point, _ version: Version) {
+//        for object in objects {
+//            if let model = object as? Model {
+//                push(model, to: version)
+//                return
+//            }
+//        }
+//    }
+//}
+//extension ObjectsView: CollectionAssignable {
+//    func add(_ objects: [Any], for p: Point, _ version: Version) {
+//        let model = objects.compactMap { $0 as? Object }
+//        if !model.isEmpty {
+//            push(self.model + model, to: version)
+//            return
+//        }
+//    }
+//    func remove(for p: Point, _ version: Version) {
+//
+//    }
+//}
+
+typealias ArrayCountElement = Equatable & Object.Value & AbstractViewable
 
 final class ArrayCountView<T: ArrayCountElement, U: BinderProtocol>: View, BindableReceiver {
     typealias ModelElement = T
@@ -198,7 +366,6 @@ final class ArrayCountView<T: ArrayCountElement, U: BinderProtocol>: View, Binda
                                            y: padding)
         countView.frame = Rect(x: countNameView.frame.maxX, y: padding,
                                width: width, height: h - padding * 2)
-        updateWithModel()
     }
     func updateWithModel() {
         countView.updateWithModel()

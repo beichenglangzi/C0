@@ -48,16 +48,21 @@ protocol Bindable {
 
 struct ZoomableActionManager: SubActionManagable {
     let scrollAction = Action(name: Text(english: "Scroll", japanese: "スクロール"),
-                              quasimode: Quasimode([ScrollEvent.EventType.scroll]))
+                              quasimode: Quasimode([.scroll(.scroll)]),
+                              isEditable: false)
     let zoomAction = Action(name: Text(english: "Zoom", japanese: "ズーム"),
-                            quasimode: Quasimode([PinchEvent.EventType.pinch]))
+                            quasimode: Quasimode([.pinch(.pinch)]),
+                            isEditable: false)
     let rotateAction = Action(name: Text(english: "Rotate", japanese: "回転"),
-                              quasimode: Quasimode([RotateEvent.EventType.rotate]))
+                              quasimode: Quasimode([.rotate(.rotate)]),
+                              isEditable: false)
     let resetViewAction = Action(name: Text(english: "Reset View", japanese: "表示を初期化"),
-                                 quasimode: Quasimode(modifier: [InputEvent.EventType.command],
-                                                      [InputEvent.EventType.b]))
+                                 quasimode: Quasimode(modifier: [.input(.command)],
+                                                      [.input(.b)]),
+                                 isEditable: false)
     let bindAction = Action(name: Text(english: "Bind", japanese: "バインド"),
-                            quasimode: Quasimode([InputEvent.EventType.subClick]))
+                            quasimode: Quasimode([.input(.subClick)]),
+                            isEditable: false)
     var actions: [Action] {
         return [scrollAction, zoomAction, rotateAction, resetViewAction, bindAction]
     }
@@ -136,6 +141,7 @@ final class ZoomableSender: SubSender {
                 }
             }
         case actionManager.resetViewAction:
+            guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? ZoomableReceiver {
                 
@@ -143,6 +149,7 @@ final class ZoomableSender: SubSender {
                 receiver.resetView(for: p, sender.indicatedVersionView.version)
             }
         case actionManager.bindAction:
+            guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? BindableReceiver {
                 

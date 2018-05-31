@@ -302,6 +302,9 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
                                width: bounds.width - rightX, height: bounds.height)
         let bx = sp + (sumKeyTimesHeight - baseTimeIntervalView.frame.height) / 2
         baseTimeIntervalView.frame.origin = Point(x: sp, y: bx)
+        
+        _scrollPoint.x = x(withTime: model.editingTime)
+        _intervalScrollPoint.x = x(withTime: time(withLocalX: _scrollPoint.x))
     }
     func updateWithModel() {
         _scrollPoint.x = x(withTime: model.editingTime)

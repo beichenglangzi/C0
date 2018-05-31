@@ -17,73 +17,167 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+protocol ObjectDecodable {
+    static var appendObjectType: () { get }
+}
+extension ObjectDecodable {
+    static var objectType: Self.Type {
+        return Self.self
+    }
+}
+
+protocol ObjectViewable {
+    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
+                           frame: Rect, _ sizeType: SizeType,
+                           type: AbstractType) -> ModelView where T: BinderProtocol
+}
+extension ObjectViewable where Self: Codable & Referenceable & AbstractViewable {
+    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
+                           frame: Rect, _ sizeType: SizeType,
+                           type: AbstractType) -> ModelView where T: BinderProtocol {
+        return ObjectView(binder: binder, keyPath: keyPath, value: self,
+                          frame: frame, sizeType: sizeType, type: type)
+    }
+}
+
 /**
- Compiler Issue: Protocolから静的に決定可能な代数的データ型のコードを自動生成
+ Compiler Issue: Protocolから静的に決定可能なコードを自動生成
  */
 struct Object {
-    var value: Codable & Referenceable
-    init(_ value: Codable & Referenceable) {
+    private static var types = [String: Value.Type]()
+    static func append<T: Value & AbstractViewable>(_ type: T.Type) {
+        let arrayType = Array<T>.self
+        types[String(describing: type)] = type
+        types[String(describing: arrayType)] = arrayType
+    }
+    
+    typealias Value = Codable & Referenceable & ObjectViewable
+    
+    var frame: Rect
+    var value: Value
+    
+    init(_ value: Value, frame: Rect = Rect()) {
         self.value = value
-    }
-//    case bool(Bool)
-    
-//    var value: Codable & Referenceable {
-//        switch self {
-//        case .bool(let value): return value
-//        default: return nil
-//        }
-//    }
-    
-    private var bool: Bool {
-        get { return value as! Bool }
-        set { value = newValue }
-    }
-    
-    private enum CodingKeys: CodingKey {
-        case typeName, value
-    }
-    enum CodingError: Error {
-        case decoding(String), encoding(String)
-    }
-}
-extension Object: Decodable {
-    init(from decoder: Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        let key = try values.decode(String.self, forKey: .typeName)
-        switch key {
-        case String(describing: Bool.self): value = try values.decode(Bool.self, forKey: .value)
-        default: throw CodingError.decoding("\(dump(values))")
-        }
-    }
-}
-extension Object: Encodable {
-    func encode(to encoder: Encoder) throws {
-        let typeName = String(describing: type(of: value))
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(typeName, forKey: .typeName)
-        switch value {
-        case (let value as Bool): try container.encode(value, forKey: .value)
-        default: throw CodingError.encoding("\(typeName)")
-        }
+        self.frame = frame
     }
 }
 extension Object: Referenceable {
     static var name = Text(english: "Object", japanese: "オブジェクト")
 }
-extension Object: AbstractViewable {
-    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
-                             frame: Rect, _ sizeType: SizeType,
-                             type: AbstractType) -> ModelView where T : BinderProtocol {
-        switch value {
-        case (let value as Bool):
-            return value.abstractViewWith(binder: binder,
-                                          keyPath: keyPath.appending(path: \Object.bool),
-                                          frame: frame, sizeType, type: type)
-        default: fatalError()
+extension Object: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case frame, typeName, value
+    }
+    enum CodingError: Error {
+        case decoding(String), encoding(String)
+    }
+    
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        frame = try values.decode(Rect.self, forKey: .frame)
+        let key = try values.decode(String.self, forKey: .typeName)
+        if let type = Object.types[key] {
+            value = try type.decode(values: values, forKey: .value)
+        } else {
+            throw CodingError.decoding("\(dump(values))")
         }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        let typeName = String(describing: type(of: value))
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(frame, forKey: .frame)
+        try container.encode(typeName, forKey: .typeName)
+        try value.encode(forKey: .value, in: &container)
+    }
+}
+extension Object: ObjectViewable {
+    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>, frame: Rect, _ sizeType: SizeType, type: AbstractType) -> ModelView where T : BinderProtocol {
+        return value.objectViewWith(binder: binder, keyPath: keyPath,
+                                    frame: frame, sizeType, type: type)
+    }
+}
+extension Object: AbstractViewable {
+    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>, frame: Rect, _ sizeType: SizeType, type: AbstractType) -> ModelView where T: BinderProtocol {
+        
+        return value.objectViewWith(binder: binder, keyPath: keyPath,
+                                    frame: frame, sizeType, type: type)
     }
 }
 
 protocol ObjectProtocol {
     var object: Object { get }
+}
+
+final class ObjectView<Value: Object.Value & AbstractViewable, T: BinderProtocol>
+: View, BindableReceiver {
+
+    typealias Model = Object
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var notifications = [((ObjectView<Value, Binder>, BasicNotification) -> ())]()
+    
+    var valueBinder: BasicBinder<Value>
+    var valueView: View
+    var value: Value? {
+        return binder[keyPath: keyPath].value as? Value
+    }
+    func set(_ value: Value) {
+        binder[keyPath: keyPath].value = value
+    }
+    
+    var sizeType: SizeType {
+        didSet { updateWithModel() }
+    }
+    var type: AbstractType {
+        didSet { updateWithModel() }
+    }
+    
+    init(binder: Binder, keyPath: BinderKeyPath, value: Value,
+         frame: Rect = Rect(), sizeType: SizeType = .regular, type: AbstractType) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        self.sizeType = sizeType
+        self.type = type
+        
+        valueBinder = BasicBinder(rootModel: value)
+        valueView = value.abstractViewWith(binder: valueBinder,
+                                           keyPath: \BasicBinder<Value>.rootModel,
+                                           frame: Rect(origin: Point(), size: frame.size),
+                                           sizeType, type: type)
+        
+        super.init()
+        
+        valueBinder.notification = { [unowned self] binder, _ in
+            self.set(binder.rootModel)
+        }
+        children = [valueView]
+        self.frame = frame
+    }
+    
+    override var defaultBounds: Rect {
+        return valueView.defaultBounds
+    }
+    override func updateLayout() {
+        valueView.frame = bounds
+    }
+    func updateWithModel() {
+        if let value = value {
+            valueBinder = BasicBinder(rootModel: value)
+            
+            valueView = value.abstractViewWith(binder: valueBinder,
+                                               keyPath: \BasicBinder<Value>.rootModel,
+                                               frame: Rect(origin: Point(), size: frame.size),
+                                               sizeType, type: type)
+            
+            children = [valueView]
+        }
+    }
 }

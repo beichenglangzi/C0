@@ -19,11 +19,31 @@
 
 import Foundation
 
-struct Desktop: Codable {
+struct Desktop {
     var copiedObjects = [Object]()
     var isHiddenActionManager = false
+    let actionManager = ActionManager()
     var objects = [Object]()
     var version = Version()
+}
+extension Desktop: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case copiedObjects, isHiddenActionManager, objects, version
+    }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        copiedObjects = try values.decode([Object].self, forKey: .copiedObjects)
+        isHiddenActionManager = try values.decode(Bool.self, forKey: .isHiddenActionManager)
+        objects = try values.decode([Object].self, forKey: .objects)
+        version = try values.decode(Version.self, forKey: .version)
+    }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(copiedObjects, forKey: .copiedObjects)
+        try container.encode(isHiddenActionManager, forKey: .isHiddenActionManager)
+        try container.encode(objects, forKey: .objects)
+        try container.encode(version, forKey: .version)
+    }
 }
 extension Desktop: Referenceable {
     static let name = Text(english: "Desktop", japanese: "デスクトップ")
@@ -32,12 +52,13 @@ extension Desktop {
     static let isHiddenActionManagerOption = BoolOption(defaultModel: false, cationModel: nil,
                                                         name: ActionManager.name,
                                                         info: .hidden)
+    static let copiedObjectsInferenceName = Text(english: "Copied", japanese: "コピー済み")
 }
 
 final class DesktopBinder: BinderProtocol {
     var rootModel: Desktop {
         didSet {
-            dataModel.isWrite = true
+            diffDesktopDataModel.isWrite = true
         }
     }
     
@@ -98,20 +119,17 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
     var notifications = [((DesktopView<Binder>, BasicNotification) -> ())]()
 
     let versionView: VersionView<Binder>
-    let copiedObjectsNameView = TextFormView(text: Text(english: "Copied:", japanese: "コピー済み:"))
-    let copiedObjectsView: ObjectsView<Object, Binder>
+    let copiedObjectsNameView = TextFormView(text: Desktop.copiedObjectsInferenceName + ":")
+    let copiedObjectsView: ObjectsView<Binder>
     let isHiddenActionManagerView: BoolView<Binder>
-    let objectsView: ObjectsView<Object, Binder>
+    let objectsView: ObjectsView<Binder>
     let actionManagerView: ActionManagerView<Binder>
 
-    var versionWidth = 100.0.cg
-    var actionWidth = Layout.propertyWidth {
-        didSet { updateLayout() }
-    }
+    var versionWidth = 150.0.cg
     var topViewsHeight = Layout.basicHeight {
         didSet { updateLayout() }
     }
-
+    
     init(binder: Binder, keyPath: BinderKeyPath,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
 
@@ -128,11 +146,14 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
                                   sizeType: sizeType)
         copiedObjectsView = ObjectsView(binder: binder,
                                         keyPath: keyPath.appending(path: \Model.copiedObjects),
-                                        sizeType: sizeType, abstractType: .mini)
+                                        sizeType: .small, abstractType: .mini)
         objectsView = ObjectsView(binder: binder,
                                   keyPath: keyPath.appending(path: \Model.objects),
                                   sizeType: sizeType, abstractType: .normal)
-        
+        actionManagerView = ActionManagerView(binder: binder,
+                                              keyPath: keyPath.appending(path: \Model.actionManager))
+        actionManagerView.isHidden = binder[keyPath: keyPath].isHiddenActionManager
+        print(actionManagerView.isHidden)
         super.init()
         fillColor = .background
         
@@ -169,12 +190,13 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         copiedObjectsNameView.frame.origin = Point(x: versionView.frame.maxX + padding,
                                                    y: headerY + padding)
         let conw = copiedObjectsNameView.frame.width
-        let cw = max(bounds.width - actionWidth - versionWidth - ihamvw - conw - padding * 3,
+        let actionWidth = actionManagerView.width
+        let cw = max(bounds.width - versionWidth - ihamvw - conw - padding * 3,
                      0)
         copiedObjectsView.frame = Rect(x: copiedObjectsNameView.frame.maxX, y: headerY,
                                        width: cw, height: topViewsHeight)
         updateCopiedObjectViewPositions()
-        isHiddenActionManagerView.frame = Rect(x: copiedObjectsNameView.frame.maxX, y: headerY,
+        isHiddenActionManagerView.frame = Rect(x: copiedObjectsView.frame.maxX, y: headerY,
                                                width: ihamvw, height: topViewsHeight)
         
         if model.isHiddenActionManager {
@@ -183,25 +205,27 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
                                      width: bounds.width - padding * 2,
                                      height: bounds.height - topViewsHeight - padding * 2)
         } else {
-            let h = bounds.height - padding * 2
-            actionManagerView.frame = Rect(x: isHiddenActionManagerView.frame.maxX,
+            let ow = max(bounds.width - actionWidth - padding * 2,
+                         0)
+            let h = bounds.height - padding * 2 - topViewsHeight
+            objectsView.frame = Rect(x: padding,
+                                     y: padding,
+                                     width: ow,
+                                     height: bounds.height - topViewsHeight - padding * 2)
+            actionManagerView.frame = Rect(x: padding + ow,
                                            y: padding,
                                            width: actionWidth,
                                            height: h)
-            objectsView.frame = Rect(x: padding,
-                                     y: padding,
-                                     width: bounds.width - (padding * 2 + actionWidth),
-                                     height: bounds.height - topViewsHeight - padding * 2)
         }
         objectsView.bounds.origin = Point(x: -round((objectsView.frame.width / 2)),
                                           y: -round((objectsView.frame.height / 2)))
-//        sceneView.frame.origin = Point(x: -round(sceneView.frame.width / 2),
-//                                       y: -round(sceneView.frame.height / 2))
-        
-        updateWithModel()
     }
     func updateWithModel() {
         isHiddenActionManagerView.updateWithModel()
+        if actionManagerView.isHidden != model.isHiddenActionManager {
+            actionManagerView.isHidden = model.isHiddenActionManager
+            updateLayout()
+        }
     }
 
     var objectViewWidth = 80.0.cg
@@ -212,11 +236,8 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
                           y: 0,
                           width: objectViewWidth,
                           height: copiedObjectsView.bounds.height - padding * 2)
-        copiedObjectsView.children = model.copiedObjects.enumerated().map { (i, object) in
-            return object.abstractViewWith(binder: binder,
-                                           keyPath: keyPath.appending(path: \Model.copiedObjects[i]),
-                                           frame: bounds, .small, type: .mini)
-        }
+        copiedObjectsView.updateWithModel()
+        copiedObjectsView.children.forEach { $0.bounds = bounds }
         updateCopiedObjectViewPositions()
     }
     private func updateCopiedObjectViewPositions() {
@@ -225,7 +246,12 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
                                  minX: padding, y: padding)
     }
 }
-extension DesktopView: Versionable {
+extension DesktopView: Localizable {
+    func update(with locale: Locale) {
+        updateLayout()
+    }
+}
+extension DesktopView: Undoable {
     var version: Version {
         return versionView.model
     }

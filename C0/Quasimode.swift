@@ -20,29 +20,32 @@
 import struct Foundation.Locale
 
 struct Quasimode {
-    var modifierEventTypeProtocols: [EventTypeProtocol] {
+    var modifierEventTypes: [AlgebraicEventType] {
         didSet { updateAllEventableTypes() }
     }
-    var eventTypeProtocols: [EventTypeProtocol] {
+    var eventTypes: [AlgebraicEventType] {
         didSet { updateAllEventableTypes() }
     }
     
-    private(set) var allEventTypeProtocols: [EventTypeProtocol]
+    private(set) var allEventTypes: [AlgebraicEventType]
     private mutating func updateAllEventableTypes() {
-        allEventTypeProtocols = modifierEventTypeProtocols + eventTypeProtocols
+        allEventTypes = modifierEventTypes + eventTypes
     }
     
-    init(modifier modifierEventableTypes: [EventTypeProtocol] = [],
-         _ eventableTypes: [EventTypeProtocol]) {
+    init(modifier modifierEventTypes: [AlgebraicEventType] = [],
+         _ eventTypes: [AlgebraicEventType]) {
         
-        self.modifierEventTypeProtocols = modifierEventableTypes
-        self.eventTypeProtocols = eventableTypes
-        allEventTypeProtocols = modifierEventableTypes + eventableTypes
+        self.modifierEventTypes = modifierEventTypes
+        self.eventTypes = eventTypes
+        allEventTypes = modifierEventTypes + eventTypes
     }
     
     var displayText: Text {
-        let ets = allEventTypeProtocols
-        return ets.reduce(into: Text()) { $0 += $0.isEmpty ? $1.name : " " + $1.name }
+        let mets = modifierEventTypes
+        let mt = mets.reduce(into: Text()) { $0 += $0.isEmpty ? $1.name : " " + $1.name }
+        let ets = eventTypes
+        let t = ets.reduce(into: Text()) { $0 += $0.isEmpty ? $1.name : " " + $1.name }
+        return mt.isEmpty ? t : "[" + mt + "] " + t
     }
 }
 extension Quasimode: Referenceable {
@@ -100,8 +103,8 @@ final class QuasimodeView<T: BinderProtocol>: View, BindableGetterReceiver {
         textView.text = model.displayText
         if isSizeToFit {
             bounds = defaultBounds
+            updateLayout()
         }
-        updateLayout()
     }
 }
 extension QuasimodeView: Localizable {

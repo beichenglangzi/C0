@@ -34,24 +34,25 @@ protocol Selectable {
 
 struct SelectableActionManager: SubActionManagable {
     let indicateAction = Action(name: Text(english: "Indicate", japanese: "指し示す"),
-                                quasimode: Quasimode([DragEvent.EventType.pointing]))
+                                quasimode: Quasimode([.drag(.pointing)]))
     let selectAction = Action(name: Text(english: "Select", japanese: "選択"),
-                              quasimode: Quasimode(modifier: [InputEvent.EventType.command],
-                                                   [DragEvent.EventType.drag]))
-    let selectAllAction = Action(name: Text(english: "Select All", japanese: "すべて選択"),
-                                 quasimode: Quasimode(modifier: [InputEvent.EventType.command],
-                                                      [InputEvent.EventType.a]))
+                              quasimode: Quasimode(modifier: [.input(.command)],
+                                                   [.drag(.drag)]))
     let deselectAction = Action(name: Text(english: "Deselect", japanese: "選択解除"),
-                                quasimode: Quasimode(modifier: [InputEvent.EventType.shift,
-                                                                InputEvent.EventType.command],
-                                                     [DragEvent.EventType.drag]))
+                                quasimode: Quasimode(modifier: [.input(.shift),
+                                                                .input(.command)],
+                                                     [.drag(.drag)]))
+    let selectAllAction = Action(name: Text(english: "Select All", japanese: "すべて選択"),
+                                 quasimode: Quasimode(modifier: [.input(.command)],
+                                                      [.input(.a)]))
     let deselectAllAction = Action(name: Text(english: "Deselect All", japanese: "すべて選択解除"),
-                                   quasimode: Quasimode(modifier: [InputEvent.EventType.shift,
-                                                                   InputEvent.EventType.command],
-                                                        [InputEvent.EventType.a]))
+                                   quasimode: Quasimode(modifier: [.input(.shift),
+                                                                   .input(.command)],
+                                                        [.input(.a)]))
     var actions: [Action] {
         return [indicateAction,
-                selectAction, selectAllAction, deselectAction, deselectAllAction]
+                selectAction, deselectAction,
+                selectAllAction, deselectAllAction]
     }
 }
 extension SelectableActionManager: SubSendable {
@@ -80,7 +81,6 @@ final class SelectableSender: SubSender {
                 sender.currentRootLocation = eventValue.rootLocation
                 sender.mainIndicatedView
                     = sender.rootView.at(eventValue.rootLocation) ?? sender.rootView
-                
                 if let receiver = sender.mainIndicatedView as? IndicatableReceiver {
                     let p = receiver.convertFromRoot(eventValue.rootLocation)
                     receiver.indicate(at: p)
@@ -92,6 +92,7 @@ final class SelectableSender: SubSender {
                               isDeselect: actionMap.action == actionManager.deselectAction)
             }
         case actionManager.selectAllAction, actionManager.deselectAllAction:
+            guard actionMap.phase == .began else { break }
             if let receiver = sender.mainIndicatedView as? SelectableReceiver {
                 receiver.captureSelections(to: sender.indicatedVersionView.version)
                 if actionMap.action == actionManager.deselectAllAction {

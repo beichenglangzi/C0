@@ -75,6 +75,12 @@ extension String: AbstractViewable {
         }
     }
 }
+extension String: ObjectViewable {}
+extension String: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 extension String: Interpolatable {
     static func linear(_ f0: String, _ f1: String, t: Real) -> String {
         return f0
@@ -122,7 +128,9 @@ final class StringGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
     var padding: Real {
         didSet { updateLayout() }
     }
-    private var textFrame: TextFrame
+    private var textFrame: TextFrame {
+        didSet { displayLinkDraw() }
+    }
     
     init(binder: Binder, keyPath: BinderKeyPath, textMaterial: TextMaterial = TextMaterial(),
          frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
@@ -139,7 +147,7 @@ final class StringGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
         textFrame = TextFrame(string: binder[keyPath: keyPath], textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
         
-        super.init(drawClosure: { $1.draw(in: $0) })
+        super.init(drawClosure: { $1.draw(in: $0) }, isLocked: false)
         
         noIndicatedLineColor = .getBorder
         indicatedLineColor = .indicated
@@ -152,15 +160,17 @@ final class StringGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
         return textFrame.bounds(padding: padding)
     }
     override func updateLayout() {
-        textFrame = TextFrame(string: model, textMaterial: textMaterial,
-                              frameWidth: textFrameWidth)
-        displayLinkDraw()
+        if !isSizeToFit {
+            textFrame = TextFrame(string: model, textMaterial: textMaterial,
+                                  frameWidth: textFrameWidth)
+        }
     }
     func updateWithModel() {
         textFrame = TextFrame(string: model, textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
-        if isSizeToFit { sizeToFit() }
-        displayLinkDraw()
+        if isSizeToFit {
+            sizeToFit()
+        }
     }
     func sizeToFit() {
         frame = textMaterial.fitFrameWith(defaultBounds: defaultBounds, frame: frame)
@@ -229,7 +239,9 @@ final class StringView<T: BinderProtocol>: View, BindableReceiver {
     var padding: Real {
         didSet { updateLayout() }
     }
-    private var textFrame: TextFrame
+    private var textFrame: TextFrame {
+        didSet { displayLinkDraw() }
+    }
 
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
          textMaterial: TextMaterial = TextMaterial(),
@@ -258,15 +270,17 @@ final class StringView<T: BinderProtocol>: View, BindableReceiver {
         return textFrame.bounds(padding: padding)
     }
     override func updateLayout() {
-        textFrame = TextFrame(string: model, textMaterial: textMaterial,
-                              frameWidth: textFrameWidth)
-        displayLinkDraw()
+        if !isSizeToFit {
+            textFrame = TextFrame(string: model, textMaterial: textMaterial,
+                                  frameWidth: textFrameWidth)
+        }
     }
     func updateWithModel() {
         textFrame = TextFrame(string: model, textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
-        if isSizeToFit { sizeToFit() }
-        displayLinkDraw()
+        if isSizeToFit {
+            sizeToFit()
+        }
     }
     func sizeToFit() {
         frame = textMaterial.fitFrameWith(defaultBounds: defaultBounds, frame: frame)

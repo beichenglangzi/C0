@@ -44,7 +44,7 @@ final class Version: UndoManager {
                     self.undoedIndex += 1
                     self.index = self.undoedIndex
                     self.indexNotification?(self, self.index)
-                    self.undoedIndexNotification?(self, self.undoedIndex)
+//                    self.undoedIndexNotification?(self, self.undoedIndex)
                 }
             }
         }
@@ -152,7 +152,8 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
         let items: [Layout.Item] = model.undoedIndex < model.index ?
             [.view(indexView), .xPadding(padding), .view(undoedDiffCountView)] :
             [.view(indexView)]
-        _ = Layout.leftAlignment(items, minX: classNameView.frame.maxX + padding, height: frame.height)
+        _ = Layout.leftAlignment(items, minX: classNameView.frame.maxX + padding,
+                                 height: frame.height)
     }
     func updateWithModel() {
         model.indexNotification = { [unowned self] _, _ in self.updateWithVersionIndex() }
@@ -168,66 +169,18 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
             undoedDiffCountView.optionStringView.textMaterial.color = .warning
             if undoedDiffCountView.parent == nil {
                 children = [classNameView, indexView, undoedDiffCountView]
-                updateLayout()
             }
         } else {
             indexView.updateWithModel()
-            indexView.bounds = indexView.optionStringView.defaultBounds
-            undoedDiffCountView.bounds = undoedDiffCountView.optionStringView.defaultBounds
-            undoedDiffCountView.optionStringView.textMaterial.color = .warning
             if undoedDiffCountView.parent != nil {
                 children = [classNameView, indexView]
-                updateLayout()
             }
         }
+        updateLayout()
     }
 }
 extension VersionView: Localizable {
     func update(with locale: Locale) {
         updateLayout()
-    }
-}
-
-protocol Versionable {
-    var version: Version { get }
-}
-struct VersionableActionManager: SubActionManagable {
-    let undoAction = Action(name: Text(english: "Undo", japanese: "取り消す"),
-                            quasimode: Quasimode(modifier: [InputEvent.EventType.command],
-                                                 [InputEvent.EventType.z]))
-    let redoAction = Action(name: Text(english: "Redo", japanese: "やり直す"),
-                            quasimode: Quasimode(modifier: [InputEvent.EventType.shift,
-                                                            InputEvent.EventType.command],
-                                                 [InputEvent.EventType.z]))
-    var actions: [Action] {
-        return [undoAction, redoAction]
-    }
-}
-extension VersionableActionManager: SubSendable {
-    func makeSubSender() -> SubSender {
-        return VersionableSender(actionManager: self)
-    }
-}
-
-final class VersionableSender: SubSender {
-    typealias Receiver = View & Versionable
-    typealias ActionManager = VersionableActionManager
-    
-    var actionManager: ActionManager
-    
-    init(actionManager: ActionManager) {
-        self.actionManager = actionManager
-    }
-    
-    func send(_ actionMap: ActionMap, from sender: Sender) {
-        switch actionMap.action {
-        case actionManager.undoAction:
-            sender.stopAllEvents()
-            sender.indicatedVersionView.version.undo()
-        case actionManager.redoAction:
-            sender.stopAllEvents()
-            sender.indicatedVersionView.version.redo()
-        default: break
-        }
     }
 }

@@ -19,7 +19,7 @@
 
 import struct Foundation.Locale
 
-typealias EnumType = RawRepresentable & Codable & Referenceable & Equatable
+typealias EnumType = RawRepresentable & Equatable & Object.Value
 
 struct EnumOption<Model: EnumType> {
     var defaultModel: Model
@@ -117,11 +117,15 @@ final class EnumView<T: EnumType, U: BinderProtocol>: View, BindableReceiver {
             return x + $1.frame.width + padding
         }
         
-        updateWithModel()
+        updateKnobLayout()
     }
-    func updateWithModel() {
+    private func updateKnobLayout() {
         let index = option.index(with: model)
         knobView.frame = nameViews[index].frame.inset(by: -1)
+    }
+    func updateWithModel() {
+        updateKnobLayout()
+        let index = option.index(with: model)
         nameViews.forEach {
             $0.fillColor = .background
             $0.lineColor = .subContent

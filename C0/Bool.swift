@@ -17,6 +17,9 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+//import struct Foundation.Data
+import struct Foundation.Locale
+
 extension Bool: Referenceable {
     static let name = Text(english: "Bool", japanese: "ブール値")
 }
@@ -54,6 +57,31 @@ extension Bool: AbstractViewable {
         }
     }
 }
+extension Bool: ObjectViewable {}
+extension Bool: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
+//extension Bool: ObjectViewable {
+//    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
+//                           frame: Rect, _ sizeType: SizeType,
+//                           type: AbstractType) -> ModelView where T : BinderProtocol {
+//        return ObjectView(binder: binder, keyPath: keyPath, value: self,
+//                          frame: frame, sizeType: sizeType, type: type)
+//    }
+//}
+
+//extension Bool: DynamicCodable {
+//    var dynamicCoder: DynamicCoder {
+//        return BoolDynamicCoder(self)
+//    }
+//}
+//final class BoolDynamicCoder: DynamicCoder {
+//    override class func value(from data: Data) -> DynamicCodable? {
+//        return valueWithType(Bool.self, from: data)
+//    }
+//}
 
 struct BoolOption {
     struct Info {
@@ -114,6 +142,8 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
                                         font: font)
         optionTrueNameView = TextFormView(text: option.info.trueName, font: font)
         optionFalseNameView = TextFormView(text: option.info.falseName, font: font)
+        optionFalseNameView.fillColor = nil
+        optionTrueNameView.fillColor = nil
         knobView = View.discreteKnob()
         
         super.init()
@@ -123,31 +153,39 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
     
     override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType)
-        let width = optionStringView.frame.width
-            + optionFalseNameView.frame.width + optionTrueNameView.frame.width + padding * 4
-        return Rect(x: 0, y: 0,
-                    width: width, height: optionStringView.frame.height + padding * 2)
+        if optionStringView.text.isEmpty {
+            let width = optionFalseNameView.frame.width
+                + optionTrueNameView.frame.width + padding * 2
+            let height = optionFalseNameView.frame.height + padding * 2
+            return Rect(x: 0, y: 0, width: width, height: height)
+        } else {
+            let width = optionStringView.frame.width
+                + optionFalseNameView.frame.width + optionTrueNameView.frame.width + padding * 4
+            let height = optionStringView.frame.height + padding * 2
+            return Rect(x: 0, y: 0, width: width, height: height)
+        }
     }
     override func updateLayout() {
         let padding = Layout.padding(with: sizeType)
         optionStringView.frame.origin = Point(x: padding, y: padding)
-        optionFalseNameView.frame.origin = Point(x: optionStringView.frame.maxX + padding,
-                                                 y: padding)
+        let x = optionStringView.text.isEmpty ? padding : optionStringView.frame.maxX + padding
+        optionFalseNameView.frame.origin = Point(x: x, y: padding)
         optionTrueNameView.frame.origin = Point(x: optionFalseNameView.frame.maxX + padding,
                                                 y: padding)
-        updateWithModel()
+        updateKnobLayout()
     }
-    func updateWithModel() {
+    private func updateKnobLayout() {
         knobView.frame = model ?
             optionTrueNameView.frame.inset(by: -1) :
             optionFalseNameView.frame.inset(by: -1)
+    }
+    func updateWithModel() {
+        updateKnobLayout()
         if option.cationModel != nil {
             knobView.lineColor = knobLineColor
         }
-        optionFalseNameView.fillColor = model ? .background : .knob
-        optionTrueNameView.fillColor = model ? .knob : .background
-        optionFalseNameView.lineColor = model ? .subContent : .knob
-        optionTrueNameView.lineColor = model ? .knob : .subContent
+        optionFalseNameView.lineColor = model ? .subContent : nil
+        optionTrueNameView.lineColor = model ? nil : .subContent
         optionFalseNameView.textMaterial.color = model ? .subLocked : .locked
         optionTrueNameView.textMaterial.color = model ? .locked : .subLocked
     }
@@ -157,6 +195,11 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
     }
     func model(at p: Point) -> Bool {
         return optionFalseNameView.frame.distance²(p) > optionTrueNameView.frame.distance²(p)
+    }
+}
+extension BoolView: Localizable {
+    func update(with locale: Locale) {
+        updateLayout()
     }
 }
 extension BoolView: Assignable {

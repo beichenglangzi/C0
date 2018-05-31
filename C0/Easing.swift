@@ -178,12 +178,10 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
                                             y: padding)
         classYNameView.frame.origin = Point(x: padding,
                                             y: bounds.height - padding - classYNameView.frame.height)
-        updateWithModel()
+        updatePathLayout()
     }
-    func updateWithModel() {
+    private func updatePathLayout() {
         guard !bounds.isEmpty else { return }
-        cp0View.updateWithModel()
-        cp1View.updateWithModel()
         easingLinePathView.path = model.path(in: bounds.insetBy(dx: padding + cp0View.padding,
                                                                 dy: padding + cp0View.padding))
         var knobLinePath = Path()
@@ -194,6 +192,11 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
                                                     y: cp1View.frame.maxY - cp1View.padding),
                                               cp1View.knobView.position + cp1View.frame.origin]))
         controlLinePathView.path = knobLinePath
+    }
+    func updateWithModel() {
+        cp0View.updateWithModel()
+        cp1View.updateWithModel()
+        updatePathLayout()
     }
 }
 extension EasingView: Assignable {
