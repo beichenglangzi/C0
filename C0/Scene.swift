@@ -152,6 +152,25 @@ extension Scene {
 extension Scene: Referenceable {
     static let name = Text(english: "Scene", japanese: "シーン")
 }
+extension Scene: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Scene>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return SceneView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Scene: ObjectViewable {}
+extension Scene: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 struct SceneLayout {
     static let versionWidth = 120.0.cg, propertyWidth = 200.0.cg
@@ -259,13 +278,15 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     override var defaultBounds: Rect {
-        let padding = Layout.basicPadding, buttonH = Layout.basicHeight
-        let h = buttonH + padding * 2
-        let cs = SceneLayout.canvasSize, th = SceneLayout.timelineHeight
-        let inWidth = cs.width + padding + SceneLayout.propertyWidth
-        let width = inWidth + padding * 2
-        let height = th + cs.height + h + buttonH + padding * 2
-        return Rect(x: 0, y: 0, width: width, height: height)
+        return Rect(x: 0, y: 0, width: 50, height: 50)
+        
+//        let padding = Layout.basicPadding, buttonH = Layout.basicHeight
+//        let h = buttonH + padding * 2
+//        let cs = SceneLayout.canvasSize, th = SceneLayout.timelineHeight
+//        let inWidth = cs.width + padding + SceneLayout.propertyWidth
+//        let width = inWidth + padding * 2
+//        let height = th + cs.height + h + buttonH + padding * 2
+//        return Rect(x: 0, y: 0, width: width, height: height)
     }
     override func updateLayout() {
         let padding = Layout.basicPadding, buttonH = Layout.basicHeight
@@ -398,5 +419,21 @@ extension SceneView: Localizable {
 extension SceneView: Undoable {
     var version: Version {
         return versionView.model
+    }
+}
+extension SceneView: Assignable {
+    func reset(for p: Point, _ version: Version) {
+        push(Model(), to: version)
+    }
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
+    }
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
+        for object in objects {
+            if let model = object as? Model {
+                push(model, to: version)
+                return
+            }
+        }
     }
 }

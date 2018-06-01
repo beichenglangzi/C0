@@ -155,7 +155,7 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
         let padding = Layout.padding(with: sizeType)
         if optionStringView.text.isEmpty {
             let width = optionFalseNameView.frame.width
-                + optionTrueNameView.frame.width + padding * 2
+                + optionTrueNameView.frame.width + padding * 3
             let height = optionFalseNameView.frame.height + padding * 2
             return Rect(x: 0, y: 0, width: width, height: height)
         } else {

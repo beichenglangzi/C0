@@ -256,6 +256,30 @@ extension Color: Interpolatable {
                                                 with: ms).loopValue())
     }
 }
+extension Color: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return View(frame: frame, fillColor: self, isLocked: true)
+    }
+}
+extension Color: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Color>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return ColorView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Color: ObjectViewable {}
+extension Color: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 struct RGB {
     var r = 0.0.cg, g = 0.0.cg, b = 0.0.cg
@@ -422,11 +446,6 @@ extension Color {
     
     var cg: CGColor {
         return CGColor.with(rgb: rgb, alpha: alpha, colorSpace: CGColorSpace.with(colorSpace))
-    }
-}
-extension Color: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return View(frame: frame, fillColor: self, isLocked: true)
     }
 }
 

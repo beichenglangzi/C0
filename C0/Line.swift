@@ -849,6 +849,20 @@ extension Line: ThumbnailViewable {
 //        draw(size: 0.5 / c.scale, in: ctx)
     }
 }
+extension Line: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Line>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+    }
+}
+extension Line: ObjectViewable {}
+extension Line: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 extension Array where Element == Line {
     func mainPointsViewWith(fillColor: Color = .controlEditPointIn,

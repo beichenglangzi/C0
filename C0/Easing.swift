@@ -85,6 +85,25 @@ extension Easing: ThumbnailViewable {
         ctx.strokePath()
     }
 }
+extension Easing: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Easing>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return EasingView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Easing: ObjectViewable {}
+extension Easing: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 /**
  Issue: 前後キーフレームからの傾斜スナップ

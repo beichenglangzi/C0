@@ -30,7 +30,11 @@ extension Desktop: Codable {
     private enum CodingKeys: String, CodingKey {
         case copiedObjects, isHiddenActionManager, objects, version
     }
+//    enum CodingError: Error {
+//        case decoding(String)
+//    }
     init(from decoder: Decoder) throws {
+//        throw CodingError.decoding("")
         let values = try decoder.container(keyedBy: CodingKeys.self)
         copiedObjects = try values.decode([Object].self, forKey: .copiedObjects)
         isHiddenActionManager = try values.decode(Bool.self, forKey: .isHiddenActionManager)
@@ -120,9 +124,9 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
 
     let versionView: VersionView<Binder>
     let copiedObjectsNameView = TextFormView(text: Desktop.copiedObjectsInferenceName + ":")
-    let copiedObjectsView: ObjectsView<Binder>
+    let copiedObjectsView: ArrayView<Object, Binder>
     let isHiddenActionManagerView: BoolView<Binder>
-    let objectsView: ObjectsView<Binder>
+    let objectsView: ArrayView<Object, Binder>
     let actionManagerView: ActionManagerView<Binder>
 
     var versionWidth = 150.0.cg
@@ -144,16 +148,15 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         versionView = VersionView(binder: binder,
                                   keyPath: keyPath.appending(path: \Model.version),
                                   sizeType: sizeType)
-        copiedObjectsView = ObjectsView(binder: binder,
+        copiedObjectsView = ArrayView(binder: binder,
                                         keyPath: keyPath.appending(path: \Model.copiedObjects),
                                         sizeType: .small, abstractType: .mini)
-        objectsView = ObjectsView(binder: binder,
+        objectsView = ArrayView(binder: binder,
                                   keyPath: keyPath.appending(path: \Model.objects),
                                   sizeType: sizeType, abstractType: .normal)
         actionManagerView = ActionManagerView(binder: binder,
                                               keyPath: keyPath.appending(path: \Model.actionManager))
         actionManagerView.isHidden = binder[keyPath: keyPath].isHiddenActionManager
-        print(actionManagerView.isHidden)
         super.init()
         fillColor = .background
         

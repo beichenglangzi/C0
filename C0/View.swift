@@ -701,7 +701,8 @@ final class DisplayLink {
     var closure: ((Second) -> ())?
     
     var isRunning: Bool {
-        return CVDisplayLinkIsRunning(cv)
+        return false
+//        return CVDisplayLinkIsRunning(cv)
     }
     
     var time = Second(0)
@@ -716,60 +717,73 @@ final class DisplayLink {
         }
     }
     private var distanceTime = TimeInterval(1 / FPS(60))
-    private let cv: CVDisplayLink
-    private let source: DispatchSourceUserDataAdd
+//    private let cv: CVDisplayLink
+//    private let source: DispatchSourceUserDataAdd
     private var oldTimestamp = Date()
     
     init?(queue: DispatchQueue = DispatchQueue.main) {
-        source = DispatchSource.makeUserDataAddSource(queue: queue)
-        var acv: CVDisplayLink?
-        var success = CVDisplayLinkCreateWithActiveCGDisplays(&acv)
-        guard let cv = acv else {
-            return nil
-        }
-        func callback(displayLink: CVDisplayLink,
-                      inNow: UnsafePointer<CVTimeStamp>, inOutputTime: UnsafePointer<CVTimeStamp>,
-                      flagsIn: CVOptionFlags, flagsOut: UnsafeMutablePointer<CVOptionFlags>,
-                      displayLinkContext: UnsafeMutableRawPointer?) -> CVReturn {
-            guard let displayLinkContext = displayLinkContext else { return kCVReturnError }
-            let unmanaged = Unmanaged<DispatchSourceUserDataAdd>.fromOpaque(displayLinkContext)
-            unmanaged.takeUnretainedValue().add(data: 1)
-            return kCVReturnSuccess
-        }
-        success = CVDisplayLinkSetOutputCallback(cv, callback,
-                                                 Unmanaged.passUnretained(source).toOpaque())
-        guard success == kCVReturnSuccess else {
-            return nil
-        }
-        success = CVDisplayLinkSetCurrentCGDisplay(cv, CGMainDisplayID())
-        guard success == kCVReturnSuccess else {
-            return nil
-        }
-        self.cv = cv
-        source.setEventHandler { [weak self] in
-            guard let link = self else { return }
-            let currentTimestamp = Date()
-            let d = currentTimestamp.timeIntervalSince(link.oldTimestamp)
-            if d >= link.distanceTime {
-                link.closure?(link.time)
-                link.oldTimestamp = currentTimestamp
-            }
-        }
+//        source = DispatchSource.makeUserDataAddSource(queue: queue)
+//        var acv: CVDisplayLink?
+//        var success = CVDisplayLinkCreateWithActiveCGDisplays(&acv)
+//        guard let cv = acv else {
+//            return nil
+//        }
+////        func callback(displayLink: CVDisplayLink,
+////                      inNow: UnsafePointer<CVTimeStamp>, inOutputTime: UnsafePointer<CVTimeStamp>,
+////                      flagsIn: CVOptionFlags, flagsOut: UnsafeMutablePointer<CVOptionFlags>,
+////                      displayLinkContext: UnsafeMutableRawPointer?) -> CVReturn {
+////            guard let displayLinkContext = displayLinkContext else { return kCVReturnSuccess }
+////            let unmanaged = Unmanaged<DispatchSourceUserDataAdd>.fromOpaque(displayLinkContext)
+////            unmanaged.takeUnretainedValue().add(data: 1)
+////            return kCVReturnSuccess
+////        }
+//        success = CVDisplayLinkSetOutputCallback(cv,
+//                                                 { (displayLink: CVDisplayLink,
+//                                                    inNow: UnsafePointer<CVTimeStamp>,
+//                                                    inOutputTime: UnsafePointer<CVTimeStamp>,
+//                                                    flagsIn: CVOptionFlags,
+//                                                    flagsOut: UnsafeMutablePointer<CVOptionFlags>,
+//                                                    displayLinkContext: UnsafeMutableRawPointer?)
+//                                                    -> CVReturn in
+//                                                        guard let displayLinkContext = displayLinkContext else { return kCVReturnSuccess }
+//                                                        let unmanaged = Unmanaged<DispatchSourceUserDataAdd>.fromOpaque(displayLinkContext)
+//                                                        unmanaged.takeUnretainedValue().add(data: 1)
+//                                                        return kCVReturnSuccess
+//                                                    },
+//                                                    Unmanaged.passUnretained(source).toOpaque())
+//        guard success == kCVReturnSuccess else {
+//            return nil
+//        }
+//        success = CVDisplayLinkSetCurrentCGDisplay(cv, CGMainDisplayID())
+//        guard success == kCVReturnSuccess else {
+//            return nil
+//        }
+//        self.cv = cv
+//
+//        source.setEventHandler { [weak self] in
+//            guard let link = self else { return }
+//            let currentTimestamp = Date()
+//            let d = currentTimestamp.timeIntervalSince(link.oldTimestamp)
+//            if d >= link.distanceTime {
+//                link.closure?(link.time)
+//                link.oldTimestamp = currentTimestamp
+//            }
+//        }
     }
     deinit {
-        if isRunning { stop() }
+//        stop()
     }
     
     func start() {
-        guard !isRunning else { return }
-        oldTimestamp = Date()
-        CVDisplayLinkStart(cv)
-        source.resume()
+//        guard !isRunning else { return }
+//        oldTimestamp = Date()
+//        CVDisplayLinkStart(cv)
+//        source.resume()
     }
     func stop() {
-        guard isRunning else { return }
-        CVDisplayLinkStop(cv)
-        source.cancel()
+//        guard isRunning else { return }
+//        CVDisplayLinkStop(cv)
+//        source.cancel()
     }
 }
 

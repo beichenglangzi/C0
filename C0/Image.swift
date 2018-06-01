@@ -21,6 +21,34 @@ import CoreGraphics
 import QuartzCore
 
 struct Image {
+    var cg: CGImage
+    
+    init?(url: URL) {
+        guard
+            let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
+            let cg = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+                return nil
+        }
+        self.cg = cg
+    }
+    init?(data: Data) {
+        guard
+            let imageSource = CGImageSourceCreateWithData(data as CFData, nil),
+            let cg = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+                return nil
+        }
+        self.cg = cg
+    }
+    init(_ cg: CGImage) {
+        self.cg = cg
+    }
+}
+extension Image {
+    var size: Size {
+        return cg.size
+    }
+}
+extension Image {
     enum FileType: FileTypeProtocol {
         case png, jpeg, tiff
         fileprivate var cfUTType: CFString {
@@ -35,24 +63,10 @@ struct Image {
         }
     }
     
-    let url: URL?
-    let cg: CGImage
-    init?(url: URL) {
-        guard
-            let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-            let cg = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
-                return nil
-        }
-        self.url = url
-        self.cg = cg
+    func data(_ type: FileType) -> Data? {
+        return cg.data(type)
     }
-    init(_ cg: CGImage) {
-        url = nil
-        self.cg = cg
-    }
-    var size: Size {
-        return cg.size
-    }
+    
     func write(_ type: FileType, to url: URL) throws {
         try cg.write(type, to: url)
     }
@@ -62,8 +76,51 @@ extension Image: Referenceable {
 }
 extension Image: Equatable {
     static func ==(lhs: Image, rhs: Image) -> Bool {
-        return lhs.cg == rhs.cg || lhs.url == rhs.url
+        return lhs.cg == rhs.cg
     }
+}
+extension Image: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case data
+    }
+    enum CodingError: Error {
+        case decoding(String), encoding(String)
+    }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let data = try values.decode(Data.self, forKey: .data)
+        guard let image = Image(data: data) else {
+            throw CodingError.decoding("\(dump(values))")
+        }
+        self = image
+    }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        if let data = data(.tiff) {
+            try container.encode(data, forKey: .data)
+        } else {
+            throw CodingError.decoding("\(dump(container))")
+        }
+    }
+}
+extension Image: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Image>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return ImageView(binder: binder, keyPath: keyPath, frame: frame)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Image: ObjectViewable {}
+extension Image: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
 }
 
 extension CGContext {
@@ -78,6 +135,20 @@ extension CGContext {
 extension CGImage {
     var size: Size {
         return Size(width: width, height: height)
+    }
+    func data(_ fileType: Image.FileType) -> Data? {
+        let cfFileType = fileType.cfUTType
+        guard
+            let mData = CFDataCreateMutable(nil, 0),
+            let idn = CGImageDestinationCreateWithData(mData, cfFileType, 1, nil) else {
+                return nil
+        }
+        CGImageDestinationAddImage(idn, self, nil)
+        if !CGImageDestinationFinalize(idn) {
+            return nil
+        } else {
+            return mData as Data
+        }
     }
     func write(_ fileType: Image.FileType, to url: URL) throws {
         let cfUrl = url as CFURL, cfFileType = fileType.cfUTType

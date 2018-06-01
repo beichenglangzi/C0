@@ -108,6 +108,12 @@ extension Subtitle: Interpolatable {
 extension Subtitle: Referenceable {
     static let name = Text(english: "Subtitle", japanese: "字幕")
 }
+extension Subtitle: KeyframeValue {}
+extension Subtitle: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return string.thumbnailView(withFrame: frame, sizeType)
+    }
+}
 extension Subtitle: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Subtitle>,
@@ -123,11 +129,11 @@ extension Subtitle: AbstractViewable {
         }
     }
 }
-extension Subtitle: KeyframeValue {}
-extension Subtitle: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return string.thumbnailView(withFrame: frame, sizeType)
-    }
+extension Subtitle: ObjectViewable {}
+extension Subtitle: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
 }
 
 struct SubtitleTrack: Track, Codable {

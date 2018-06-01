@@ -172,6 +172,25 @@ extension Timeline {
 extension Timeline: Referenceable {
     static let name = Text(english: "Timeline", japanese: "タイムライン")
 }
+extension Timeline: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Timeline>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return TimelineView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Timeline: ObjectViewable {}
+extension Timeline: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 /**
  Issue: 複数選択

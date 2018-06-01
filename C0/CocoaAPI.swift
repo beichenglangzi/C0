@@ -403,7 +403,7 @@ final class C0View: NSView, NSTextInputClient {
     
     override init(frame frameRect: NSRect) {
         var desktop = Desktop()
-        desktop.objects.append(Object(Scene()))
+//        desktop.objects.append(Object(Scene()))
         desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
         sender = Sender(rootView: desktopView)
@@ -414,7 +414,7 @@ final class C0View: NSView, NSTextInputClient {
     }
     required init?(coder: NSCoder) {
         var desktop = Desktop()
-        desktop.objects.append(Object(Scene()))
+//        desktop.objects.append(Object(Scene()))
         desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
         sender = Sender(rootView: desktopView)
@@ -897,46 +897,46 @@ struct TextInputContext {
     }
 }
 
-protocol DynamicCodable: Codable {
-    var dynamicCoder: DynamicCoder { get }
-}
-class DynamicCoder: NSObject, NSCoding {
-    class func value(from data: Data) -> DynamicCodable? {
-        return nil
-    }
-    static func valueWithType<T: DynamicCodable>(_ type: T.Type,
-                                                 from data: Data) -> DynamicCodable? {
-        return try? JSONDecoder().decode(type, from: data)
-    }
-    
-    required init?(coder decoder: NSCoder) {
-        guard let data = decoder.decodeData() else {
-            return nil
-        }
-        guard let value = DynamicCoder.value(from: data) else {
-            return nil
-        }
-        self.value = value
-        super.init()
-    }
-    func encode(with encoder: NSCoder) {
-        if let data = value.jsonData {
-            encoder.encode(data)
-        }
-    }
-    
-    static func with(data: Data) -> DynamicCoder? {
-        return NSKeyedUnarchiver.unarchiveObject(with: data) as? DynamicCoder
-    }
-    var data: Data {
-        return NSKeyedArchiver.archivedData(withRootObject: self)
-    }
-    
-    var value: DynamicCodable
-    init(_ value: DynamicCodable) {
-        self.value = value
-    }
-}
+//protocol DynamicCodable: Codable {
+//    var dynamicCoder: DynamicCoder { get }
+//}
+//class DynamicCoder: NSObject, NSCoding {
+//    class func value(from data: Data) -> DynamicCodable? {
+//        return nil
+//    }
+//    static func valueWithType<T: DynamicCodable>(_ type: T.Type,
+//                                                 from data: Data) -> DynamicCodable? {
+//        return try? JSONDecoder().decode(type, from: data)
+//    }
+//
+//    required init?(coder decoder: NSCoder) {
+//        guard let data = decoder.decodeData() else {
+//            return nil
+//        }
+//        guard let value = DynamicCoder.value(from: data) else {
+//            return nil
+//        }
+//        self.value = value
+//        super.init()
+//    }
+//    func encode(with encoder: NSCoder) {
+//        if let data = value.jsonData {
+//            encoder.encode(data)
+//        }
+//    }
+//
+//    static func with(data: Data) -> DynamicCoder? {
+//        return NSKeyedUnarchiver.unarchiveObject(with: data) as? DynamicCoder
+//    }
+//    var data: Data {
+//        return NSKeyedArchiver.archivedData(withRootObject: self)
+//    }
+//
+//    var value: DynamicCodable
+//    init(_ value: DynamicCodable) {
+//        self.value = value
+//    }
+//}
 
 protocol FileTypeProtocol {
     var utType: String { get }

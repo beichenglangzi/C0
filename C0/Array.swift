@@ -127,19 +127,34 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: View, BindableRece
         
         super.init()
         isClipped = true
-        updateChildren()
         self.frame = frame
     }
     
-    var layoutClosure: ((Model, [View]) -> ())?
+//    var layoutClosure: ((Model, [View]) -> ())?
+//    override func updateLayout() {
+//        layoutClosure?(model, modelViews)
+//    }
     override func updateLayout() {
-        layoutClosure?(model, modelViews)
+        let padding = Layout.padding(with: sizeType)
+        var x = padding
+        //test
+        modelViews.forEach {
+            let db = $0.defaultBounds
+            $0.frame = Rect(x: x,
+                            y: padding,
+                            width: db.width,
+                            height: abstractType == .mini ? bounds.height - padding * 2 : db.height)
+            x += db.width
+        }
+        //        layoutClosure?(model, modelViews)
     }
+
     func updateChildren() {
         modelViews = ArrayView.modelViewsWith(model: model,
                                               binder: binder, keyPath: keyPath,
                                               sizeType: sizeType, type: abstractType)
         self.children = modelViews
+        updateLayout()
     }
     static func modelViewsWith(model: Model, binder: Binder, keyPath: BinderKeyPath,
                                sizeType: SizeType, type: AbstractType) -> [View] {
@@ -183,6 +198,18 @@ extension ArrayView: Assignable {
                 return
             }
         }
+    }
+}
+extension ArrayView: CollectionAssignable {
+    func add(_ objects: [Any], for p: Point, _ version: Version) {
+        let model = objects.compactMap { $0 as? ModelElement }
+        if !model.isEmpty {
+            push(self.model + model, to: version)
+            return
+        }
+    }
+    func remove(for p: Point, _ version: Version) {
+        
     }
 }
 

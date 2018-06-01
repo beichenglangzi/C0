@@ -636,6 +636,25 @@ extension CellGroup: ThumbnailViewable {
         return name.thumbnailView(withFrame: frame, sizeType)
     }
 }
+extension CellGroup: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, CellGroup>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return CellGroupView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension CellGroup: ObjectViewable {}
+extension CellGroup: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 struct CellGroupChildren: KeyframeValue {
     var children = [CellGroup]()
@@ -675,6 +694,12 @@ extension CellGroupChildren: AbstractViewable {
         case .mini: return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
         }
     }
+}
+extension CellGroupChildren: ObjectViewable {}
+extension CellGroupChildren: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
 }
 
 struct CellGroupChildrenTrack: Track, Codable {

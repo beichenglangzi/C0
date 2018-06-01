@@ -184,6 +184,12 @@ extension Sound: AbstractViewable {
         }
     }
 }
+extension Sound: ObjectViewable {}
+extension Sound: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 final class SoundPlayer {
     var currentTime: Second {

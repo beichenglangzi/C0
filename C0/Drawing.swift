@@ -130,6 +130,25 @@ extension Drawing: ThumbnailViewable {
 //        drawDraft(lineWidth: 0.5 / centering.scale, lineColor: Color.draft, in: ctx)
     }
 }
+extension Drawing: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Drawing>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return DrawingView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Drawing: ObjectViewable {}
+extension Drawing: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 struct LinesTrack: Track, Codable {
     var animation: Animation<Lines>
@@ -213,6 +232,12 @@ extension Lines: AbstractViewable {
             return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
         }
     }
+}
+extension Lines: ObjectViewable {}
+extension Lines: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
 }
 
 /**

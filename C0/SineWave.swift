@@ -65,6 +65,12 @@ extension SineWave: Interpolatable {
 extension SineWave: Referenceable {
     static let name = Text(english: "Sine Wave", japanese: "サイン波")
 }
+extension SineWave: KeyframeValue {}
+extension SineWave: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return View(frame: frame, isLocked: true)
+    }
+}
 extension SineWave: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, SineWave>,
@@ -79,11 +85,11 @@ extension SineWave: AbstractViewable {
         }
     }
 }
-extension SineWave: KeyframeValue {}
-extension SineWave: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return View(frame: frame, isLocked: true)
-    }
+extension SineWave: ObjectViewable {}
+extension SineWave: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
 }
 
 struct SineWaveTrack: Track, Codable {

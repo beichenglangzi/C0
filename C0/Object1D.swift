@@ -183,6 +183,9 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
         self.frame = frame
     }
     
+    override var defaultBounds: Rect {
+        return Rect(x: 0, y: 0, width: 80, height: Layout.height(with: sizeType))
+    }
     override func updateLayout() {
         let paddingX = sizeType == .small ? 3.0.cg : 5.0.cg
         knobLineFrame = Rect(x: paddingX, y: sizeType == .small ? 1 : 2,

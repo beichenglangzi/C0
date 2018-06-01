@@ -31,7 +31,7 @@ protocol ObjectViewable {
                            frame: Rect, _ sizeType: SizeType,
                            type: AbstractType) -> ModelView where T: BinderProtocol
 }
-extension ObjectViewable where Self: Codable & Referenceable & AbstractViewable {
+extension ObjectViewable where Self: Codable & Referenceable & ObjectDecodable & AbstractViewable {
     func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
                            frame: Rect, _ sizeType: SizeType,
                            type: AbstractType) -> ModelView where T: BinderProtocol {
@@ -50,8 +50,17 @@ struct Object {
         types[String(describing: type)] = type
         types[String(describing: arrayType)] = arrayType
     }
+    static func append<T: KeyframeValue>(_ type: T.Type) {
+        let arrayType = Array<T>.self
+        let keyframeType = Keyframe<T>.self
+        let animationType = Animation<T>.self
+        types[String(describing: type)] = type
+        types[String(describing: arrayType)] = arrayType
+        types[String(describing: keyframeType)] = keyframeType
+        types[String(describing: animationType)] = animationType
+    }
     
-    typealias Value = Codable & Referenceable & ObjectViewable
+    typealias Value = Codable & Referenceable & ObjectViewable & ObjectDecodable
     
     var frame: Rect
     var value: Value
@@ -92,17 +101,23 @@ extension Object: Codable {
     }
 }
 extension Object: ObjectViewable {
-    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>, frame: Rect, _ sizeType: SizeType, type: AbstractType) -> ModelView where T : BinderProtocol {
+    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
+                           frame: Rect, _ sizeType: SizeType,
+                           type: AbstractType) -> ModelView where T: BinderProtocol {
         return value.objectViewWith(binder: binder, keyPath: keyPath,
                                     frame: frame, sizeType, type: type)
     }
 }
 extension Object: AbstractViewable {
-    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>, frame: Rect, _ sizeType: SizeType, type: AbstractType) -> ModelView where T: BinderProtocol {
-        
+    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> ModelView where T: BinderProtocol {
         return value.objectViewWith(binder: binder, keyPath: keyPath,
                                     frame: frame, sizeType, type: type)
     }
+}
+extension Object: ObjectDecodable {
+    static var appendObjectType: () { return () }
 }
 
 protocol ObjectProtocol {

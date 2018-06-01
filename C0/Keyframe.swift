@@ -22,9 +22,7 @@ import CoreGraphics
 protocol KeyframeProtocol {
     var timing: KeyframeTiming { get }
 }
-protocol KeyframeValue
-: Codable, Equatable, Interpolatable, Initializable, Referenceable, AbstractViewable {
-
+protocol KeyframeValue: Equatable, Interpolatable, Initializable, Object.Value, AbstractViewable {
     var defaultLabel: KeyframeTiming.Label { get }
 }
 extension KeyframeValue {
@@ -80,17 +78,20 @@ extension Keyframe: AbstractViewable {
         }
     }
 }
-
+extension Keyframe: ObjectViewable {}
+extension Keyframe: ObjectDecodable {
+    static var appendObjectType: () { return () }
+}
 
 struct KeyframeTiming: Codable, Hashable {
-    enum Interpolation: Int8, Codable {
-        case spline, bound, linear, step
+    enum Label: Int8, Codable {
+        case main, sub
     }
     enum Loop: Int8, Codable {
         case none, began, ended
     }
-    enum Label: Int8, Codable {
-        case main, sub
+    enum Interpolation: Int8, Codable {
+        case spline, bound, linear, step
     }
     
     var time = Beat(0)
@@ -100,11 +101,57 @@ struct KeyframeTiming: Codable, Hashable {
 extension KeyframeTiming: Referenceable {
     static let name = Text(english: "Keyframe Timing", japanese: "キーフレームタイミング")
 }
-extension KeyframeTiming: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return interpolation.displayText.thumbnailView(withFrame: frame, sizeType)
+
+extension KeyframeTiming.Loop: Referenceable {
+    static let uninheritanceName = Text(english: "Loop", japanese: "ループ")
+    static let name = KeyframeTiming.name.spacedUnion(uninheritanceName)
+}
+extension KeyframeTiming.Loop: DisplayableText {
+    var displayText: Text {
+        switch self {
+        case .none: return Text(english: "None", japanese: "なし")
+        case .began: return Text(english: "Began", japanese: "開始")
+        case .ended: return Text(english: "Ended", japanese: "終了")
+        }
+    }
+    static var displayTexts: [Text] {
+        return [none.displayText,
+                began.displayText,
+                ended.displayText]
     }
 }
+extension KeyframeTiming.Loop {
+    static var defaultOption: EnumOption<KeyframeTiming.Loop> {
+        return EnumOption(defaultModel: KeyframeTiming.Loop.none,
+                          cationModels: [],
+                          indexClosure: { Int($0) },
+                          rawValueClosure: { KeyframeTiming.Loop.RawValue($0) },
+                          names: KeyframeTiming.Loop.displayTexts)
+    }
+}
+extension KeyframeTiming.Loop: AbstractViewable {
+    func abstractViewWith
+        <T : BinderProtocol>(binder: T,
+                             keyPath: ReferenceWritableKeyPath<T, KeyframeTiming.Loop>,
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return EnumView(binder: binder, keyPath: keyPath,
+                            option: KeyframeTiming.Loop.defaultOption,
+                            frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension KeyframeTiming.Loop: ObjectViewable {}
+extension KeyframeTiming.Loop: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
+
 extension KeyframeTiming.Interpolation: Referenceable {
     static let uninheritanceName = Text(english: "Interpolation", japanese: "補間")
     static let name = KeyframeTiming.name.spacedUnion(uninheritanceName)
@@ -125,24 +172,38 @@ extension KeyframeTiming.Interpolation: DisplayableText {
                 step.displayText]
     }
 }
-extension KeyframeTiming.Loop: Referenceable {
-    static let uninheritanceName = Text(english: "Loop", japanese: "ループ")
-    static let name = KeyframeTiming.name.spacedUnion(uninheritanceName)
+extension KeyframeTiming.Interpolation {
+    static var defaultOption: EnumOption<KeyframeTiming.Interpolation> {
+        return EnumOption(defaultModel: KeyframeTiming.Interpolation.spline,
+                          cationModels: [],
+                          indexClosure: { Int($0) },
+                          rawValueClosure: { KeyframeTiming.Interpolation.RawValue($0) },
+                          names: KeyframeTiming.Interpolation.displayTexts)
+    }
 }
-extension KeyframeTiming.Loop: DisplayableText {
-    var displayText: Text {
-        switch self {
-        case .none: return Text(english: "None", japanese: "なし")
-        case .began: return Text(english: "Began", japanese: "開始")
-        case .ended: return Text(english: "Ended", japanese: "終了")
+extension KeyframeTiming.Interpolation: AbstractViewable {
+    func abstractViewWith
+        <T : BinderProtocol>(binder: T,
+                             keyPath: ReferenceWritableKeyPath<T, KeyframeTiming.Interpolation>,
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return EnumView(binder: binder, keyPath: keyPath,
+                            option: KeyframeTiming.Interpolation.defaultOption,
+                            frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
         }
     }
-    static var displayTexts: [Text] {
-        return [none.displayText,
-                began.displayText,
-                ended.displayText]
-    }
 }
+extension KeyframeTiming.Interpolation: ObjectViewable {}
+extension KeyframeTiming.Interpolation: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
+
 extension KeyframeTiming.Label: Referenceable {
     static let uninheritanceName = Text(english: "Label", japanese: "ラベル")
     static let name = KeyframeTiming.name.spacedUnion(uninheritanceName)
@@ -159,22 +220,68 @@ extension KeyframeTiming.Label: DisplayableText {
                 sub.displayText]
     }
 }
+extension KeyframeTiming.Label {
+    static var defaultOption: EnumOption<KeyframeTiming.Label> {
+        return EnumOption(defaultModel: KeyframeTiming.Label.main,
+                          cationModels: [],
+                          indexClosure: { Int($0) },
+                          rawValueClosure: { KeyframeTiming.Label.RawValue($0) },
+                          names: KeyframeTiming.Label.displayTexts)
+    }
+}
+extension KeyframeTiming.Label: AbstractViewable {
+    func abstractViewWith
+        <T : BinderProtocol>(binder: T,
+                             keyPath: ReferenceWritableKeyPath<T, KeyframeTiming.Label>,
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return EnumView(binder: binder, keyPath: keyPath,
+                            option: KeyframeTiming.Label.defaultOption,
+                            frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension KeyframeTiming.Label: ObjectViewable {}
+extension KeyframeTiming.Label: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
+
+extension KeyframeTiming: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return interpolation.displayText.thumbnailView(withFrame: frame, sizeType)
+    }
+}
+extension KeyframeTiming: AbstractViewable {
+    func abstractViewWith
+        <T : BinderProtocol>(binder: T,
+                             keyPath: ReferenceWritableKeyPath<T, KeyframeTiming>,
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return KeyframeTimingView(binder: binder, keyPath: keyPath,
+                                      frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension KeyframeTiming: ObjectViewable {}
+extension KeyframeTiming: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 extension KeyframeTiming {
-    static let labelOption = EnumOption(defaultModel: Label.main,
-                                        cationModels: [],
-                                        indexClosure: { Int($0) },
-                                        rawValueClosure: { Label.RawValue($0) },
-                                        names: Label.displayTexts)
-    static let loopOption = EnumOption(defaultModel: Loop.none,
-                                       cationModels: [],
-                                       indexClosure: { Int($0) },
-                                       rawValueClosure: { Loop.RawValue($0) },
-                                       names: Loop.displayTexts)
-    static let interpolationOption = EnumOption(defaultModel: Interpolation.spline,
-                                                cationModels: [],
-                                                indexClosure: { Int($0) },
-                                                rawValueClosure: { Interpolation.RawValue($0) },
-                                                names: Interpolation.displayTexts)
+    static let labelOption = KeyframeTiming.Label.defaultOption
+    static let loopOption = KeyframeTiming.Loop.defaultOption
+    static let interpolationOption = KeyframeTiming.Interpolation.defaultOption
 }
 
 struct KeyframeTimingCollection: RandomAccessCollection {

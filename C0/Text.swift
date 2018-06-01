@@ -131,9 +131,9 @@ extension Text: AbstractViewable {
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return TextView(binder: binder, keyPath: keyPath, option: TextOption(),
-                            textMaterial: TextMaterial(font: Font.default(with: sizeType)),
-                            frame: frame)
+            return TextGetterView(binder: binder, keyPath: keyPath,
+                                  textMaterial: TextMaterial(font: Font.default(with: sizeType)),
+                                  frame: frame)
         case .mini:
             return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
         }

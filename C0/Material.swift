@@ -44,20 +44,6 @@ struct Material: Codable, Hashable {
 extension Material: Referenceable {
     static let name = Text(english: "Material", japanese: "マテリアル")
 }
-extension Material: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Material>,
-                                              frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return MaterialView(binder: binder, keyPath: keyPath,
-                                frame: frame, sizeType: sizeType)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
-        }
-    }
-}
 extension Material: Interpolatable {
     static func linear(_ f0: Material, _ f1: Material, t: Real) -> Material {
         let type = f0.type
@@ -105,17 +91,38 @@ extension Material: Interpolatable {
                         lineWidth: lineWidth, opacity: opacity)
     }
 }
+extension Material: Initializable {}
+extension Material: KeyframeValue {}
 extension Material: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return View(frame: frame, fillColor: color, isLocked: true)
     }
 }
+extension Material: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Material>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return MaterialView(binder: binder, keyPath: keyPath,
+                                frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Material: ObjectViewable {}
+extension Material: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
+
 extension Material.MaterialType: Referenceable {
     static let uninheritanceName = Text(english: "Type", japanese: "タイプ")
     static let name = Material.name.spacedUnion(uninheritanceName)
 }
-extension Material: Initializable {}
-extension Material: KeyframeValue {}
 extension Material.MaterialType: DisplayableText {
     var displayText: Text {
         switch self {
@@ -136,6 +143,36 @@ extension Material.MaterialType: DisplayableText {
                 subtract.displayText]
     }
 }
+extension Material.MaterialType {
+    static var defaultOption: EnumOption<Material.MaterialType> {
+        return EnumOption(defaultModel: Material.MaterialType.normal, cationModels: [],
+                          indexClosure: { Int($0) },
+                          rawValueClosure: { Material.MaterialType.RawValue($0) },
+                          names: Material.MaterialType.displayTexts)
+    }
+}
+extension Material.MaterialType: AbstractViewable {
+    func abstractViewWith
+        <T : BinderProtocol>(binder: T,
+                             keyPath: ReferenceWritableKeyPath<T, Material.MaterialType>,
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return EnumView(binder: binder, keyPath: keyPath,
+                            option: Material.MaterialType.defaultOption,
+                            frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Material.MaterialType: ObjectViewable {}
+extension Material.MaterialType: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 struct MaterialTrack: Track, Codable {
     var animation = Animation<Material>()
@@ -145,10 +182,7 @@ struct MaterialTrack: Track, Codable {
 }
 
 struct MaterialOption {
-    var typeOption = EnumOption(defaultModel: Material.MaterialType.normal, cationModels: [],
-                                     indexClosure: { Int($0) },
-                                     rawValueClosure: { Material.MaterialType.RawValue($0) },
-                                     names: Material.MaterialType.displayTexts)
+    var typeOption = Material.MaterialType.defaultOption
     var lineWidthOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1000,
                                       modelInterval: 0.1, exp: 3, numberOfDigits: 0, unit: "")
     var opacityOption = RealOption.opacity

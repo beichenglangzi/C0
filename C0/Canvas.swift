@@ -73,6 +73,25 @@ extension Canvas {
 extension Canvas: Referenceable {
     static let name = Text(english: "Canvas", japanese: "キャンバス")
 }
+extension Canvas: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Canvas>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return CanvasView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Canvas: ObjectViewable {}
+extension Canvas: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 /**
  Issue: Z移動を廃止してセルツリー表示を作成、セルクリップや全てのロック解除などを廃止
@@ -97,8 +116,10 @@ final class CanvasView<T: BinderProtocol>: View, BindableReceiver {
         self.binder = binder
         self.keyPath = keyPath
         
-        super.init(drawClosure: { $1.draw(in: $0) }, isLocked: false)
-        
+        super.init()
+        children = [model.view()]
+//        super.init(drawClosure: { _, _ in }, isLocked: false)
+//        drawClosure = { [unowned self] in self.model.draw(in: $0) }
     }
     
     var screenTransform = AffineTransform.identity

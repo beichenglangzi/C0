@@ -233,6 +233,31 @@ extension Transform: Referenceable {
     static let name = Text(english: "Transform", japanese: "トランスフォーム")
 }
 extension Transform: KeyframeValue {}
+extension Transform: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return View(isLocked: true)
+    }
+}
+extension Transform: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Transform>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return TransformView(binder: binder, keyPath: keyPath, option: TransformOption(),
+                                 frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Transform: ObjectViewable {}
+extension Transform: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 struct TransformTrack: Track, Codable {
     var animation = Animation<Transform>()
@@ -373,22 +398,3 @@ extension TransformView: Assignable {
     }
 }
 
-extension Transform: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return View(isLocked: true)
-    }
-}
-extension Transform: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Transform>,
-                                              frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return TransformView(binder: binder, keyPath: keyPath, option: TransformOption(),
-                                 frame: frame, sizeType: sizeType)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
-        }
-    }
-}

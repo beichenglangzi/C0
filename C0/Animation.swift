@@ -344,6 +344,23 @@ extension Animation: ThumbnailViewable {
         return text.thumbnailView(withFrame: frame, sizeType)
     }
 }
+extension Animation: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Animation>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return AnimationView(binder: binder, keyPath: keyPath, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Animation: ObjectViewable {}
+extension Animation: ObjectDecodable {
+    static var appendObjectType: () { return () }
+}
 
 final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, BindableReceiver {
     typealias Model = Animation<Value>

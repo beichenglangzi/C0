@@ -39,6 +39,34 @@ extension BlendType: DisplayableText {
                 subtract.displayText]
     }
 }
+extension BlendType {
+    static var defaultOption: EnumOption<BlendType> {
+        return EnumOption(defaultModel: BlendType.normal, cationModels: [],
+                          indexClosure: { Int($0) },
+                          rawValueClosure: { BlendType.RawValue($0) },
+                          names: BlendType.displayTexts)
+    }
+}
+extension BlendType: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, BlendType>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return EnumView(binder: binder, keyPath: keyPath, option: BlendType.defaultOption,
+                            frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension BlendType: ObjectViewable {}
+extension BlendType: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 struct Effect: Codable, Hashable {
     var blendType = BlendType.normal, blurRadius = 0.0.cg, opacity = 1.0.cg
@@ -60,19 +88,6 @@ extension Effect {
 }
 extension Effect: Referenceable {
     static let name = Text(english: "Effect", japanese: "エフェクト")
-}
-extension Effect: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Effect>,
-                                              frame: Rect, _ sizeType: SizeType,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return EffectView(binder: binder, keyPath: keyPath,
-                              frame: frame, sizeType: sizeType)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
-        }
-    }
 }
 extension Effect: Interpolatable {
     static func linear(_ f0: Effect, _ f1: Effect, t: Real) -> Effect {
@@ -111,12 +126,29 @@ extension Effect: ThumbnailViewable {
         return blendType.displayText.thumbnailView(withFrame: frame, sizeType)
     }
 }
+extension Effect: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Effect>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return EffectView(binder: binder, keyPath: keyPath,
+                              frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Effect: ObjectViewable {}
+extension Effect: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
+}
 
 struct EffectOption {
-    var blendTypeOption = EnumOption(defaultModel: BlendType.normal, cationModels: [],
-                                     indexClosure: { Int($0) },
-                                     rawValueClosure: { BlendType.RawValue($0) },
-                                     names: BlendType.displayTexts)
+    var blendTypeOption = BlendType.defaultOption
     var blurRadiusOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1000,
                                       modelInterval: 0.1, exp: 3)
     var opacityOption = RealOption.opacity

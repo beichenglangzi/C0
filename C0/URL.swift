@@ -27,7 +27,8 @@ extension URL {
         }
         do {
             var bds = false
-            guard let url = try URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &bds) else {
+            guard let url = try URL(resolvingBookmarkData: bookmark,
+                                    bookmarkDataIsStale: &bds) else {
                 return nil
             }
             self = url
@@ -47,4 +48,18 @@ extension URL: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return lastPathComponent.thumbnailView(withFrame: frame, sizeType)
     }
+}
+extension URL: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, URL>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+    }
+}
+extension URL: ObjectViewable {}
+extension URL: ObjectDecodable {
+    static let appendObjectType: () = {
+        Object.append(objectType)
+    } ()
 }
