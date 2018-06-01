@@ -253,11 +253,6 @@ extension Transform: AbstractViewable {
     }
 }
 extension Transform: ObjectViewable {}
-extension Transform: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 struct TransformTrack: Track, Codable {
     var animation = Animation<Transform>()

@@ -166,11 +166,6 @@ extension Scene: AbstractViewable {
     }
 }
 extension Scene: ObjectViewable {}
-extension Scene: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 struct SceneLayout {
     static let versionWidth = 120.0.cg, propertyWidth = 200.0.cg

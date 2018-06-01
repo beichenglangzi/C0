@@ -858,11 +858,6 @@ extension Line: AbstractViewable {
     }
 }
 extension Line: ObjectViewable {}
-extension Line: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 extension Array where Element == Line {
     func mainPointsViewWith(fillColor: Color = .controlEditPointIn,

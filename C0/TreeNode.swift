@@ -53,17 +53,17 @@ extension TreeNode {
     typealias Index = TreeIndex<Self>
     
     subscript(indexPath: IndexPath) -> Self {
-        get {
-            return at(indexPath: indexPath, at: 0)
-        }
-        set {
-            self[keyPath: Self.keyPath(with: indexPath)] = newValue
-        }
+        get { return at(indexPath: indexPath, at: 0) }
+        set { self[keyPath: Self.keyPath(with: indexPath)] = newValue }
     }
     func at(indexPath: IndexPath, at i: Int) -> Self {
+        guard i < indexPath.count else {
+            return self
+        }
         let index = indexPath[i]
         let child = children[index]
         return child.at(indexPath: indexPath, at: i + 1)
+        
     }
     
     static func keyPath(with indexPath: IndexPath) -> WritableKeyPath<Self, Self> {
@@ -81,12 +81,8 @@ extension TreeNode {
     }
     
     subscript(treeIndex: Index) -> Self {
-        get {
-            return self[treeIndex.indexPath]
-        }
-        set {
-            self[treeIndex.indexPath] = newValue
-        }
+        get { return self[treeIndex.indexPath] }
+        set { self[treeIndex.indexPath] = newValue }
     }
     
     func nodes(at treeIndex: Index) -> [Self] {

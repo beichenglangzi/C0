@@ -63,11 +63,10 @@ typealias ModelView = View & Modeler
 protocol BindableReceiver: Modeler {
     associatedtype Model
     associatedtype Binder: BinderProtocol
-    associatedtype BinderKeyPath: ReferenceWritableKeyPath<Binder, Model>
     associatedtype Notification: NotificationProtocol
     var model: Model { get set }
     var binder: Binder { get set }
-    var keyPath: BinderKeyPath { get set }
+    var keyPath: ReferenceWritableKeyPath<Binder, Model> { get set }
     var notifications: [((Self, Notification) -> ())] { get }
     func push(_ model: Model, to version: Version)
     func capture(_ model: Model, to version: Version)
@@ -99,10 +98,9 @@ extension BindableReceiver {
 protocol BindableGetterReceiver: Modeler {
     associatedtype Model
     associatedtype Binder: BinderProtocol
-    associatedtype BinderKeyPath: KeyPath<Binder, Model>
     var model: Model { get }
     var binder: Binder { get set }
-    var keyPath: BinderKeyPath { get set }
+    var keyPath: KeyPath<Binder, Model> { get set }
 }
 extension BindableGetterReceiver {
     typealias BinderKeyPath = KeyPath<Binder, Model>

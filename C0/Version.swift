@@ -32,7 +32,10 @@ final class Version: UndoManager {
     private var undoToken: NSObjectProtocol?, redoToken: NSObjectProtocol?
     override init() {
         super.init()
-        
+        updateNotifications()
+    }
+    
+    func updateNotifications() {
         let nc = NotificationCenter.default
         
         let undoGroupClosure: (Notification) -> () = { [unowned self] in
@@ -44,7 +47,7 @@ final class Version: UndoManager {
                     self.undoedIndex += 1
                     self.index = self.undoedIndex
                     self.indexNotification?(self, self.index)
-//                    self.undoedIndexNotification?(self, self.undoedIndex)
+                    self.undoedIndexNotification?(self, self.undoedIndex)
                 }
             }
         }
@@ -91,6 +94,7 @@ extension Version: Referenceable {
 extension Version: Codable {
     convenience init(from decoder: Decoder) throws {
         self.init()
+        updateNotifications()
     }
     func encode(to encoder: Encoder) throws {}
 }
@@ -137,9 +141,7 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
         isClipped = true
         children = [classNameView, indexView]
         self.frame = frame
-        
-        model.indexNotification = { [unowned self] _, _ in self.updateWithVersionIndex() }
-        model.undoedIndexNotification = { [unowned self] _, _ in self.updateWithVersionIndex() }
+        updateWithModel()
     }
     
     override var defaultBounds: Rect {

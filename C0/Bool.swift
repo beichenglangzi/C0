@@ -17,7 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-//import struct Foundation.Data
 import struct Foundation.Locale
 
 extension Bool: Referenceable {
@@ -58,30 +57,6 @@ extension Bool: AbstractViewable {
     }
 }
 extension Bool: ObjectViewable {}
-extension Bool: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
-//extension Bool: ObjectViewable {
-//    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
-//                           frame: Rect, _ sizeType: SizeType,
-//                           type: AbstractType) -> ModelView where T : BinderProtocol {
-//        return ObjectView(binder: binder, keyPath: keyPath, value: self,
-//                          frame: frame, sizeType: sizeType, type: type)
-//    }
-//}
-
-//extension Bool: DynamicCodable {
-//    var dynamicCoder: DynamicCoder {
-//        return BoolDynamicCoder(self)
-//    }
-//}
-//final class BoolDynamicCoder: DynamicCoder {
-//    override class func value(from data: Data) -> DynamicCodable? {
-//        return valueWithType(Bool.self, from: data)
-//    }
-//}
 
 struct BoolOption {
     struct Info {
@@ -100,10 +75,10 @@ struct BoolOption {
     var info = Info()
 }
 
-final class BoolView<T: BinderProtocol>: View, BindableReceiver {
+final class BoolView<Binder: BinderProtocol>: View, BindableReceiver {
     typealias Model = Bool
     typealias ModelOption = BoolOption
-    typealias Binder = T
+    typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
     var binder: Binder {
         didSet { updateWithModel() }
     }
@@ -149,6 +124,7 @@ final class BoolView<T: BinderProtocol>: View, BindableReceiver {
         super.init()
         children = [optionStringView, knobView, optionTrueNameView, optionFalseNameView]
         self.frame = frame
+        updateWithModel()
     }
     
     override var defaultBounds: Rect {

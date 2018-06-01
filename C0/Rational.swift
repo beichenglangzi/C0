@@ -187,11 +187,6 @@ extension Rational: AbstractViewable {
     }
 }
 extension Rational: ObjectViewable {}
-extension Rational: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 extension Rational: LosslessStringConvertible {
     init?(_ description: String) {
         let values = description.components(separatedBy: "/")

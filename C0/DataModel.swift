@@ -157,11 +157,21 @@ final class DataModel {
         return nil
     }
     
+    private(set) var isStopIsWrite = false
+    func stopIsWriteClosure(_ closure: () -> ()) {
+        isStopIsWrite = true
+        closure()
+        isStopIsWrite = false
+    }
+    
     var didChangeIsWriteClosure: ((DataModel, Bool) -> Void)? = nil
-    var isWrite = false {
-        didSet {
-            if isWrite != oldValue {
-                didChangeIsWriteClosure?(self, isWrite)
+    private var _isWrite = false
+    var isWrite: Bool {
+        get { return _isWrite }
+        set {
+            if newValue != _isWrite && !isStopIsWrite {
+                _isWrite = newValue
+                didChangeIsWriteClosure?(self, newValue)
             }
         }
     }

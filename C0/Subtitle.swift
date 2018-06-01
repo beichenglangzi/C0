@@ -130,11 +130,6 @@ extension Subtitle: AbstractViewable {
     }
 }
 extension Subtitle: ObjectViewable {}
-extension Subtitle: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 struct SubtitleTrack: Track, Codable {
     var animation = Animation<Subtitle>()

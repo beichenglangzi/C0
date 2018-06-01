@@ -50,6 +50,12 @@ final class C0Application: NSApplication {
     }
 }
 
+extension Bool: Initializable {
+    func update(with locale: Locale) {
+        
+    }
+}
+
 @NSApplicationMain final class C0AppDelegate: NSObject, NSApplicationDelegate {
     @IBOutlet weak var aboutAppItem: NSMenuItem?
     @IBOutlet weak var servicesItem: NSMenuItem?
@@ -71,6 +77,8 @@ final class C0Application: NSApplication {
     
     private var localToken: NSObjectProtocol?
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Object.appendTypes()
+        
         updateString(with: Locale.current)
         let nc = NotificationCenter.default
         let localeClosure: (Notification) -> Void = { [unowned self] _ in
@@ -144,20 +152,18 @@ final class C0Document: NSDocument, NSWindowDelegate {
     var preferenceDataModel: DataModel {
         didSet {
             if let preference = preferenceDataModel.readObject(C0Preference.self) {
-                self.preference = preference
+                preferenceDataModel.stopIsWriteClosure {
+                    self.preference = preference
+                }
             }
             preferenceDataModel.didChangeIsWriteClosure = { [unowned self] (_, isWrite) in
-                if isWrite {
-                    self.updateChangeCount(.changeDone)
-                }
+                self.updateChangeCount(.changeDone)
             }
             preferenceDataModel.dataClosure = { [unowned self] in self.preference.jsonData }
         }
     }
     private var preference = C0Preference() {
-        didSet {
-            preferenceDataModel.isWrite = true
-        }
+        didSet { preferenceDataModel.isWrite = true }
     }
     
     var window: NSWindow {
@@ -174,9 +180,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
         
         super.init()
         preferenceDataModel.didChangeIsWriteClosure = { [unowned self] (_, isWrite) in
-            if isWrite {
-                self.updateChangeCount(.changeDone)
-            }
+            self.updateChangeCount(.changeDone)
         }
         preferenceDataModel.dataClosure = { [unowned self] in self.preference.jsonData }
     }
@@ -196,7 +200,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
             .instantiateController(withIdentifier: identifier) as! NSWindowController
         addWindowController(windowController)
         window.acceptsMouseMovedEvents = true
-        c0View = windowController.contentViewController!.view as! C0View
+        c0View = windowController.contentViewController!.view as? C0View
         
         if let desktopDataModel = rootDataModel.children[c0View.desktopBinder.dataModelKey] {
             c0View.desktopBinder.dataModel = desktopDataModel
@@ -288,7 +292,9 @@ extension NSPasteboard {
     var copiedObjects: [Object] {
         var copiedObjects = [Object]()
         func append(with data: Data, type: NSPasteboard.PasteboardType) {
-            if let object = try? JSONDecoder().decode(Object.self, from: data) {
+            if Object.contains(type.rawValue),
+                let object = try? JSONDecoder().decode(Object.self, from: data) {
+                
                 copiedObjects.append(object)
             }
         }
@@ -331,7 +337,7 @@ extension NSPasteboard {
             if let string = object.value as? String {
                 strings.append(string)
             } else {
-                let typeName = String(describing: type(of: object.value))
+                let typeName = object.value.objectTypeName
                 if let data = object.jsonData {
                     let pasteboardType = NSPasteboard.PasteboardType(rawValue: typeName)
                     typesAndDatas.append((pasteboardType, data))
@@ -403,6 +409,7 @@ final class C0View: NSView, NSTextInputClient {
     
     override init(frame frameRect: NSRect) {
         var desktop = Desktop()
+        desktop.objects.append(Object(Effect()))
 //        desktop.objects.append(Object(Scene()))
         desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
@@ -414,6 +421,7 @@ final class C0View: NSView, NSTextInputClient {
     }
     required init?(coder: NSCoder) {
         var desktop = Desktop()
+        desktop.objects.append(Object(Effect()))
 //        desktop.objects.append(Object(Scene()))
         desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)

@@ -58,8 +58,3 @@ extension URL: AbstractViewable {
     }
 }
 extension URL: ObjectViewable {}
-extension URL: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}

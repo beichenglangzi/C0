@@ -99,11 +99,6 @@ extension Easing: AbstractViewable {
     }
 }
 extension Easing: ObjectViewable {}
-extension Easing: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 /**
  Issue: 前後キーフレームからの傾斜スナップ

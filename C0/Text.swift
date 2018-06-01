@@ -140,11 +140,6 @@ extension Text: AbstractViewable {
     }
 }
 extension Text: ObjectViewable {}
-extension Text: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 final class TextFormView: View {
     var text: Text {

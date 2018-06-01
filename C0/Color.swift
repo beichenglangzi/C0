@@ -275,11 +275,6 @@ extension Color: AbstractViewable {
     }
 }
 extension Color: ObjectViewable {}
-extension Color: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 struct RGB {
     var r = 0.0.cg, g = 0.0.cg, b = 0.0.cg

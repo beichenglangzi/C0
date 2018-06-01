@@ -186,11 +186,6 @@ extension Timeline: AbstractViewable {
     }
 }
 extension Timeline: ObjectViewable {}
-extension Timeline: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 /**
  Issue: 複数選択

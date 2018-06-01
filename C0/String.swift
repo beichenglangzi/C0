@@ -76,11 +76,6 @@ extension String: AbstractViewable {
     }
 }
 extension String: ObjectViewable {}
-extension String: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 extension String: Interpolatable {
     static func linear(_ f0: String, _ f1: String, t: Real) -> String {
         return f0

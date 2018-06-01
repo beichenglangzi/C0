@@ -86,11 +86,6 @@ extension SineWave: AbstractViewable {
     }
 }
 extension SineWave: ObjectViewable {}
-extension SineWave: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 struct SineWaveTrack: Track, Codable {
     var animation = Animation<SineWave>() {

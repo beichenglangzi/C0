@@ -117,11 +117,6 @@ extension Image: AbstractViewable {
     }
 }
 extension Image: ObjectViewable {}
-extension Image: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 extension CGContext {
     var renderImage: Image? {

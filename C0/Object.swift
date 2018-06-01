@@ -18,20 +18,24 @@
  */
 
 protocol ObjectDecodable {
-    static var appendObjectType: () { get }
+    static var objectTypeName: String { get }
+    var objectTypeName: String { get }
 }
 extension ObjectDecodable {
-    static var objectType: Self.Type {
-        return Self.self
+    static var objectTypeName: String {
+        return String(describing: self)
+    }
+    var objectTypeName: String {
+        return String(describing: type(of: self))
     }
 }
 
-protocol ObjectViewable {
+protocol ObjectViewable: Codable, Referenceable, ObjectDecodable {
     func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
                            frame: Rect, _ sizeType: SizeType,
                            type: AbstractType) -> ModelView where T: BinderProtocol
 }
-extension ObjectViewable where Self: Codable & Referenceable & ObjectDecodable & AbstractViewable {
+extension ObjectViewable where Self: Codable & Referenceable & AbstractViewable {
     func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
                            frame: Rect, _ sizeType: SizeType,
                            type: AbstractType) -> ModelView where T: BinderProtocol {
@@ -40,27 +44,37 @@ extension ObjectViewable where Self: Codable & Referenceable & ObjectDecodable &
     }
 }
 
-/**
- Compiler Issue: Protocolから静的に決定可能なコードを自動生成
- */
 struct Object {
     private static var types = [String: Value.Type]()
+    static func contains(_ typeName: String) -> Bool {
+        return types[typeName] != nil
+    }
     static func append<T: Value & AbstractViewable>(_ type: T.Type) {
         let arrayType = Array<T>.self
-        types[String(describing: type)] = type
-        types[String(describing: arrayType)] = arrayType
+        types[type.objectTypeName] = type
+        types[arrayType.objectTypeName] = arrayType
     }
     static func append<T: KeyframeValue>(_ type: T.Type) {
         let arrayType = Array<T>.self
         let keyframeType = Keyframe<T>.self
         let animationType = Animation<T>.self
-        types[String(describing: type)] = type
-        types[String(describing: arrayType)] = arrayType
-        types[String(describing: keyframeType)] = keyframeType
-        types[String(describing: animationType)] = animationType
+        types[type.objectTypeName] = type
+        types[arrayType.objectTypeName] = arrayType
+        types[keyframeType.objectTypeName] = keyframeType
+        types[animationType.objectTypeName] = animationType
+    }
+    static func appendTypes() {
+        //😖
+        append(Bool.self)
+        
+        append(Effect.self)
+//        var types = [String: Value.Type]()
+//        print(String(describing: Bool.self))
+//        types[String(describing: Bool.self)] = Bool.self
+//        types[String(describing: [Bool].self)] = [Bool].self
     }
     
-    typealias Value = Codable & Referenceable & ObjectViewable & ObjectDecodable
+    typealias Value = ObjectViewable
     
     var frame: Rect
     var value: Value
@@ -93,7 +107,7 @@ extension Object: Codable {
     }
     
     func encode(to encoder: Encoder) throws {
-        let typeName = String(describing: type(of: value))
+        let typeName = String(describing: value.objectTypeName)
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(frame, forKey: .frame)
         try container.encode(typeName, forKey: .typeName)
@@ -115,9 +129,6 @@ extension Object: AbstractViewable {
         return value.objectViewWith(binder: binder, keyPath: keyPath,
                                     frame: frame, sizeType, type: type)
     }
-}
-extension Object: ObjectDecodable {
-    static var appendObjectType: () { return () }
 }
 
 protocol ObjectProtocol {
@@ -169,7 +180,8 @@ final class ObjectView<Value: Object.Value & AbstractViewable, T: BinderProtocol
                                            sizeType, type: type)
         
         super.init()
-        
+        indicatedLineColor = nil
+        noIndicatedLineColor = nil
         valueBinder.notification = { [unowned self] binder, _ in
             self.set(binder.rootModel)
         }
@@ -184,15 +196,14 @@ final class ObjectView<Value: Object.Value & AbstractViewable, T: BinderProtocol
         valueView.frame = bounds
     }
     func updateWithModel() {
-        if let value = value {
-            valueBinder = BasicBinder(rootModel: value)
-            
-            valueView = value.abstractViewWith(binder: valueBinder,
-                                               keyPath: \BasicBinder<Value>.rootModel,
-                                               frame: Rect(origin: Point(), size: frame.size),
-                                               sizeType, type: type)
-            
-            children = [valueView]
-        }
+        guard let value = value else { return }
+        valueBinder = BasicBinder(rootModel: value)
+        
+        valueView = value.abstractViewWith(binder: valueBinder,
+                                           keyPath: \BasicBinder<Value>.rootModel,
+                                           frame: Rect(origin: Point(), size: frame.size),
+                                           sizeType, type: type)
+        
+        children = [valueView]
     }
 }

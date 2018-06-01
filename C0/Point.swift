@@ -316,11 +316,6 @@ extension Point: AbstractViewable {
     }
 }
 extension Point: ObjectViewable {}
-extension Point: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 extension Array where Element == Point {
     var convexHull: [Point] {

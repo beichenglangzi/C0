@@ -74,11 +74,6 @@ extension Int: AbstractViewable {
     }
 }
 extension Int: ObjectViewable {}
-extension Int: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 struct IntGetterOption: GetterOption {
     typealias Model = Int

@@ -18,7 +18,6 @@
  */
 
 precedencegroup PowerPrecedence {
-    associativity: right
     higherThan: MultiplicationPrecedence
 }
 infix operator **: PowerPrecedence

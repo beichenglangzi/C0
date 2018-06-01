@@ -269,6 +269,7 @@ class View {
         set {
             _frame.origin = Point(x: newValue.x - _frame.width / 2,
                                   y: newValue.y - _frame.height / 2)
+            caLayer.frame.origin = _frame.origin
             changed(_frame)
             updateLayout()
         }

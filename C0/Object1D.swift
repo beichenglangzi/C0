@@ -181,6 +181,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
         isClipped = true
         children = [optionStringView, linePathView, knobView]
         self.frame = frame
+        updateWithModel()
     }
     
     override var defaultBounds: Rect {
@@ -311,13 +312,14 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
         super.init()
         append(child: knobView)
         self.frame = frame
+        updateWithModel()
     }
     
     override func updateLayout() {
         updateKnobLayout()
     }
     private func updateKnobLayout() {
-        let t = option.ratioFromDefaultModel(with: model)
+        let t = option.ratio(with: model)
         switch xyOrientation {
         case .horizontal(let horizontal):
             let tt = horizontal == .leftToRight ? t : 1 - t

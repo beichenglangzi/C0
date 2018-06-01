@@ -113,11 +113,6 @@ extension Material: AbstractViewable {
     }
 }
 extension Material: ObjectViewable {}
-extension Material: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 extension Material.MaterialType: Referenceable {
     static let uninheritanceName = Text(english: "Type", japanese: "タイプ")
@@ -168,11 +163,6 @@ extension Material.MaterialType: AbstractViewable {
     }
 }
 extension Material.MaterialType: ObjectViewable {}
-extension Material.MaterialType: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 struct MaterialTrack: Track, Codable {
     var animation = Animation<Material>()

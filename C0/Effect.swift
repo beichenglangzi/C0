@@ -62,11 +62,6 @@ extension BlendType: AbstractViewable {
     }
 }
 extension BlendType: ObjectViewable {}
-extension BlendType: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 struct Effect: Codable, Hashable {
     var blendType = BlendType.normal, blurRadius = 0.0.cg, opacity = 1.0.cg
@@ -141,16 +136,11 @@ extension Effect: AbstractViewable {
     }
 }
 extension Effect: ObjectViewable {}
-extension Effect: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 struct EffectOption {
     var blendTypeOption = BlendType.defaultOption
     var blurRadiusOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1000,
-                                      modelInterval: 0.1, exp: 3)
+                                      modelInterval: 0.1, exp: 2, numberOfDigits: 1)
     var opacityOption = RealOption.opacity
 }
 
@@ -224,7 +214,7 @@ final class EffectView<T: BinderProtocol>: View, BindableReceiver {
     override var defaultBounds: Rect {
         let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
         let viewHeight = height * 2 + padding * 2
-        return Rect(x: 0, y: 0, width: Layout.propertyWidth, height: viewHeight)
+        return Rect(x: 0, y: 0, width: 220, height: viewHeight)
     }
     override func updateLayout() {
         let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)

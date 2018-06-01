@@ -121,8 +121,8 @@ extension Real {
     }
 }
 extension Real {
-    static func **(_ lhs: Real, _rhs: Real) -> Real {
-        return pow(lhs, lhs)
+    static func **(_ lhs: Real, _ rhs: Real) -> Real {
+        return pow(lhs, rhs)
     }
 }
 extension Real: Interpolatable {
@@ -176,11 +176,6 @@ extension Real: AbstractViewable {
     }
 }
 extension Real: ObjectViewable {}
-extension Real: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 extension Real {
     init?(_ string: String) {
         if let value = Double(string)?.cg {
@@ -292,7 +287,9 @@ struct RealOption: Object1DOption {
         return (model - minModel) / (maxModel - minModel)
     }
     func ratioFromDefaultModel(with model: Model) -> Real {
-        if model < defaultModel {
+        if defaultModel == minModel || defaultModel == maxModel {
+            return model / (maxModel - minModel)
+        } else if model < defaultModel {
             return ((model - minModel) / (defaultModel - minModel)) * 0.5
         } else {
             return ((model - defaultModel) / (maxModel - defaultModel)) * 0.5 + 0.5

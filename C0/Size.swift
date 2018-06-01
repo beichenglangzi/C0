@@ -97,11 +97,6 @@ extension Size: AbstractViewable {
     }
 }
 extension Size: ObjectViewable {}
-extension Size: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 extension Size: Object2D {
     typealias XModel = Real

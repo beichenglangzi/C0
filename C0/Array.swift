@@ -70,6 +70,7 @@ extension Array: AbstractViewable where Element: Object.Value & AbstractViewable
         }
     }
 }
+extension Array: ObjectDecodable where Element: Object.Value & AbstractViewable {}
 extension Array: ObjectViewable where Element: Object.Value & AbstractViewable {
 //    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
 //                           frame: Rect, _ sizeType: SizeType,
@@ -77,9 +78,6 @@ extension Array: ObjectViewable where Element: Object.Value & AbstractViewable {
 //        return ObjectView(binder: binder, keyPath: keyPath, value: self,
 //                          frame: frame, sizeType: sizeType, type: type)
 //    }
-}
-extension Array: ObjectDecodable where Element: ObjectDecodable {
-    static var appendObjectType: () { return () }
 }
 
 enum ArrayNotification<Model> {

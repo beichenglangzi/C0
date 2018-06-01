@@ -144,11 +144,6 @@ extension Drawing: AbstractViewable {
     }
 }
 extension Drawing: ObjectViewable {}
-extension Drawing: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 struct LinesTrack: Track, Codable {
     var animation: Animation<Lines>
@@ -234,11 +229,6 @@ extension Lines: AbstractViewable {
     }
 }
 extension Lines: ObjectViewable {}
-extension Lines: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 /**
  Issue: DraftArray、下書き化などのコマンドを排除

@@ -650,11 +650,6 @@ extension CellGroup: AbstractViewable {
     }
 }
 extension CellGroup: ObjectViewable {}
-extension CellGroup: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 struct CellGroupChildren: KeyframeValue {
     var children = [CellGroup]()
@@ -695,12 +690,7 @@ extension CellGroupChildren: AbstractViewable {
         }
     }
 }
-extension CellGroupChildren: ObjectViewable {}
-extension CellGroupChildren: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
+//extension CellGroupChildren: ObjectViewable {}
 
 struct CellGroupChildrenTrack: Track, Codable {
     var animation = Animation<CellGroupChildren>()

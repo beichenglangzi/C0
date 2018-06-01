@@ -215,7 +215,7 @@ final class MovableSender: SubSender {
 
 protocol BasicDiscretePointMovable: BindableReceiver, PointMovable {
     var knobView: View { get }
-    var knobLineColor: Color { get }
+    var knobFillColor: Color { get }
     func model(at p: Point, first fp: Point, old: Model) -> Model
     func didChangeFromMovePoint(_ phase: Phase, beganModel: Model)
 }
@@ -223,8 +223,8 @@ extension BasicDiscretePointMovable {
     func captureWillMovePoint(at p: Point, to version: Version) {
         capture(model, to: version)
     }
-    var knobLineColor: Color {
-        return .getSetBorder
+    var knobFillColor: Color {
+        return .knob
     }
 }
 extension BasicDiscretePointMovable where Self: View {
@@ -249,7 +249,7 @@ final class BasicDiscreteViewPointMover<T: View & BasicDiscretePointMovable>: Vi
         switch phase {
         case .began: view.knobView.fillColor = .editing
         case .changed: break
-        case .ended: view.knobView.fillColor = view.knobLineColor
+        case .ended: view.knobView.fillColor = view.knobFillColor
         }
         
         view.binder[keyPath: view.keyPath] = view.model(at: p, first: fp, old: beganModel)

@@ -317,11 +317,6 @@ extension Cell: AbstractViewable {
     }
 }
 extension Cell: ObjectViewable {}
-extension Cell: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 final class CellView<T: BinderProtocol>: View, BindableReceiver {
     typealias Model = Cell

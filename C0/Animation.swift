@@ -358,9 +358,6 @@ extension Animation: AbstractViewable {
     }
 }
 extension Animation: ObjectViewable {}
-extension Animation: ObjectDecodable {
-    static var appendObjectType: () { return () }
-}
 
 final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, BindableReceiver {
     typealias Model = Animation<Value>

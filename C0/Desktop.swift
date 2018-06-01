@@ -20,7 +20,7 @@
 import Foundation
 
 struct Desktop {
-    var copiedObjects = [Object]()
+    var copiedObjects = [Object(false)]
     var isHiddenActionManager = false
     let actionManager = ActionManager()
     var objects = [Object]()
@@ -98,7 +98,9 @@ final class DesktopBinder: BinderProtocol {
     var diffDesktopDataModel: DataModel {
         didSet {
             if let desktop = diffDesktopDataModel.readObject(Desktop.self) {
-                self.rootModel = desktop
+                diffDesktopDataModel.stopIsWriteClosure {
+                    self.rootModel = desktop
+                }
             }
             diffDesktopDataModel.dataClosure = { [unowned self] in self.rootModel.jsonData }
         }
@@ -114,6 +116,8 @@ final class DesktopBinder: BinderProtocol {
 final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
     typealias Model = Desktop
     typealias Binder = T
+    typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
+    typealias Notification = BasicNotification
     var binder: Binder {
         didSet { updateWithModel() }
     }
@@ -160,6 +164,8 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         super.init()
         fillColor = .background
         
+        children = [versionView, copiedObjectsNameView,
+                    isHiddenActionManagerView, actionManagerView]
         children = [versionView, copiedObjectsNameView, copiedObjectsView,
                     isHiddenActionManagerView, actionManagerView, objectsView]
         
@@ -199,6 +205,8 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         copiedObjectsView.frame = Rect(x: copiedObjectsNameView.frame.maxX, y: headerY,
                                        width: cw, height: topViewsHeight)
         updateCopiedObjectViewPositions()
+        isHiddenActionManagerView.frame = Rect(x: 100, y: headerY,
+                                               width: ihamvw, height: topViewsHeight)
         isHiddenActionManagerView.frame = Rect(x: copiedObjectsView.frame.maxX, y: headerY,
                                                width: ihamvw, height: topViewsHeight)
         
@@ -225,6 +233,9 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
     }
     func updateWithModel() {
         isHiddenActionManagerView.updateWithModel()
+        copiedObjectsView.updateWithModel()
+        objectsView.updateWithModel()
+        versionView.updateWithModel()
         if actionManagerView.isHidden != model.isHiddenActionManager {
             actionManagerView.isHidden = model.isHiddenActionManager
             updateLayout()

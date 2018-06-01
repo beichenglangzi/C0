@@ -87,11 +87,6 @@ extension Canvas: AbstractViewable {
     }
 }
 extension Canvas: ObjectViewable {}
-extension Canvas: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 /**
  Issue: Z移動を廃止してセルツリー表示を作成、セルクリップや全てのロック解除などを廃止
@@ -394,7 +389,6 @@ final class CanvasViewTransformer<Binder: BinderProtocol>: ViewTransformer, View
         case .changed, .ended:
             guard let cellGroup = cellGroup else { return }
             let affine = affineTransform(with: cellGroup)
-            
         }
     }
 }

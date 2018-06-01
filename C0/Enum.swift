@@ -90,6 +90,7 @@ final class EnumView<T: EnumType, U: BinderProtocol>: View, BindableReceiver {
         super.init()
         children = [classNameView, knobView] + nameViews
         self.frame = frame
+        updateWithModel()
     }
     
     override var defaultBounds: Rect {

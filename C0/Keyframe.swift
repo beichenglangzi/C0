@@ -79,9 +79,6 @@ extension Keyframe: AbstractViewable {
     }
 }
 extension Keyframe: ObjectViewable {}
-extension Keyframe: ObjectDecodable {
-    static var appendObjectType: () { return () }
-}
 
 struct KeyframeTiming: Codable, Hashable {
     enum Label: Int8, Codable {
@@ -146,11 +143,6 @@ extension KeyframeTiming.Loop: AbstractViewable {
     }
 }
 extension KeyframeTiming.Loop: ObjectViewable {}
-extension KeyframeTiming.Loop: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 extension KeyframeTiming.Interpolation: Referenceable {
     static let uninheritanceName = Text(english: "Interpolation", japanese: "補間")
@@ -198,11 +190,6 @@ extension KeyframeTiming.Interpolation: AbstractViewable {
     }
 }
 extension KeyframeTiming.Interpolation: ObjectViewable {}
-extension KeyframeTiming.Interpolation: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 extension KeyframeTiming.Label: Referenceable {
     static let uninheritanceName = Text(english: "Label", japanese: "ラベル")
@@ -246,11 +233,6 @@ extension KeyframeTiming.Label: AbstractViewable {
     }
 }
 extension KeyframeTiming.Label: ObjectViewable {}
-extension KeyframeTiming.Label: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 
 extension KeyframeTiming: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
@@ -273,11 +255,6 @@ extension KeyframeTiming: AbstractViewable {
     }
 }
 extension KeyframeTiming: ObjectViewable {}
-extension KeyframeTiming: ObjectDecodable {
-    static let appendObjectType: () = {
-        Object.append(objectType)
-    } ()
-}
 extension KeyframeTiming {
     static let labelOption = KeyframeTiming.Label.defaultOption
     static let loopOption = KeyframeTiming.Loop.defaultOption
