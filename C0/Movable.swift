@@ -51,7 +51,7 @@ protocol PointEditable: VertexMovable {
     func insert(_ p: Point, _ version: Version)
     func removeNearestPoint(for p: Point, _ version: Version)
 }
-protocol Movable {
+protocol Movable: Layoutable {
     func captureWillMoveObject(at p: Point, to version: Version)
     func makeViewMover() -> ViewMover
 }
@@ -101,7 +101,7 @@ final class MovableSender: SubSender {
     typealias PointEditableReceiver = View & PointEditable
     typealias PointMovableReceiver = View & PointMovable
     typealias VertexMovableReceiver = View & VertexMovable
-    typealias MovableReceiver = View & Movable
+    typealias MovableReceiver = View & Layoutable
     typealias TransfomableReceiver = View & Transformable
     
     typealias ActionManager = MovableActionManager
@@ -111,7 +111,8 @@ final class MovableSender: SubSender {
         self.actionManager = actionManager
     }
     
-    private var fp = Point()
+    private var fp = Point(), oldP = Point()
+    private var layoutableView: MovableReceiver?
     private var viewPointMover: ViewPointMover?, viewVertexMover: ViewVertexMover?
     private var viewMover: ViewMover?, viewTransformer: ViewTransformer?
     
@@ -172,18 +173,21 @@ final class MovableSender: SubSender {
         case actionManager.moveAction:
             if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
                 if actionMap.phase == .began,
-                    let receiver = sender.mainIndicatedView as? MovableReceiver {
+                    let receiver = sender.mainIndicatedView.withSelfAndAllParents(with: MovableReceiver.self) {
                     
-                    fp = receiver.convertFromRoot(eventValue.rootLocation)
-                    viewMover = receiver.makeViewMover()
-                    receiver.captureWillMoveObject(at: fp, to: sender.indicatedVersionView.version)
+                    oldP = receiver.frame.origin
+                    fp = receiver.parent?.convertFromRoot(eventValue.rootLocation) ?? Point()
+                    layoutableView = receiver
+//                    viewMover = receiver.makeViewMover()
+//                    receiver.captureWillMoveObject(at: fp, to: sender.indicatedVersionView.version)
                 }
-                guard let viewMover = viewMover else { return }
-                let p = viewMover.movableView.convertFromRoot(eventValue.rootLocation)
-                viewMover.move(for: p, first: fp, pressure: eventValue.pressure,
-                               time: eventValue.time, actionMap.phase)
+                guard let viewMover = layoutableView else { return }
+                let p = viewMover.parent?.convertFromRoot(eventValue.rootLocation) ?? Point()
+                viewMover.frame.origin = oldP + p - fp
+//                viewMover.move(for: p, first: fp, pressure: eventValue.pressure,
+//                               time: eventValue.time, actionMap.phase)
                 if actionMap.phase == .ended {
-                    self.viewMover = nil
+                    self.layoutableView = nil
                 }
             }
         case actionManager.transformAction, actionManager.warpAction:
@@ -300,5 +304,478 @@ final class BasicSlidableViewPointMover<T: View & BasicSlidablePointMovable>: Vi
         view.binder[keyPath: view.keyPath] = view.model(at: p)
         view.updateWithModel()
         view.didChangeFromMovePoint(phase, beganModel: beganModel)
+    }
+}
+
+
+extension CanvasView: VertexMovable {
+    var z: Real {
+        get {
+            return 1
+        }
+        set {
+            
+        }
+    }
+    
+    func captureWillMovePoint(at p: Point, to version: Version) {
+        
+    }
+    
+    func insert(_ point: Point) {
+        let p = convertToCurrentLocal(point), inNode = model.editingCellGroup
+        guard let nearest = inNode.nearestLineItem(at: p) else { return }
+        
+    }
+    func removeNearestPoint(for point: Point) {
+        let p = convertToCurrentLocal(point), inNode = model.editingCellGroup
+        guard let nearest = inNode.nearestLineItem(at: p) else { return }
+        if nearest.linePoint.line.controls.count > 2 {
+            model.editingCellGroup.drawing.lines[nearest.linePoint.lineIndex]
+                .controls.remove(at: nearest.linePoint.pointIndex)
+        } else {
+            model.editingCellGroup.drawing.lines.remove(at: nearest.linePoint.lineIndex)
+        }
+    }
+    
+    func makeViewPointMover() -> ViewPointMover {
+        return CanvasViewPointMover(canvasView: self)
+    }
+    func makeViewVertexMover() -> ViewVertexMover {
+        return CanvasViewPointMover(canvasView: self)
+    }
+}
+
+
+
+final class AnimationViewPointMover<Value: KeyframeValue, Binder: BinderProtocol> {
+    var animationView: AnimationView<Value, Binder>
+    var model: Animation<Value> {
+        get { return animationView.model }
+        set { animationView.model = newValue }
+    }
+    
+    init(animationView: AnimationView<Value, Binder>) {
+        self.animationView = animationView
+    }
+    
+    var editingKeyframeIndex: Int?
+    
+    var oldRealBaseTime = RealBaseTime(0), oldKeyframeIndex: Int?
+    var clipDeltaTime = Rational(0), minDeltaTime = Rational(0), oldTime = Rational(0)
+    var oldAnimation = Animation<Value>()
+    
+    func move(for point: Point, pressure: Real,
+              time: Second, _ phase: Phase) {
+        let p = point
+        switch phase {
+        case .began:
+            oldRealBaseTime = animationView.realBaseTime(withX: p.x)
+            if let ki = animationView.nearestKeyframeIndex(at: p), model.keyframes.count > 1 {
+                let keyframeIndex = ki > 0 ? ki : 1
+                oldKeyframeIndex = keyframeIndex
+                moveKeyframe(withDeltaTime: 0, keyframeIndex: keyframeIndex, phase: phase)
+            } else {
+                oldKeyframeIndex = nil
+                moveDuration(withDeltaTime: 0, phase)
+            }
+        case .changed, .ended:
+            let t = animationView.realBaseTime(withX: point.x)
+            let fdt = t - oldRealBaseTime + (t - oldRealBaseTime >= 0 ? 0.5 : -0.5)
+            let dt = animationView.basedRationalTime(withRealBaseTime: fdt)
+            let deltaTime = max(minDeltaTime, dt + clipDeltaTime)
+            if let keyframeIndex = oldKeyframeIndex, keyframeIndex < model.keyframes.count {
+                moveKeyframe(withDeltaTime: deltaTime, keyframeIndex: keyframeIndex, phase: phase)
+            } else {
+                moveDuration(withDeltaTime: deltaTime, phase)
+            }
+        }
+    }
+    func move(withDeltaTime deltaTime: Rational, keyframeIndex: Int?, _ phase: Phase) {
+        if let keyframeIndex = keyframeIndex, keyframeIndex < model.keyframes.count {
+            moveKeyframe(withDeltaTime: deltaTime, keyframeIndex: keyframeIndex, phase: phase)
+        } else {
+            moveDuration(withDeltaTime: deltaTime, phase)
+        }
+    }
+    func moveKeyframe(withDeltaTime deltaTime: Rational,
+                      keyframeIndex: Int, phase: Phase) {
+        switch phase {
+        case .began:
+            editingKeyframeIndex = keyframeIndex
+            let preTime = model.keyframes[keyframeIndex - 1].timing.time
+            let time = model.keyframes[keyframeIndex].timing.time
+            clipDeltaTime = animationView.clipDeltaTime(withTime: time + animationView.beginBaseTime)
+            minDeltaTime = preTime - time
+            oldAnimation = model
+            oldTime = time
+        case .changed, .ended:
+            var nks = oldAnimation.keyframes
+            (keyframeIndex..<nks.count).forEach {
+                nks[$0].timing.time += deltaTime
+            }
+            model.keyframes = nks
+            model.duration = oldAnimation.duration + deltaTime
+            animationView.updateLayout()
+        }
+    }
+    func moveDuration(withDeltaTime deltaTime: Rational, _ phase: Phase) {
+        switch phase {
+        case .began:
+            editingKeyframeIndex = model.keyframes.count
+            let preTime = model.keyframes[model.keyframes.count - 1].timing.time
+            let time = model.duration
+            clipDeltaTime = animationView.clipDeltaTime(withTime: time + animationView.beginBaseTime)
+            minDeltaTime = preTime - time
+            oldAnimation = model
+            oldTime = time
+        case .changed, .ended:
+            model.duration = oldAnimation.duration + deltaTime
+            animationView.updateLayout()
+        }
+    }
+}
+
+
+extension CanvasView: Transformable {
+    func captureWillMoveObject(at p: Point, to version: Version) {
+        
+    }
+    
+    func makeViewTransformer() -> ViewTransformer {
+        return CanvasViewTransformer(canvasView: self)
+    }
+    
+    func makeViewMover() -> ViewMover {
+        return CanvasViewTransformer(canvasView: self)
+    }
+}
+final class CanvasViewTransformer<Binder: BinderProtocol>: ViewTransformer, ViewMover {
+    var transformableView: View & Transformable {
+        return canvasView
+    }
+    var movableView: View & Movable {
+        return canvasView
+    }
+    
+    var canvasView: CanvasView<Binder>
+    
+    init(canvasView: CanvasView<Binder>) {
+        self.canvasView = canvasView
+    }
+    
+    var transformBounds = Rect.null, beginPoint = Point(), anchorPoint = Point()
+    enum TransformEditType {
+        case move, transform, warp
+    }
+    func move(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        move(for: p, pressure: pressure, time: time, phase, type: .move)
+    }
+    func transform(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        move(for: p, pressure: pressure, time: time, phase, type: .transform)
+    }
+    func warp(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        move(for: p, pressure: pressure, time: time, phase, type: .warp)
+    }
+    let transformAngleTime = Second(0.1)
+    var transformAngleOldTime = Second(0.0)
+    var transformAnglePoint = Point(), transformAngleOldPoint = Point()
+    var isTransformAngle = false
+    var cellGroup: CellGroup?
+    func move(for point: Point, pressure: Real, time: Second, _ phase: Phase,
+              type: TransformEditType) {
+        let p = canvasView.convertToCurrentLocal(point)
+        
+        func transformAffineTransformWith(point: Point, oldPoint: Point,
+                                          anchorPoint: Point) -> AffineTransform {
+            guard oldPoint != anchorPoint else {
+                return AffineTransform.identity
+            }
+            let r = point.distance(anchorPoint), oldR = oldPoint.distance(anchorPoint)
+            let angle = anchorPoint.tangential(point)
+            let oldAngle = anchorPoint.tangential(oldPoint)
+            let scale = r / oldR
+            var affine = AffineTransform(translation: anchorPoint)
+            affine.rotate(by: angle.differenceRotation(oldAngle))
+            affine.scale(by: scale)
+            affine.translate(by: -anchorPoint)
+            return affine
+        }
+        func warpAffineTransformWith(point: Point, oldPoint: Point,
+                                     anchorPoint: Point) -> AffineTransform {
+            guard oldPoint != anchorPoint else {
+                return AffineTransform.identity
+            }
+            let theta = oldPoint.tangential(anchorPoint)
+            let angle = theta < 0 ? theta + .pi : theta - .pi
+            var pAffine = AffineTransform(rotationAngle: -angle)
+            pAffine.translate(by: -anchorPoint)
+            let newOldP = oldPoint * pAffine, newP = point * pAffine
+            let scaleX = newP.x / newOldP.x, skewY = (newP.y - newOldP.y) / newOldP.x
+            var affine = AffineTransform(translation: anchorPoint)
+            affine.rotate(by: angle)
+            affine.scale(by: Point(x: scaleX, y: 1))
+            if skewY != 0 {
+                let skewAffine = AffineTransform(a: 1, b: skewY,
+                                                 c: 0, d: 1,
+                                                 tx: 0, ty: 0)
+                affine = skewAffine * affine
+            }
+            affine.rotate(by: -angle)
+            affine.translate(by: -anchorPoint)
+            return affine
+        }
+        
+        func affineTransform(with cellGroup: CellGroup) -> AffineTransform {
+            switch type {
+            case .move:
+                return AffineTransform(translation: p - beginPoint)
+            case .transform:
+                return transformAffineTransformWith(point: p, oldPoint: beginPoint,
+                                                    anchorPoint: anchorPoint)
+            case .warp:
+                return warpAffineTransformWith(point: p, oldPoint: beginPoint,
+                                               anchorPoint: anchorPoint)
+            }
+        }
+        switch phase {
+        case .began:
+            //selectedLines
+            if type != .move {
+                self.transformAngleOldTime = time
+                self.transformAngleOldPoint = p
+                self.isTransformAngle = false
+            }
+            cellGroup = canvasView.model.editingCellGroup
+            beginPoint = p
+        case .changed, .ended:
+            guard let cellGroup = cellGroup else { return }
+            let affine = affineTransform(with: cellGroup)
+        }
+    }
+}
+
+
+extension ImageView: Movable {
+    var z: Real {
+        get {
+            return 1
+        }
+        set {
+            
+        }
+    }
+    
+    func captureWillMoveObject(at p: Point, to version: Version) {}
+    
+    func makeViewMover() -> ViewMover {
+        return ImageViewMover(imageView: self)
+    }
+    
+}
+final class ImageViewMover<Binder: BinderProtocol>: ViewMover {
+    var movableView: View & Movable {
+        return imageView
+    }
+    var imageView: ImageView<Binder>
+    
+    init(imageView: ImageView<Binder>) {
+        self.imageView = imageView
+    }
+    
+    private enum DragType {
+        case move, resizeMinXMinY, resizeMaxXMinY, resizeMinXMaxY, resizeMaxXMaxY
+    }
+    private var dragType = DragType.move, downPosition = Point(), oldFrame = Rect()
+    private var resizeWidth = 10.0.cg, ratio = 1.0.cg
+    
+    func move(for point: Point, first fp: Point, pressure: Real,
+              time: Second, _ phase: Phase) {
+        guard let parent = imageView.parent else { return }
+        let p = parent.convert(point, from: imageView), ip = point
+        switch phase {
+        case .began:
+            if Rect(x: 0, y: 0, width: resizeWidth, height: resizeWidth).contains(ip) {
+                dragType = .resizeMinXMinY
+            } else if Rect(x: imageView.bounds.width - resizeWidth, y: 0,
+                           width: resizeWidth, height: resizeWidth).contains(ip) {
+                dragType = .resizeMaxXMinY
+            } else if Rect(x: 0, y: imageView.bounds.height - resizeWidth,
+                           width: resizeWidth, height: resizeWidth).contains(ip) {
+                dragType = .resizeMinXMaxY
+            } else if Rect(x: imageView.bounds.width - resizeWidth,
+                           y: imageView.bounds.height - resizeWidth,
+                           width: resizeWidth, height: resizeWidth).contains(ip) {
+                dragType = .resizeMaxXMaxY
+            } else {
+                dragType = .move
+            }
+            downPosition = p
+            oldFrame = imageView.frame
+            ratio = imageView.frame.height / imageView.frame.width
+        case .changed, .ended:
+            let dp =  p - downPosition
+            var frame = imageView.frame
+            switch dragType {
+            case .move:
+                frame.origin = Point(x: oldFrame.origin.x + dp.x, y: oldFrame.origin.y + dp.y)
+            case .resizeMinXMinY:
+                frame.origin.x = oldFrame.origin.x + dp.x
+                frame.origin.y = oldFrame.origin.y + dp.y
+                frame.size.width = oldFrame.width - dp.x
+                frame.size.height = frame.size.width * ratio
+            case .resizeMaxXMinY:
+                frame.origin.y = oldFrame.origin.y + dp.y
+                frame.size.width = oldFrame.width + dp.x
+                frame.size.height = frame.size.width * ratio
+            case .resizeMinXMaxY:
+                frame.origin.x = oldFrame.origin.x + dp.x
+                frame.size.width = oldFrame.width - dp.x
+                frame.size.height = frame.size.width * ratio
+            case .resizeMaxXMaxY:
+                frame.size.width = oldFrame.width + dp.x
+                frame.size.height = frame.size.width * ratio
+            }
+            imageView.frame = phase == .ended ? frame.integral : frame
+        }
+    }
+}
+
+final class CanvasViewPointMover<Binder: BinderProtocol>: ViewPointMover, ViewVertexMover {
+    var canvasView: CanvasView<Binder>
+    
+    var pointMovableView: View & PointMovable {
+        return canvasView
+    }
+    var vertexMovableView: View & VertexMovable {
+        return canvasView
+    }
+    
+    init(canvasView: CanvasView<Binder>) {
+        self.canvasView = canvasView
+    }
+    
+    private var nearest: CellGroup.Nearest?
+    private var oldPoint = Point(), isSnap = false
+    private var cellGroup: CellGroup?
+    private let snapDistance = 8.0.cg
+    
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        movePoint(for: p, first: fp, pressure: pressure, time: time, phase, isVertex: false)
+    }
+    func moveVertex(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+        movePoint(for: p, first: fp, pressure: pressure, time: time, phase, isVertex: true)
+    }
+    func movePoint(for point: Point, first fp: Point, pressure: Real,
+                   time: Second, _ phase: Phase, isVertex: Bool) {
+        let p = canvasView.convertToCurrentLocal(point)
+        switch phase {
+        case .began:
+            let cellGroup = canvasView.model.editingCellGroup
+            guard let nearest = cellGroup.nearest(at: p, isVertex: isVertex) else { return }
+            self.nearest = nearest
+            isSnap = false
+            self.cellGroup = cellGroup
+            oldPoint = p
+        case .changed, .ended:
+            guard let nearest = nearest else { return }
+            let dp = p - oldPoint
+            
+            isSnap = isSnap ? true : pressure == 1//speed
+            
+            switch nearest.result {
+            case .lineItem(let lineItem):
+                movingPoint(with: lineItem, fp: nearest.point, dp: dp)
+            case .lineCapResult(let lineCapResult):
+                if isSnap {
+                    movingPoint(with: lineCapResult,
+                                fp: nearest.point, dp: dp, isVertex: isVertex)
+                } else {
+                    movingLineCap(with: lineCapResult,
+                                  fp: nearest.point, dp: dp, isVertex: isVertex)
+                }
+            }
+        }
+    }
+    private func movingPoint(with lineItem: CellGroup.LineItem, fp: Point, dp: Point) {
+        let snapD = snapDistance / canvasView.model.scale
+        let e = lineItem.linePoint
+        switch lineItem.drawingOrCell {
+        case .drawing(let drawing):
+            var control = e.line.controls[e.pointIndex]
+            control.point = e.line.mainPoint(withMainCenterPoint: fp + dp,
+                                             at: e.pointIndex)
+            if isSnap && (e.pointIndex == 1 || e.pointIndex == e.line.controls.count - 2) {
+                let cellGroup = canvasView.model.editingCellGroup
+                control.point = cellGroup.snappedPoint(control.point,
+                                                       editLine: drawing.lines[e.lineIndex],
+                                                       editingMaxPointIndex: e.pointIndex,
+                                                       snapDistance: snapD)
+            }
+        //            drawing.lines[e.lineIndex].controls[e.pointIndex] = control
+        default: break
+        }
+    }
+    private func movingPoint(with lcr: CellGroup.Nearest.Result.LineCapResult,
+                             fp: Point, dp: Point, isVertex: Bool) {
+        let snapD = snapDistance * canvasView.model.reciprocalScale
+        let grid = 5 * canvasView.model.reciprocalScale
+        
+        let b = lcr.bezierSortedLineCapItem
+        let cellGroup = canvasView.model.editingCellGroup
+        var np = cellGroup.snappedPoint(fp + dp, with: b,
+                                        snapDistance: snapD, grid: grid)
+        switch b.drawingOrCell {
+        case .drawing(let drawing):
+            var newLines = drawing.lines
+            if b.lineCap.line.controls.count == 2 {
+                let pointIndex = b.lineCap.pointIndex
+                var control = b.lineCap.line.controls[pointIndex]
+                control.point = cellGroup.snappedPoint(np,
+                                                       editLine: drawing.lines[b.lineCap.lineIndex],
+                                                       editingMaxPointIndex: pointIndex,
+                                                       snapDistance: snapD)
+                newLines[b.lineCap.lineIndex].controls[pointIndex] = control
+                np = control.point
+            } else if isVertex {
+                newLines[b.lineCap.lineIndex]
+                    = b.lineCap.line.warpedWith(deltaPoint: np - fp,
+                                                isFirst: b.lineCap.orientation == .first)
+            } else {
+                let pointIndex = b.lineCap.pointIndex
+                var control = b.lineCap.line.controls[pointIndex]
+                control.point = np
+                newLines[b.lineCap.lineIndex].controls[b.lineCap.pointIndex] = control
+            }
+        //            drawing.lines = newLines
+        default: break
+        }
+    }
+    func movingLineCap(with lcr: CellGroup.Nearest.Result.LineCapResult,
+                       fp: Point, dp: Point, isVertex: Bool) {
+        let np = fp + dp
+        
+        if let dc = lcr.lineCapsItem.drawingCap {
+            var newLines = dc.drawing.lines
+            if isVertex {
+                dc.drawingLineCaps.forEach {
+                    newLines[$0.lineIndex] = $0.line.warpedWith(deltaPoint: dp,
+                                                                isFirst: $0.orientation == .first)
+                }
+            } else {
+                for cap in dc.drawingLineCaps {
+                    var control = cap.orientation == .first ?
+                        cap.line.controls[0] : cap.line.controls[cap.line.controls.count - 1]
+                    control.point = np
+                    switch cap.orientation {
+                    case .first:
+                        newLines[cap.lineIndex].controls[0] = control
+                    case .last:
+                        newLines[cap.lineIndex].controls[cap.line.controls.count - 1] = control
+                    }
+                }
+            }
+            //            e.drawing.lines = newLines
+        }
     }
 }

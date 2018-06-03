@@ -17,8 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
-
 typealias Object0D = Object.Value
 
 protocol GetterOption {
@@ -28,7 +26,9 @@ protocol GetterOption {
     func displayText(with model: Model) -> Text
 }
 
-final class GetterView<T: GetterOption, U: BinderProtocol>: View, BindableGetterReceiver {
+final class GetterView<T: GetterOption, U: BinderProtocol>
+: ModelView, BindableGetterReceiver {
+
     typealias Model = T.Model
     typealias ModelOption = T
     typealias Binder = U
@@ -86,13 +86,8 @@ final class GetterView<T: GetterOption, U: BinderProtocol>: View, BindableGetter
         bounds.size = optionStringView.bounds.size
     }
 }
-extension GetterView: Copiable {
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-}
 
-final class MiniView<T: Object0D, U: BinderProtocol>: View, BindableGetterReceiver {
+final class MiniView<T: Object0D, U: BinderProtocol>: ModelView, BindableGetterReceiver {
     typealias Model = T
     typealias Binder = U
     var binder: Binder {
@@ -140,21 +135,21 @@ final class MiniView<T: Object0D, U: BinderProtocol>: View, BindableGetterReceiv
         return 40
     }
     override var defaultBounds: Rect {
-        let padding = Layout.padding(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
         let width = max(MiniView.defaultMinWidth,
                         classNameView.frame.width + MiniView.defaultThumbnailWidth)
         return Rect(x: 0, y: 0, width: width, height: classNameView.frame.height + padding * 2)
     }
     static func thumbnailFrame(withBounds bounds: Rect,
                                leftWidth: Real, sizeType: SizeType) -> Rect {
-        let padding = Layout.padding(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
         return Rect(x: leftWidth + padding,
                     y: padding,
                     width: bounds.width - leftWidth - padding * 3,
                     height: bounds.height - padding * 2)
     }
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
         classNameView.frame.origin = Point(x: padding,
                                            y: bounds.height - classNameView.frame.height - padding)
         thumbnailView.frame = MiniView.thumbnailFrame(withBounds: bounds,
@@ -169,23 +164,6 @@ final class MiniView<T: Object0D, U: BinderProtocol>: View, BindableGetterReceiv
                                                    frame: thumbnailFrame, sizeType: sizeType)
     }
     static func thumbnailViewWith(model: Model, frame: Rect, sizeType: SizeType) -> View {
-        if let thumbnailViewable = model as? ThumbnailViewable {
-            return thumbnailViewable.thumbnailView(withFrame: frame, sizeType)
-        } else {
-            let view = View(isLocked: true)
-            view.frame = frame
-            view.lineColor = .formBorder
-            return view
-        }
-    }
-}
-extension MiniView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
-    }
-}
-extension MiniView: Copiable {
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
+        return model.thumbnailView(withFrame: frame, sizeType)
     }
 }

@@ -98,12 +98,26 @@ extension Version: Codable {
     }
     func encode(to encoder: Encoder) throws {}
 }
+extension Version: AbstractViewable {
+    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Version>,
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> ModelView where T : BinderProtocol {
+        switch type {
+        case .normal:
+            return VersionView(binder: binder, keyPath: keyPath,
+                               frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Version: ObjectViewable {}
 
 /**
  Issue: バージョン管理
  Issue: ブランチ機能
  */
-final class VersionView<T: BinderProtocol>: View, BindableReceiver {
+final class VersionView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Version
     typealias Binder = T
     var binder: Binder {
@@ -113,6 +127,10 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
         didSet { updateWithModel() }
     }
     var notifications = [((VersionView<Binder>, BasicNotification) -> ())]()
+    
+    var defaultModel: Model {
+        return Model()
+    }
     
     let indexView: IntGetterView<Binder>
     let undoedDiffCountView: IntGetterView<Binder>
@@ -145,16 +163,16 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     override var defaultBounds: Rect {
-        return Rect(x: 0, y: 0, width: 120, height: Layout.height(with: sizeType))
+        return Rect(x: 0, y: 0, width: 120, height: Layouter.height(with: sizeType))
     }
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
         classNameView.frame.origin = Point(x: padding,
                                            y: bounds.height - classNameView.frame.height - padding)
-        let items: [Layout.Item] = model.undoedIndex < model.index ?
+        let items: [Layouter.Item] = model.undoedIndex < model.index ?
             [.view(indexView), .xPadding(padding), .view(undoedDiffCountView)] :
             [.view(indexView)]
-        _ = Layout.leftAlignment(items, minX: classNameView.frame.maxX + padding,
+        _ = Layouter.leftAlignment(items, minX: classNameView.frame.maxX + padding,
                                  height: frame.height)
     }
     func updateWithModel() {
@@ -180,9 +198,8 @@ final class VersionView<T: BinderProtocol>: View, BindableReceiver {
         }
         updateLayout()
     }
-}
-extension VersionView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
+    
+    func clippedModel(_ model: Model) -> Model {
+        return self.model
     }
 }

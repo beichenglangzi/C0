@@ -17,7 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
 import CoreGraphics
 
 struct CellGroup: Codable, TreeNode, Equatable, Namable {
@@ -679,6 +678,11 @@ extension CellGroupChildren: Referenceable {
     static let name = Text(english: "Cell Group Children",
                            japanese: "セルグループチルドレン")
 }
+extension CellGroupChildren: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return children.count.thumbnailView(withFrame: frame, sizeType)
+    }
+}
 extension CellGroupChildren: AbstractViewable {
     func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, CellGroupChildren>,
                              frame: Rect, _ sizeType: SizeType,
@@ -690,7 +694,6 @@ extension CellGroupChildren: AbstractViewable {
         }
     }
 }
-//extension CellGroupChildren: ObjectViewable {}
 
 struct CellGroupChildrenTrack: Track, Codable {
     var animation = Animation<CellGroupChildren>()
@@ -702,7 +705,7 @@ extension CellGroupChildrenTrack: Referenceable {
     static let name = Text(english: "Cell Group Children Track", japanese: "セルグループ配列トラック")
 }
 
-final class CellGroupView<T: BinderProtocol>: View, BindableReceiver {
+final class CellGroupView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = CellGroup
     typealias Binder = T
     var binder: Binder {
@@ -712,6 +715,8 @@ final class CellGroupView<T: BinderProtocol>: View, BindableReceiver {
         didSet { updateWithModel() }
     }
     var notifications = [((CellGroupView<Binder>, BasicNotification) -> ())]()
+    
+    var defaultModel = Model()
     
     var sizeType: SizeType {
         didSet { updateLayout() }
@@ -738,29 +743,19 @@ final class CellGroupView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
         classNameView.frame.origin = Point(x: padding,
                                            y: bounds.height - classNameView.frame.height - padding)
         isHiddenView.frame = Rect(x: classNameView.frame.maxX + padding, y: padding,
                                   width: bounds.width - classNameView.frame.width - padding * 3,
-                                  height: Layout.height(with: sizeType))
+                                  height: Layouter.height(with: sizeType))
     }
     func updateWithModel() {
         isHiddenView.updateWithModel()
     }
 }
-extension CellGroupView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
-    }
-}
-extension CellGroupView: Copiable {
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-}
 
-final class CellGroupChildrenView<T: BinderProtocol>: View, BindableGetterReceiver {
+final class CellGroupChildrenView<T: BinderProtocol>: ModelView, BindableGetterReceiver {
     typealias Model = CellGroupChildren
     typealias Binder = T
     var binder: Binder {
@@ -791,7 +786,7 @@ final class CellGroupChildrenView<T: BinderProtocol>: View, BindableGetterReceiv
     }
     
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
         classNameView.frame.origin = Point(x: padding,
                                            y: bounds.height - classNameView.frame.height - padding)
     }

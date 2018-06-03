@@ -99,6 +99,49 @@ extension KeyframeTiming: Referenceable {
     static let name = Text(english: "Keyframe Timing", japanese: "キーフレームタイミング")
 }
 
+extension KeyframeTiming.Label: Referenceable {
+    static let uninheritanceName = Text(english: "Label", japanese: "ラベル")
+    static let name = KeyframeTiming.name.spacedUnion(uninheritanceName)
+}
+extension KeyframeTiming.Label: DisplayableText {
+    var displayText: Text {
+        switch self {
+        case .main: return Text(english: "Main", japanese: "メイン")
+        case .sub: return Text(english: "Sub", japanese: "サブ")
+        }
+    }
+    static var displayTexts: [Text] {
+        return [main.displayText,
+                sub.displayText]
+    }
+}
+extension KeyframeTiming.Label {
+    static var defaultOption: EnumOption<KeyframeTiming.Label> {
+        return EnumOption(defaultModel: KeyframeTiming.Label.main,
+                          cationModels: [],
+                          indexClosure: { Int($0) },
+                          rawValueClosure: { KeyframeTiming.Label.RawValue($0) },
+                          names: KeyframeTiming.Label.displayTexts)
+    }
+}
+extension KeyframeTiming.Label: AbstractViewable {
+    func abstractViewWith
+        <T : BinderProtocol>(binder: T,
+                             keyPath: ReferenceWritableKeyPath<T, KeyframeTiming.Label>,
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return EnumView(binder: binder, keyPath: keyPath,
+                            option: KeyframeTiming.Label.defaultOption,
+                            frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension KeyframeTiming.Label: ObjectViewable {}
+
 extension KeyframeTiming.Loop: Referenceable {
     static let uninheritanceName = Text(english: "Loop", japanese: "ループ")
     static let name = KeyframeTiming.name.spacedUnion(uninheritanceName)
@@ -191,49 +234,6 @@ extension KeyframeTiming.Interpolation: AbstractViewable {
 }
 extension KeyframeTiming.Interpolation: ObjectViewable {}
 
-extension KeyframeTiming.Label: Referenceable {
-    static let uninheritanceName = Text(english: "Label", japanese: "ラベル")
-    static let name = KeyframeTiming.name.spacedUnion(uninheritanceName)
-}
-extension KeyframeTiming.Label: DisplayableText {
-    var displayText: Text {
-        switch self {
-        case .main: return Text(english: "Main", japanese: "メイン")
-        case .sub: return Text(english: "Sub", japanese: "サブ")
-        }
-    }
-    static var displayTexts: [Text] {
-        return [main.displayText,
-                sub.displayText]
-    }
-}
-extension KeyframeTiming.Label {
-    static var defaultOption: EnumOption<KeyframeTiming.Label> {
-        return EnumOption(defaultModel: KeyframeTiming.Label.main,
-                          cationModels: [],
-                          indexClosure: { Int($0) },
-                          rawValueClosure: { KeyframeTiming.Label.RawValue($0) },
-                          names: KeyframeTiming.Label.displayTexts)
-    }
-}
-extension KeyframeTiming.Label: AbstractViewable {
-    func abstractViewWith
-        <T : BinderProtocol>(binder: T,
-                             keyPath: ReferenceWritableKeyPath<T, KeyframeTiming.Label>,
-                             frame: Rect, _ sizeType: SizeType,
-                             type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return EnumView(binder: binder, keyPath: keyPath,
-                            option: KeyframeTiming.Label.defaultOption,
-                            frame: frame, sizeType: sizeType)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
-        }
-    }
-}
-extension KeyframeTiming.Label: ObjectViewable {}
-
 extension KeyframeTiming: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
         return interpolation.displayText.thumbnailView(withFrame: frame, sizeType)
@@ -280,7 +280,7 @@ struct KeyframeTimingCollection: RandomAccessCollection {
     }
 }
 
-final class KeyframeView<Value: KeyframeValue, T: BinderProtocol>: View, BindableReceiver {
+final class KeyframeView<Value: KeyframeValue, T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Keyframe<Value>
     typealias Binder = T
     var binder: Binder {
@@ -320,27 +320,15 @@ final class KeyframeView<Value: KeyframeValue, T: BinderProtocol>: View, Bindabl
 //        keyValueView
         keyframeTimingView.updateWithModel()
     }
-}
-extension KeyframeView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        var model = Model()
+    
+    func clippedModel(_ model: Model) -> Model {
+        var model = model
         model.timing.time = self.model.timing.time
-        push(model, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = object as? Model {
-                push(model, to: version)
-                return
-            }
-        }
+        return model
     }
 }
 
-final class KeyframeTimingView<T: BinderProtocol>: View, BindableReceiver {
+final class KeyframeTimingView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = KeyframeTiming
     typealias Binder = T
     var binder: Binder {
@@ -391,8 +379,8 @@ final class KeyframeTimingView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
-        let w = bounds.width - padding * 2, h = Layout.height(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
+        let w = bounds.width - padding * 2, h = Layouter.height(with: sizeType)
         var y = bounds.height - classNameView.frame.height - padding
         classNameView.frame.origin = Point(x: padding, y: y)
         labelView.frame = Rect(x: classNameView.frame.maxX + padding, y: y - padding * 2,
@@ -409,20 +397,10 @@ final class KeyframeTimingView<T: BinderProtocol>: View, BindableReceiver {
         interpolationView.updateWithModel()
         easingView.updateWithModel()
     }
-}
-extension KeyframeTimingView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let keyframe = object as? Model {
-                push(keyframe, to: version)
-                return
-            }
-        }
+    
+    func clippedModel(_ model: Model) -> Model {
+        var model = model
+        model.time = self.model.time
+        return model
     }
 }

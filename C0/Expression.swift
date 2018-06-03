@@ -67,42 +67,6 @@ indirect enum Expression: Hashable {
         }
     }
 }
-extension Expression: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return displayString.thumbnailView(withFrame: frame, sizeType)
-    }
-}
 extension Expression: Referenceable {
     static let name = Text(english: "Expression", japanese: "数式")
-}
-
-final class ExpressionView<T: BinderProtocol>: View, BindableGetterReceiver {
-    typealias Model = Expression
-    typealias Binder = T
-    var binder: Binder {
-        didSet { updateWithModel() }
-    }
-    var keyPath: BinderKeyPath {
-        didSet { updateWithModel() }
-    }
-    var notifications = [((ExpressionView<Binder>, BasicNotification) -> ())]()
-    
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
-    
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
-        self.binder = binder
-        self.keyPath = keyPath
-        
-        self.sizeType = sizeType
-        
-        super.init()
-        self.frame = frame
-    }
-    func updateWithModel() {
-        children = [TextFormView(text: Text(model.displayString))]
-    }
 }

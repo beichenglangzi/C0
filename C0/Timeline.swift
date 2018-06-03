@@ -17,7 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
 import struct Foundation.Data
 
 struct Timeline: Codable {
@@ -172,6 +171,11 @@ extension Timeline {
 extension Timeline: Referenceable {
     static let name = Text(english: "Timeline", japanese: "タイムライン")
 }
+extension Timeline: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return "\(duration) b".thumbnailView(withFrame: frame, sizeType)
+    }
+}
 extension Timeline: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Timeline>,
@@ -192,7 +196,7 @@ extension Timeline: ObjectViewable {}
  Issue: 滑らかなスクロール
  Issue: スクロールの可視性の改善
  */
-final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
+final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Timeline
     typealias Binder = T
     var binder: Binder {
@@ -207,7 +211,7 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
     
     let frameRateView: DiscreteRealView<Binder>
     let baseTimeIntervalView: DiscreteRationalView<Binder>
-    let curretEditKeyframeTimeExpressionView: ExpressionView<Binder>
+    let curretEditKeyframeTimeView: TextFormView
     let timeRulerView = RulerView()
     
     let tempoAnimationClipView = View(isLocked: true)
@@ -226,8 +230,8 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
             updateWith(time: time, scrollPoint: Point(x: x(withTime: time), y: _scrollPoint.y))
         }
     }
-    private let timeHeight = Layout.basicHeight
-    private let timeRulerHeight = Layout.smallHeight
+    private let timeHeight = Layouter.basicHeight
+    private let timeRulerHeight = Layouter.smallHeight
     private let tempoHeight = 18.0.cg
     private let subtitleHeight = 24.0.cg, soundHeight = 20.0.cg
     private let sumKeyTimesHeight = 18.0.cg
@@ -253,19 +257,18 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
         frameRateView = DiscreteRealView(binder: binder,
                                          keyPath: keyPath.appending(path: \Model.frameRate),
                                          option: Model.frameRateOption,
-                                         frame: Layout.valueFrame(with: .small),
+                                         frame: Layouter.valueFrame(with: .small),
                                          sizeType: .small)
         baseTimeIntervalView
             = DiscreteRationalView(binder: binder,
                                    keyPath: keyPath.appending(path: \Model.baseTimeInterval),
                                    option: Model.baseTimeIntervalOption,
-                                   frame: Layout.valueFrame(with: .regular),
+                                   frame: Layouter.valueFrame(with: .regular),
                                    sizeType: sizeType)
         
-        let cekteKeyPath = keyPath.appending(path: \Model.curretEditingKeyframeTimeExpression)
-        curretEditKeyframeTimeExpressionView = ExpressionView(binder: binder,
-                                                              keyPath: cekteKeyPath,
-                                                              sizeType: sizeType)
+        let editingTimeString = binder[keyPath: keyPath]
+            .curretEditingKeyframeTimeExpression.displayString
+        curretEditKeyframeTimeView = TextFormView(text: Text(editingTimeString))
         
         tempoAnimationView
             = AnimationView(binder: binder,
@@ -276,7 +279,7 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
                             sizeType: sizeType)
         
         super.init()
-        children = [timeView, curretEditKeyframeTimeExpressionView,
+        children = [timeView, curretEditKeyframeTimeView,
                     beatsView, sumAnimationNameView, sumKeyTimesClipView,
                     timeRulerView,
                     tempoAnimationClipView, baseTimeIntervalView,
@@ -303,7 +306,7 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     override func updateLayout() {
-        let sp = Layout.basicPadding
+        let sp = Layouter.basicPadding
         let midX = bounds.midX
         let rightX = leftWidth
         sumKeyTimesClipView.frame = Rect(x: rightX,
@@ -404,7 +407,7 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
             timeView.fillColor = nil
             let secondX = x(withTime: model.basedBeatTime(withSecondTime: Second($0)))
             timeView.frame.origin = Point(x: secondX - timeView.frame.width / 2,
-                                          y: Layout.smallPadding)
+                                          y: Layouter.smallPadding)
             return timeView
         }
     }
@@ -431,7 +434,7 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
             beatsView.path = nil
             return
         }
-        let padding = Layout.basicPadding
+        let padding = Layouter.basicPadding
         let rects: [Rect] = (intMinTime...intMaxTime).map {
             let i0x = x(withDoubleBeatTime: RealBeat($0)) + minX
             let w = beatsPerBar != 0 && $0 % beatsPerBar == 0 ? barLineWidth : beatsLineWidth
@@ -527,27 +530,6 @@ final class TimelineView<T: BinderProtocol>: View, BindableReceiver {
         let x = (scrollPoint.x - scrollDeltaPoint.x).clip(min: 0, max: maxX)
         scrollPoint = Point(x: phase == .began ?
             self.x(withTime: self.time(withLocalX: x)) : x, y: 0)
-    }
-}
-extension TimelineView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
-    }
-}
-extension TimelineView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = object as? Model {
-                push(model, to: version)
-                return
-            }
-        }
     }
 }
 

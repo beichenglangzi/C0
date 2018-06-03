@@ -17,14 +17,12 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
-
 extension Bool: Referenceable {
     static let name = Text(english: "Bool", japanese: "ブール値")
 }
 extension Bool: AnyInitializable {
-    init?(_ object: Any) {
-        switch object {
+    init?(anyValue: Any) {
+        switch anyValue {
         case let value as Bool: self = value
         case let value as Int: self = value > 0
         case let value as Real: self = value > 0
@@ -75,7 +73,7 @@ struct BoolOption {
     var info = Info()
 }
 
-final class BoolView<Binder: BinderProtocol>: View, BindableReceiver {
+final class BoolView<Binder: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Bool
     typealias ModelOption = BoolOption
     typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
@@ -94,6 +92,9 @@ final class BoolView<Binder: BinderProtocol>: View, BindableReceiver {
             optionFalseNameView.text = option.info.falseName
             updateWithModel()
         }
+    }
+    var defaultModel: Bool {
+        return option.defaultModel
     }
     
     var sizeType: SizeType {
@@ -128,7 +129,7 @@ final class BoolView<Binder: BinderProtocol>: View, BindableReceiver {
     }
     
     override var defaultBounds: Rect {
-        let padding = Layout.padding(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
         if optionStringView.text.isEmpty {
             let width = optionFalseNameView.frame.width
                 + optionTrueNameView.frame.width + padding * 3
@@ -142,7 +143,7 @@ final class BoolView<Binder: BinderProtocol>: View, BindableReceiver {
         }
     }
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
         optionStringView.frame.origin = Point(x: padding, y: padding)
         let x = optionStringView.text.isEmpty ? padding : optionStringView.frame.maxX + padding
         optionFalseNameView.frame.origin = Point(x: x, y: padding)
@@ -171,27 +172,6 @@ final class BoolView<Binder: BinderProtocol>: View, BindableReceiver {
     }
     func model(at p: Point) -> Bool {
         return optionFalseNameView.frame.distance²(p) > optionTrueNameView.frame.distance²(p)
-    }
-}
-extension BoolView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
-    }
-}
-extension BoolView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(option.defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = Model(object) {
-                push(model, to: version)
-                return
-            }
-        }
     }
 }
 extension BoolView: Runnable {

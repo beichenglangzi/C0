@@ -17,8 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
-
 struct Material: Codable, Hashable {
     enum MaterialType: Int8, Codable {
         case normal, lineless, blur, luster, addition, subtract
@@ -174,15 +172,15 @@ struct MaterialTrack: Track, Codable {
 struct MaterialOption {
     var typeOption = Material.MaterialType.defaultOption
     var lineWidthOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1000,
-                                      modelInterval: 0.1, exp: 3, numberOfDigits: 0, unit: "")
+                                      modelInterval: 0.1, exp: 2, numberOfDigits: 1, unit: "")
     var opacityOption = RealOption.opacity
 }
 
 struct MaterialLayout {
-    static let width = 200.0.cg, rightWidth = 60.0.cg
+    static let width = 150.0.cg, rightWidth = 60.0.cg
 }
 
-final class MaterialView<T: BinderProtocol>: View, BindableReceiver {
+final class MaterialView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Material
     typealias ModelOption = MaterialOption
     typealias Binder = T
@@ -212,8 +210,10 @@ final class MaterialView<T: BinderProtocol>: View, BindableReceiver {
     let lineColorView: ColorView<Binder>
     
     let classNameView = TextFormView(text: Material.name, font: .bold)
-    private let lineColorNameView = TextFormView(text: Text(english: "Line Color:",
-                                                            japanese: "線のカラー:"))
+    private let lineColorNameView = TextFormView(text: Text(english: "Line Color",
+                                                            japanese: "線のカラー") + ":")
+    private let lineWidthNameView = TextFormView(text: Text(english: "Line Color",
+                                                            japanese: "線の幅") + ":")
     
     init(binder: T, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
@@ -238,26 +238,27 @@ final class MaterialView<T: BinderProtocol>: View, BindableReceiver {
         super.init()
         children = [classNameView,
                     typeView,
-                    colorView, lineColorNameView, lineColorView,
+                    colorView, lineColorNameView, lineColorView, lineWidthNameView,
                     lineWidthView, opacityView]
         self.frame = frame
     }
     
     override var defaultBounds: Rect {
-        let padding = Layout.basicPadding, h = Layout.basicHeight, cw = MaterialLayout.width
+        let padding = Layouter.basicPadding, h = Layouter.basicHeight, cw = MaterialLayout.width
         return Rect(x: 0, y: 0,
                     width: cw + MaterialLayout.rightWidth + padding * 2,
                     height: cw + classNameView.frame.height + h + padding * 2)
     }
     func defaultBounds(withWidth width: Real) -> Rect {
-        let padding = Layout.basicPadding, h = Layout.basicHeight
+        let padding = Layouter.basicPadding, h = Layouter.basicHeight
         let cw = width - MaterialLayout.rightWidth + padding * 2
         return Rect(x: 0, y: 0,
                     width: cw + MaterialLayout.rightWidth + padding * 2,
                     height: cw + classNameView.frame.height + h + padding * 2)
     }
     override func updateLayout() {
-        let padding = Layout.basicPadding, h = Layout.basicHeight, rw = MaterialLayout.rightWidth
+        let padding = Layouter.basicPadding
+        let h = Layouter.basicHeight, rw = MaterialLayout.rightWidth
         let cw = bounds.width - rw - padding * 2
         classNameView.frame.origin = Point(x: padding,
                                            y: bounds.height - classNameView.frame.height - padding)
@@ -266,14 +267,17 @@ final class MaterialView<T: BinderProtocol>: View, BindableReceiver {
                               y: bounds.height - h * 2 - padding,
                               width: bounds.width - tx - padding, height: h * 2)
         colorView.frame = Rect(x: padding, y: padding, width: cw, height: cw)
-        lineColorNameView.frame.origin = Point(x: padding + cw,
-                                                    y: padding + cw - lineColorNameView.frame.height)
-        lineColorView.frame = Rect(x: padding + cw, y: lineColorNameView.frame.minY - rw,
-                                   width: rw, height: rw)
-        lineWidthView.frame = Rect(x: padding + cw, y: lineColorView.frame.minY - h,
-                                   width: rw, height: h)
-        let opacityFrame = Rect(x: padding + cw, y: lineColorView.frame.minY - h * 2,
-                                width: rw, height: h)
+        var y = padding + cw
+        y -= lineColorNameView.frame.height
+        lineColorNameView.frame.origin = Point(x: padding + cw, y: y)
+        y -= rw
+        lineColorView.frame = Rect(x: padding + cw, y: y, width: rw, height: rw)
+        y -= lineWidthNameView.frame.height
+        lineWidthNameView.frame.origin = Point(x: padding + cw, y: y)
+        y -= h
+        lineWidthView.frame = Rect(x: padding + cw, y: y, width: rw, height: h)
+        y -= h
+        let opacityFrame = Rect(x: padding + cw, y: y, width: rw, height: h)
         opacityView.updateOpacityViews(withFrame: opacityFrame)
     }
     func updateWithModel() {
@@ -282,26 +286,5 @@ final class MaterialView<T: BinderProtocol>: View, BindableReceiver {
         lineColorView.updateWithModel()
         lineWidthView.updateWithModel()
         opacityView.updateWithModel()
-    }
-}
-extension MaterialView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
-    }
-}
-extension MaterialView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = object as? Model {
-                push(model, to: version)
-                return
-            }
-        }
     }
 }

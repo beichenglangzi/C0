@@ -22,10 +22,27 @@ extension Optional: Referenceable {
         return Text(english: "Optional", japanese: "オプショナル")
     }
 }
+extension Optional: AnyInitializable where Wrapped: ObjectDecodable {}
+extension Optional: ObjectDecodable where Wrapped: ObjectDecodable {}
+extension Optional: ThumbnailViewable where Wrapped: ThumbnailViewable {}
+extension Optional: AbstractViewable where Wrapped: Object.Value & AbstractViewable {
+    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Optional>,
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> ModelView where T : BinderProtocol {
+        switch type {
+        case .normal:
+            return OptionalView(binder: binder, keyPath: keyPath,
+                                frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Optional: ObjectViewable where Wrapped: Object.Value & AbstractViewable {}
 
-final class OptionalGetterView<Wrapped: AbstractViewable & Referenceable, U: BinderProtocol>
-: View, BindableReceiver {
-
+final class OptionalView<Wrapped: Object.Value & AbstractViewable, U: BinderProtocol>
+: ModelView, BindableReceiver {
+    
     typealias Model = Optional<Wrapped>
     typealias Binder = U
     var binder: Binder {
@@ -34,7 +51,11 @@ final class OptionalGetterView<Wrapped: AbstractViewable & Referenceable, U: Bin
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((OptionalGetterView<Wrapped, Binder>, BasicNotification) -> ())]()
+    var notifications = [((OptionalView<Wrapped, Binder>, BasicNotification) -> ())]()
+    
+    var defaultModel: Optional<Wrapped> {
+        return .none
+    }
     
     var sizeType: SizeType {
         didSet { updateLayout() }
@@ -47,7 +68,7 @@ final class OptionalGetterView<Wrapped: AbstractViewable & Referenceable, U: Bin
     var noneNameView: TextFormView
     
     init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular, type: AbstractType) {
+         frame: Rect = Rect(), sizeType: SizeType = .regular, type: AbstractType = .normal) {
         
         self.binder = binder
         self.keyPath = keyPath
@@ -72,7 +93,7 @@ final class OptionalGetterView<Wrapped: AbstractViewable & Referenceable, U: Bin
         self.frame = frame
     }
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
         if let wrappedView = wrappedView {
             wrappedView.frame = bounds.inset(by: padding)
         } else {
@@ -83,10 +104,11 @@ final class OptionalGetterView<Wrapped: AbstractViewable & Referenceable, U: Bin
     func updateWithModel() {
         if let wrapped = binder[keyPath: keyPath] {
             if children.first != wrappedView {
-                let wrappedView = wrapped.abstractViewWith(binder: binder,
-                                                           keyPath: keyPath.appending(path: \Model.!),
-                                                           frame: Rect(),
-                                                           sizeType, type: type)
+                let wrappedView
+                    = wrapped.abstractViewWith(binder: binder,
+                                               keyPath: keyPath.appending(path: \Model.!),
+                                               frame: Rect(),
+                                               sizeType, type: type)
                 self.wrappedView = wrappedView
                 children = [wrappedView]
                 updateLayout()

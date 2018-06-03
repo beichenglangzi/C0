@@ -22,5 +22,16 @@ protocol Initializable {
 }
 
 protocol AnyInitializable {
-    init?(_ object: Any)
+    init?(anyValue: Any)
+}
+extension AnyInitializable {
+    init?(anyValue: Any) {
+        if let value = anyValue as? Self {
+            self = value
+        } else if let value = (anyValue as? ValueChain)?.value(Self.self) {
+            self = value
+        } else {
+            return nil
+        }
+    }
 }

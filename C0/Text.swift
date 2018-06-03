@@ -20,10 +20,6 @@
 import struct Foundation.Locale
 import class CoreGraphics.CGContext
 
-protocol Localizable: class {
-    func update(with locale: Locale)
-}
-
 protocol Referenceable {
     static var uninheritanceName: Text { get }
     static var name: Text { get }
@@ -141,13 +137,18 @@ extension Text: AbstractViewable {
 }
 extension Text: ObjectViewable {}
 
-final class TextFormView: View {
+protocol TextViewProtocol {
+    var text: Text { get }
+    func updateText()
+}
+
+final class TextFormView: View, TextViewProtocol {
     var text: Text {
-        didSet { updateWithModel() }
+        didSet { updateText() }
     }
     
     var textMaterial: TextMaterial {
-        didSet { updateWithModel() }
+        didSet { updateText() }
     }
     var isSizeToFit: Bool {
         didSet {
@@ -207,7 +208,7 @@ final class TextFormView: View {
                                   frameWidth: textFrameWidth)
         }
     }
-    func updateWithModel() {
+    func updateText() {
         textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
         if isSizeToFit {
@@ -230,13 +231,8 @@ final class TextFormView: View {
         textFrame.draw(in: bounds.inset(by: padding), in: ctx)
     }
 }
-extension TextFormView: Localizable {
-    func update(with locale: Locale) {
-        updateWithModel()
-    }
-}
 
-final class TextGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
+final class TextGetterView<T: BinderProtocol>: ModelView, TextViewProtocol, BindableGetterReceiver {
     typealias Model = Text
     typealias Binder = T
     var binder: Binder {
@@ -246,6 +242,9 @@ final class TextGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
         didSet { updateWithModel() }
     }
     
+    var text: Text {
+        return model
+    }
     var textMaterial: TextMaterial {
         didSet { updateWithModel() }
     }
@@ -295,6 +294,9 @@ final class TextGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
                                   frameWidth: textFrameWidth)
         }
     }
+    func updateText() {
+        updateWithModel()
+    }
     func updateWithModel() {
         textFrame = TextFrame(string: model.currentString, textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
@@ -317,15 +319,5 @@ final class TextGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
     
     override func draw(in ctx: CGContext) {
         textFrame.draw(in: bounds.inset(by: padding), in: ctx)
-    }
-}
-extension TextGetterView: Localizable {
-    func update(with locale: Locale) {
-        updateWithModel()
-    }
-}
-extension TextGetterView: Copiable {
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
     }
 }

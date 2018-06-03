@@ -43,8 +43,8 @@ extension String: Referenceable {
     static let name = Text(english: "String", japanese: "文字")
 }
 extension String: AnyInitializable {
-    init?(_ object: Any) {
-        switch object {
+    init?(anyValue: Any) {
+        switch anyValue {
         case let value as String: self = value
         case let value as Bool: self = String(value)
         case let value as Int: self = String(value)
@@ -102,7 +102,7 @@ protocol Namable {
     var name: String { get }
 }
 
-final class StringGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
+final class StringGetterView<T: BinderProtocol>: ModelView, BindableGetterReceiver {
     typealias Model = String
     typealias Binder = T
     var binder: Binder {
@@ -183,11 +183,6 @@ final class StringGetterView<T: BinderProtocol>: View, BindableGetterReceiver {
         textFrame.draw(in: bounds.inset(by: padding), in: ctx)
     }
 }
-extension StringGetterView: Copiable {
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-}
 
 protocol KeyInputtable {
     func insert(_ string: String, for p: Point, _ version: Version)
@@ -196,7 +191,7 @@ protocol KeyInputtable {
 /**
  Issue: モードレス文字入力
  */
-final class StringView<T: BinderProtocol>: View, BindableReceiver {
+final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = String
     typealias ModelOption = StringOption
     typealias Binder = T
@@ -221,6 +216,9 @@ final class StringView<T: BinderProtocol>: View, BindableReceiver {
 
     var option: ModelOption {
         didSet { updateWithModel() }
+    }
+    var defaultModel: Model {
+        return option.defaultModel
     }
 
     var textMaterial: TextMaterial {
@@ -307,22 +305,6 @@ final class StringView<T: BinderProtocol>: View, BindableReceiver {
 
     private let timer = RunTimer()
     private var oldModel = "", isinputting = false
-}
-extension StringView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(Model(), to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = Model(object) {
-                push(model, to: version)
-                return
-            }
-        }
-    }
 }
 extension StringView: Indicatable {
     func indicate(at p: Point) {

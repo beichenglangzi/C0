@@ -60,11 +60,13 @@ protocol Modeler: class {
 }
 typealias ModelView = View & Modeler
 
-protocol BindableReceiver: Modeler {
-    associatedtype Model
+protocol BindableReceiver: Modeler, Assignable {
+    associatedtype Model: Object.Value
     associatedtype Binder: BinderProtocol
     associatedtype Notification: NotificationProtocol
     var model: Model { get set }
+    var defaultModel: Model { get }
+    func clippedModel(_ model: Model) -> Model
     var binder: Binder { get set }
     var keyPath: ReferenceWritableKeyPath<Binder, Model> { get set }
     var notifications: [((Self, Notification) -> ())] { get }
@@ -94,9 +96,28 @@ extension BindableReceiver {
         }
     }
 }
+extension BindableReceiver {
+    func clippedModel(_ model: Model) -> Model {
+        return model
+    }
+    func reset(for p: Point, _ version: Version) {
+        push(defaultModel, to: version)
+    }
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
+    }
+    func paste(_ values: [Any], for p: Point, _ version: Version) {
+        for value in values {
+            if let model = Model(anyValue: value) {
+                push(clippedModel(model), to: version)
+                return
+            }
+        }
+    }
+}
 
-protocol BindableGetterReceiver: Modeler {
-    associatedtype Model
+protocol BindableGetterReceiver: Modeler, Copiable {
+    associatedtype Model: Object.Value
     associatedtype Binder: BinderProtocol
     var model: Model { get }
     var binder: Binder { get set }
@@ -108,3 +129,9 @@ extension BindableGetterReceiver {
         return binder[keyPath: keyPath]
     }
 }
+extension BindableGetterReceiver {
+    func copiedObjects(at p: Point) -> [Object] {
+        return [Object(model)]
+    }
+}
+

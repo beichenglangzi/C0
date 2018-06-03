@@ -17,8 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
-
 protocol Object2D: Object.Value {
     associatedtype XModel: Codable & Referenceable
     associatedtype YModel: Codable & Referenceable
@@ -40,7 +38,6 @@ protocol Object2DOption {
     var defaultModel: Model { get }
     var minModel: Model { get }
     var maxModel: Model { get }
-    func model(with object: Any) -> Model?
     func ratio2D(with model: Model) -> Ratio2D
     func ratio2DFromDefaultModel(with model: Model) -> Ratio2D
     func model(withDelta delta: Ratio2D, oldModel: Model) -> Model
@@ -79,7 +76,9 @@ extension Object2DOption {
     }
 }
 
-final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete, BindableReceiver {
+final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
+: ModelView, Discrete, BindableReceiver {
+
     typealias Model = T.Model
     typealias ModelOption = T
     typealias Binder = U
@@ -94,6 +93,9 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
     
     var option: ModelOption {
         didSet { updateWithModel() }
+    }
+    var defaultModel: Model {
+        return option.defaultModel
     }
     
     let xView: Assignable1DView<ModelOption.XOption, Binder>
@@ -120,7 +122,7 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
         self.option = option
         
         self.sizeType = sizeType
-        boundsPadding = Layout.padding(with: sizeType)
+        boundsPadding = Layouter.padding(with: sizeType)
         boundsView = View()
         boundsView.lineColor = .formBorder
         let font = Font.default(with: .small)
@@ -138,8 +140,8 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
     }
     
     override var defaultBounds: Rect {
-        let padding = Layout.padding(with: sizeType)
-        let valueFrame = Layout.valueFrame(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
+        let valueFrame = Layouter.valueFrame(with: sizeType)
         let xWidth = xNameView.frame.width + valueFrame.width
         let yWidth = yNameView.frame.height + valueFrame.width
         return Rect(x: 0,
@@ -148,8 +150,8 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
                     height: valueFrame.height * 2 + padding * 2)
     }
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
-        let valueFrame = Layout.valueFrame(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
+        let valueFrame = Layouter.valueFrame(with: sizeType)
         var x = bounds.width - padding, y = bounds.height - padding
         x -= valueFrame.width
         y -= valueFrame.height
@@ -192,21 +194,9 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>: View, Discrete
         let ratio2D = Ratio2D(x: xt, y: yt)
         return option.model(withDelta: ratio2D, oldModel: oldModel)
     }
-}
-extension Discrete2DView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(option.defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = option.model(with: object) {
-                push(option.clippedModel(model), to: version)
-                return
-            }
-        }
+    
+    func clippedModel(_ model: Model) -> Model {
+        return option.clippedModel(model)
     }
 }
 extension Discrete2DView: BasicDiscretePointMovable {
@@ -215,7 +205,9 @@ extension Discrete2DView: BasicDiscretePointMovable {
     }
 }
 
-final class Slidable2DView<T: Object2DOption, U: BinderProtocol>: View, Slidable, BindableReceiver {
+final class Slidable2DView<T: Object2DOption, U: BinderProtocol>
+: ModelView, Slidable, BindableReceiver {
+
     typealias Model = T.Model
     typealias ModelOption = T
     typealias Binder = U
@@ -230,6 +222,9 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>: View, Slidable
     
     var option: ModelOption {
         didSet { updateWithModel() }
+    }
+    var defaultModel: Model {
+        return option.defaultModel
     }
     
     var padding = 5.0.cg {
@@ -272,21 +267,9 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>: View, Slidable
         let y = inBounds.height * ratio2D.y + inBounds.origin.y
         return Point(x: x, y: y)
     }
-}
-extension Slidable2DView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(option.defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = option.model(with: object) {
-                push(option.clippedModel(model), to: version)
-                return
-            }
-        }
+    
+    func clippedModel(_ model: Model) -> Model {
+        return option.clippedModel(model)
     }
 }
 extension Slidable2DView: Runnable {

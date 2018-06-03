@@ -17,7 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
 import CoreGraphics
 
 typealias AffineTransform = CGAffineTransform
@@ -280,7 +279,7 @@ struct TransformOption {
     }
 }
 
-final class TransformView<T: BinderProtocol>: View, BindableReceiver {
+final class TransformView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Transform
     typealias ModelOption = TransformOption
     typealias Binder = T
@@ -299,6 +298,9 @@ final class TransformView<T: BinderProtocol>: View, BindableReceiver {
             rotationView.option = option.rotationOption
             updateLayout()
         }
+    }
+    var defaultModel: Model {
+        return option.defaultModel
     }
     
     let translationView: DiscretePointView<Binder>
@@ -330,11 +332,11 @@ final class TransformView<T: BinderProtocol>: View, BindableReceiver {
                                             sizeType: sizeType)
         zView = DiscreteRealView(binder: binder, keyPath: keyPath.appending(path: \Model.z),
                                  option: option.zOption,
-                                 frame: Layout.valueFrame(with: .regular), sizeType: sizeType)
+                                 frame: Layouter.valueFrame(with: .regular), sizeType: sizeType)
         rotationView = DiscreteRealView(binder: binder,
                                         keyPath: keyPath.appending(path: \Model.rotation),
                                         option: option.rotationOption,
-                                        frame: Layout.valueFrame(with: .regular), sizeType: sizeType)
+                                        frame: Layouter.valueFrame(with: .regular), sizeType: sizeType)
         
         self.sizeType = sizeType
         
@@ -348,21 +350,21 @@ final class TransformView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     override var defaultBounds: Rect {
-        let padding = Layout.basicPadding
-        let w = Layout.propertyWidth + padding * 2
-        let h = Layout.basicHeight * 2 + classNameView.frame.height + padding * 3
+        let padding = Layouter.basicPadding
+        let w = Layouter.propertyWidth + padding * 2
+        let h = Layouter.basicHeight * 2 + classNameView.frame.height + padding * 3
         return Rect(x: 0, y: 0, width: w, height: h)
     }
     override func updateLayout() {
-        let padding = Layout.basicPadding
+        let padding = Layouter.basicPadding
         var y = bounds.height - padding - classNameView.frame.height
         classNameView.frame.origin = Point(x: padding, y: y)
-        y -= Layout.basicHeight + Layout.basicPadding
-        _ = Layout.leftAlignment([.view(classZNameView), .view(zView), .xPadding(padding),
+        y -= Layouter.basicHeight + Layouter.basicPadding
+        _ = Layouter.leftAlignment([.view(classZNameView), .view(zView), .xPadding(padding),
                                   .view(classRotationNameView), .view(rotationView)],
-                                 y: y, height: Layout.basicHeight)
+                                 y: y, height: Layouter.basicHeight)
         let tdb = translationView.defaultBounds
-        translationView.frame = Rect(x: bounds.width - Layout.basicPadding - tdb.width, y: padding,
+        translationView.frame = Rect(x: bounds.width - Layouter.basicPadding - tdb.width, y: padding,
                                      width: tdb.width, height: tdb.height)
     }
     func updateWithModel() {
@@ -371,25 +373,3 @@ final class TransformView<T: BinderProtocol>: View, BindableReceiver {
         rotationView.updateWithModel()
     }
 }
-extension TransformView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
-    }
-}
-extension TransformView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(option.defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = object as? Transform {
-                push(model, to: version)
-                return
-            }
-        }
-    }
-}
-

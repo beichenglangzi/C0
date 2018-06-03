@@ -34,9 +34,10 @@ extension Data: Referenceable {
 
 extension Decodable {
     init?(jsonData: Data) {
-        if let obj = try? JSONDecoder().decode(Self.self, from: jsonData) {
-            self = obj
-        } else {
+        do {
+           self = try JSONDecoder().decode(Self.self, from: jsonData)
+        } catch {
+            print(error)
             return nil
         }
     }

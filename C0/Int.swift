@@ -74,6 +74,28 @@ extension Int: AbstractViewable {
     }
 }
 extension Int: ObjectViewable {}
+extension Int: AnyInitializable {
+    init?(anyValue: Any) {
+        switch anyValue {
+        case let valueChain as ValueChain:
+            if let value = valueChain.value(Int.self) {
+                self = value
+            } else {
+                return nil
+            }
+        case let value as Int: self = value
+        case let value as Rational: self = Int(value)
+        case let value as Real: self = Int(value)
+        case let value as String:
+            if let value = Int(value) {
+                self = value
+            } else {
+                return nil
+            }
+        default: return nil
+        }
+    }
+}
 
 struct IntGetterOption: GetterOption {
     typealias Model = Int
@@ -124,15 +146,6 @@ struct IntOption: Object1DOption {
         self.unit = unit
     }
     
-    func model(with object: Any) -> Model? {
-        switch object {
-        case let value as Model: return value
-        case let value as Rational: return Model(value)
-        case let value as Real: return Model(value)
-        case let value as String: return Model(value)
-        default: return nil
-        }
-    }
     func string(with model: Model) -> String {
         return model.description
     }

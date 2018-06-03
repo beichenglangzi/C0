@@ -17,9 +17,13 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
-
 typealias EnumType = RawRepresentable & Equatable & Object.Value
+
+//extension RawRepresentable where Self: Equatable & Object.Value {
+//    init?(anyValue: Any) {
+//
+//    }
+//}
 
 struct EnumOption<Model: EnumType> {
     var defaultModel: Model
@@ -28,10 +32,12 @@ struct EnumOption<Model: EnumType> {
     let rawValueClosure: ((Int) -> (Model.RawValue?))
     let names: [Text]
     
-    func model(with object: Any) -> Model? {
-        if let model = object as? Model {
+    func model(with value: Any) -> Model? {
+        if let object = value as? Object {
+            return model(with: object.value)
+        } else if let model = value as? Model {
             return model
-        } else if let string = object as? String, let index = Int(string) {
+        } else if let string = value as? String, let index = Int(string) {
             return model(at: index)
         } else {
             return nil
@@ -49,7 +55,7 @@ struct EnumOption<Model: EnumType> {
     }
 }
 
-final class EnumView<T: EnumType, U: BinderProtocol>: View, BindableReceiver {
+final class EnumView<T: EnumType, U: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = T
     typealias ModelOption = EnumOption<Model>
     typealias Binder = U
@@ -64,6 +70,9 @@ final class EnumView<T: EnumType, U: BinderProtocol>: View, BindableReceiver {
     
     var option: ModelOption {
         didSet { updateWithModel() }
+    }
+    var defaultModel: Model {
+        return option.defaultModel
     }
     
     var sizeType: SizeType {
@@ -88,23 +97,24 @@ final class EnumView<T: EnumType, U: BinderProtocol>: View, BindableReceiver {
             View.discreteKnob(Size(square: 8), lineWidth: 1)
         
         super.init()
+        nameViews.forEach { $0.fillColor = nil }
         children = [classNameView, knobView] + nameViews
         self.frame = frame
         updateWithModel()
     }
     
     override var defaultBounds: Rect {
-        let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
+        let padding = Layouter.padding(with: sizeType), height = Layouter.height(with: sizeType)
         let np = Real(nameViews.count - 1) * padding
         let nw = nameViews.reduce(0.0.cg) { $0 + $1.frame.width } + np
         return Rect(x: 0, y: 0, width: classNameView.frame.width + nw + padding * 2, height: height)
     }
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
         classNameView.frame.origin = Point(x: padding,
                                            y: bounds.height - classNameView.frame.height - padding)
         
-        let h = Layout.height(with: sizeType) - padding * 2
+        let h = Layouter.height(with: sizeType) - padding * 2
         var y = bounds.height - padding - h
         _ = nameViews.reduce(classNameView.frame.maxX + padding) {
             let x: Real
@@ -128,14 +138,12 @@ final class EnumView<T: EnumType, U: BinderProtocol>: View, BindableReceiver {
         updateKnobLayout()
         let index = option.index(with: model)
         nameViews.forEach {
-            $0.fillColor = .background
             $0.lineColor = .subContent
         }
         if !option.cationModels.isEmpty {
             knobView.lineColor = knobLineColor
         }
-        nameViews[index].fillColor = .knob
-        nameViews[index].lineColor = .knob
+        nameViews[index].lineColor = nil
         nameViews.enumerated().forEach {
             $0.element.textMaterial.color = $0.offset == index ? .locked : .subLocked
         }
@@ -154,27 +162,6 @@ final class EnumView<T: EnumType, U: BinderProtocol>: View, BindableReceiver {
             }
         }
         return option.model(at: minI)
-    }
-}
-extension EnumView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
-    }
-}
-extension EnumView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(option.defaultModel, to:  version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = option.model(with: object) {
-                push(model, to: version)
-                return
-            }
-        }
     }
 }
 extension EnumView: Runnable {

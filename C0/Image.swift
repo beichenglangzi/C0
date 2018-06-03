@@ -21,7 +21,7 @@ import CoreGraphics
 import QuartzCore
 
 struct Image {
-    var cg: CGImage
+    var cg: CGImage?
     
     init?(url: URL) {
         guard
@@ -42,10 +42,11 @@ struct Image {
     init(_ cg: CGImage) {
         self.cg = cg
     }
+    init() {}
 }
 extension Image {
     var size: Size {
-        return cg.size
+        return cg?.size ?? Size()
     }
 }
 extension Image {
@@ -64,11 +65,11 @@ extension Image {
     }
     
     func data(_ type: FileType) -> Data? {
-        return cg.data(type)
+        return cg?.data(type)
     }
     
     func write(_ type: FileType, to url: URL) throws {
-        try cg.write(type, to: url)
+        try cg?.write(type, to: url)
     }
 }
 extension Image: Referenceable {
@@ -101,6 +102,13 @@ extension Image: Codable {
         } else {
             throw CodingError.decoding("\(dump(container))")
         }
+    }
+}
+extension Image: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        let view = View(frame: frame, isLocked: true)
+        view.image = self
+        return view
     }
 }
 extension Image: AbstractViewable {
@@ -177,7 +185,7 @@ extension CALayer {
     }
 }
 
-final class ImageView<T: BinderProtocol>: View, BindableReceiver {
+final class ImageView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Image
     typealias Binder = T
     var binder: Binder {
@@ -187,6 +195,8 @@ final class ImageView<T: BinderProtocol>: View, BindableReceiver {
         didSet { updateWithModel() }
     }
     var notifications = [((ImageView<Binder>, BasicNotification) -> ())]()
+    
+    var defaultModel = Model()
     
     init(binder: Binder, keyPath: BinderKeyPath, frame: Rect = Rect()) {
         self.binder = binder
@@ -198,80 +208,5 @@ final class ImageView<T: BinderProtocol>: View, BindableReceiver {
     
     func updateWithModel() {
         self.image = model
-    }
-}
-extension ImageView: Movable {
-    func captureWillMoveObject(at p: Point, to version: Version) {}
-    
-    func makeViewMover() -> ViewMover {
-        return ImageViewMover(imageView: self)
-    }
-    
-}
-final class ImageViewMover<Binder: BinderProtocol>: ViewMover {
-    var movableView: View & Movable {
-        return imageView
-    }
-    var imageView: ImageView<Binder>
-    
-    init(imageView: ImageView<Binder>) {
-        self.imageView = imageView
-    }
-    
-    private enum DragType {
-        case move, resizeMinXMinY, resizeMaxXMinY, resizeMinXMaxY, resizeMaxXMaxY
-    }
-    private var dragType = DragType.move, downPosition = Point(), oldFrame = Rect()
-    private var resizeWidth = 10.0.cg, ratio = 1.0.cg
-    
-    func move(for point: Point, first fp: Point, pressure: Real,
-              time: Second, _ phase: Phase) {
-        guard let parent = imageView.parent else { return }
-        let p = parent.convert(point, from: imageView), ip = point
-        switch phase {
-        case .began:
-            if Rect(x: 0, y: 0, width: resizeWidth, height: resizeWidth).contains(ip) {
-                dragType = .resizeMinXMinY
-            } else if Rect(x: imageView.bounds.width - resizeWidth, y: 0,
-                           width: resizeWidth, height: resizeWidth).contains(ip) {
-                dragType = .resizeMaxXMinY
-            } else if Rect(x: 0, y: imageView.bounds.height - resizeWidth,
-                           width: resizeWidth, height: resizeWidth).contains(ip) {
-                dragType = .resizeMinXMaxY
-            } else if Rect(x: imageView.bounds.width - resizeWidth,
-                           y: imageView.bounds.height - resizeWidth,
-                           width: resizeWidth, height: resizeWidth).contains(ip) {
-                dragType = .resizeMaxXMaxY
-            } else {
-                dragType = .move
-            }
-            downPosition = p
-            oldFrame = imageView.frame
-            ratio = imageView.frame.height / imageView.frame.width
-        case .changed, .ended:
-            let dp =  p - downPosition
-            var frame = imageView.frame
-            switch dragType {
-            case .move:
-                frame.origin = Point(x: oldFrame.origin.x + dp.x, y: oldFrame.origin.y + dp.y)
-            case .resizeMinXMinY:
-                frame.origin.x = oldFrame.origin.x + dp.x
-                frame.origin.y = oldFrame.origin.y + dp.y
-                frame.size.width = oldFrame.width - dp.x
-                frame.size.height = frame.size.width * ratio
-            case .resizeMaxXMinY:
-                frame.origin.y = oldFrame.origin.y + dp.y
-                frame.size.width = oldFrame.width + dp.x
-                frame.size.height = frame.size.width * ratio
-            case .resizeMinXMaxY:
-                frame.origin.x = oldFrame.origin.x + dp.x
-                frame.size.width = oldFrame.width - dp.x
-                frame.size.height = frame.size.width * ratio
-            case .resizeMaxXMaxY:
-                frame.size.width = oldFrame.width + dp.x
-                frame.size.height = frame.size.width * ratio
-            }
-            imageView.frame = phase == .ended ? frame.integral : frame
-        }
     }
 }

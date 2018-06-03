@@ -34,7 +34,65 @@ enum Orientation {
     case xy(XY), circular(Circular)
 }
 
-enum Layout {
+protocol Layoutable {
+    var frame: Rect { get set }
+    var z: Real { get set }
+}
+
+typealias LayoutValue = Codable & ThumbnailViewable & Referenceable & AbstractViewable
+
+struct Layout<Value: LayoutValue>: Layoutable, Codable {
+    var value: Value
+    var z: Real
+    var frame: Rect
+    
+    init(_ value: Value, z: Real = 1, frame: Rect = Rect()) {
+        self.value = value
+        self.z = z
+        self.frame = frame
+    }
+}
+extension Layout: ValueChain {
+    var chainValue: Any { return value }
+}
+extension Layout: AnyInitializable {
+    init?(anyValue: Any) {
+        if let value = (anyValue as? ValueChain)?.value(Value.self) {
+            self = Layout(value)
+        } else if let value = anyValue as? Value {
+            self = Layout(value)
+        } else {
+            return nil
+        }
+    }
+}
+extension Layout: Referenceable {
+    static var name: Text {
+        return Text(english: "Layout", japanese: "レイアウト") + "<" + Value.name + ">"
+    }
+}
+extension Layout: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return value.thumbnailView(withFrame: frame, sizeType)
+    }
+}
+extension Layout: AbstractViewable {
+    func abstractViewWith<T : BinderProtocol>(binder: T,
+                                              keyPath: ReferenceWritableKeyPath<T, Layout<Value>>,
+                                              frame: Rect, _ sizeType: SizeType,
+                                              type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return LayoutView(binder: binder, keyPath: keyPath,
+                              frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Layout: ObjectViewable {}
+
+enum Layouter {
     static let smallPadding = 2.0.cg, basicPadding = 3.0.cg, basicLargePadding = 14.0.cg
     static let smallRatio = Font.small.size / Font.default.size
     static let basicTextHeight = Font.default.ceilHeight(withPadding: 1)
@@ -128,7 +186,7 @@ enum Layout {
     }
     static func topAlignment(_ items: [Item],
                              minX: Real = basicPadding, minY: Real = basicPadding,
-                             minSize: inout Size, padding: Real = Layout.basicPadding) {
+                             minSize: inout Size, padding: Real = Layouter.basicPadding) {
         let width = items.reduce(0.0.cg) { max($0, $1.defaultBounds.width) } + padding * 2
         let height = items.reversed().reduce(minY) { y, item in
             item.view?.frame = Rect(x: minX, y: y, width: width, height: item.defaultBounds.height)
@@ -155,5 +213,71 @@ enum Layout {
                 return x + item.width + padding
             }
         }
+    }
+}
+
+final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
+: ModelView, BindableReceiver, Layoutable {
+    
+    typealias Model = Layout<Value>
+    typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var notifications = [((LayoutView<Value, Binder>, BasicPhaseNotification<Model>) -> ())]()
+    
+    var sizeType: SizeType {
+        didSet { updateLayout() }
+    }
+    
+    var defaultModel: Layout<Value> {
+        return Layout(model.value)
+    }
+    
+    let valueView: View
+    
+    init(binder: Binder, keyPath: BinderKeyPath,
+         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        let model = binder[keyPath: keyPath]
+        let valueFrame = model.frame.size == Size() ?
+            Rect() :
+            Rect(origin: Point(), size: model.frame.size)
+            .inset(by: Layouter.padding(with: sizeType))
+        self.sizeType = sizeType
+        valueView = model.value.abstractViewWith(binder: binder,
+                                                 keyPath: keyPath.appending(path: \Model.value),
+                                                 frame: valueFrame, sizeType, type: .normal)
+        if valueView.frame.isEmpty {
+            valueView.frame.size = valueView.defaultBounds.size
+        }
+        super.init()
+        self.frame = model.frame
+        children = [valueView]
+    }
+    
+    var z: Real {
+        get { return model.z }
+        set {
+            model.z = newValue
+//            transform 
+        }
+    }
+    
+    override var defaultBounds: Rect {
+        return valueView.defaultBounds.inset(by: -Layouter.padding(with: sizeType))
+    }
+    override func updateLayout() {
+        model.frame = frame
+        valueView.frame = bounds.inset(by: Layouter.padding(with: sizeType))
+    }
+    func updateWithModel() {
+        
     }
 }

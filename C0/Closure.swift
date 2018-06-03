@@ -19,7 +19,7 @@
 
 typealias Closure = ((Version) -> ())
 
-final class ClosureView: View {
+final class ClosureView: ModelView {
     typealias Model = Closure
     var model: Model
     
@@ -42,14 +42,15 @@ final class ClosureView: View {
     }
     
     override var defaultBounds: Rect {
-        let fitSize = nameView.defaultBounds.size, padding = Layout.padding(with: sizeType)
+        let fitSize = nameView.defaultBounds.size, padding = Layouter.padding(with: sizeType)
         return Rect(x: 0, y: 0,
                     width: fitSize.width + padding * 2, height: fitSize.height + padding * 2)
     }
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
         nameView.frame.origin = Point(x: padding, y: bounds.height - nameView.frame.height - padding)
     }
+    func updateWithModel() {}
 }
 private struct _Closure: Referenceable {
     static let name = Text(english: "Closure", japanese: "クロージャ")

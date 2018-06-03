@@ -17,7 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
 import struct Foundation.URL
 import class Foundation.OperationQueue
 
@@ -152,6 +151,11 @@ extension Scene {
 extension Scene: Referenceable {
     static let name = Text(english: "Scene", japanese: "シーン")
 }
+extension Scene: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return name.thumbnailView(withFrame: frame, sizeType)
+    }
+}
 extension Scene: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Scene>,
@@ -176,7 +180,7 @@ struct SceneLayout {
  Issue: セルをキャンバス外にペースト
  Issue: Display P3サポート
  */
-final class SceneView<T: BinderProtocol>: View, BindableReceiver {
+final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Scene
     typealias Binder = T
     var binder: Binder {
@@ -186,6 +190,10 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
         didSet { updateWithModel() }
     }
     var notifications = [((SceneView<Binder>, BasicNotification) -> ())]()
+    
+    var defaultModel: Model {
+        return Model()
+    }
     
     let versionView: VersionView<Binder>
     
@@ -232,7 +240,7 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
             = DiscreteIntView(binder: binder,
                               keyPath: keyPath.appending(path: \Scene.renderingVerticalResolution),
                               option: Scene.renderingVerticalResolutionOption,
-                              frame: Layout.valueFrame(with: .small), sizeType: .small)
+                              frame: Layouter.valueFrame(with: .small), sizeType: .small)
         isHiddenSubtitlesView = BoolView(binder: binder,
                                          keyPath: keyPath.appending(path: \Scene.isHiddenSubtitles),
                                          option: Scene.isHiddenSubtitlesOption, sizeType: .small)
@@ -284,7 +292,7 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
 //        return Rect(x: 0, y: 0, width: width, height: height)
     }
     override func updateLayout() {
-        let padding = Layout.basicPadding, buttonH = Layout.basicHeight
+        let padding = Layouter.basicPadding, buttonH = Layouter.basicHeight
         let h = buttonH + padding * 2
         let cs = SceneLayout.canvasSize, th = SceneLayout.timelineHeight
         let pw = SceneLayout.propertyWidth
@@ -308,7 +316,7 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
         let ihpw = isHiddenPreviousView.defaultBounds.width
         topX -= ihpw
         isHiddenPreviousView.frame = Rect(x: topX, y: topY, width: ihpw, height: buttonH)
-        let tiw = Layout.valueWidth(with: .regular)
+        let tiw = Layouter.valueWidth(with: .regular)
         topX -= tiw
         timelineView.baseTimeIntervalView.frame = Rect(x: topX, y: topY, width: tiw, height: buttonH)
         topX = classNameView.frame.maxX + padding
@@ -324,8 +332,8 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
         
         let px = padding * 2 + cs.width, propertyMaxY = y
         var py = propertyMaxY
-        let sh = Layout.smallHeight
-        let sph = sh + Layout.smallPadding * 2
+        let sh = Layouter.smallHeight
+        let sph = sh + Layouter.smallPadding * 2
         py -= sph
         sizeView.frame = Rect(x: px, y: py, width: sizeView.defaultBounds.width, height: sph)
         py -= sh
@@ -406,29 +414,8 @@ final class SceneView<T: BinderProtocol>: View, BindableReceiver {
         }
     }
 }
-extension SceneView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
-    }
-}
 extension SceneView: Undoable {
     var version: Version {
         return versionView.model
-    }
-}
-extension SceneView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(Model(), to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = object as? Model {
-                push(model, to: version)
-                return
-            }
-        }
     }
 }

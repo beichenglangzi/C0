@@ -17,7 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
 import CoreGraphics
 
 struct SineWave: Codable, Hashable, Initializable {
@@ -233,7 +232,7 @@ struct SineWaveOption {
                                      modelInterval: 0.1, numberOfDigits: 1, unit: "rpb")
 }
 
-final class SineWaveView<T: BinderProtocol>: View, BindableReceiver {
+final class SineWaveView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = SineWave
     typealias ModelOption = SineWaveOption
     typealias Binder = T
@@ -251,6 +250,9 @@ final class SineWaveView<T: BinderProtocol>: View, BindableReceiver {
             frequencyView.option = option.frequencyOption
             updateWithModel()
         }
+    }
+    var defaultModel: Model {
+        return option.defaultModel
     }
     
     let amplitudeView: DiscreteRealView<Binder>
@@ -277,12 +279,12 @@ final class SineWaveView<T: BinderProtocol>: View, BindableReceiver {
         amplitudeView = DiscreteRealView(binder: binder,
                                          keyPath: keyPath.appending(path: \SineWave.amplitude),
                                          option: option.amplitudeOption,
-                                         frame: Layout.valueFrame(with: sizeType),
+                                         frame: Layouter.valueFrame(with: sizeType),
                                          sizeType: sizeType)
         frequencyView = DiscreteRealView(binder: binder,
                                          keyPath: keyPath.appending(path: \SineWave.frequency),
                                          option: option.frequencyOption,
-                                         frame: Layout.valueFrame(with: sizeType),
+                                         frame: Layouter.valueFrame(with: sizeType),
                                          sizeType: sizeType)
         
         self.sizeType = sizeType
@@ -298,43 +300,22 @@ final class SineWaveView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     override var defaultBounds: Rect {
-        let w = Layout.propertyWidth + Layout.basicPadding * 2
-        let h = Layout.basicHeight * 2 + Layout.basicPadding * 2
+        let w = Layouter.propertyWidth + Layouter.basicPadding * 2
+        let h = Layouter.basicHeight * 2 + Layouter.basicPadding * 2
         return Rect(x: 0, y: 0, width: w, height: h)
     }
     override func updateLayout() {
-        var y = bounds.height - Layout.basicPadding - classNameView.frame.height
-        classNameView.frame.origin = Point(x: Layout.basicPadding, y: y)
-        y = bounds.height - Layout.basicPadding - Layout.basicHeight
-        _ = Layout.leftAlignment([.view(classFrequencyNameView), .view(frequencyView)],
-                                 y: y, height: Layout.basicHeight)
-        y -= Layout.basicHeight
+        var y = bounds.height - Layouter.basicPadding - classNameView.frame.height
+        classNameView.frame.origin = Point(x: Layouter.basicPadding, y: y)
+        y = bounds.height - Layouter.basicPadding - Layouter.basicHeight
+        _ = Layouter.leftAlignment([.view(classFrequencyNameView), .view(frequencyView)],
+                                 y: y, height: Layouter.basicHeight)
+        y -= Layouter.basicHeight
         classFrequencyNameView.frame.origin.x
             = frequencyView.frame.minX - classFrequencyNameView.frame.width
     }
     func updateWithModel() {
         amplitudeView.updateWithModel()
         frequencyView.updateWithModel()
-    }
-}
-extension SineWaveView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
-    }
-}
-extension SineWaveView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(option.defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = object as? Model {
-                push(model, to: version)
-                return
-            }
-        }
     }
 }

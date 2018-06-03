@@ -19,7 +19,7 @@
 
 import Cocoa
 
-final class CocoaStringView<T: BinderProtocol>: View, BindableReceiver {
+final class CocoaStringView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = String
     typealias ModelOption = StringOption
     typealias Binder = T
@@ -46,6 +46,9 @@ final class CocoaStringView<T: BinderProtocol>: View, BindableReceiver {
     
     var option: ModelOption {
         didSet { updateWithModel() }
+    }
+    var defaultModel: Model {
+        return option.defaultModel
     }
     
     var textMaterial: TextMaterial {
@@ -142,7 +145,7 @@ extension CocoaStringView: Assignable {
     }
     func paste(_ objects: [Any], for p: Point, _ version: Version) {
         for object in objects {
-            if let model = Model(object) {
+            if let model = Model(anyValue: object) {
                 push(model, to: version)
                 return
             }

@@ -60,15 +60,14 @@ class View {
         return view
     }
     
-//    fileprivate
-    var caLayer: CALayer
+    fileprivate var caLayer: CALayer
     init() {
         caLayer = CALayer.interface()
     }
     
     init(frame: Rect = Rect(), fillColor: Color? = nil, isLocked: Bool) {
         self.isLocked = isLocked
-        caLayer = CALayer.interface()
+        caLayer = CALayer.interface(backgroundColor: fillColor)
         self.fillColor = fillColor
         self.frame = frame
     }
@@ -320,6 +319,22 @@ class View {
         }
     }
     
+    var transform = Transform() {
+        didSet {
+            
+        }
+    }
+    var childrenTransform = Transform() {
+        didSet {
+            CATransaction.disableAnimation {
+                caLayer.sublayerTransform
+                    = CATransform3DMakeAffineTransform(childrenTransform.affineTransform)
+                caLayer.bounds.origin = -Point(x: bounds.width / 2, y: bounds.height / 2)
+                    - childrenTransform.translation
+            }
+        }
+    }
+    
     var radius: Real {
         get { return min(bounds.width, bounds.height) / 2 }
         set {
@@ -470,7 +485,13 @@ class View {
     private func convertToRoot(_ point: Point,
                                stop view: View?) -> (point: Point, isRoot: Bool) {
         if let parent = parent {
-            let parentPoint = point - bounds.origin + frame.origin
+            let p = point - bounds.origin
+            let parentPoint: Point
+            if parent.childrenTransform.isIdentity {
+                parentPoint = p + frame.origin
+            } else {
+                parentPoint = p * parent.childrenTransform.affineTransform + frame.origin
+            }
             return parent === view ?
                 (parentPoint, false) : parent.convertToRoot(parentPoint, stop: view)
         } else {
@@ -502,13 +523,6 @@ class View {
     }
     private func updateLineColorWithIsIndicated() {
         lineColor = isIndicated ? indicatedLineColor : noIndicatedLineColor
-    }
-    
-    var isSubIndicated = false
-    weak var subIndicatedParent: View?
-    func allSubIndicatedParentsAndSelf(closure: (View) -> Void) {
-        closure(self)
-        (subIndicatedParent ?? parent)?.allSubIndicatedParentsAndSelf(closure: closure)
     }
     
     func renderImage(with size: Size) -> Image? {
@@ -635,68 +649,6 @@ extension CGContext {
                          bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue)
     }
 }
-//extension CGContext {
-//    func drawBlurWith(color fillColor: Color, width: Real, strength: Real,
-//                      isLuster: Bool, path: CGPath, scale: Real, rotation: Real) {
-//        let nFillColor: Color
-//        if fillColor.alpha < 1 {
-//            saveGState()
-//            setAlpha(Real(fillColor.alpha))
-//            nFillColor = fillColor.with(alpha: 1)
-//        } else {
-//            nFillColor = fillColor
-//        }
-//        let pathBounds = path.boundingBoxOfPath.insetBy(dx: -width, dy: -width)
-//        let lineColor = strength == 1 ? nFillColor : nFillColor.multiply(alpha: strength)
-//        beginTransparencyLayer(in: boundingBoxOfClipPath.intersection(pathBounds),
-//                               auxiliaryInfo: nil)
-//        if isLuster {
-//            setShadow(offset: Size(), blur: width * scale, color: lineColor.cg)
-//        } else {
-//            let shadowY = hypot(pathBounds.size.width, pathBounds.size.height)
-//            translateBy(x: 0, y: shadowY)
-//            let shadowOffset = Size(width: shadowY * scale * sin(rotation),
-//                                    height: -shadowY * scale * cos(rotation))
-//            setShadow(offset: shadowOffset, blur: width * scale / 2, color: lineColor.cg)
-//            setLineWidth(width)
-//            setLineJoin(.round)
-//            setStrokeColor(lineColor.cg)
-//            addPath(path)
-//            strokePath()
-//            translateBy(x: 0, y: -shadowY)
-//        }
-//        setFillColor(nFillColor.cg)
-//        addPath(path)
-//        fillPath()
-//        endTransparencyLayer()
-//        if fillColor.alpha < 1 {
-//            restoreGState()
-//        }
-//    }
-//    func drawBlur(withBlurRadius blurRadius: Real, to ctx: CGContext) {
-//        guard let image = makeImage() else { return }
-//        let ciImage = CIImage(cgImage: image)
-//        let cictx = CIContext(cgContext: ctx, options: nil)
-//        let filter = CIFilter(name: "CIGaussianBlur")
-//        filter?.setValue(ciImage, forKey: kCIInputImageKey)
-//        filter?.setValue(Float(blurRadius), forKey: kCIInputRadiusKey)
-//        if let outputImage = filter?.outputImage {
-//            cictx.draw(outputImage,
-//                       in: ctx.boundingBoxOfClipPath,
-//                       from: Rect(origin: Point(), size: image.size))
-//        }
-//    }
-//}
-
-//private extension BlendType {
-//    var cgBlendMode: CGBlendMode {
-//        switch self {
-//        case .normal: return .normal
-//        case .addition: return .plusLighter
-//        case .subtract: return .plusDarker
-//        }
-//    }
-//}
 
 final class DisplayLink {
     var closure: ((Second) -> ())?
@@ -813,6 +765,14 @@ protocol AbstractViewable {
 }
 protocol ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View
+}
+extension ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        let view = View(isLocked: true)
+        view.frame = frame
+        view.lineColor = .formBorder
+        return view
+    }
 }
 protocol DisplayableText {
     var displayText: Text { get }

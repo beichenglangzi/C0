@@ -17,7 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
 import CoreGraphics
 
 typealias Object1D = Object.Value
@@ -27,7 +26,6 @@ protocol Object1DOption: GetterOption {
     var minModel: Model { get }
     var maxModel: Model { get }
     var transformedModel: ((Model) -> (Model)) { get }
-    func model(with object: Any) -> Model?
     func ratio(with model: Model) -> Real
     func ratioFromDefaultModel(with model: Model) -> Real
     func model(withDelta delta: Real, oldModel: Model) -> Model
@@ -35,7 +33,7 @@ protocol Object1DOption: GetterOption {
     func clippedModel(_ model: Model) -> Model
 }
 
-final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, BindableReceiver {
+final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = T.Model
     typealias ModelOption = T
     typealias Binder = U
@@ -58,6 +56,9 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
     
     var option: ModelOption {
         didSet { updateWithModel() }
+    }
+    var defaultModel: Model {
+        return option.defaultModel
     }
     
     var sizeType: SizeType
@@ -96,21 +97,9 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: View, Bindab
     private func updateString() {
         optionTextView.text = option.displayText(with: model)
     }
-}
-extension Assignable1DView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(option.defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = option.model(with: object) {
-                push(option.clippedModel(model), to: version)
-                return
-            }
-        }
+    
+    func clippedModel(_ model: Model) -> Model {
+        return option.clippedModel(model)
     }
 }
 
@@ -119,7 +108,9 @@ protocol Discrete {}
 /**
  Issue: スクロールによる値の変更
  */
-final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete, BindableReceiver {
+final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
+: ModelView, Discrete, BindableReceiver {
+
     typealias Model = T.Model
     typealias ModelOption = T
     typealias Binder = U
@@ -143,6 +134,9 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
     
     var option: ModelOption {
         didSet { updateWithModel() }
+    }
+    var defaultModel: Model {
+        return option.defaultModel
     }
     
     var sizeType: SizeType {
@@ -173,7 +167,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
         self.sizeType = sizeType
         self.xyOrientation = xyOrientation
         knobPadding = sizeType == .small ? 2 : 3
-        labelPaddingX = Layout.padding(with: sizeType)
+        labelPaddingX = Layouter.padding(with: sizeType)
         optionStringView = TextFormView(font: Font.default(with: sizeType),
                                       frameAlignment: .right, alignment: .right)
         
@@ -185,7 +179,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
     }
     
     override var defaultBounds: Rect {
-        return Rect(x: 0, y: 0, width: 80, height: Layout.height(with: sizeType))
+        return Rect(x: 0, y: 0, width: 80, height: Layouter.height(with: sizeType))
     }
     override func updateLayout() {
         let paddingX = sizeType == .small ? 3.0.cg : 5.0.cg
@@ -229,21 +223,9 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>: View, Discrete
         }
         return option.model(withDelta: delta / interval, oldModel: oldModel)
     }
-}
-extension Discrete1DView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(option.defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = option.model(with: object) {
-                push(option.clippedModel(model), to: version)
-                return
-            }
-        }
+    
+    func clippedModel(_ model: Model) -> Model {
+        return option.clippedModel(model)
     }
 }
 extension Discrete1DView: BasicDiscretePointMovable {
@@ -254,7 +236,9 @@ extension Discrete1DView: BasicDiscretePointMovable {
 
 protocol Slidable {}
 
-final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable, BindableReceiver {
+final class Slidable1DView<T: Object1DOption, U: BinderProtocol>
+: ModelView, Slidable, BindableReceiver {
+
     typealias Model = T.Model
     typealias ModelOption = T
     typealias Binder = U
@@ -278,6 +262,9 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     
     var option: ModelOption {
         didSet { updateWithModel() }
+    }
+    var defaultModel: Model {
+        return option.defaultModel
     }
     
     var sizeType: SizeType {
@@ -348,21 +335,9 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
         }
         return option.model(withRatio: t)
     }
-}
-extension Slidable1DView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(option.defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = option.model(with: object) {
-                push(option.clippedModel(model), to: version)
-                return
-            }
-        }
+    
+    func clippedModel(_ model: Model) -> Model {
+        return option.clippedModel(model)
     }
 }
 extension Slidable1DView: Runnable {
@@ -403,7 +378,9 @@ extension Slidable1DView {
     }
 }
 
-final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable, BindableReceiver {
+final class Circular1DView<T: Object1DOption, U: BinderProtocol>
+: ModelView, Slidable, BindableReceiver {
+
     typealias Model = T.Model
     typealias ModelOption = T
     typealias Binder = U
@@ -427,6 +404,9 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     
     var option: ModelOption {
         didSet { updateWithModel() }
+    }
+    var defaultModel: Model {
+        return option.defaultModel
     }
     
     var sizeType: SizeType {
@@ -473,13 +453,13 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
     
     override func updateLayout() {
         let cp = Point(x: bounds.midX, y: bounds.midY), r = bounds.width / 2
+        let mr = r - width
         let fp0 = cp + Point(x: r, y: 0)
-        let arc0 = PathLine.Arc(centerPoint: cp, endAngle: 2 * .pi,
-                                circularOrientation: .clockwise)
-        let fp1 = cp + Point(x: r - width, y: 0)
-        let arc1 = PathLine.Arc(centerPoint: cp, endAngle: 2 * .pi,
-                                circularOrientation: .counterClockwise)
+        let arc0 = PathLine.Arc(radius: r, startAngle: 0, endAngle: 2 * .pi)
+        let fp1 = cp + Point(x: mr, y: 0)
+        let arc1 = PathLine.Arc(radius: mr, startAngle: 2 * .pi, endAngle: 0)
         var path = Path()
+        
         path.append(PathLine(firstPoint: fp0, elements: [.arc(arc0)]))
         path.append(PathLine(firstPoint: fp1, elements: [.arc(arc1)]))
         self.path = path
@@ -507,21 +487,9 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: View, Slidable
         let model = option.model(withRatio: t)
         return option.clippedModel(model)
     }
-}
-extension Circular1DView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(option.defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = option.model(with: object) {
-                push(model, to: version)
-                return
-            }
-        }
+    
+    func clippedModel(_ model: Model) -> Model {
+        return option.clippedModel(model)
     }
 }
 extension Circular1DView: Runnable {

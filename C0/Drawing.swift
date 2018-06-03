@@ -214,6 +214,11 @@ extension Lines: Interpolatable {
 extension Lines: Referenceable {
     static let name = Text(english: "Lines Keyframe Value", japanese: "線キーフレーム値")
 }
+extension Lines: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return drawing.thumbnailView(withFrame: frame, sizeType)
+    }
+}
 extension Lines: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Lines>,
@@ -233,7 +238,7 @@ extension Lines: ObjectViewable {}
 /**
  Issue: DraftArray、下書き化などのコマンドを排除
  */
-final class DrawingView<T: BinderProtocol>: View, BindableReceiver {
+final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Drawing
     typealias Binder = T
     var binder: Binder {
@@ -279,12 +284,12 @@ final class DrawingView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     override var defaultBounds: Rect {
-        let padding = Layout.padding(with: sizeType), buttonH = Layout.height(with: sizeType)
+        let padding = Layouter.padding(with: sizeType), buttonH = Layouter.height(with: sizeType)
         return Rect(x: 0, y: 0, width: 100,
                       height: buttonH * 4 + padding * 2)
     }
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType), buttonH = Layout.height(with: sizeType)
+        let padding = Layouter.padding(with: sizeType), buttonH = Layouter.height(with: sizeType)
         let px = padding, pw = bounds.width - padding * 2
         var py = bounds.height - padding
         py -= classNameView.frame.height
@@ -321,21 +326,5 @@ extension DrawingView {
         let lines = model.lines
         model.lines = model.draftLines
         model.draftLines = lines
-    }
-}
-extension DrawingView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = object as? Model {
-                push(model, to: version)
-                return
-            }
-        }
     }
 }

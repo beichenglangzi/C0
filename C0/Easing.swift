@@ -103,7 +103,7 @@ extension Easing: ObjectViewable {}
 /**
  Issue: 前後キーフレームからの傾斜スナップ
  */
-final class EasingView<T: BinderProtocol>: View, BindableReceiver {
+final class EasingView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Easing
     typealias Binder = T
     var binder: Binder {
@@ -121,10 +121,8 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
     var sizeType: SizeType {
         didSet { updateLayout() }
     }
-    var padding = Layout.basicPadding {
-        didSet {
-            updateLayout()
-        }
+    var padding = Layouter.basicPadding {
+        didSet { updateLayout() }
     }
     private let classXNameView: TextFormView, classYNameView: TextFormView
     private let controlLinePathView: View = {
@@ -179,7 +177,7 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
                              width: (bounds.width - padding * 2) / 2,
                              height: (bounds.height - padding * 2) / 2)
         var path = Path()
-        let sp = Layout.smallPadding
+        let sp = Layouter.smallPadding
         let p0 = Point(x: padding + cp0View.padding,
                        y: bounds.height - padding - classYNameView.frame.height - sp)
         let p1 = Point(x: padding + cp0View.padding,
@@ -211,21 +209,5 @@ final class EasingView<T: BinderProtocol>: View, BindableReceiver {
         cp0View.updateWithModel()
         cp1View.updateWithModel()
         updatePathLayout()
-    }
-}
-extension EasingView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = object as? Model {
-                push(model, to: version)
-                return
-            }
-        }
     }
 }

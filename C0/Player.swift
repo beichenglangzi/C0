@@ -17,7 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
 import struct Foundation.Date
 import class CoreGraphics.CGContext
 
@@ -44,8 +43,21 @@ extension Player {
     static let playingFrameRateOption = RealGetterOption(numberOfDigits: 1, unit: " fps")
     static let timeOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1)
 }
+extension Player: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return "\(time) b".thumbnailView(withFrame: frame, sizeType)
+    }
+}
+extension Player: AbstractViewable {
+    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Player>,
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> ModelView where T : BinderProtocol {
+        return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+    }
+}
+extension Player: ObjectViewable {}
 
-final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
+final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Player
     typealias Binder = T
     var binder: Binder {
@@ -62,6 +74,8 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
     var scene: Scene {
         return binder[keyPath: sceneKeyPath]
     }
+    
+    var defaultModel = Player()
     
     private var screenTransform = AffineTransform.identity
     private var audioPlayers = [SoundPlayer]()
@@ -120,7 +134,7 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
 //                    soundPlayer.currentTime = scene.timeline.secondTime(withBeatTime: t)
 //                    soundPlayer.play()
 //                }
-//
+
                 drawView.displayLinkDraw()
             } else {
                 displayLink?.stop()
@@ -155,10 +169,11 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
         self.binder = binder
         self.keyPath = keyPath
         self.sceneKeyPath = sceneKeyPath
-        playingFrameRateView = RealGetterView(binder: binder,
-                                              keyPath: keyPath.appending(path: \Model.playingFrameRate),
-                                              option: Model.playingFrameRateOption,
-                                              sizeType: sizeType)
+        playingFrameRateView
+            = RealGetterView(binder: binder,
+                             keyPath: keyPath.appending(path: \Model.playingFrameRate),
+                             option: Model.playingFrameRateOption,
+                             sizeType: sizeType)
         
         timeView = SlidableRealView(binder: binder, keyPath: keyPath.appending(path: \Model.time),
                                     option: Model.timeOption, sizeType: sizeType)
@@ -197,13 +212,13 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
         drawView.frame = Rect(origin: paddingOrigin, size: scene.canvas.frame.size)
         screenTransform = AffineTransform(translation: drawView.bounds.midPoint)
         
-        let padding = Layout.basicPadding, height = Layout.basicHeight
+        let padding = Layouter.basicPadding, height = Layouter.basicHeight
         let sliderY = ((frame.height - height) / 2).rounded()
-        let labelHeight = Layout.basicHeight - padding * 2
+        let labelHeight = Layouter.basicHeight - padding * 2
         let labelY = ((frame.height - labelHeight) / 2).rounded()
         
         timeStringView.frame.origin = Point(x: padding, y: labelY)
-        let frw = Layout.valueWidth(with: .regular)
+        let frw = Layouter.valueWidth(with: .regular)
         playingFrameRateView.frame = Rect(x: bounds.width - frw - padding,
                                           y: padding * 2, width: frw, height: height - padding * 2)
         let sliderWidth = playingFrameRateView.frame.minX - timeStringView.frame.maxX - padding * 2
@@ -277,10 +292,5 @@ final class ScenePlayerView<T: BinderProtocol>: View, BindableReceiver {
         if isPlaying {
             isPlaying = false
         }
-    }
-}
-extension ScenePlayerView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
     }
 }

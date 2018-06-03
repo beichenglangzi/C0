@@ -359,7 +359,7 @@ extension Animation: AbstractViewable {
 }
 extension Animation: ObjectViewable {}
 
-final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, BindableReceiver {
+final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Animation<Value>
     typealias Binder = T
     var binder: Binder {
@@ -422,7 +422,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
     init(binder: Binder, keyPath: BinderKeyPath,
          beginBaseTime: Rational = 0, baseTimeInterval: Rational = Rational(1, 16),
          origin: Point = Point(),
-         height: Real = Layout.basicHeight, smallHeight: Real = 8.0,
+         height: Real = Layouter.basicHeight, smallHeight: Real = 8.0,
          sizeType: SizeType = .regular) {
         
         self.binder = binder
@@ -692,109 +692,6 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: View, Bindab
         updateMin(index: nil, time: model.duration)
         return minIndex
     }
-
-    enum SetKeyframeType {
-        case insert(Int), remove(Range<Int>), replace(Int)
-    }
-}
-extension AnimationView: Selectable {
-    func captureSelections(to version: Version) {
-        version.registerUndo(withTarget: self) {
-            [oldSelectedKeyframeIndexes = model.selectedKeyframeIndexes, unowned version] in
-            
-            $0.pushSelectedKeyframeIndexes(oldSelectedKeyframeIndexes, to: version)
-        }
-    }
-    func pushSelectedKeyframeIndexes(_ selectedKeyframeIndexes: [KeyframeIndex],
-                                     to version: Version) {
-        version.registerUndo(withTarget: self) {
-            [oldSelectedKeyframeIndexes = model.selectedKeyframeIndexes, unowned version] in
-            
-            $0.pushSelectedKeyframeIndexes(oldSelectedKeyframeIndexes, to: version)
-        }
-        model.selectedKeyframeIndexes = selectedKeyframeIndexes
-        updateLayout()
-    }
-    
-    func makeViewSelector() -> ViewSelector {
-        return AnimationViewSelector(animationView: self)
-    }
-    
-    func selectAll() {
-        model.selectedKeyframeIndexes = Array(0..<model.keyframes.count)
-        updateLayout()
-    }
-    func deselectAll() {
-        model.selectedKeyframeIndexes = []
-        updateLayout()
-    }
-}
-final class AnimationViewSelector<Value: KeyframeValue, Binder: BinderProtocol>: ViewSelector {
-    var animationView: AnimationView<Value, Binder>
-    var model: Animation<Value> {
-        get { return animationView.model }
-        set { animationView.model = newValue }
-    }
-    
-    init(animationView: AnimationView<Value, Binder>) {
-        self.animationView = animationView
-    }
-    
-    var beginSelectedKeyframeIndexes = [KeyframeIndex]()
-    
-    func select(from rect: Rect, _ phase: Phase) {
-        select(from: rect, phase, isDeselect: false)
-    }
-    func deselect(from rect: Rect, _ phase: Phase) {
-        select(from: rect, phase, isDeselect: true)
-    }
-    func select(from rect: Rect, _ phase: Phase, isDeselect: Bool) {
-        switch phase {
-        case .began:
-            beginSelectedKeyframeIndexes = model.selectedKeyframeIndexes
-        case .changed, .ended:
-            model.selectedKeyframeIndexes = selectedIndex(from: rect, isDeselect: isDeselect)
-            animationView.updateLayout()
-        }
-    }
-    private func indexes(from rect: Rect) -> [KeyframeIndex] {
-        let halfTimeInterval = animationView.baseTimeInterval / 2
-        let startTime = animationView.time(withX: rect.minX, isBased: false) + halfTimeInterval
-        let startIndexInfo = Keyframe.indexInfo(atTime: startTime,
-                                                with: animationView.model.keyframes)
-        let startIndex = startIndexInfo.index
-        let selectEndX = rect.maxX
-        let endTime = animationView.time(withX: selectEndX, isBased: false) + halfTimeInterval
-        let endIndexInfo = Keyframe.indexInfo(atTime: endTime,
-                                              with: animationView.model.keyframes)
-        let endIndex = endIndexInfo.index
-        return startIndex == endIndex ?
-            [startIndex] :
-            Array(startIndex < endIndex ? (startIndex...endIndex) : (endIndex...startIndex))
-    }
-    private func selectedIndex(from rect: Rect, isDeselect: Bool) -> [KeyframeIndex] {
-        let selectedIndexes = indexes(from: rect)
-        return isDeselect ?
-            Array(Set(beginSelectedKeyframeIndexes).subtracting(Set(selectedIndexes))).sorted() :
-            Array(Set(beginSelectedKeyframeIndexes).union(Set(selectedIndexes))).sorted()
-    }
-    
-}
-extension AnimationView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = object as? Model {
-                push(model, to: version)
-                return
-            }
-        }
-    }
 }
 extension AnimationView: Newable {
     func new(for p: Point, _ version: Version) {
@@ -859,92 +756,5 @@ extension AnimationView: Newable {
         }
         model.keyframes[index] = keyframe
         //updateView
-    }
-}
-final class AnimationViewPointMover<Value: KeyframeValue, Binder: BinderProtocol> {
-    var animationView: AnimationView<Value, Binder>
-    var model: Animation<Value> {
-        get { return animationView.model }
-        set { animationView.model = newValue }
-    }
-    
-    init(animationView: AnimationView<Value, Binder>) {
-        self.animationView = animationView
-    }
-    
-    var editingKeyframeIndex: Int?
-    
-    var oldRealBaseTime = RealBaseTime(0), oldKeyframeIndex: Int?
-    var clipDeltaTime = Rational(0), minDeltaTime = Rational(0), oldTime = Rational(0)
-    var oldAnimation = Animation<Value>()
-    
-    func move(for point: Point, pressure: Real,
-              time: Second, _ phase: Phase) {
-        let p = point
-        switch phase {
-        case .began:
-            oldRealBaseTime = animationView.realBaseTime(withX: p.x)
-            if let ki = animationView.nearestKeyframeIndex(at: p), model.keyframes.count > 1 {
-                let keyframeIndex = ki > 0 ? ki : 1
-                oldKeyframeIndex = keyframeIndex
-                moveKeyframe(withDeltaTime: 0, keyframeIndex: keyframeIndex, phase: phase)
-            } else {
-                oldKeyframeIndex = nil
-                moveDuration(withDeltaTime: 0, phase)
-            }
-        case .changed, .ended:
-            let t = animationView.realBaseTime(withX: point.x)
-            let fdt = t - oldRealBaseTime + (t - oldRealBaseTime >= 0 ? 0.5 : -0.5)
-            let dt = animationView.basedRationalTime(withRealBaseTime: fdt)
-            let deltaTime = max(minDeltaTime, dt + clipDeltaTime)
-            if let keyframeIndex = oldKeyframeIndex, keyframeIndex < model.keyframes.count {
-                moveKeyframe(withDeltaTime: deltaTime, keyframeIndex: keyframeIndex, phase: phase)
-            } else {
-                moveDuration(withDeltaTime: deltaTime, phase)
-            }
-        }
-    }
-    func move(withDeltaTime deltaTime: Rational, keyframeIndex: Int?, _ phase: Phase) {
-        if let keyframeIndex = keyframeIndex, keyframeIndex < model.keyframes.count {
-            moveKeyframe(withDeltaTime: deltaTime, keyframeIndex: keyframeIndex, phase: phase)
-        } else {
-            moveDuration(withDeltaTime: deltaTime, phase)
-        }
-    }
-    func moveKeyframe(withDeltaTime deltaTime: Rational,
-                      keyframeIndex: Int, phase: Phase) {
-        switch phase {
-        case .began:
-            editingKeyframeIndex = keyframeIndex
-            let preTime = model.keyframes[keyframeIndex - 1].timing.time
-            let time = model.keyframes[keyframeIndex].timing.time
-            clipDeltaTime = animationView.clipDeltaTime(withTime: time + animationView.beginBaseTime)
-            minDeltaTime = preTime - time
-            oldAnimation = model
-            oldTime = time
-        case .changed, .ended:
-            var nks = oldAnimation.keyframes
-            (keyframeIndex..<nks.count).forEach {
-                nks[$0].timing.time += deltaTime
-            }
-            model.keyframes = nks
-            model.duration = oldAnimation.duration + deltaTime
-            animationView.updateLayout()
-        }
-    }
-    func moveDuration(withDeltaTime deltaTime: Rational, _ phase: Phase) {
-        switch phase {
-        case .began:
-            editingKeyframeIndex = model.keyframes.count
-            let preTime = model.keyframes[model.keyframes.count - 1].timing.time
-            let time = model.duration
-            clipDeltaTime = animationView.clipDeltaTime(withTime: time + animationView.beginBaseTime)
-            minDeltaTime = preTime - time
-            oldAnimation = model
-            oldTime = time
-        case .changed, .ended:
-            model.duration = oldAnimation.duration + deltaTime
-            animationView.updateLayout()
-        }
     }
 }

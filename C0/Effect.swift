@@ -17,8 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
-
 enum BlendType: Int8, Codable, Hashable {
     case normal, addition, subtract
 }
@@ -151,7 +149,7 @@ struct EffectTrack: Track, Codable {
     }
 }
 
-final class EffectView<T: BinderProtocol>: View, BindableReceiver {
+final class EffectView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Effect
     typealias ModelOption = EffectOption
     typealias Binder = T
@@ -212,12 +210,12 @@ final class EffectView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     override var defaultBounds: Rect {
-        let padding = Layout.padding(with: sizeType), height = Layout.height(with: sizeType)
+        let padding = Layouter.padding(with: sizeType), height = Layouter.height(with: sizeType)
         let viewHeight = height * 2 + padding * 2
         return Rect(x: 0, y: 0, width: 220, height: viewHeight)
     }
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
+        let padding = Layouter.padding(with: sizeType), h = Layouter.height(with: sizeType)
         let cw = bounds.width - padding * 2
         let rw = cw - classNameView.frame.width - padding
         let px = bounds.width - rw - padding
@@ -236,26 +234,5 @@ final class EffectView<T: BinderProtocol>: View, BindableReceiver {
         blendTypeView.updateWithModel()
         blurRadiusView.updateWithModel()
         opacityView.updateWithModel()
-    }
-}
-extension EffectView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
-    }
-}
-extension EffectView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = object as? Model {
-                push(model, to: version)
-                return
-            }
-        }
     }
 }

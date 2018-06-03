@@ -24,19 +24,13 @@ import CoreGraphics
  */
 struct Color: Codable {
     var hue: Real {
-        didSet {
-            rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
-        }
+        didSet { rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb }
     }
     var saturation: Real {
-        didSet {
-            rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
-        }
+        didSet { rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb }
     }
     var lightness: Real {
-        didSet {
-            rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
-        }
+        didSet { rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb }
     }
     var sl: Point {
         get {
@@ -48,40 +42,54 @@ struct Color: Codable {
         }
     }
     var alpha: Real
-    var colorSpace: ColorSpace
+    var rgbColorSpace: RGBColorSpace
     private(set) var rgb: RGB
     
     init(hue: Real = 0, saturation: Real = 0, lightness: Real = 0,
-         alpha: Real = 1, colorSpace: ColorSpace = .sRGB) {
+         alpha: Real = 1, rgbColorSpace: RGBColorSpace = .sRGB) {
+        
         self.hue = hue
         self.saturation = saturation
         self.lightness = lightness
         rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
         self.alpha = alpha
-        self.colorSpace = colorSpace
+        self.rgbColorSpace = rgbColorSpace
+    }
+    init(hue: Real, saturation: Real, lightnessFromMaxSaturation: Real,
+         alpha: Real = 1, rgbColorSpace: RGBColorSpace = .sRGB) {
+        
+        let hsv = HSV(h: Color.hsvHue(withHSLHue: hue),
+                      s: saturation,
+                      v: lightnessFromMaxSaturation)
+        self.init(hsv: hsv, rgb: hsv.rgb, alpha: alpha,
+                  rgbColorSpace: rgbColorSpace)
     }
     init(hue: Real, saturation: Real, brightness: Real,
-         alpha: Real = 1, colorSpace: ColorSpace = .sRGB) {
+         alpha: Real = 1, rgbColorSpace: RGBColorSpace = .sRGB) {
+        
         let hsv = HSV(h: hue, s: saturation, v: brightness)
-        self.init(hsv: hsv, rgb: hsv.rgb, alpha: alpha, colorSpace: colorSpace)
+        self.init(hsv: hsv, rgb: hsv.rgb, alpha: alpha,
+                  rgbColorSpace: rgbColorSpace)
     }
     init(red: Real, green: Real, blue: Real,
-         alpha: Real = 1, colorSpace: ColorSpace = .sRGB) {
+         alpha: Real = 1, rgbColorSpace: RGBColorSpace = .sRGB) {
         
         let rgb = RGB(r: red, g: green, b: blue)
-        self.init(hsv: rgb.hsv, rgb: rgb, alpha: alpha, colorSpace: colorSpace)
+        self.init(hsv: rgb.hsv, rgb: rgb, alpha: alpha, rgbColorSpace: rgbColorSpace)
     }
-    init(rgb: RGB, alpha: Real = 1, colorSpace: ColorSpace = .sRGB) {
-        self.init(hsv: rgb.hsv, rgb: rgb, alpha: alpha, colorSpace: colorSpace)
+    init(rgb: RGB, alpha: Real = 1, rgbColorSpace: RGBColorSpace = .sRGB) {
+        self.init(hsv: rgb.hsv, rgb: rgb, alpha: alpha,
+                  rgbColorSpace: rgbColorSpace)
     }
-    init(white: Real, alpha: Real = 1, colorSpace: ColorSpace = .sRGB) {
-        self.init(hue: 0, saturation: 0, lightness: white, alpha: alpha, colorSpace: colorSpace)
+    init(white: Real, alpha: Real = 1, rgbColorSpace: RGBColorSpace = .sRGB) {
+        self.init(hue: 0, saturation: 0, lightness: white, alpha: alpha,
+                  rgbColorSpace: rgbColorSpace)
     }
-    init(hsv: HSV, rgb: RGB, alpha: Real, colorSpace: ColorSpace = .sRGB) {
+    init(hsv: HSV, rgb: RGB, alpha: Real, rgbColorSpace: RGBColorSpace = .sRGB) {
         (hue, saturation, lightness) = Color.hsl(with: hsv)
         self.rgb = rgb
         self.alpha = alpha
-        self.colorSpace = colorSpace
+        self.rgbColorSpace = rgbColorSpace
     }
 }
 extension Color {
@@ -128,11 +136,72 @@ extension Color {
     static let warning = rgbRed
 }
 extension Color {
-    static func random(colorSpace: ColorSpace = .sRGB) -> Color {
+    static func random(rgbColorSpace: RGBColorSpace = .sRGB) -> Color {
         let hue = Real.random(min: 0, max: 1)
         let saturation = Real.random(min: 0.5, max: 1)
         let lightness = Real.random(min: 0.4, max: 0.9)
-        return Color(hue: hue, saturation: saturation, lightness: lightness, colorSpace: colorSpace)
+        return Color(hue: hue, saturation: saturation, lightness: lightness,
+                     rgbColorSpace: rgbColorSpace)
+    }
+    
+    private static let split = 1.0.cg / 12.0.cg, slow = 0.45.cg, fast = 1.55.cg
+    private static func hsvHue(withHSLHue hslHue: Real) -> Real {
+        let a = hslHue - 1 / 12
+        let hue = a < 0 ? a + 1 : a
+        if hue < split {
+            return hue * fast
+        } else if hue < split * 2 {
+            return (hue - split) * slow + split * fast
+        } else if hue < split * 3 {
+            return (hue - split * 2) * slow + split * (fast + slow)
+        } else if hue < split * 4 {
+            return (hue - split * 3) * fast + split * (fast + slow * 2)
+        } else if hue < split * 5 {
+            return (hue - split * 4) * fast + split * (fast * 2 + slow * 2)
+        } else if hue < split * 6 {
+            return (hue - split * 5) * slow + split * (fast * 3 + slow * 2)
+        } else if hue < split * 7 {
+            return (hue - split * 6) * slow + split * (fast * 3 + slow * 3)
+        } else if hue < split * 8 {
+            return (hue - split * 7) * fast + split * (fast * 3 + slow * 4)
+        } else if hue < split * 9 {
+            return (hue - split * 8) * fast + split * (fast * 4 + slow * 4)
+        } else if hue < split * 10 {
+            return (hue - split * 9) * slow + split * (fast * 5 + slow * 4)
+        } else if hue < split * 11 {
+            return (hue - split * 10) * slow + split * (fast * 5 + slow * 5)
+        } else {
+            return (hue - split * 11) * fast + split * (fast * 5 + slow * 6)
+        }
+    }
+    private static func hslHue(withHSVHue hsvHue: Real) -> Real {
+        let a = hsvHue + 1 / 12
+        let hue = a > 1 ? a - 1 : a
+        if hue < split * fast {
+            return hue / fast
+        } else if hue < split * (fast + slow) {
+            return (hue - split * fast) / slow + split
+        } else if hue < split * (fast + slow * 2) {
+            return (hue - split * (fast + slow)) / slow + split * 2
+        } else if hue < split * (fast * 2 + slow * 2) {
+            return (hue - split * (fast + slow * 2)) / fast + split * 3
+        } else if hue < split * (fast * 3 + slow * 2) {
+            return (hue - split * (fast * 2 + slow * 2)) / fast + split * 4
+        } else if hue < split * (fast * 3 + slow * 3) {
+            return (hue - split * (fast * 3 + slow * 2)) / slow + split * 5
+        } else if hue < split * (fast * 3 + slow * 4) {
+            return (hue - split * (fast * 3 + slow * 3)) / slow + split * 6
+        } else if hue < split * (fast * 4 + slow * 4) {
+            return (hue - split * (fast * 3 + slow * 4)) / fast + split * 7
+        } else if hue < split * (fast * 5 + slow * 4) {
+            return (hue - split * (fast * 4 + slow * 4)) / fast + split * 8
+        } else if hue < split * (fast * 5 + slow * 5) {
+            return (hue - split * (fast * 5 + slow * 4)) / slow + split * 9
+        } else if hue < split * (fast * 5 + slow * 6) {
+            return (hue - split * (fast * 5 + slow * 5)) / slow + split * 10
+        } else {
+            return (hue - split * (fast * 5 + slow * 6)) / fast + split * 11
+        }
     }
     
     func with(hue: Real) -> Color {
@@ -160,7 +229,7 @@ extension Color {
     }
     
     private static func hsl(with hsv: HSV) -> (h: Real, s: Real, l: Real) {
-        let h = hsv.h, s = hsv.s, v = hsv.v
+        let h = hslHue(withHSVHue: hsv.h), s = hsv.s, v = hsv.v
         let y = Color.y(withHue: h)
         let n = s * (1 - y) + y
         let nb = n == 0 ? 0 : y * v / n
@@ -176,10 +245,14 @@ extension Color {
         let y = Color.y(withHue: h)
         if y < l {
             let by = y == 1 ? 0 : (l - y) / (1 - y)
-            return HSV(h: h, s: -s * by + s, v: (1 - y) * (-s * by + s + by) + y)
+            return HSV(h: hsvHue(withHSLHue: h),
+                       s: -s * by + s,
+                       v: (1 - y) * (-s * by + s + by) + y)
         } else {
             let by = y == 0 ? 0 : l / y
-            return HSV(h: h, s: s, v: s * by * (1 - y) + by * y)
+            return HSV(h: hsvHue(withHSLHue: h),
+                       s: s,
+                       v: s * by * (1 - y) + by * y)
         }
     }
     var hsv: HSV {
@@ -193,15 +266,18 @@ extension Color {
 }
 extension Color: Equatable {
     static func ==(lhs: Color, rhs: Color) -> Bool {
-        return lhs.hue == rhs.hue && lhs.saturation == lhs.saturation && lhs.lightness == rhs.lightness
-            && lhs.alpha == rhs.alpha && lhs.colorSpace == rhs.colorSpace
+        return lhs.hue == rhs.hue
+            && lhs.saturation == lhs.saturation
+            && lhs.lightness == rhs.lightness
+            && lhs.alpha == rhs.alpha
+            && lhs.rgbColorSpace == rhs.rgbColorSpace
     }
 }
 extension Color: Hashable {
     var hashValue: Int {
         return Hash.uniformityHashValue(with: [hue.hashValue, saturation.hashValue,
                                                lightness.hashValue,
-                                               alpha.hashValue, colorSpace.hashValue])
+                                               alpha.hashValue, rgbColorSpace.hashValue])
     }
 }
 extension Color: Referenceable {
@@ -379,13 +455,13 @@ extension HSV: Codable {
     }
 }
 
-enum ColorSpace: Int8, Codable, Hashable {
+enum RGBColorSpace: Int8, Codable, Hashable {
     case sRGB, displayP3
 }
-extension ColorSpace: Referenceable {
+extension RGBColorSpace: Referenceable {
     static let name = Text(english: "Color space", japanese: "色空間")
 }
-extension ColorSpace: CustomStringConvertible {
+extension RGBColorSpace: CustomStringConvertible {
     var description: String {
         switch self {
         case .sRGB: return "sRGB"
@@ -393,7 +469,7 @@ extension ColorSpace: CustomStringConvertible {
         }
     }
 }
-extension ColorSpace: DisplayableText {
+extension RGBColorSpace: DisplayableText {
     var displayText: Text {
         return Text(description)
     }
@@ -416,19 +492,19 @@ extension Color {
                       green: Real(components[1]),
                       blue: Real(components[2]),
                       alpha: Real(components[3]),
-                      colorSpace: .sRGB)
+                      rgbColorSpace: .sRGB)
         case String(CGColorSpace.displayP3):
             self.init(red: Real(components[0]),
                       green: Real(components[1]),
                       blue: Real(components[2]),
                       alpha: Real(components[3]),
-                      colorSpace: .displayP3)
+                      rgbColorSpace: .displayP3)
         default:
             self.init()
         }
     }
     
-    func with(colorSpace: ColorSpace) -> Color {
+    func with(colorSpace: RGBColorSpace) -> Color {
         guard
             let cs = CGColorSpace.with(colorSpace),
             let cgColor = self.cg.converted(to: cs, intent: .defaultIntent, options: nil),
@@ -436,11 +512,11 @@ extension Color {
                 return self
         }
         return Color(red: Real(cps[0]), green: Real(cps[1]), blue: Real(cps[2]),
-                     alpha: Real(cps[3]), colorSpace: colorSpace)
+                     alpha: Real(cps[3]), rgbColorSpace: rgbColorSpace)
     }
     
     var cg: CGColor {
-        return CGColor.with(rgb: rgb, alpha: alpha, colorSpace: CGColorSpace.with(colorSpace))
+        return CGColor.with(rgb: rgb, alpha: alpha, colorSpace: CGColorSpace.with(rgbColorSpace))
     }
 }
 
@@ -459,7 +535,7 @@ extension CGColorSpace {
                             blackPoint: [0, 0, 0],
                             range: [-127, 127, -127, 127])
     }
-    static func with(_ colorSpace: ColorSpace) -> CGColorSpace? {
+    static func with(_ colorSpace: RGBColorSpace) -> CGColorSpace? {
         switch colorSpace {
         case .sRGB: return CGColorSpace(name: CGColorSpace.sRGB)
         case .displayP3: return CGColorSpace(name: CGColorSpace.displayP3)
@@ -468,7 +544,7 @@ extension CGColorSpace {
 }
 
 struct HueCircle {
-    var lineWidth: Real, colorSpace: ColorSpace
+    var lineWidth: Real, rgbColorSpace: RGBColorSpace
     var bounds: Rect {
         didSet {
             radius = min(bounds.width, bounds.height) / 2
@@ -476,75 +552,11 @@ struct HueCircle {
     }
     private(set) var radius: Real
     
-    init(lineWidth: Real = 2, bounds: Rect = Rect(), colorSpace: ColorSpace = .sRGB) {
+    init(lineWidth: Real = 2, bounds: Rect = Rect(), rgbColorSpace: RGBColorSpace = .sRGB) {
         self.lineWidth = lineWidth
         self.bounds = bounds
         self.radius = min(bounds.width, bounds.height) / 2
-        self.colorSpace = colorSpace
-    }
-    
-    func hue(withAngle angle: Real) -> Real {
-        let a = (angle < -.pi + .pi / 6 ? 2 * (.pi) : 0) +  angle - .pi / 6
-        return hue(withRevisionHue: (a < 0 ? 1 : 0) + a / (2 * (.pi)))
-    }
-    func angle(withHue hue: Real) -> Real {
-        return revisionHue(withHue: hue) * 2 * (.pi) + .pi / 6
-    }
-    
-    private let split = 1.0.cg / 12.0.cg, slow = 0.5.cg, fast = 1.5.cg
-    private func revisionHue(withHue hue: Real) -> Real {
-        if hue < split {
-            return hue * fast
-        } else if hue < split * 2 {
-            return (hue - split) * slow + split * fast
-        } else if hue < split * 3 {
-            return (hue - split * 2) * slow + split * (fast + slow)
-        } else if hue < split * 4 {
-            return (hue - split * 3) * fast + split * (fast + slow * 2)
-        } else if hue < split * 5 {
-            return (hue - split * 4) * fast + split * (fast * 2 + slow * 2)
-        } else if hue < split * 6 {
-            return (hue - split * 5) * slow + split * (fast * 3 + slow * 2)
-        } else if hue < split * 7 {
-            return (hue - split * 6) * slow + split * (fast * 3 + slow * 3)
-        } else if hue < split * 8 {
-            return (hue - split * 7) * fast + split * (fast * 3 + slow * 4)
-        } else if hue < split * 9 {
-            return (hue - split * 8) * fast + split * (fast * 4 + slow * 4)
-        } else if hue < split * 10 {
-            return (hue - split * 9) * slow + split * (fast * 5 + slow * 4)
-        } else if hue < split * 11 {
-            return (hue - split * 10) * slow + split * (fast * 5 + slow * 5)
-        } else {
-            return (hue - split * 11) * fast + split * (fast * 5 + slow * 6)
-        }
-    }
-    private func hue(withRevisionHue revisionHue: Real) -> Real {
-        if revisionHue < split * fast {
-            return revisionHue / fast
-        } else if revisionHue < split * (fast + slow) {
-            return (revisionHue - split * fast) / slow + split
-        } else if revisionHue < split * (fast + slow * 2) {
-            return (revisionHue - split * (fast + slow)) / slow + split * 2
-        } else if revisionHue < split * (fast * 2 + slow * 2) {
-            return (revisionHue - split * (fast + slow * 2)) / fast + split * 3
-        } else if revisionHue < split * (fast * 3 + slow * 2) {
-            return (revisionHue - split * (fast * 2 + slow * 2)) / fast + split * 4
-        } else if revisionHue < split * (fast * 3 + slow * 3) {
-            return (revisionHue - split * (fast * 3 + slow * 2)) / slow + split * 5
-        } else if revisionHue < split * (fast * 3 + slow * 4) {
-            return (revisionHue - split * (fast * 3 + slow * 3)) / slow + split * 6
-        } else if revisionHue < split * (fast * 4 + slow * 4) {
-            return (revisionHue - split * (fast * 3 + slow * 4)) / fast + split * 7
-        } else if revisionHue < split * (fast * 5 + slow * 4) {
-            return (revisionHue - split * (fast * 4 + slow * 4)) / fast + split * 8
-        } else if revisionHue < split * (fast * 5 + slow * 5) {
-            return (revisionHue - split * (fast * 5 + slow * 4)) / slow + split * 9
-        } else if revisionHue < split * (fast * 5 + slow * 6) {
-            return (revisionHue - split * (fast * 5 + slow * 5)) / slow + split * 10
-        } else {
-            return (revisionHue - split * (fast * 5 + slow * 6)) / fast + split * 11
-        }
+        self.rgbColorSpace = rgbColorSpace
     }
     
     func draw(in ctx: CGContext) {
@@ -556,10 +568,11 @@ struct HueCircle {
                       Point(x: outR, y: -outChord / 2), Point(x: inR, y: -inChord / 2)]
         ctx.saveGState()
         ctx.translateBy(x: bounds.midX, y: bounds.midY)
-        ctx.rotate(by: .pi / 6 - deltaAngle / 2)
+        ctx.rotate(by: -(deltaAngle / 2))
         for i in 0..<splitCount {
-            let hue = revisionHue(withHue: Real(i) / Real(splitCount))
-            let color = Color(hue: hue, saturation: 1, brightness: 1, colorSpace: colorSpace)
+            let hue = Real(i) / Real(splitCount)
+            let color = Color(hue: hue, saturation: 1, lightnessFromMaxSaturation: 1,
+                              rgbColorSpace: rgbColorSpace)
             ctx.setFillColor(color.cg)
             ctx.addLines(between: points)
             ctx.fillPath()
@@ -569,7 +582,7 @@ struct HueCircle {
     }
 }
 
-final class ColorView<T: BinderProtocol>: View, BindableReceiver {
+final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Color
     typealias Binder = T
     var binder: Binder {
@@ -611,7 +624,7 @@ final class ColorView<T: BinderProtocol>: View, BindableReceiver {
         
         let valueOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1)
         hueView = CircularRealView(binder: binder, keyPath: keyPath.appending(path: \Color.hue),
-                                   option: valueOption, width: hWidth)
+                                   option: valueOption, startAngle: 0, width: hWidth)
         let slOption = PointOption(xOption: valueOption, yOption: valueOption)
         slView = SlidablePointView(binder: binder, keyPath: keyPath.appending(path: \Color.sl),
                                    option: slOption)
@@ -626,12 +639,19 @@ final class ColorView<T: BinderProtocol>: View, BindableReceiver {
         hueView.width = hWidth
         self.hueLineWidth = hLineWidth
         self.slRatio = slRatio
-        slColorGradientView = View(gradient: Gradient(values: [],
+        
+        let hue = binder[keyPath: keyPath].hue
+        let y = Color.y(withHue: hue)
+        let slcValues = [Gradient.Value(color: Color(hue: hue, saturation: 0, brightness: y),
+                                        location: 0),
+                         Gradient.Value(color: Color(hue: hue, saturation: 1, brightness: 1),
+                                        location: 1)]
+        slColorGradientView = View(gradient: Gradient(values: slcValues,
                                                       startPoint: Point(x: 0, y: 0),
                                                       endPoint: Point(x: 1, y: 0)))
         let slgValues = [Gradient.Value(color: Color(white: 0, alpha: 1), location: 0),
-                         Gradient.Value(color: Color(white: 0, alpha: 0), location: 0.5),
-                         Gradient.Value(color: Color(white: 1, alpha: 0), location: 0.5),
+                         Gradient.Value(color: Color(white: 0, alpha: 0), location: y),
+                         Gradient.Value(color: Color(white: 1, alpha: 0), location: y),
                          Gradient.Value(color: Color(white: 1, alpha: 1), location: 1)]
         slBlackWhiteGradientView = View(gradient: Gradient(values: slgValues,
                                                            startPoint: Point(x: 0, y: 0),
@@ -640,16 +660,25 @@ final class ColorView<T: BinderProtocol>: View, BindableReceiver {
         super.init()
         hueDrawView.fillColor = nil
         hueDrawView.lineColor = nil
+        slBlackWhiteGradientView.lineColor = nil
+        slColorGradientView.lineColor = nil
         hueDrawView.drawClosure = { [unowned self] ctx, _ in self.hueCircle.draw(in: ctx) }
         hueView.backgroundViews = [hueDrawView]
         slView.children = [slColorGradientView, slBlackWhiteGradientView, slView.knobView]
         children = [hueView, slView]
         self.frame = frame
+        
+        hueView.notifications.append { [unowned self] (view, notification) in
+            self.updateGradient()
+        }
+        slView.notifications.append { [unowned self] (view, notification) in
+            self.updateGradient()
+        }
     }
     
     override func updateLayout() {
         guard !bounds.isEmpty else { return }
-        let padding = Layout.smallPadding
+        let padding = Layouter.smallPadding
         let r = floor(min(bounds.size.width, bounds.size.height) / 2) - padding
         hueView.frame = Rect(x: padding, y: padding, width: r * 2, height: r * 2)
         let sr = r - hueView.width
@@ -666,45 +695,30 @@ final class ColorView<T: BinderProtocol>: View, BindableReceiver {
         hueDrawView.frame = hueView.bounds.inset(by: ceil((hueView.width - hueLineWidth) / 2))
         hueCircle = HueCircle(lineWidth: hueLineWidth,
                               bounds: hueDrawView.bounds,
-                              colorSpace: model.colorSpace)
+                              rgbColorSpace: model.rgbColorSpace)
     }
     func updateWithModel() {
-        if model.colorSpace != hueCircle.colorSpace {
+        if model.rgbColorSpace != hueCircle.rgbColorSpace {
             updateWithColorSpace()
         }
-        
+        hueView.updateWithModel()
+        slView.updateWithModel()
+        updateGradient()
+    }
+    private func updateGradient() {
         let y = Color.y(withHue: model.hue)
         slColorGradientView.gradient?.colors = [Color(hue: model.hue, saturation: 0, brightness: y),
                                                 Color(hue: model.hue, saturation: 1, brightness: 1)]
         slBlackWhiteGradientView.gradient?.locations = [0, y, y, 1]
-        
-        hueView.updateWithModel()
-        slView.updateWithModel()
     }
     private func updateWithColorSpace() {
-        let colors = [Color(white: 0, alpha: 1, colorSpace: model.colorSpace),
-                      Color(white: 0, alpha: 0, colorSpace: model.colorSpace),
-                      Color(white: 1, alpha: 0, colorSpace: model.colorSpace),
-                      Color(white: 1, alpha: 1, colorSpace: model.colorSpace)]
+        let colors = [Color(white: 0, alpha: 1, rgbColorSpace: model.rgbColorSpace),
+                      Color(white: 0, alpha: 0, rgbColorSpace: model.rgbColorSpace),
+                      Color(white: 1, alpha: 0, rgbColorSpace: model.rgbColorSpace),
+                      Color(white: 1, alpha: 1, rgbColorSpace: model.rgbColorSpace)]
         slBlackWhiteGradientView.gradient?.colors = colors
         hueCircle = HueCircle(lineWidth: hueLineWidth,
                               bounds: hueDrawView.bounds,
-                              colorSpace: model.colorSpace)
-    }
-}
-extension ColorView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = object as? Model {
-                push(model, to: version)
-                return
-            }
-        }
+                              rgbColorSpace: model.rgbColorSpace)
     }
 }

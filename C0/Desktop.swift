@@ -17,28 +17,22 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Foundation
-
 struct Desktop {
     var copiedObjects = [Object(false)]
     var isHiddenActionManager = false
     let actionManager = ActionManager()
-    var objects = [Object]()
+    var objects = [Layout<Object>]()
     var version = Version()
 }
 extension Desktop: Codable {
     private enum CodingKeys: String, CodingKey {
         case copiedObjects, isHiddenActionManager, objects, version
     }
-//    enum CodingError: Error {
-//        case decoding(String)
-//    }
     init(from decoder: Decoder) throws {
-//        throw CodingError.decoding("")
         let values = try decoder.container(keyedBy: CodingKeys.self)
         copiedObjects = try values.decode([Object].self, forKey: .copiedObjects)
         isHiddenActionManager = try values.decode(Bool.self, forKey: .isHiddenActionManager)
-        objects = try values.decode([Object].self, forKey: .objects)
+        objects = try values.decode([Layout<Object>].self, forKey: .objects)
         version = try values.decode(Version.self, forKey: .version)
     }
     func encode(to encoder: Encoder) throws {
@@ -58,12 +52,24 @@ extension Desktop {
                                                         info: .hidden)
     static let copiedObjectsInferenceName = Text(english: "Copied", japanese: "コピー済み")
 }
+extension Desktop: AbstractViewable {
+    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Desktop>,
+                             frame: Rect, _ sizeType: SizeType,
+                             type: AbstractType) -> ModelView where T : BinderProtocol {
+        switch type {
+        case .normal:
+            return DesktopView(binder: binder, keyPath: keyPath,
+                               frame: frame, sizeType: sizeType)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        }
+    }
+}
+extension Desktop: ObjectViewable {}
 
 final class DesktopBinder: BinderProtocol {
     var rootModel: Desktop {
-        didSet {
-            diffDesktopDataModel.isWrite = true
-        }
+        didSet { diffDesktopDataModel.isWrite = true }
     }
     
     init(rootModel: Desktop) {
@@ -113,7 +119,7 @@ final class DesktopBinder: BinderProtocol {
 /**
  Issue: sceneViewを取り除く
  */
-final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
+final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Desktop
     typealias Binder = T
     typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
@@ -126,15 +132,19 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
     }
     var notifications = [((DesktopView<Binder>, BasicNotification) -> ())]()
 
+    var defaultModel: Model {
+        return Model()
+    }
+    
     let versionView: VersionView<Binder>
     let copiedObjectsNameView = TextFormView(text: Desktop.copiedObjectsInferenceName + ":")
     let copiedObjectsView: ArrayView<Object, Binder>
     let isHiddenActionManagerView: BoolView<Binder>
-    let objectsView: ArrayView<Object, Binder>
-    let actionManagerView: ActionManagerView<Binder>
+    let objectsView: ArrayView<Layout<Object>, Binder>
+    let actionManagerView: ActionManagerFormView
 
     var versionWidth = 150.0.cg
-    var topViewsHeight = Layout.basicHeight {
+    var topViewsHeight = Layouter.basicHeight {
         didSet { updateLayout() }
     }
     
@@ -153,13 +163,12 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
                                   keyPath: keyPath.appending(path: \Model.version),
                                   sizeType: sizeType)
         copiedObjectsView = ArrayView(binder: binder,
-                                        keyPath: keyPath.appending(path: \Model.copiedObjects),
-                                        sizeType: .small, abstractType: .mini)
+                                      keyPath: keyPath.appending(path: \Model.copiedObjects),
+                                      sizeType: .small, abstractType: .mini)
         objectsView = ArrayView(binder: binder,
-                                  keyPath: keyPath.appending(path: \Model.objects),
-                                  sizeType: sizeType, abstractType: .normal)
-        actionManagerView = ActionManagerView(binder: binder,
-                                              keyPath: keyPath.appending(path: \Model.actionManager))
+                                keyPath: keyPath.appending(path: \Model.objects),
+                                sizeType: sizeType, abstractType: .normal)
+        actionManagerView = ActionManagerFormView()
         actionManagerView.isHidden = binder[keyPath: keyPath].isHiddenActionManager
         super.init()
         fillColor = .background
@@ -174,14 +183,6 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
             self.updateLayout()
         })
     }
-
-    var locale = Locale.current {
-        didSet {
-            if locale.languageCode != oldValue.languageCode {
-                allChildrenAndSelf { ($0 as? Localizable)?.update(with: locale) }
-            }
-        }
-    }
     
     override var contentsScale: Real {
         didSet {
@@ -191,7 +192,7 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         }
     }
     override func updateLayout() {
-        let padding = Layout.basicPadding
+        let padding = Layouter.basicPadding
         let ihamvw = isHiddenActionManagerView.defaultBounds.width
         let headerY = bounds.height - topViewsHeight - padding
         versionView.frame = Rect(x: padding, y: headerY,
@@ -228,8 +229,8 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
                                            width: actionWidth,
                                            height: h)
         }
-        objectsView.bounds.origin = Point(x: -round((objectsView.frame.width / 2)),
-                                          y: -round((objectsView.frame.height / 2)))
+        objectsView.bounds.origin = Point(x: -(objectsView.frame.width / 2).rounded(),
+                                          y: -(objectsView.frame.height / 2).rounded())
     }
     func updateWithModel() {
         isHiddenActionManagerView.updateWithModel()
@@ -245,7 +246,7 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
     var objectViewWidth = 80.0.cg
     private func updateCopiedObjectViews() {
         copiedObjectsView.updateWithModel()
-        let padding = Layout.smallPadding
+        let padding = Layouter.smallPadding
         let bounds = Rect(x: 0,
                           y: 0,
                           width: objectViewWidth,
@@ -255,14 +256,9 @@ final class DesktopView<T: BinderProtocol>: View, BindableReceiver {
         updateCopiedObjectViewPositions()
     }
     private func updateCopiedObjectViewPositions() {
-        let padding = Layout.smallPadding
-        _ = Layout.leftAlignment(copiedObjectsView.children.map { .view($0) },
-                                 minX: padding, y: padding)
-    }
-}
-extension DesktopView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
+        let padding = Layouter.smallPadding
+        _ = Layouter.leftAlignment(copiedObjectsView.children.map { .view($0) },
+                                   minX: padding, y: padding)
     }
 }
 extension DesktopView: Undoable {

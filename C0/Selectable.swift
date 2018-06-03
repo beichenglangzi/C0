@@ -17,6 +17,15 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+struct Selection<Value: Collection>: ValueChain {
+    var value: Value
+    var selectedIndexes: [Value.Index]
+    
+    var chainValue: Any {
+        return value
+    }
+}
+
 protocol ViewSelector: class {
     func select(from rect: Rect, _ phase: Phase)
     func deselect(from rect: Rect, _ phase: Phase)
@@ -164,6 +173,166 @@ final class SelectableSender: SubSender {
                     self.viewSelector = nil
                 }
             }
+        }
+    }
+}
+
+
+extension AnimationView: Selectable {
+    func captureSelections(to version: Version) {
+        version.registerUndo(withTarget: self) {
+            [oldSelectedKeyframeIndexes = model.selectedKeyframeIndexes, unowned version] in
+            
+            $0.pushSelectedKeyframeIndexes(oldSelectedKeyframeIndexes, to: version)
+        }
+    }
+    func pushSelectedKeyframeIndexes(_ selectedKeyframeIndexes: [KeyframeIndex],
+                                     to version: Version) {
+        version.registerUndo(withTarget: self) {
+            [oldSelectedKeyframeIndexes = model.selectedKeyframeIndexes, unowned version] in
+            
+            $0.pushSelectedKeyframeIndexes(oldSelectedKeyframeIndexes, to: version)
+        }
+        model.selectedKeyframeIndexes = selectedKeyframeIndexes
+        updateLayout()
+    }
+    
+    func makeViewSelector() -> ViewSelector {
+        return AnimationViewSelector(animationView: self)
+    }
+    
+    func selectAll() {
+        model.selectedKeyframeIndexes = Array(0..<model.keyframes.count)
+        updateLayout()
+    }
+    func deselectAll() {
+        model.selectedKeyframeIndexes = []
+        updateLayout()
+    }
+}
+final class AnimationViewSelector<Value: KeyframeValue, Binder: BinderProtocol>: ViewSelector {
+    var animationView: AnimationView<Value, Binder>
+    var model: Animation<Value> {
+        get { return animationView.model }
+        set { animationView.model = newValue }
+    }
+    
+    init(animationView: AnimationView<Value, Binder>) {
+        self.animationView = animationView
+    }
+    
+    var beginSelectedKeyframeIndexes = [KeyframeIndex]()
+    
+    func select(from rect: Rect, _ phase: Phase) {
+        select(from: rect, phase, isDeselect: false)
+    }
+    func deselect(from rect: Rect, _ phase: Phase) {
+        select(from: rect, phase, isDeselect: true)
+    }
+    func select(from rect: Rect, _ phase: Phase, isDeselect: Bool) {
+        switch phase {
+        case .began:
+            beginSelectedKeyframeIndexes = model.selectedKeyframeIndexes
+        case .changed, .ended:
+            model.selectedKeyframeIndexes = selectedIndex(from: rect, isDeselect: isDeselect)
+            animationView.updateLayout()
+        }
+    }
+    private func indexes(from rect: Rect) -> [KeyframeIndex] {
+        let halfTimeInterval = animationView.baseTimeInterval / 2
+        let startTime = animationView.time(withX: rect.minX, isBased: false) + halfTimeInterval
+        let startIndexInfo = Keyframe.indexInfo(atTime: startTime,
+                                                with: animationView.model.keyframes)
+        let startIndex = startIndexInfo.index
+        let selectEndX = rect.maxX
+        let endTime = animationView.time(withX: selectEndX, isBased: false) + halfTimeInterval
+        let endIndexInfo = Keyframe.indexInfo(atTime: endTime,
+                                              with: animationView.model.keyframes)
+        let endIndex = endIndexInfo.index
+        return startIndex == endIndex ?
+            [startIndex] :
+            Array(startIndex < endIndex ? (startIndex...endIndex) : (endIndex...startIndex))
+    }
+    private func selectedIndex(from rect: Rect, isDeselect: Bool) -> [KeyframeIndex] {
+        let selectedIndexes = indexes(from: rect)
+        return isDeselect ?
+            Array(Set(beginSelectedKeyframeIndexes).subtracting(Set(selectedIndexes))).sorted() :
+            Array(Set(beginSelectedKeyframeIndexes).union(Set(selectedIndexes))).sorted()
+    }
+    
+}
+
+extension CanvasView: Selectable {
+    func captureSelections(to version: Version) {
+        version.registerUndo(withTarget: self) {
+            [oldSelectedCellIndexes = model.editingCellGroup.selectedCellIndexes, unowned version] in
+            
+            $0.pushSelectedCellIndexes(oldSelectedCellIndexes, to: version)
+        }
+    }
+    func pushSelectedCellIndexes(_ selectedCellIndexes: [Cell.Index],
+                                 to version: Version) {
+        version.registerUndo(withTarget: self) {
+            [oldSelectedCellIndexes = model.editingCellGroup.selectedCellIndexes, unowned version] in
+            
+            $0.pushSelectedCellIndexes(oldSelectedCellIndexes, to: version)
+        }
+        model.editingCellGroup.selectedCellIndexes = selectedCellIndexes
+        updateLayout()
+    }
+    
+    func makeViewSelector() -> ViewSelector {
+        return CanvasViewSelector<Binder>(canvasView: self)
+    }
+    
+    func selectAll() {
+        model.editingCellGroup.selectedCellIndexes = []
+    }
+    func deselectAll() {
+        model.editingCellGroup.selectedCellIndexes
+            = model.editingCellGroup.rootCell.treeIndexEnumerated().map { (index, _) in index }
+    }
+}
+final class CanvasViewSelector<Binder: BinderProtocol>: ViewSelector {
+    var canvasView: CanvasView<Binder>
+    var cellGroup: CellGroup?, cellGroupIndex = CellGroup.Index()
+    var selectedLineIndexes = [Int]()
+    var drawing: Drawing?
+    
+    init(canvasView: CanvasView<Binder>) {
+        self.canvasView = canvasView
+    }
+    
+    func select(from rect: Rect, _ phase: Phase) {
+        select(from: rect, phase, isDeselect: false)
+    }
+    func deselect(from rect: Rect, _ phase: Phase) {
+        select(from: rect, phase, isDeselect: true)
+    }
+    func select(from rect: Rect, _ phase: Phase, isDeselect: Bool) {
+        func unionWithStrokeLine(with drawing: Drawing) -> [Array<Line>.Index] {
+            let affine = canvasView.screenToEditingCellGroupTransform.inverted()
+            let lines = [Line].rectangle(rect).map { $0 * affine }
+            let geometry = Geometry(lines: lines)
+            let lineIndexes = drawing.lines.enumerated().compactMap {
+                geometry.intersects($1) ? $0 : nil
+            }
+            if isDeselect {
+                return Array(Set(selectedLineIndexes).subtracting(Set(lineIndexes)))
+            } else {
+                return Array(Set(selectedLineIndexes).union(Set(lineIndexes)))
+            }
+        }
+        
+        switch phase {
+        case .began:
+            cellGroup = canvasView.model.editingCellGroup
+            cellGroupIndex = canvasView.model.editingCellGroupTreeIndex
+            drawing = canvasView.model.editingCellGroup.drawing
+            selectedLineIndexes = canvasView.model.editingCellGroup.drawing.selectedLineIndexes
+        case .changed, .ended:
+            guard let drawing = drawing else { return }
+            //            drawing?.selectedLineIndexes = unionWithStrokeLine(with: drawing)
         }
     }
 }

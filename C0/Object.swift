@@ -17,6 +17,28 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import struct Foundation.URL
+
+protocol ValueChain {
+    var chainValue: Any { get }
+    var rootChainValue: Any { get }
+    func value<T>(_ type: T.Type) -> T?
+}
+extension ValueChain {
+    var rootChainValue: Any {
+        let chainValue = self.chainValue
+        if let valueChain = chainValue as? ValueChain {
+            return valueChain.rootChainValue
+        } else {
+            return chainValue
+        }
+    }
+    func value<T>(_ type: T.Type) -> T? {
+        let chainValue = rootChainValue
+        return chainValue as? T
+    }
+}
+
 protocol ObjectDecodable {
     static var objectTypeName: String { get }
     var objectTypeName: String { get }
@@ -30,7 +52,9 @@ extension ObjectDecodable {
     }
 }
 
-protocol ObjectViewable: Codable, Referenceable, ObjectDecodable {
+protocol ObjectViewable
+: Codable, Referenceable, ThumbnailViewable, ObjectDecodable, AnyInitializable {
+
     func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
                            frame: Rect, _ sizeType: SizeType,
                            type: AbstractType) -> ModelView where T: BinderProtocol
@@ -45,73 +69,123 @@ extension ObjectViewable where Self: Codable & Referenceable & AbstractViewable 
 }
 
 struct Object {
-    private static var types = [String: Value.Type]()
+    //😖
+    private(set) static var types = [String: Value.Type]()
     static func contains(_ typeName: String) -> Bool {
         return types[typeName] != nil
     }
     static func append<T: Value & AbstractViewable>(_ type: T.Type) {
-        let arrayType = Array<T>.self
         types[type.objectTypeName] = type
+        appendInArray(type)
+        appendInArray(Layout<T>.self)
+        appendInLayout(type)
+        appendInLayout(Array<T>.self)
+    }
+    static func appendInArray<T: Value & AbstractViewable>(_ type: T.Type) {
+        let arrayType = Array<T>.self
         types[arrayType.objectTypeName] = arrayType
     }
+    static func appendInLayout<T: Value & AbstractViewable>(_ type: T.Type) {
+        let layoutType = Layout<T>.self
+        types[layoutType.objectTypeName] = layoutType
+    }
     static func append<T: KeyframeValue>(_ type: T.Type) {
-        let arrayType = Array<T>.self
+        types[type.objectTypeName] = type
+        appendInArray(type)
+        appendInArray(Layout<T>.self)
+        appendInArray(Keyframe<T>.self)
+        appendInArray(Animation<T>.self)
+        appendInLayout(type)
+        appendInLayout(Array<T>.self)
+        appendInLayout(Keyframe<T>.self)
+        appendInLayout(Animation<T>.self)
         let keyframeType = Keyframe<T>.self
         let animationType = Animation<T>.self
-        types[type.objectTypeName] = type
-        types[arrayType.objectTypeName] = arrayType
         types[keyframeType.objectTypeName] = keyframeType
         types[animationType.objectTypeName] = animationType
     }
     static func appendTypes() {
-        //😖
-        append(Bool.self)
-        
+        append(Scene.self)
+        append(Timeline.self)
+        append(Sound.self)
+        append(Subtitle.self)
+        append(Canvas.self)
+        append(CellGroup.self)
+        append(Cell.self)
+        append(Material.self)
+        append(Material.MaterialType.self)
+        append(BlendType.self)
         append(Effect.self)
-//        var types = [String: Value.Type]()
-//        print(String(describing: Bool.self))
-//        types[String(describing: Bool.self)] = Bool.self
-//        types[String(describing: [Bool].self)] = [Bool].self
+        append(Drawing.self)
+        append(Lines.self)
+        append(Line.self)
+        append(Color.self)
+        append(Transform.self)
+        append(SineWave.self)
+        append(Image.self)
+        append(URL.self)
+        append(KeyframeTiming.self)
+        append(KeyframeTiming.Label.self)
+        append(KeyframeTiming.Loop.self)
+        append(KeyframeTiming.Interpolation.self)
+        append(Easing.self)
+        append(Size.self)
+        append(Point.self)
+        append(Real.self)
+        append(Rational.self)
+        append(Int.self)
+        append(Bool.self)
+        append(Text.self)
+        append(String.self)
+        append(Object.self)
     }
     
     typealias Value = ObjectViewable
     
-    var frame: Rect
     var value: Value
     
-    init(_ value: Value, frame: Rect = Rect()) {
-        self.value = value
-        self.frame = frame
+    init(_ value: Value) {
+        if let object = value as? Object {
+            self = object
+        } else {
+            self.value = value
+        }
     }
+}
+extension Object: ValueChain {
+    var chainValue: Any { return value }
 }
 extension Object: Referenceable {
     static var name = Text(english: "Object", japanese: "オブジェクト")
 }
 extension Object: Codable {
     private enum CodingKeys: String, CodingKey {
-        case frame, typeName, value
+        case typeName, value
     }
     enum CodingError: Error {
-        case decoding(String), encoding(String)
+        case decoding(String)
     }
     
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        frame = try values.decode(Rect.self, forKey: .frame)
         let key = try values.decode(String.self, forKey: .typeName)
         if let type = Object.types[key] {
             value = try type.decode(values: values, forKey: .value)
         } else {
-            throw CodingError.decoding("\(dump(values))")
+            throw CodingError.decoding("key bug = \(key)")
         }
     }
     
     func encode(to encoder: Encoder) throws {
         let typeName = String(describing: value.objectTypeName)
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(frame, forKey: .frame)
         try container.encode(typeName, forKey: .typeName)
         try value.encode(forKey: .value, in: &container)
+    }
+}
+extension Object: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+        return value.thumbnailView(withFrame: frame, sizeType)
     }
 }
 extension Object: ObjectViewable {
@@ -136,8 +210,8 @@ protocol ObjectProtocol {
 }
 
 final class ObjectView<Value: Object.Value & AbstractViewable, T: BinderProtocol>
-: View, BindableReceiver {
-
+: ModelView, BindableReceiver {
+    
     typealias Model = Object
     typealias Binder = T
     var binder: Binder {
@@ -155,6 +229,10 @@ final class ObjectView<Value: Object.Value & AbstractViewable, T: BinderProtocol
     }
     func set(_ value: Value) {
         binder[keyPath: keyPath].value = value
+    }
+    
+    var defaultModel: Model {
+        return model
     }
     
     var sizeType: SizeType {

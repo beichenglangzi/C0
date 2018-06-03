@@ -17,6 +17,8 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import struct Foundation.Locale
+
 protocol SubSender {
     func send(_ actionMap: ActionMap, from sender: Sender)
 }
@@ -31,7 +33,7 @@ final class Sender {
     typealias UndoableView = View & Undoable
     typealias ZoomableView = View & Zoomable
     
-    var rootView: View & Undoable
+    var rootView: ModelView & Undoable
     var mainIndicatedView: View {
         didSet {
             guard mainIndicatedView != oldValue else { return }
@@ -69,7 +71,7 @@ final class Sender {
     var eventMap = EventMap()
     var actionMaps = [ActionMap]()
     
-    init(rootView: View & Undoable) {
+    init(rootView: ModelView & Undoable) {
         self.rootView = rootView
         subSenders = actionManager.subActionManagers.map { $0.makeSubSender() }
         
@@ -78,6 +80,15 @@ final class Sender {
         indicatedVersionView = rootView
         
         rootView.changedFrame = { [unowned self] in self.updateIndicatedView(with: $0) }
+    }
+    
+    var locale = Locale.current {
+        didSet {
+            if locale.languageCode != oldValue.languageCode {
+                rootView.allChildrenAndSelf { ($0 as? TextViewProtocol)?.updateText() }
+                rootView.allChildrenAndSelf { $0.updateLayout() }
+            }
+        }
     }
     
     func sendPointing(_ eventValue: DragEvent.Value) {

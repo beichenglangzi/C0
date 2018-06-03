@@ -17,7 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import struct Foundation.Locale
 import CoreGraphics
 
 /**
@@ -318,7 +317,7 @@ extension Cell: AbstractViewable {
 }
 extension Cell: ObjectViewable {}
 
-final class CellView<T: BinderProtocol>: View, BindableReceiver {
+final class CellView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Cell
     typealias Binder = T
     var binder: Binder {
@@ -329,6 +328,8 @@ final class CellView<T: BinderProtocol>: View, BindableReceiver {
     }
     var notifications = [((CellView<Binder>, BasicNotification) -> ())]()
     
+    var defaultModel = Model()
+    
     private let isLockedView: BoolView<Binder>
     
     var sizeType: SizeType {
@@ -336,7 +337,7 @@ final class CellView<T: BinderProtocol>: View, BindableReceiver {
     }
     private let classNameView: TextFormView
     
-    init(binder: T, keyPath: BinderKeyPath,
+    init(binder: Binder, keyPath: BinderKeyPath,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
         self.binder = binder
@@ -357,12 +358,12 @@ final class CellView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     override var defaultBounds: Rect {
-        let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
+        let padding = Layouter.padding(with: sizeType), h = Layouter.height(with: sizeType)
         let tlw = classNameView.frame.width + isLockedView.frame.width + padding * 3
         return Rect(x: 0, y: 0, width: tlw, height: h + padding * 2)
     }
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType), h = Layout.height(with: sizeType)
+        let padding = Layouter.padding(with: sizeType), h = Layouter.height(with: sizeType)
         let tlw = bounds.width - classNameView.frame.width - padding * 3
         classNameView.frame.origin = Point(x: padding,
                                            y: bounds.height - classNameView.frame.height - padding)
@@ -371,15 +372,5 @@ final class CellView<T: BinderProtocol>: View, BindableReceiver {
     }
     func updateWithModel() {
         isLockedView.updateWithModel()
-    }
-}
-extension CellView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
-    }
-}
-extension CellView: Copiable {
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
     }
 }

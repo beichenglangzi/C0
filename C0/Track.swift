@@ -22,7 +22,7 @@ protocol Track: Codable {
 }
 
 /**
- Compiler Issue: Protocolから静的に決定可能な代数的データ型のコードを自動生成
+ Compiler Issue: Protocolからコード自動生成
  */
 indirect enum AlgebraicTrack: Track {
     case tempo(TempoTrack)
@@ -93,29 +93,16 @@ extension AlgebraicTrack: Codable {
         guard let key = values.allKeys.first else {
             throw CodingError.decoding("\(dump(values))")
         }
-        switch key {
-        case .tempo:
-            if let track = try? values.decode(TempoTrack.self, forKey: key) {
-                self = .tempo(track)
-            }
-        case .subtitle:
-            if let track = try? values.decode(SubtitleTrack.self, forKey: key) {
-                self = .subtitle(track)
-            }
-        case .transform:
-            if let track = try? values.decode(TransformTrack.self, forKey: key) {
-                self = .transform(track)
-            }
-        case .sineWave:
-            if let track = try? values.decode(SineWaveTrack.self, forKey: key) {
-                self = .sineWave(track)
-            }
-        case .sound:
-            if let track = try? values.decode(SoundTrack.self, forKey: key) {
-                self = .sound(track)
-            }
+        func value<T: Decodable>(type: T.Type) throws -> T {
+            return try values.decode(type, forKey: key)
         }
-        throw CodingError.decoding("\(dump(values))")
+        switch key {
+        case .tempo: self = .tempo(try value(type: TempoTrack.self))
+        case .subtitle: self = .subtitle(try value(type: SubtitleTrack.self))
+        case .transform: self = .transform(try value(type: TransformTrack.self))
+        case .sineWave: self = .sineWave(try value(type: SineWaveTrack.self))
+        case .sound: self = .sound(try value(type: SoundTrack.self))
+        }
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -129,9 +116,13 @@ extension AlgebraicTrack: Codable {
     }
 }
 
-final class TrackItemView<T: BinderProtocol>: View {
+final class TrackItemView<T: BinderProtocol>: ModelView {
     
     init(binder: T) {
         super.init()
+    }
+    
+    func updateWithModel() {
+        
     }
 }

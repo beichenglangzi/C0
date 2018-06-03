@@ -305,7 +305,7 @@ final class MediaEncoderView<T: MediaEncoder>: View {
     }
     
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
         let y = bounds.height - textView.bounds.height - padding
         textView.frame.origin = Point(x: padding, y: y)
         let sb = stopView.defaultBounds

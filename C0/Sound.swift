@@ -28,6 +28,8 @@ struct Sound {
             if let url = url {
                 bookmark = try? url.bookmarkData()
                 name = url.lastPathComponent
+            } else {
+                name = ""
             }
         }
     }
@@ -344,7 +346,7 @@ final class SoundWaveformView: View {
  Issue: 効果音編集
  Issue: シーケンサー
  */
-final class SoundView<T: BinderProtocol>: View, BindableReceiver {
+final class SoundView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Sound
     typealias Binder = T
     var binder: Binder {
@@ -361,7 +363,7 @@ final class SoundView<T: BinderProtocol>: View, BindableReceiver {
     let classNameView: TextFormView
     let nameView: StringView<Binder>
     
-    init(binder: T, keyPath: BinderKeyPath,
+    init(binder: Binder, keyPath: BinderKeyPath,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
         
         self.binder = binder
@@ -381,7 +383,7 @@ final class SoundView<T: BinderProtocol>: View, BindableReceiver {
     }
     
     override func updateLayout() {
-        let padding = Layout.padding(with: sizeType)
+        let padding = Layouter.padding(with: sizeType)
         let y = bounds.height - padding - classNameView.frame.height
         classNameView.frame.origin = Point(x: padding, y: y)
         nameView.frame = Rect(x: classNameView.frame.maxX + padding, y: padding,
@@ -389,33 +391,6 @@ final class SoundView<T: BinderProtocol>: View, BindableReceiver {
                                 height: bounds.height - padding * 2)
     }
     func updateWithModel() {
-        nameView.model = model.url != nil ? model.name : ""
-    }
-}
-extension SoundView: Localizable {
-    func update(with locale: Locale) {
-        updateLayout()
-    }
-}
-extension SoundView: Assignable {
-    func reset(for p: Point, _ version: Version) {
-        push(defaultModel, to: version)
-    }
-    func copiedObjects(at p: Point) -> [Object] {
-        guard let url = model.url else {
-            return [Object(model)]
-        }
-        return [Object(model), Object(url)]
-    }
-    func paste(_ objects: [Any], for p: Point, _ version: Version) {
-        for object in objects {
-            if let model = object as? Model {
-                push(model, to: version)
-                return
-            } else if let url = object as? URL, let model = Model(url: url) {
-                push(model, to: version)
-                return
-            }
-        }
+        nameView.updateWithModel()
     }
 }

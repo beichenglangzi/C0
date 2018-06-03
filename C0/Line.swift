@@ -666,13 +666,11 @@ extension Line {
             
             let fp = controls[0].point + dp0
             let p0 = controls[1].point + dp1
-            let arc0 = PathLine.Arc(centerPoint: controls[controls.count - 1].point,
-                                    endAngle: firstTheta - .pi,
-                                    circularOrientation: .clockwise)
+            let arc0 = PathLine.Arc(radius: pres0,
+                                    startAngle: firstTheta + .pi, endAngle: firstTheta - .pi)
             let p1 = controls[0].point - dp0
-            let arc1 = PathLine.Arc(centerPoint: controls[0].point,
-                                    endAngle: firstTheta - .pi * 2,
-                                    circularOrientation: .clockwise)
+            let arc1 = PathLine.Arc(radius: pres1,
+                                    startAngle: firstTheta - .pi, endAngle: firstTheta + .pi)
             let pathLine = PathLine(firstPoint: fp, elements: [.linear(p0), .arc(arc0),
                                                                .linear(p1), .arc(arc1)])
             
@@ -682,11 +680,11 @@ extension Line {
             view.fillColor = fillColor
             return view
         } else {
-            let firstTheta = firstAngle + .pi / 2, pres = s * controls[0].pressure
+            let firstTheta = firstAngle + .pi / 2, fpres = s * controls[0].pressure
             var previousPressure = controls[0].pressure
             var es = [PathLine.Element](), res = [PathLine.Element]()
-            let fp = controls[0].point + Point(x: pres * cos(firstTheta),
-                                               y: pres * sin(firstTheta))
+            let fp = controls[0].point + Point(x: fpres * cos(firstTheta),
+                                               y: fpres * sin(firstTheta))
             if controls.count == 3 {
                 let bezier = self.bezier(at: 0)
                 let pr0 = s * controls[0].pressure
@@ -733,17 +731,15 @@ extension Line {
             }
             
             let lp = controls[controls.count - 1].point
-            let lastTheta = lastAngle + .pi / 2, pres2 = s * controls[controls.count - 1].pressure
-            es.append(.linear(lp + Point(x: pres2 * cos(lastTheta),
-                                         y: pres2 * sin(lastTheta))))
+            let lastTheta = lastAngle + .pi / 2, lpres = s * controls[controls.count - 1].pressure
+            es.append(.linear(lp + Point(x: lpres * cos(lastTheta),
+                                         y: lpres * sin(lastTheta))))
             
-            es.append(.arc(PathLine.Arc(centerPoint: controls[controls.count - 1].point,
-                                        endAngle: lastTheta - .pi,
-                                        circularOrientation: .clockwise)))
+            es.append(.arc(PathLine.Arc(radius: lpres,
+                                        startAngle: firstTheta + .pi, endAngle: firstTheta - .pi)))
             es += res.reversed()
-            es.append(.arc(PathLine.Arc(centerPoint: controls[0].point,
-                                        endAngle: firstTheta - .pi * 2,
-                                        circularOrientation: .clockwise)))
+            es.append(.arc(PathLine.Arc(radius: fpres,
+                                        startAngle: firstTheta - .pi, endAngle: firstTheta + .pi)))
             
             var path = Path()
             path.append(PathLine(firstPoint: fp, elements: es))

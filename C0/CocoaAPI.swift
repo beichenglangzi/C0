@@ -19,7 +19,7 @@
 
 import Cocoa
 
-struct Hash {
+struct Hash {//swift 4.2
     static func uniformityHashValue(with hashValues: [Int]) -> Int {
         return Int(bitPattern: hashValues.reduce(into: UInt(bitPattern: 0),
                                                  unionHashValues))
@@ -36,7 +36,8 @@ struct Hash {
 }
 
 private struct C0Preference: Codable {
-    var isFullScreen = false, windowFrame = NSRect()
+    var isFullScreen = false
+    var windowFrame = NSRect()//
 }
 
 @objc(C0Application)
@@ -47,12 +48,6 @@ final class C0Application: NSApplication {
         } else {
             super.sendEvent(event)
         }
-    }
-}
-
-extension Bool: Initializable {
-    func update(with locale: Locale) {
-        
     }
 }
 
@@ -408,21 +403,46 @@ final class C0View: NSView, NSTextInputClient {
     private let isHiddenActionManagerKey = "isHiddenActionManagerKey"
     
     override init(frame frameRect: NSRect) {
-        var desktop = Desktop()
-        desktop.objects.append(Object(Effect()))
-//        desktop.objects.append(Object(Scene()))
-        desktopBinder = DesktopBinder(rootModel: desktop)
-        desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
-        sender = Sender(rootView: desktopView)
-        dragManager = DragManager(sender: sender, clickType: .click, dragType: .drag)
-        subDragManager = DragManager(sender: sender, clickType: .subClick, dragType: .subDrag)
-        super.init(frame: frameRect)
-        setup()
+        fatalError()
     }
     required init?(coder: NSCoder) {
         var desktop = Desktop()
-        desktop.objects.append(Object(Effect()))
-//        desktop.objects.append(Object(Scene()))
+
+        //test
+//        desktop.objects.append(Layout(Object(Scene())))
+//        desktop.objects.append(Layout(Object(Timeline())))
+//        desktop.objects.append(Layout(Object(Sound())))
+//        desktop.objects.append(Layout(Object(Subtitle())))
+//        desktop.objects.append(Layout(Object(Canvas())))
+//        desktop.objects.append(Layout(Object(CellGroup())))
+//        desktop.objects.append(Layout(Object(Cell())))
+//        desktop.objects.append(Layout(Object(Material())))
+//        desktop.objects.append(Layout(Object(Material.MaterialType.normal)))
+//        desktop.objects.append(Layout(Object(BlendType.addition)))
+        desktop.objects.append(Layout(Object(Effect())))
+        desktop.objects.append(Layout(Object(Drawing())))
+//        desktop.objects.append(Layout(Object(Lines())))
+//        desktop.objects.append(Layout(Object(Line())))
+//        desktop.objects.append(Layout(Object(Color())))
+//        desktop.objects.append(Layout(Object(Transform())))
+        desktop.objects.append(Layout(Object(SineWave())))
+//        desktop.objects.append(Layout(Object(Image())))
+//        desktop.objects.append(Layout(Object(URL())))
+//        desktop.objects.append(Layout(Object(KeyframeTiming())))
+//        desktop.objects.append(Layout(Object(KeyframeTiming.Label())))
+//        desktop.objects.append(Layout(Object(KeyframeTiming.Loop())))
+//        desktop.objects.append(Layout(Object(KeyframeTiming.Interpolation())))
+//        desktop.objects.append(Layout(Object(Easing())))
+//        desktop.objects.append(Layout(Object(Size())))
+//        desktop.objects.append(Layout(Object(Point())))
+//        desktop.objects.append(Layout(Object(Real())))
+//        desktop.objects.append(Layout(Object(Rational())))
+//        desktop.objects.append(Layout(Object(Int())))
+//        desktop.objects.append(Layout(Object(Bool())))
+//        desktop.objects.append(Layout(Object(Text())))
+//        desktop.objects.append(Layout(Object(String())))
+//        desktop.objects.append(Layout(Object(Object())))
+        
         desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
         sender = Sender(rootView: desktopView)
@@ -450,7 +470,7 @@ final class C0View: NSView, NSTextInputClient {
         localToken = nc.addObserver(forName: NSLocale.currentLocaleDidChangeNotification,
                                     object: nil,
                                     queue: nil) { [unowned self] _ in
-                                        self.desktopView.locale = .current }
+                                        self.sender.locale = .current }
         token = nc.addObserver(forName: NSView.frameDidChangeNotification,
                                object: self,
                                queue: nil) { ($0.object as? C0View)?.updateFrame() }
@@ -904,47 +924,6 @@ struct TextInputContext {
         currentContext?.discardMarkedText()
     }
 }
-
-//protocol DynamicCodable: Codable {
-//    var dynamicCoder: DynamicCoder { get }
-//}
-//class DynamicCoder: NSObject, NSCoding {
-//    class func value(from data: Data) -> DynamicCodable? {
-//        return nil
-//    }
-//    static func valueWithType<T: DynamicCodable>(_ type: T.Type,
-//                                                 from data: Data) -> DynamicCodable? {
-//        return try? JSONDecoder().decode(type, from: data)
-//    }
-//
-//    required init?(coder decoder: NSCoder) {
-//        guard let data = decoder.decodeData() else {
-//            return nil
-//        }
-//        guard let value = DynamicCoder.value(from: data) else {
-//            return nil
-//        }
-//        self.value = value
-//        super.init()
-//    }
-//    func encode(with encoder: NSCoder) {
-//        if let data = value.jsonData {
-//            encoder.encode(data)
-//        }
-//    }
-//
-//    static func with(data: Data) -> DynamicCoder? {
-//        return NSKeyedUnarchiver.unarchiveObject(with: data) as? DynamicCoder
-//    }
-//    var data: Data {
-//        return NSKeyedArchiver.archivedData(withRootObject: self)
-//    }
-//
-//    var value: DynamicCodable
-//    init(_ value: DynamicCodable) {
-//        self.value = value
-//    }
-//}
 
 protocol FileTypeProtocol {
     var utType: String { get }
