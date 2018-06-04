@@ -131,16 +131,19 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
 //    }
     override func updateLayout() {
         let padding = Layouter.padding(with: sizeType)
-        var x = padding
         //test
-//        modelViews.forEach {
-//            let db = $0.defaultBounds
-//            $0.frame = Rect(x: x,
-//                            y: padding,
-//                            width: db.width,
-//                            height: abstractType == .mini ? bounds.height - padding * 2 : db.height)
-//            x += db.width
-//        }
+        if !(ModelElement.self is Layoutable.Type) {
+            var x = padding
+            modelViews.forEach {
+                let db = $0.defaultBounds
+                $0.frame = Rect(x: x,
+                                y: padding,
+                                width: db.width,
+                                height: abstractType == .mini ? bounds.height - padding * 2 : db.height)
+                x += db.width
+            }
+
+        }
 //        layoutClosure?(model, modelViews)
     }
 
@@ -188,7 +191,9 @@ extension ArrayView: CollectionAssignable {
         }
     }
     func remove(for p: Point, _ version: Version) {
-        
+        guard let index = children.index(where: { $0.contains($0.convert(p, from: self)) }) else { return }
+//        let child = children[index]
+        remove(at: index, version)
     }
 }
 extension ArrayView: Zoomable {
@@ -248,7 +253,8 @@ final class ArrayCountView<T: ArrayCountElement, U: BinderProtocol>: ModelView, 
         countNameView = TextFormView(text: Text(english: "Count", japanese: "個数") + ":",
                                      font: Font.default(with: sizeType))
         countView = IntGetterView(binder: binder, keyPath: keyPath.appending(path: \Model.count),
-                                  option: IntGetterOption(unit: ""), sizeType: sizeType)
+                                  option: IntGetterOption(unit: ""), sizeType: sizeType,
+                                  isSizeToFit: false)
         
         super.init()
         isClipped = true

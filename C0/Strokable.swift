@@ -32,7 +32,7 @@ protocol Strokable {
     func makeViewStroker() -> ViewStroker
 }
 
-struct StrokableActionManager: SubActionManagable {
+struct StrokableActionList: SubActionList {
     let strokeAction = Action(name: Text(english: "Stroke", japanese: "ストローク"),
                               quasimode: Quasimode([.drag(.subDrag)]))
     let lassoEraseAction = Action(name: Text(english: "Lasso Erase", japanese: "囲み消し"),
@@ -42,27 +42,27 @@ struct StrokableActionManager: SubActionManagable {
         return [strokeAction, lassoEraseAction]
     }
 }
-extension StrokableActionManager: SubSendable {
+extension StrokableActionList: SubSendable {
     func makeSubSender() -> SubSender {
-        return StrokableSender(actionManager: self)
+        return StrokableSender(actionList: self)
     }
 }
 
 final class StrokableSender: SubSender {
     typealias Receiver = View & Strokable
     
-    typealias ActionManager = StrokableActionManager
-    var actionManager: ActionManager
+    typealias ActionList = StrokableActionList
+    var actionList: ActionList
     
-    init(actionManager: ActionManager) {
-        self.actionManager = actionManager
+    init(actionList: ActionList) {
+        self.actionList = actionList
     }
     
     private var viewStroker: ViewStroker?
     
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
-        case actionManager.strokeAction:
+        case actionList.strokeAction:
             if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
                 if actionMap.phase == .began,
                     let receiver = sender.mainIndicatedView as? Receiver {
@@ -79,7 +79,7 @@ final class StrokableSender: SubSender {
                     self.viewStroker = nil
                 }
             }
-        case actionManager.lassoEraseAction:
+        case actionList.lassoEraseAction:
             if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
                 if actionMap.phase == .began,
                     let receiver = sender.mainIndicatedView as? Receiver {

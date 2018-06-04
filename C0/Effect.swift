@@ -21,7 +21,7 @@ enum BlendType: Int8, Codable, Hashable {
     case normal, addition, subtract
 }
 extension BlendType: Referenceable {
-    static let name = Text(english: "Blend Type", japanese: "ブレンドタイプ")
+    static let name = Text(english: "Blend Type", japanese: "合成タイプ")
 }
 extension BlendType: DisplayableText {
     var displayText: Text {

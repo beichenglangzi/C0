@@ -120,7 +120,7 @@ final class StringGetterView<T: BinderProtocol>: ModelView, BindableGetterReceiv
             if isSizeToFit { sizeToFit() }
         }
     }
-    var padding: Real {
+    var paddingSize: Size {
         didSet { updateLayout() }
     }
     private var textFrame: TextFrame {
@@ -128,31 +128,30 @@ final class StringGetterView<T: BinderProtocol>: ModelView, BindableGetterReceiv
     }
     
     init(binder: Binder, keyPath: BinderKeyPath, textMaterial: TextMaterial = TextMaterial(),
-         frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
+         frame: Rect = Rect(), paddingSize: Size = Size(square: 1), isSizeToFit: Bool = true) {
         
         self.binder = binder
         self.keyPath = keyPath
         
         self.isSizeToFit = isSizeToFit
-        self.padding = padding
+        self.paddingSize = paddingSize
         self.textMaterial = textMaterial
         
-        let textFrameWidth = StringGetterView.textFrameWidthWith(frame: frame, padding: padding,
+        let textFrameWidth = StringGetterView.textFrameWidthWith(frame: frame,
+                                                                 paddingWidth: paddingSize.width,
                                                                  isSizeToFit: isSizeToFit)
         textFrame = TextFrame(string: binder[keyPath: keyPath], textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
         
         super.init(drawClosure: { $1.draw(in: $0) }, isLocked: false)
-        
-        noIndicatedLineColor = .getBorder
-        indicatedLineColor = .indicated
+        lineColor = .getBorder
         
         self.frame = frame
         if isSizeToFit { sizeToFit() }
     }
     
     override var defaultBounds: Rect {
-        return textFrame.bounds(padding: padding)
+        return textFrame.bounds(paddingSize: paddingSize)
     }
     override func updateLayout() {
         if !isSizeToFit {
@@ -172,15 +171,18 @@ final class StringGetterView<T: BinderProtocol>: ModelView, BindableGetterReceiv
     }
     
     var textFrameWidth: Real? {
-        return StringGetterView.textFrameWidthWith(frame: frame, padding: padding,
+        return StringGetterView.textFrameWidthWith(frame: frame,
+                                                   paddingWidth: paddingSize.width,
                                                    isSizeToFit: isSizeToFit)
     }
-    private static func textFrameWidthWith(frame: Rect, padding: Real, isSizeToFit: Bool) -> Real? {
-        return isSizeToFit ? nil : frame.width - padding * 2
+    private static func textFrameWidthWith(frame: Rect,
+                                           paddingWidth: Real, isSizeToFit: Bool) -> Real? {
+        return isSizeToFit ? nil : frame.width - paddingWidth * 2
     }
     
     override func draw(in ctx: CGContext) {
-        textFrame.draw(in: bounds.inset(by: padding), in: ctx)
+        textFrame.draw(in: bounds.insetBy(dx: paddingSize.width, dy: paddingSize.height),
+                       in: ctx)
     }
 }
 
@@ -229,7 +231,7 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
             if isSizeToFit { sizeToFit() }
         }
     }
-    var padding: Real {
+    var paddingSize: Size {
         didSet { updateLayout() }
     }
     private var textFrame: TextFrame {
@@ -238,17 +240,18 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
 
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
          textMaterial: TextMaterial = TextMaterial(),
-         frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
+         frame: Rect = Rect(), paddingSize: Size = Size(square: 1), isSizeToFit: Bool = true) {
 
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
 
         self.isSizeToFit = isSizeToFit
-        self.padding = padding
+        self.paddingSize = paddingSize
         self.textMaterial = textMaterial
         
-        let textFrameWidth = StringView.textFrameWidthWith(frame: frame, padding: padding,
+        let textFrameWidth = StringView.textFrameWidthWith(frame: frame,
+                                                           paddingWidth: paddingSize.width,
                                                            isSizeToFit: isSizeToFit)
         textFrame = TextFrame(string: binder[keyPath: keyPath], textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
@@ -260,7 +263,7 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
 
     override var defaultBounds: Rect {
-        return textFrame.bounds(padding: padding)
+        return textFrame.bounds(paddingSize: paddingSize)
     }
     override func updateLayout() {
         if !isSizeToFit {
@@ -280,27 +283,32 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
 
     var textFrameWidth: Real? {
-        return StringView.textFrameWidthWith(frame: frame, padding: padding,
+        return StringView.textFrameWidthWith(frame: frame, paddingWidth: paddingSize.width,
                                              isSizeToFit: isSizeToFit)
     }
-    private static func textFrameWidthWith(frame: Rect, padding: Real, isSizeToFit: Bool) -> Real? {
-        return isSizeToFit ? nil : frame.width - padding * 2
+    private static func textFrameWidthWith(frame: Rect,
+                                           paddingWidth: Real, isSizeToFit: Bool) -> Real? {
+        return isSizeToFit ? nil : frame.width - paddingWidth * 2
     }
 
     func convertToLocal(_ p: Point) -> Point {
-        return p - Point(x: padding, y: bounds.height - textFrame.height - padding)
+        return p - Point(x: paddingSize.width,
+                         y: bounds.height - textFrame.height - paddingSize.height)
     }
     func convertFromLocal(_ p: Point) -> Point {
-        return p + Point(x: padding, y: bounds.height - textFrame.height - padding)
+        return p + Point(x: paddingSize.width,
+                         y: bounds.height - textFrame.height - paddingSize.height)
     }
 
-    func editingCharacterIndex(for p: Point) -> String.Index {
+    func editingCharacterIndex(for p: Point) -> String.Index? {
+        guard !model.isEmpty else { return nil }
         let index = textFrame.editCharacterIndex(for: convertToLocal(p))
         return String.Index(encodedOffset: index)
     }
     
     override func draw(in ctx: CGContext) {
-        textFrame.draw(in: bounds.inset(by: padding), in: ctx)
+        textFrame.draw(in: bounds.insetBy(dx: paddingSize.width, dy: paddingSize.height),
+                       in: ctx)
     }
 
     private let timer = RunTimer()
@@ -308,7 +316,7 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
 }
 extension StringView: Indicatable {
     func indicate(at p: Point) {
-        let index = editingCharacterIndex(for: p)
+        guard let index = editingCharacterIndex(for: p) else { return }
         selectedRange = model.rangeOfComposedCharacterSequence(at: index)
     }
 }

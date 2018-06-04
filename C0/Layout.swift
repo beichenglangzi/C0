@@ -36,19 +36,19 @@ enum Orientation {
 
 protocol Layoutable {
     var frame: Rect { get set }
-    var z: Real { get set }
+    var transform: Transform { get set }
 }
 
 typealias LayoutValue = Codable & ThumbnailViewable & Referenceable & AbstractViewable
 
 struct Layout<Value: LayoutValue>: Layoutable, Codable {
     var value: Value
-    var z: Real
+    var transform: Transform
     var frame: Rect
     
-    init(_ value: Value, z: Real = 1, frame: Rect = Rect()) {
+    init(_ value: Value, transform: Transform = Transform(), frame: Rect = Rect()) {
         self.value = value
-        self.z = z
+        self.transform = transform
         self.frame = frame
     }
 }
@@ -96,6 +96,7 @@ enum Layouter {
     static let smallPadding = 2.0.cg, basicPadding = 3.0.cg, basicLargePadding = 14.0.cg
     static let smallRatio = Font.small.size / Font.default.size
     static let basicTextHeight = Font.default.ceilHeight(withPadding: 1)
+    static let basicTextSmallHeight = Font.small.ceilHeight(withPadding: 1)
     static let basicHeight = basicTextHeight + basicPadding * 2
     static let smallHeight = Font.small.ceilHeight(withPadding: 1) + smallPadding * 2
     static let basicValueWidth = 56.cg, smallValueWidth = 40.0.cg
@@ -109,6 +110,9 @@ enum Layouter {
     }
     static func height(with sizeType: SizeType) -> Real {
         return sizeType == .small ? smallHeight : basicHeight
+    }
+    static func textHeight(with sizeType: SizeType) -> Real {
+        return sizeType == .small ? basicTextSmallHeight : basicTextHeight
     }
     static func valueWidth(with sizeType: SizeType) -> Real {
         return sizeType == .small ? smallValueWidth : basicValueWidth
@@ -245,29 +249,22 @@ final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
         self.binder = binder
         self.keyPath = keyPath
         
-        let model = binder[keyPath: keyPath]
-        let valueFrame = model.frame.size == Size() ?
+        let padding = Layouter.padding(with: sizeType)
+        let valueFrame = Size(square: padding).intersects(binder[keyPath: keyPath].frame.size) ?
             Rect() :
-            Rect(origin: Point(), size: model.frame.size)
-            .inset(by: Layouter.padding(with: sizeType))
+            binder[keyPath: keyPath].frame.inset(by: padding)
         self.sizeType = sizeType
-        valueView = model.value.abstractViewWith(binder: binder,
-                                                 keyPath: keyPath.appending(path: \Model.value),
-                                                 frame: valueFrame, sizeType, type: .normal)
+        valueView = binder[keyPath: keyPath].value
+            .abstractViewWith(binder: binder,
+                              keyPath: keyPath.appending(path: \Model.value),
+                              frame: valueFrame, sizeType, type: .normal)
         if valueView.frame.isEmpty {
             valueView.frame.size = valueView.defaultBounds.size
         }
         super.init()
-        self.frame = model.frame
+        self.model.frame.size = valueView.frame.inset(by: -padding).size
+        self.frame = self.model.frame
         children = [valueView]
-    }
-    
-    var z: Real {
-        get { return model.z }
-        set {
-            model.z = newValue
-//            transform 
-        }
     }
     
     override var defaultBounds: Rect {

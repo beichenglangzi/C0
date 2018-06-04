@@ -20,6 +20,10 @@
 struct Rational: AdditiveGroup, SignedNumeric {
     var p, q: Int
     
+    init() {
+        p = 0
+        q = 1
+    }
     init(_ p: Int, _ q: Int) {
         guard q != 0 else { fatalError("Division by zero") }
         let d = abs(Int.gcd(p, q)) * (q / abs(q))
@@ -96,10 +100,10 @@ extension Rational {
     }
     
     static var min: Rational {
-        return Rational(Int.min)
+        return Rational(Int(Int32.min))
     }
     static var max: Rational {
-        return Rational(Int.max)
+        return Rational(Int(Int32.max))
     }
     
     var magnitude: Rational {
@@ -127,6 +131,13 @@ extension Rational {
     }
     static func /(lhs: Rational, rhs: Rational) -> Rational {
         return Rational(lhs.p * rhs.q, lhs.q * rhs.p)
+    }
+    
+    func description(q: Int) -> String? {
+        switch q % self.q {
+        case 0: return "\(p * (q / self.q)) / \(q)"
+        default: return nil
+        }
     }
 }
 extension Rational {
@@ -178,7 +189,10 @@ extension Rational: AbstractViewable {
         case .normal:
             return DiscreteRationalView(binder: binder, keyPath: keyPath,
                                         option: RationalOption(defaultModel: 0,
-                                                               minModel: .min, maxModel: .max,
+                                                               minModel: .min,
+                                                               maxModel: .max,
+                                                               modelInterval: Rational(1, 10),
+                                                               descriptionQ: 10,
                                                                isInfinitesimal: false),
                                         frame: frame, sizeType: sizeType)
         case .mini:
@@ -202,7 +216,7 @@ extension Rational: CustomStringConvertible {
     var description: String {
         switch q {
         case 1: return "\(p)"
-        default: return "\(p)/\(q)"
+        default: return "\(p) / \(q)"
         }
     }
 }
@@ -210,6 +224,28 @@ extension Rational: ExpressibleByIntegerLiteral {
     typealias IntegerLiteralType = Int
     init(integerLiteral value: Int) {
         self.init(value)
+    }
+}
+extension Rational: AnyInitializable {
+    init?(anyValue: Any) {
+        switch anyValue {
+        case let value as Rational: self = value
+        case let value as Int: self = Rational(value)
+        case let value as Real: self = Rational(value)
+        case let value as String:
+            if let value = Rational(value) {
+                self = value
+            } else {
+                return nil
+            }
+        case let valueChain as ValueChain:
+            if let value = Rational(anyValue: valueChain.rootChainValue) {
+                self = value
+            } else {
+                return nil
+            }
+        default: return nil
+        }
     }
 }
 func floor(_ x: Rational) -> Rational {
@@ -229,13 +265,15 @@ struct RationalOption: Object1DOption {
     var transformedModel: ((Model) -> (Model))
     var reverseTransformedModel: ((Model) -> (Model))
     var modelInterval: Model
+    var descriptionQ: Int?
     var isInfinitesimal: Bool
     var unit: String
     
     init(defaultModel: Model, minModel: Model, maxModel: Model,
          transformedModel: @escaping ((Model) -> (Model)) = { $0 },
          reverseTransformedModel: @escaping ((Model) -> (Model)) = { $0 },
-         modelInterval: Model = 0, isInfinitesimal: Bool, unit: String = "") {
+         modelInterval: Model = 0, descriptionQ: Int? = nil, isInfinitesimal: Bool,
+         unit: String = "") {
         
         self.defaultModel = defaultModel
         self.minModel = minModel
@@ -243,24 +281,24 @@ struct RationalOption: Object1DOption {
         self.transformedModel = transformedModel
         self.reverseTransformedModel = reverseTransformedModel
         self.modelInterval = modelInterval
+        self.descriptionQ = descriptionQ
         self.isInfinitesimal = isInfinitesimal
         self.unit = unit
     }
     
-    func model(with object: Any) -> Model? {
-        switch object {
-        case let value as Model: return value
-        case let value as Int: return Model(value)
-        case let value as Real: return Model(value)
-        case let value as String: return Model(value)
-        default: return nil
+    func string(with model: Model) -> String {
+        if let descriptionQ = descriptionQ, let description = model.description(q: descriptionQ) {
+            return description
+        } else {
+            return model.description
         }
     }
-    func string(with model: Model) -> String {
-        return model.description
-    }
     func displayText(with model: Model) -> Text {
-        return Text(model.description + "\(unit)")
+        if let descriptionQ = descriptionQ, let description = model.description(q: descriptionQ) {
+            return Text(description + "\(unit)")
+        } else {
+            return Text(model.description + "\(unit)")
+        }
     }
     func ratio(with model: Model) -> Real {
         return Real((model - minModel) / (maxModel - minModel))

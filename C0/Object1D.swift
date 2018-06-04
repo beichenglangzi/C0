@@ -74,11 +74,11 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: ModelView, B
         self.sizeType = sizeType
         optionTextView = TextFormView(text: option.displayText(with: binder[keyPath: keyPath]),
                                       font: Font.default(with: sizeType),
-                                      frameAlignment: .right, alignment: .right)
+                                      frameAlignment: .right, alignment: .right,
+                                      paddingSize: Size(width: 3, height: 1))
         
         super.init()
-        noIndicatedLineColor = .getBorder
-        indicatedLineColor = .indicated
+        lineColor = .getBorder
         isClipped = true
         children = [optionTextView]
         self.frame = frame

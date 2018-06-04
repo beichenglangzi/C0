@@ -66,7 +66,9 @@ extension Int: AbstractViewable {
         case .normal:
             return DiscreteIntView(binder: binder, keyPath: keyPath,
                                    option: IntOption(defaultModel: 0,
-                                                     minModel: .min, maxModel: .max),
+                                                     minModel: Int(Int32.min),
+                                                     maxModel: Int(Int32.max),
+                                                     modelInterval: 1),
                                    frame: frame, sizeType: sizeType)
         case .mini:
             return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
@@ -77,17 +79,17 @@ extension Int: ObjectViewable {}
 extension Int: AnyInitializable {
     init?(anyValue: Any) {
         switch anyValue {
-        case let valueChain as ValueChain:
-            if let value = valueChain.value(Int.self) {
-                self = value
-            } else {
-                return nil
-            }
         case let value as Int: self = value
         case let value as Rational: self = Int(value)
         case let value as Real: self = Int(value)
         case let value as String:
             if let value = Int(value) {
+                self = value
+            } else {
+                return nil
+            }
+        case let valueChain as ValueChain:
+            if let value = Int(anyValue: valueChain.rootChainValue) {
                 self = value
             } else {
                 return nil

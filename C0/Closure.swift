@@ -19,7 +19,7 @@
 
 typealias Closure = ((Version) -> ())
 
-final class ClosureView: ModelView {
+final class ClosureView: ModelView, IndicatableResponder {
     typealias Model = Closure
     var model: Model
     
@@ -37,6 +37,7 @@ final class ClosureView: ModelView {
         self.nameView = TextFormView(text: name, font: Font.default(with: sizeType), color: .locked)
         
         super.init()
+        lineColor = .sendBorder
         children = [nameView]
         self.frame = frame
     }
@@ -51,6 +52,10 @@ final class ClosureView: ModelView {
         nameView.frame.origin = Point(x: padding, y: bounds.height - nameView.frame.height - padding)
     }
     func updateWithModel() {}
+    
+    var indicatedLineColor: Color? {
+        return .indicated
+    }
 }
 private struct _Closure: Referenceable {
     static let name = Text(english: "Closure", japanese: "クロージャ")

@@ -32,28 +32,34 @@ protocol SubSendable {
 final class Sender {
     typealias UndoableView = View & Undoable
     typealias ZoomableView = View & Zoomable
+    typealias RootView = ModelView & Undoable & IndicatableResponder
+    typealias IndicatedReciver = View & IndicatableResponder
     
-    var rootView: ModelView & Undoable
+    var rootView: RootView
     var mainIndicatedView: View {
         didSet {
             guard mainIndicatedView != oldValue else { return }
             
+            if let oldResponder = oldValue as? IndicatedReciver {
+                oldResponder.lineColor = oldMainIndicatedViewColor
+            }
+            if let responder = mainIndicatedView as? IndicatedReciver {
+                oldMainIndicatedViewColor = responder.lineColor
+                responder.lineColor = responder.indicatedLineColor
+            }
             if let view = mainIndicatedView.withSelfAndAllParents(with: UndoableView.self) {
                 self.indicatedVersionView = view
             }
             if let view = mainIndicatedView.withSelfAndAllParents(with: ZoomableView.self) {
                 self.indicatedZoomableView = view
             }
-            
-            oldValue.isIndicated = false
-            mainIndicatedView.isIndicated = true
         }
     }
     var oldMainIndicatedViewColor: Color?
     var indicatedVersionView: UndoableView
     var indicatedZoomableView: ZoomableView?
     
-    let actionManager = ActionManager()
+    let actionList = ActionList()
     let subSenders: [SubSender]
     
     func updateIndicatedView(with frame: Rect) {
@@ -71,9 +77,9 @@ final class Sender {
     var eventMap = EventMap()
     var actionMaps = [ActionMap]()
     
-    init(rootView: ModelView & Undoable) {
+    init(rootView: RootView) {
         self.rootView = rootView
-        subSenders = actionManager.subActionManagers.map { $0.makeSubSender() }
+        subSenders = actionList.subActionLists.map { $0.makeSubSender() }
         
         mainIndicatedView = rootView
         oldMainIndicatedViewColor = mainIndicatedView.lineColor
@@ -93,7 +99,7 @@ final class Sender {
     
     func sendPointing(_ eventValue: DragEvent.Value) {
         let event = DragEvent(type: .pointing, value: eventValue)
-        let action = actionManager.selectableActionManager.indicateAction
+        let action = actionList.selectableActionList.indicateAction
         changedOnlySend(event, action)
     }
     func changedOnlySend<T: Event>(_ event: T, _ action: Action) {
@@ -105,7 +111,7 @@ final class Sender {
         switch event.value.phase {
         case .began:
             eventMap.append(event)
-            if let actionMap = eventMap.actionMapWith(event, actionManager.actions) {
+            if let actionMap = eventMap.actionMapWith(event, actionList.actions) {
                 actionMaps.append(actionMap)
                 subSenders.forEach { $0.send(actionMap, from: self) }
             }

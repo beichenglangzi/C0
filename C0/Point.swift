@@ -290,6 +290,26 @@ extension Point: Interpolatable {
                      y: Real.lastMonospline(f0.y, f1.y, f2.y, with: ms))
     }
 }
+extension Point: AnyInitializable {
+    init?(anyValue: Any) {
+        switch anyValue {
+        case let value as Point: self = value
+        case let value as String:
+            if let value = Point(jsonString: value) {
+                self = value
+            } else {
+                return nil
+            }
+        case let valueChain as ValueChain:
+            if let value = Point(anyValue: valueChain.rootChainValue) {
+                self = value
+            } else {
+                return nil
+            }
+        default: return nil
+        }
+    }
+}
 extension Point: Referenceable {
     static let name = Text(english: "Point", japanese: "ポイント")
 }
@@ -305,7 +325,9 @@ extension Point: AbstractViewable {
         switch type {
         case .normal:
             let valueOption = PointOption.XOption(defaultModel: 0,
-                                                  minModel: -.infinity, maxModel: .infinity)
+                                                  minModel: -.greatestFiniteMagnitude,
+                                                  maxModel: .greatestFiniteMagnitude,
+                                                  modelInterval: 0.1)
             return DiscretePointView(binder: binder, keyPath: keyPath,
                                      option: PointOption(xOption: valueOption,
                                                          yOption: valueOption),
@@ -371,14 +393,6 @@ struct PointOption: Object2DOption {
     
     var xOption: XOption
     var yOption: YOption
-    
-    func model(with object: Any) -> Model? {
-        switch object {
-        case let value as Model: return value
-        case let value as String: return Model(jsonString: value)
-        default: return nil
-        }
-    }
 }
 typealias SlidablePointView<Binder: BinderProtocol> = Slidable2DView<PointOption, Binder>
 typealias DiscretePointView<Binder: BinderProtocol> = Discrete2DView<PointOption, Binder>

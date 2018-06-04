@@ -295,7 +295,12 @@ extension NSPasteboard {
         }
         if let urls = readObjects(forClasses: [NSURL.self],
                                   options: nil) as? [URL], !urls.isEmpty {
-            urls.forEach { copiedObjects.append(Object($0)) }
+            urls.forEach {
+                if let image = Image(url: $0) {
+                    copiedObjects.append(Object(image))
+                }
+                copiedObjects.append(Object($0))
+            }
         }
         if let string = string(forType: .string) {
             copiedObjects.append(Object(string))
@@ -400,7 +405,7 @@ final class C0View: NSView, NSTextInputClient {
     let desktopBinder: DesktopBinder
     let desktopView: DesktopView<DesktopBinder>
     
-    private let isHiddenActionManagerKey = "isHiddenActionManagerKey"
+    private let isHiddenActionListKey = "isHiddenActionListKey"
     
     override init(frame frameRect: NSRect) {
         fatalError()
@@ -416,32 +421,27 @@ final class C0View: NSView, NSTextInputClient {
 //        desktop.objects.append(Layout(Object(Canvas())))
 //        desktop.objects.append(Layout(Object(CellGroup())))
 //        desktop.objects.append(Layout(Object(Cell())))
-//        desktop.objects.append(Layout(Object(Material())))
-//        desktop.objects.append(Layout(Object(Material.MaterialType.normal)))
-//        desktop.objects.append(Layout(Object(BlendType.addition)))
+        desktop.objects.append(Layout(Object(Material())))
+        desktop.objects.append(Layout(Object(Material.MaterialType.normal)))
+        desktop.objects.append(Layout(Object(BlendType.addition)))
         desktop.objects.append(Layout(Object(Effect())))
         desktop.objects.append(Layout(Object(Drawing())))
-//        desktop.objects.append(Layout(Object(Lines())))
-//        desktop.objects.append(Layout(Object(Line())))
-//        desktop.objects.append(Layout(Object(Color())))
-//        desktop.objects.append(Layout(Object(Transform())))
+        desktop.objects.append(Layout(Object(Lines())))
+        desktop.objects.append(Layout(Object(Line())))
+        desktop.objects.append(Layout(Object(Color())))
+        desktop.objects.append(Layout(Object(Transform())))
         desktop.objects.append(Layout(Object(SineWave())))
-//        desktop.objects.append(Layout(Object(Image())))
-//        desktop.objects.append(Layout(Object(URL())))
-//        desktop.objects.append(Layout(Object(KeyframeTiming())))
-//        desktop.objects.append(Layout(Object(KeyframeTiming.Label())))
-//        desktop.objects.append(Layout(Object(KeyframeTiming.Loop())))
-//        desktop.objects.append(Layout(Object(KeyframeTiming.Interpolation())))
-//        desktop.objects.append(Layout(Object(Easing())))
-//        desktop.objects.append(Layout(Object(Size())))
-//        desktop.objects.append(Layout(Object(Point())))
-//        desktop.objects.append(Layout(Object(Real())))
-//        desktop.objects.append(Layout(Object(Rational())))
-//        desktop.objects.append(Layout(Object(Int())))
-//        desktop.objects.append(Layout(Object(Bool())))
-//        desktop.objects.append(Layout(Object(Text())))
-//        desktop.objects.append(Layout(Object(String())))
-//        desktop.objects.append(Layout(Object(Object())))
+        desktop.objects.append(Layout(Object(KeyframeTiming())))
+        desktop.objects.append(Layout(Object(KeyframeTiming.Label.main)))
+        desktop.objects.append(Layout(Object(KeyframeTiming.Loop.began)))
+        desktop.objects.append(Layout(Object(KeyframeTiming.Interpolation.linear)))
+        desktop.objects.append(Layout(Object(Easing())))
+        desktop.objects.append(Layout(Object(Size())))
+        desktop.objects.append(Layout(Object(Point())))
+        desktop.objects.append(Layout(Object(Real())))
+        desktop.objects.append(Layout(Object(Rational())))
+        desktop.objects.append(Layout(Object(Int())))
+        desktop.objects.append(Layout(Object(Bool())))
         
         desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
@@ -459,12 +459,12 @@ final class C0View: NSView, NSTextInputClient {
         
         desktopView.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }
         
-        desktopView.isHiddenActionManagerView.notifications.append({ [unowned self] view, _ in
+        desktopView.isHiddenActionListView.notifications.append({ [unowned self] view, _ in
             UserDefaults.standard.set(view.model,
-                                      forKey: self.isHiddenActionManagerKey)
+                                      forKey: self.isHiddenActionListKey)
         })
-        desktopView.model.isHiddenActionManager
-            = UserDefaults.standard.bool(forKey: isHiddenActionManagerKey)
+        desktopView.model.isHiddenActionList
+            = UserDefaults.standard.bool(forKey: isHiddenActionListKey)
         
         let nc = NotificationCenter.default
         localToken = nc.addObserver(forName: NSLocale.currentLocaleDidChangeNotification,

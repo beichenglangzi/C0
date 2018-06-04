@@ -59,21 +59,21 @@ final class CocoaStringView<T: BinderProtocol>: ModelView, BindableReceiver {
             if isSizeToFit { sizeToFit() }
         }
     }
-    var padding: Real {
+    var paddingSize: Size {
         didSet { updateLayout() }
     }
     private var textFrame: TextFrame
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
          textMaterial: TextMaterial = TextMaterial(),
-         frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
+         frame: Rect = Rect(), paddingSize: Size = Size(square: 1), isSizeToFit: Bool = true) {
         
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
         
         self.isSizeToFit = isSizeToFit
-        self.padding = padding
+        self.paddingSize = paddingSize
         self.textMaterial = textMaterial
         
         defaultAttributes = NSAttributedString.attributesWith(font: textMaterial.font,
@@ -82,7 +82,8 @@ final class CocoaStringView<T: BinderProtocol>: ModelView, BindableReceiver {
         markedAttributes = NSAttributedString.attributesWith(font: .default,
                                                              color: .gray, border: nil)
         
-        let textFrameWidth = CocoaStringView.textFrameWidthWith(frame: frame, padding: padding,
+        let textFrameWidth = CocoaStringView.textFrameWidthWith(frame: frame,
+                                                                paddingWidth: paddingSize.width,
                                                                 isSizeToFit: isSizeToFit)
         textFrame = TextFrame(string: binder[keyPath: keyPath], textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
@@ -94,7 +95,7 @@ final class CocoaStringView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     
     override var defaultBounds: Rect {
-        return textFrame.bounds(padding: padding)
+        return textFrame.bounds(paddingSize: paddingSize)
     }
     override func updateLayout() {
         textFrame = TextFrame(string: model, textMaterial: textMaterial,
@@ -115,22 +116,27 @@ final class CocoaStringView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     
     var textFrameWidth: Real? {
-        return CocoaStringView.textFrameWidthWith(frame: frame, padding: padding,
+        return CocoaStringView.textFrameWidthWith(frame: frame,
+                                                  paddingWidth: paddingSize.width,
                                                   isSizeToFit: isSizeToFit)
     }
-    private static func textFrameWidthWith(frame: Rect, padding: Real, isSizeToFit: Bool) -> Real? {
-        return isSizeToFit ? nil : frame.width - padding * 2
+    private static func textFrameWidthWith(frame: Rect,
+                                           paddingWidth: Real, isSizeToFit: Bool) -> Real? {
+        return isSizeToFit ? nil : frame.width - paddingWidth * 2
     }
     
     func convertToLocal(_ p: Point) -> Point {
-        return p - Point(x: padding, y: bounds.height - textFrame.height - padding)
+        return p - Point(x: paddingSize.width,
+                         y: bounds.height - textFrame.height - paddingSize.height)
     }
     func convertFromLocal(_ p: Point) -> Point {
-        return p + Point(x: padding, y: bounds.height - textFrame.height - padding)
+        return p + Point(x: paddingSize.width,
+                         y: bounds.height - textFrame.height - paddingSize.height)
     }
     
     override func draw(in ctx: CGContext) {
-        textFrame.draw(in: bounds.inset(by: padding), in: ctx)
+        textFrame.draw(in: bounds.insetBy(dx: paddingSize.width, dy: paddingSize.height),
+                       in: ctx)
     }
     
     private let timer = RunTimer()

@@ -149,6 +149,28 @@ extension Real: Interpolatable {
         return fb - fa
     }
 }
+extension Real: AnyInitializable {
+    init?(anyValue: Any) {
+        switch anyValue {
+        case let value as Real: self = value
+        case let value as Int: self = Real(value)
+        case let value as Rational: self = Real(value)
+        case let value as String:
+            if let value = Real(value) {
+                self = value
+            } else {
+                return nil
+            }
+        case let valueChain as ValueChain:
+            if let value = Real(anyValue: valueChain.rootChainValue) {
+                self = value
+            } else {
+                return nil
+            }
+        default: return nil
+        }
+    }
+}
 extension Real: KeyframeValue {}
 extension Real: Referenceable {
     static let name = Text(english: "Real Number (\(MemoryLayout<Real>.size * 8)bit)",
@@ -160,15 +182,16 @@ extension Real: ThumbnailViewable {
     }
 }
 extension Real: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Real>,
+    func abstractViewWith<T: BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Real>,
                                               frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return DiscreteRealView(binder: binder, keyPath: keyPath,
                                     option: RealOption(defaultModel: 0,
-                                                       minModel: -.infinity,
-                                                       maxModel: .infinity),
+                                                       minModel: -.greatestFiniteMagnitude,
+                                                       maxModel: .greatestFiniteMagnitude,
+                                                       modelInterval: 0.1),
                                     frame: frame, sizeType: sizeType)
         case .mini:
             return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
@@ -247,7 +270,7 @@ struct RealOption: Object1DOption {
     init(defaultModel: Model, minModel: Model, maxModel: Model,
          transformedModel: @escaping ((Model) -> (Model)) = { $0 },
          reverseTransformedModel: @escaping ((Model) -> (Model)) = { $0 },
-         modelInterval: Model = 0, exp: Real = 1, numberOfDigits: Int = 0, unit: String = "") {
+         modelInterval: Model = 0, exp: Real = 1, numberOfDigits: Int = 1, unit: String = "") {
         
         self.defaultModel = defaultModel
         self.minModel = minModel
@@ -260,15 +283,6 @@ struct RealOption: Object1DOption {
         self.unit = unit
     }
     
-    func model(with object: Any) -> Real? {
-        switch object {
-        case let value as Model: return value
-        case let value as Int: return Model(value)
-        case let value as Rational: return Model(value)
-        case let value as String: return Model(value)
-        default: return nil
-        }
-    }
     func string(with model: Model) -> String {
         return "\(model)"
     }

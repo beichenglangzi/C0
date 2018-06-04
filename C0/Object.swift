@@ -258,8 +258,7 @@ final class ObjectView<Value: Object.Value & AbstractViewable, T: BinderProtocol
                                            sizeType, type: type)
         
         super.init()
-        indicatedLineColor = nil
-        noIndicatedLineColor = nil
+        lineColor = nil
         valueBinder.notification = { [unowned self] binder, _ in
             self.set(binder.rootModel)
         }

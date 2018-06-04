@@ -37,7 +37,7 @@ final class Version: UndoManager {
     
     func updateNotifications() {
         let nc = NotificationCenter.default
-        
+        removeNotification()
         let undoGroupClosure: (Notification) -> () = { [unowned self] in
             if !self.disabledUndoRegistrationKeys.isEmpty {
                 self.disabledUndoRegistrationKeys = []

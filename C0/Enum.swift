@@ -19,12 +19,6 @@
 
 typealias EnumType = RawRepresentable & Equatable & Object.Value
 
-//extension RawRepresentable where Self: Equatable & Object.Value {
-//    init?(anyValue: Any) {
-//
-//    }
-//}
-
 struct EnumOption<Model: EnumType> {
     var defaultModel: Model
     var cationModels: [Model]
@@ -32,17 +26,6 @@ struct EnumOption<Model: EnumType> {
     let rawValueClosure: ((Int) -> (Model.RawValue?))
     let names: [Text]
     
-    func model(with value: Any) -> Model? {
-        if let object = value as? Object {
-            return model(with: object.value)
-        } else if let model = value as? Model {
-            return model
-        } else if let string = value as? String, let index = Int(string) {
-            return model(at: index)
-        } else {
-            return nil
-        }
-    }
     func index(with model: Model) -> Int {
         return indexClosure(model.rawValue)
     }

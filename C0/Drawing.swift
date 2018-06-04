@@ -285,7 +285,7 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     override var defaultBounds: Rect {
         let padding = Layouter.padding(with: sizeType), buttonH = Layouter.height(with: sizeType)
-        return Rect(x: 0, y: 0, width: 100,
+        return Rect(x: 0, y: 0, width: 170,
                       height: buttonH * 4 + padding * 2)
     }
     override func updateLayout() {

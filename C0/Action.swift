@@ -40,31 +40,31 @@ extension Action: Referenceable {
     static let name = Text(english: "Action", japanese: "アクション")
 }
 
-protocol SubActionManagable: SubSendable {
+protocol SubActionList: SubSendable {
     var actions: [Action] { get }
 }
 
-struct ActionManager {
-    let selectableActionManager = SelectableActionManager()
-    let zoomableActionManager = ZoomableActionManager()
-    let undoableActionManager = UndoableActionManager()
-    let assignableActionManager = AssignableActionManager()
-    let runnableActionManager = RunnableActionManager()
-    let strokableActionManager = StrokableActionManager()
-    let movableActionManager = MovableActionManager()
+struct ActionList {
+    let selectableActionList = SelectableActionList()
+    let zoomableActionList = ZoomableActionList()
+    let undoableActionList = UndoableActionList()
+    let assignableActionList = AssignableActionList()
+    let runnableActionList = RunnableActionList()
+    let strokableActionList = StrokableActionList()
+    let movableActionList = MovableActionList()
     
-    let subActionManagers: [SubActionManagable]
+    let subActionLists: [SubActionList]
     let actions: [Action]
     
     init() {
-        subActionManagers = [selectableActionManager, zoomableActionManager,
-                             undoableActionManager, assignableActionManager,
-                             runnableActionManager, strokableActionManager, movableActionManager]
-        actions = subActionManagers.flatMap { $0.actions }
+        subActionLists = [selectableActionList, zoomableActionList,
+                          undoableActionList, assignableActionList,
+                          runnableActionList, strokableActionList, movableActionList]
+        actions = subActionLists.flatMap { $0.actions }
     }
 }
-extension ActionManager: Referenceable {
-    static let name = Text(english: "Action Manager", japanese: "アクション管理")
+extension ActionList: Referenceable {
+    static let name = Text(english: "Action List", japanese: "アクション一覧")
 }
 
 final class ActionFormView: View {
@@ -78,11 +78,10 @@ final class ActionFormView: View {
         nameView = TextFormView(text: action.name)
         quasimodeDisplayTextView = TextFormView(text: action.quasimode.displayText,
                                                 font: Font(monospacedSize: 10),
-                                                frameAlignment: .right)
+                                                frameAlignment: .right, alignment: .right)
         
         super.init(isLocked: true)
-        noIndicatedLineColor = .formBorder
-        indicatedLineColor = .noBorderIndicated
+        lineColor = .formBorder
         self.frame = frame
         children = [nameView, quasimodeDisplayTextView]
     }
@@ -103,31 +102,30 @@ final class ActionFormView: View {
     }
 }
 
-final class SubActionManagableFormView<T: SubActionManagable>: View {
-    var subActionManagable: T
+final class SubActionListFormView<T: SubActionList>: View {
+    var subActionList: T
     
-    init(_ subActionManagable: T) {
-        self.subActionManagable = subActionManagable
+    init(_ subActionList: T) {
+        self.subActionList = subActionList
         
         super.init(isLocked: true)
-        noIndicatedLineColor = nil
-        indicatedLineColor = .noBorderIndicated
+        lineColor = nil
         bounds = defaultBounds
         let padding = Layouter.basicPadding
         let ah = Layouter.basicTextHeight + Layouter.smallPadding * 2
         let aw = bounds.width - padding * 2
         var y = bounds.height - padding
-        children = subActionManagable.actions.map {
+        children = subActionList.actions.map {
             y -= ah
             return ActionFormView(action: $0,
-                              frame: Rect(x: padding, y: y, width: aw, height: ah))
+                                  frame: Rect(x: padding, y: y, width: aw, height: ah))
         }
     }
     
     override var defaultBounds: Rect {
         let padding = Layouter.basicPadding
         let actionHeight = Layouter.basicTextHeight + Layouter.smallPadding * 2
-        let height = actionHeight * Real(subActionManagable.actions.count) + padding * 2
+        let height = actionHeight * Real(subActionList.actions.count) + padding * 2
         return Rect(x: 0, y: 0, width: Layouter.propertyWidth, height: height)
     }
     override func updateLayout() {
@@ -145,39 +143,38 @@ final class SubActionManagableFormView<T: SubActionManagable>: View {
 /**
  Hardware Issue: アクションをキーボードとトラックパッドに直接表示
  */
-final class ActionManagerFormView: View {
-    var actionManager: ActionManager
+final class ActionListFormView: View {
+    var actionList: ActionList
     
-    let selectableActionManagerView = SubActionManagableFormView(SelectableActionManager())
-    let zoomableActionManagerView = SubActionManagableFormView(ZoomableActionManager())
-    let undoableActionManagerView = SubActionManagableFormView(UndoableActionManager())
-    let assignableActionManagerView = SubActionManagableFormView(AssignableActionManager())
-    let runnableActionManagerView = SubActionManagableFormView(RunnableActionManager())
-    let strokableActionManagerView = SubActionManagableFormView(StrokableActionManager())
-    let movableActionManagerView = SubActionManagableFormView(MovableActionManager())
-    let subActionManagableViews: [View]
+    let selectableActionListView = SubActionListFormView(SelectableActionList())
+    let zoomableActionListView = SubActionListFormView(ZoomableActionList())
+    let undoableActionListView = SubActionListFormView(UndoableActionList())
+    let assignableActionListView = SubActionListFormView(AssignableActionList())
+    let runnableActionListView = SubActionListFormView(RunnableActionList())
+    let strokableActionListView = SubActionListFormView(StrokableActionList())
+    let movableActionListView = SubActionListFormView(MovableActionList())
+    let subActionListViews: [View]
     
-    let classNameView = TextFormView(text: ActionManager.name, font: .bold)
+    let classNameView = TextFormView(text: ActionList.name, font: .bold)
     var width = 200.0.cg
     
-    init(actionManager: ActionManager = ActionManager(), frame: Rect = Rect()) {
-        self.actionManager = actionManager
+    init(actionList: ActionList = ActionList(), frame: Rect = Rect()) {
+        self.actionList = actionList
         
-        subActionManagableViews = [selectableActionManagerView, zoomableActionManagerView,
-                                   undoableActionManagerView, assignableActionManagerView,
-                                   runnableActionManagerView, strokableActionManagerView,
-                                   movableActionManagerView]
+        subActionListViews = [selectableActionListView, zoomableActionListView,
+                              undoableActionListView, assignableActionListView,
+                              runnableActionListView, strokableActionListView,
+                              movableActionListView]
         
         super.init(isLocked: true)
-        noIndicatedLineColor = nil
-        indicatedLineColor = .noBorderIndicated
-        children = [classNameView] + subActionManagableViews
+        lineColor = nil
+        children = [classNameView] + subActionListViews
         self.frame = frame
     }
     
     override var defaultBounds: Rect {
         let padding = Layouter.basicPadding
-        let ah = subActionManagableViews.reduce(0.0.cg) { $0 + $1.bounds.height }
+        let ah = subActionListViews.reduce(0.0.cg) { $0 + $1.bounds.height }
         let height = classNameView.frame.height + padding * 3 + ah
         return Rect(x: 0, y: 0,
                     width: width + padding * 2, height: height)
@@ -188,7 +185,7 @@ final class ActionManagerFormView: View {
         var y = bounds.height - classNameView.frame.height - padding
         classNameView.frame.origin = Point(x: padding, y: y)
         y -= padding
-        _ = subActionManagableViews.reduce(y) {
+        _ = subActionListViews.reduce(y) {
             let ny = $0 - $1.frame.height
             $1.frame = Rect(x: padding, y: ny, width: w, height: $1.frame.height)
             return ny

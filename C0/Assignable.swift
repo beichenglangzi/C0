@@ -37,11 +37,11 @@ protocol Newable {
     func new(for p: Point, _ version: Version)
 }
 
-struct AssignableActionManager: SubActionManagable {
+struct AssignableActionList: SubActionList {
     let cutAction = Action(name: Text(english: "Cut", japanese: "カット"),
                            quasimode: Quasimode(modifier: [.input(.command)],
                                                 [.input(.x)]))
-    let resetAction = Action(name: Text(english: "Reset", japanese: "リセット"),
+    let resetAction = Action(name: Text(english: "Reset", japanese: "初期化"),
                              quasimode: Quasimode(modifier: [.input(.shift),
                                                              .input(.command)],
                                                   [.input(.x)]))
@@ -61,9 +61,9 @@ struct AssignableActionManager: SubActionManagable {
         return [cutAction, resetAction, copyAction, pasteAction, addAction, newAction]
     }
 }
-extension AssignableActionManager: SubSendable {
+extension AssignableActionList: SubSendable {
     func makeSubSender() -> SubSender {
-        return AssignableSender(actionManager: self)
+        return AssignableSender(actionList: self)
     }
 }
 
@@ -74,16 +74,16 @@ final class AssignableSender: SubSender {
     typealias CopiableReceiver = View & Copiable
     typealias NewableReceiver = View & Newable
     
-    typealias ActionManager = AssignableActionManager
-    var actionManager: ActionManager
+    typealias ActionList = AssignableActionList
+    var actionList: ActionList
     
-    init(actionManager: ActionManager) {
-        self.actionManager = actionManager
+    init(actionList: ActionList) {
+        self.actionList = actionList
     }
     
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
-        case actionManager.resetAction:
+        case actionList.resetAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? Receiver {
@@ -92,10 +92,11 @@ final class AssignableSender: SubSender {
                 sender.stopEditableEvents()
                 receiver.reset(for: p, sender.indicatedVersionView.version)
             }
-        case actionManager.cutAction:
+        case actionList.cutAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
-                let receiver = sender.mainIndicatedView as? CollectionReceiver,
+                let receiver = sender.mainIndicatedView
+                    .withSelfAndAllParents(with: CollectionReceiver.self),
                 let viewer = receiver.withSelfAndAllParents(with: CopiedObjectViewer.self) {
                 
                 let p = receiver.convertFromRoot(eventValue.rootLocation)
@@ -106,7 +107,7 @@ final class AssignableSender: SubSender {
                     viewer.push(copiedObjects, to: sender.indicatedVersionView.version)
                 }
             }
-        case actionManager.copyAction:
+        case actionList.copyAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? CopiableReceiver,
@@ -119,7 +120,7 @@ final class AssignableSender: SubSender {
                     viewer.push(copiedObjects, to: sender.indicatedVersionView.version)
                 }
             }
-        case actionManager.pasteAction:
+        case actionList.pasteAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? Receiver,
@@ -129,7 +130,7 @@ final class AssignableSender: SubSender {
                 sender.stopEditableEvents()
                 receiver.paste(viewer.copiedObjects, for: p, sender.indicatedVersionView.version)
             }
-        case actionManager.addAction:
+        case actionList.addAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? CollectionReceiver,
@@ -139,7 +140,7 @@ final class AssignableSender: SubSender {
                 sender.stopEditableEvents()
                 receiver.add(viewer.copiedObjects, for: p, sender.indicatedVersionView.version)
             }
-        case actionManager.newAction:
+        case actionList.newAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? NewableReceiver {

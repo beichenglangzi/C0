@@ -203,10 +203,22 @@ final class ImageView<T: BinderProtocol>: ModelView, BindableReceiver {
         self.keyPath = keyPath
         
         super.init()
+        self.image = model
         self.frame = frame
     }
     
     func updateWithModel() {
         self.image = model
+    }
+    
+    var defaultMinSize = Size(width: 50, height: 50)
+    var defaultMaxSize = Size(width: 400, height: 400)
+    override var defaultBounds: Rect {
+        let size = model.size
+        return Rect(x: 0, y: 0,
+                    width: size.width.clip(min: defaultMinSize.width,
+                                           max: defaultMaxSize.width),
+                    height: size.height.clip(min: defaultMinSize.height,
+                                             max: defaultMaxSize.height))
     }
 }

@@ -51,7 +51,7 @@ final class GetterView<T: GetterOption, U: BinderProtocol>
     let optionStringView: TextFormView
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+         frame: Rect = Rect(), sizeType: SizeType = .regular, isSizeToFit: Bool = true) {
         
         self.binder = binder
         self.keyPath = keyPath
@@ -60,11 +60,12 @@ final class GetterView<T: GetterOption, U: BinderProtocol>
         self.sizeType = sizeType
         optionStringView = TextFormView(text: option.displayText(with: binder[keyPath: keyPath]),
                                         font: Font.default(with: sizeType),
-                                        frameAlignment: .right, alignment: .right)
+                                        frameAlignment: .right, alignment: .right,
+                                        paddingSize: Size(width: 3, height: 1),
+                                        isSizeToFit: isSizeToFit)
         
         super.init()
-        noIndicatedLineColor = .getBorder
-        indicatedLineColor = .indicated
+        lineColor = .getBorder
         isClipped = true
         children = [optionStringView]
         self.frame = frame
@@ -74,16 +75,22 @@ final class GetterView<T: GetterOption, U: BinderProtocol>
         return Rect(origin: Point(), size: optionStringView.defaultBounds.size)
     }
     override func updateLayout() {
-        optionStringView.frame.origin
-            = Point(x: bounds.width - optionStringView.frame.width,
-                    y: bounds.height - optionStringView.frame.height)
+        if optionStringView.isSizeToFit {
+            optionStringView.frame.origin
+                = Point(x: bounds.width - optionStringView.frame.width,
+                        y: bounds.height - optionStringView.frame.height)
+        } else {
+            optionStringView.frame = bounds
+        }
     }
     func updateWithModel() {
         updateString()
     }
     private func updateString() {
         optionStringView.text = option.displayText(with: model)
-        bounds.size = optionStringView.bounds.size
+        if optionStringView.isSizeToFit {
+            bounds.size = optionStringView.bounds.size
+        }
     }
 }
 

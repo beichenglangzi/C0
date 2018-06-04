@@ -31,7 +31,10 @@ protocol ViewSelector: class {
     func deselect(from rect: Rect, _ phase: Phase)
 }
 
-protocol Indicatable {
+protocol IndicatableResponder {
+    var indicatedLineColor: Color? { get }
+}
+protocol Indicatable: IndicatableResponder {
     func indicate(at p: Point)
 }
 protocol Selectable {
@@ -41,7 +44,7 @@ protocol Selectable {
     func deselectAll()
 }
 
-struct SelectableActionManager: SubActionManagable {
+struct SelectableActionList: SubActionList {
     let indicateAction = Action(name: Text(english: "Indicate", japanese: "指し示す"),
                                 quasimode: Quasimode([.drag(.pointing)]))
     let selectAction = Action(name: Text(english: "Select", japanese: "選択"),
@@ -64,9 +67,9 @@ struct SelectableActionManager: SubActionManagable {
                 selectAllAction, deselectAllAction]
     }
 }
-extension SelectableActionManager: SubSendable {
+extension SelectableActionList: SubSendable {
     func makeSubSender() -> SubSender {
-        return SelectableSender(actionManager: self)
+        return SelectableSender(actionList: self)
     }
 }
 
@@ -74,18 +77,18 @@ final class SelectableSender: SubSender {
     typealias IndicatableReceiver = View & Indicatable
     typealias SelectableReceiver = View & Selectable
     
-    typealias ActionManager = SelectableActionManager
-    var actionManager: ActionManager
+    typealias ActionList = SelectableActionList
+    var actionList: ActionList
     
-    init(actionManager: ActionManager) {
-        self.actionManager = actionManager
+    init(actionList: ActionList) {
+        self.actionList = actionList
     }
     
     private var selector = Selector()
     
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
-        case actionManager.indicateAction:
+        case actionList.indicateAction:
             if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
                 sender.currentRootLocation = eventValue.rootLocation
                 sender.mainIndicatedView
@@ -95,16 +98,16 @@ final class SelectableSender: SubSender {
                     receiver.indicate(at: p)
                 }
             }
-        case actionManager.selectAction, actionManager.deselectAction:
+        case actionList.selectAction, actionList.deselectAction:
             if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
                 selector.send(eventValue, actionMap.phase, from: sender,
-                              isDeselect: actionMap.action == actionManager.deselectAction)
+                              isDeselect: actionMap.action == actionList.deselectAction)
             }
-        case actionManager.selectAllAction, actionManager.deselectAllAction:
+        case actionList.selectAllAction, actionList.deselectAllAction:
             guard actionMap.phase == .began else { break }
             if let receiver = sender.mainIndicatedView as? SelectableReceiver {
                 receiver.captureSelections(to: sender.indicatedVersionView.version)
-                if actionMap.action == actionManager.deselectAllAction {
+                if actionMap.action == actionList.deselectAllAction {
                     receiver.deselectAll()
                 } else {
                     receiver.selectAll()

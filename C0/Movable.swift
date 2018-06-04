@@ -52,14 +52,20 @@ protocol PointEditable: VertexMovable {
     func removeNearestPoint(for p: Point, _ version: Version)
 }
 protocol Movable: Layoutable {
+    var isInteger: Bool { get }
     func captureWillMoveObject(at p: Point, to version: Version)
     func makeViewMover() -> ViewMover
+}
+extension Movable {
+    var isInteger: Bool {
+        return false
+    }
 }
 protocol Transformable: Movable {
     func makeViewTransformer() -> ViewTransformer
 }
 
-struct MovableActionManager: SubActionManagable {
+struct MovableActionList: SubActionList {
     let removeEditPointAction = Action(name: Text(english: "Remove Edit Point",
                                                   japanese: "編集点を削除"),
                                        quasimode: Quasimode(modifier: [.input(.control)],
@@ -91,9 +97,9 @@ struct MovableActionManager: SubActionManagable {
                 moveAction, transformAction, warpAction]
     }
 }
-extension MovableActionManager: SubSendable {
+extension MovableActionList: SubSendable {
     func makeSubSender() -> SubSender {
-        return MovableSender(actionManager: self)
+        return MovableSender(actionList: self)
     }
 }
 
@@ -104,11 +110,11 @@ final class MovableSender: SubSender {
     typealias MovableReceiver = View & Layoutable
     typealias TransfomableReceiver = View & Transformable
     
-    typealias ActionManager = MovableActionManager
-    var actionManager: ActionManager
+    typealias ActionList = MovableActionList
+    var actionList: ActionList
     
-    init(actionManager: ActionManager) {
-        self.actionManager = actionManager
+    init(actionList: ActionList) {
+        self.actionList = actionList
     }
     
     private var fp = Point(), oldP = Point()
@@ -118,7 +124,7 @@ final class MovableSender: SubSender {
     
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
-        case actionManager.removeEditPointAction:
+        case actionList.removeEditPointAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? PointEditableReceiver {
@@ -127,7 +133,7 @@ final class MovableSender: SubSender {
                 let p = receiver.convertFromRoot(eventValue.rootLocation)
                 receiver.removeNearestPoint(for: p, sender.indicatedVersionView.version)
             }
-        case actionManager.insertEditPointAction:
+        case actionList.insertEditPointAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? PointEditableReceiver {
@@ -136,7 +142,7 @@ final class MovableSender: SubSender {
                 let p = receiver.convertFromRoot(eventValue.rootLocation)
                 receiver.insert(p, sender.indicatedVersionView.version)
             }
-        case actionManager.moveEditPointAction:
+        case actionList.moveEditPointAction:
             if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
                 if actionMap.phase == .began,
                     let receiver = sender.mainIndicatedView as? PointMovableReceiver {
@@ -153,7 +159,7 @@ final class MovableSender: SubSender {
                     self.viewPointMover = nil
                 }
             }
-        case actionManager.moveVertexAction:
+        case actionList.moveVertexAction:
             if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
                 if actionMap.phase == .began,
                     let receiver = sender.mainIndicatedView as? VertexMovableReceiver {
@@ -170,7 +176,7 @@ final class MovableSender: SubSender {
                     self.viewVertexMover = nil
                 }
             }
-        case actionManager.moveAction:
+        case actionList.moveAction:
             if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
                 if actionMap.phase == .began,
                     let receiver = sender.mainIndicatedView.withSelfAndAllParents(with: MovableReceiver.self) {
@@ -183,14 +189,14 @@ final class MovableSender: SubSender {
                 }
                 guard let viewMover = layoutableView else { return }
                 let p = viewMover.parent?.convertFromRoot(eventValue.rootLocation) ?? Point()
-                viewMover.frame.origin = oldP + p - fp
+                viewMover.frame.origin = (oldP + p - fp).rounded()
 //                viewMover.move(for: p, first: fp, pressure: eventValue.pressure,
 //                               time: eventValue.time, actionMap.phase)
                 if actionMap.phase == .ended {
                     self.layoutableView = nil
                 }
             }
-        case actionManager.transformAction, actionManager.warpAction:
+        case actionList.transformAction, actionList.warpAction:
             if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
                 if actionMap.phase == .began,
                     let receiver = sender.mainIndicatedView as? TransfomableReceiver {
@@ -201,7 +207,7 @@ final class MovableSender: SubSender {
                 }
                 guard let viewTransformer = viewTransformer else { return }
                 let p = viewTransformer.transformableView.convertFromRoot(eventValue.rootLocation)
-                if actionMap.action == actionManager.transformAction {
+                if actionMap.action == actionList.transformAction {
                     viewTransformer.transform(for: p, first: fp, pressure: eventValue.pressure,
                                               time: eventValue.time, actionMap.phase)
                 } else {
@@ -555,91 +561,64 @@ final class CanvasViewTransformer<Binder: BinderProtocol>: ViewTransformer, View
     }
 }
 
-
-extension ImageView: Movable {
-    var z: Real {
-        get {
-            return 1
-        }
-        set {
-            
-        }
-    }
-    
-    func captureWillMoveObject(at p: Point, to version: Version) {}
-    
-    func makeViewMover() -> ViewMover {
-        return ImageViewMover(imageView: self)
-    }
-    
-}
-final class ImageViewMover<Binder: BinderProtocol>: ViewMover {
-    var movableView: View & Movable {
-        return imageView
-    }
-    var imageView: ImageView<Binder>
-    
-    init(imageView: ImageView<Binder>) {
-        self.imageView = imageView
-    }
-    
-    private enum DragType {
-        case move, resizeMinXMinY, resizeMaxXMinY, resizeMinXMaxY, resizeMaxXMaxY
-    }
-    private var dragType = DragType.move, downPosition = Point(), oldFrame = Rect()
-    private var resizeWidth = 10.0.cg, ratio = 1.0.cg
-    
-    func move(for point: Point, first fp: Point, pressure: Real,
-              time: Second, _ phase: Phase) {
-        guard let parent = imageView.parent else { return }
-        let p = parent.convert(point, from: imageView), ip = point
-        switch phase {
-        case .began:
-            if Rect(x: 0, y: 0, width: resizeWidth, height: resizeWidth).contains(ip) {
-                dragType = .resizeMinXMinY
-            } else if Rect(x: imageView.bounds.width - resizeWidth, y: 0,
-                           width: resizeWidth, height: resizeWidth).contains(ip) {
-                dragType = .resizeMaxXMinY
-            } else if Rect(x: 0, y: imageView.bounds.height - resizeWidth,
-                           width: resizeWidth, height: resizeWidth).contains(ip) {
-                dragType = .resizeMinXMaxY
-            } else if Rect(x: imageView.bounds.width - resizeWidth,
-                           y: imageView.bounds.height - resizeWidth,
-                           width: resizeWidth, height: resizeWidth).contains(ip) {
-                dragType = .resizeMaxXMaxY
-            } else {
-                dragType = .move
-            }
-            downPosition = p
-            oldFrame = imageView.frame
-            ratio = imageView.frame.height / imageView.frame.width
-        case .changed, .ended:
-            let dp =  p - downPosition
-            var frame = imageView.frame
-            switch dragType {
-            case .move:
-                frame.origin = Point(x: oldFrame.origin.x + dp.x, y: oldFrame.origin.y + dp.y)
-            case .resizeMinXMinY:
-                frame.origin.x = oldFrame.origin.x + dp.x
-                frame.origin.y = oldFrame.origin.y + dp.y
-                frame.size.width = oldFrame.width - dp.x
-                frame.size.height = frame.size.width * ratio
-            case .resizeMaxXMinY:
-                frame.origin.y = oldFrame.origin.y + dp.y
-                frame.size.width = oldFrame.width + dp.x
-                frame.size.height = frame.size.width * ratio
-            case .resizeMinXMaxY:
-                frame.origin.x = oldFrame.origin.x + dp.x
-                frame.size.width = oldFrame.width - dp.x
-                frame.size.height = frame.size.width * ratio
-            case .resizeMaxXMaxY:
-                frame.size.width = oldFrame.width + dp.x
-                frame.size.height = frame.size.width * ratio
-            }
-            imageView.frame = phase == .ended ? frame.integral : frame
-        }
-    }
-}
+//final class ImageViewMover<Binder: BinderProtocol>: ViewMover {
+//    private enum DragType {
+//        case move, resizeMinXMinY, resizeMaxXMinY, resizeMinXMaxY, resizeMaxXMaxY
+//    }
+//    private var dragType = DragType.move, downPosition = Point(), oldFrame = Rect()
+//    private var resizeWidth = 10.0.cg, ratio = 1.0.cg
+//
+//    func move(for point: Point, first fp: Point, pressure: Real,
+//              time: Second, _ phase: Phase) {
+//        guard let parent = imageView.parent else { return }
+//        let p = parent.convert(point, from: imageView), ip = point
+//        switch phase {
+//        case .began:
+//            if Rect(x: 0, y: 0, width: resizeWidth, height: resizeWidth).contains(ip) {
+//                dragType = .resizeMinXMinY
+//            } else if Rect(x: imageView.bounds.width - resizeWidth, y: 0,
+//                           width: resizeWidth, height: resizeWidth).contains(ip) {
+//                dragType = .resizeMaxXMinY
+//            } else if Rect(x: 0, y: imageView.bounds.height - resizeWidth,
+//                           width: resizeWidth, height: resizeWidth).contains(ip) {
+//                dragType = .resizeMinXMaxY
+//            } else if Rect(x: imageView.bounds.width - resizeWidth,
+//                           y: imageView.bounds.height - resizeWidth,
+//                           width: resizeWidth, height: resizeWidth).contains(ip) {
+//                dragType = .resizeMaxXMaxY
+//            } else {
+//                dragType = .move
+//            }
+//            downPosition = p
+//            oldFrame = imageView.frame
+//            ratio = imageView.frame.height / imageView.frame.width
+//        case .changed, .ended:
+//            let dp =  p - downPosition
+//            var frame = imageView.frame
+//            switch dragType {
+//            case .move:
+//                frame.origin = Point(x: oldFrame.origin.x + dp.x, y: oldFrame.origin.y + dp.y)
+//            case .resizeMinXMinY:
+//                frame.origin.x = oldFrame.origin.x + dp.x
+//                frame.origin.y = oldFrame.origin.y + dp.y
+//                frame.size.width = oldFrame.width - dp.x
+//                frame.size.height = frame.size.width * ratio
+//            case .resizeMaxXMinY:
+//                frame.origin.y = oldFrame.origin.y + dp.y
+//                frame.size.width = oldFrame.width + dp.x
+//                frame.size.height = frame.size.width * ratio
+//            case .resizeMinXMaxY:
+//                frame.origin.x = oldFrame.origin.x + dp.x
+//                frame.size.width = oldFrame.width - dp.x
+//                frame.size.height = frame.size.width * ratio
+//            case .resizeMaxXMaxY:
+//                frame.size.width = oldFrame.width + dp.x
+//                frame.size.height = frame.size.width * ratio
+//            }
+//            imageView.frame = phase == .ended ? frame.integral : frame
+//        }
+//    }
+//}
 
 final class CanvasViewPointMover<Binder: BinderProtocol>: ViewPointMover, ViewVertexMover {
     var canvasView: CanvasView<Binder>

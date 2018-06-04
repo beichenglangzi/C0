@@ -46,11 +46,11 @@ struct Line: Codable {
                              Control(point: bezier.cp, pressure: cpPressure),
                              Control(point: bezier.p1, pressure: p1Pressure)])
     }
-    init(controls: [Control]) {
+    init(controls: [Control] = []) {
         self.controls = controls
         imageBounds = Line.imageBounds(with: controls)
-        firstAngle = controls[0].point.tangential(controls[1].point)
-        lastAngle = controls[controls.count - 2].point
+        firstAngle = controls.isEmpty ? 0 : controls[0].point.tangential(controls[1].point)
+        lastAngle = controls.isEmpty ? 0 : controls[controls.count - 2].point
             .tangential(controls[controls.count - 1].point)
     }
 }

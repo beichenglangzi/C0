@@ -32,13 +32,21 @@ extension Bool: AnyInitializable {
             } else {
                 return nil
             }
+        case let valueChain as ValueChain:
+            if let value = Bool(anyValue: valueChain.rootChainValue) {
+                self = value
+            } else {
+                return nil
+            }
         default: return nil
         }
     }
 }
 extension Bool: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return (self ? "true" : "false").thumbnailView(withFrame: frame, sizeType)
+        let boolInfo = BoolOption.Info()
+        let text = self ? boolInfo.trueName : boolInfo.falseName
+        return text.thumbnailView(withFrame: frame, sizeType)
     }
 }
 extension Bool: AbstractViewable {

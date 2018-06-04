@@ -19,26 +19,26 @@
 
 struct Desktop {
     var copiedObjects = [Object(false)]
-    var isHiddenActionManager = false
-    let actionManager = ActionManager()
+    var isHiddenActionList = false
+    let actionList = ActionList()
     var objects = [Layout<Object>]()
     var version = Version()
 }
 extension Desktop: Codable {
     private enum CodingKeys: String, CodingKey {
-        case copiedObjects, isHiddenActionManager, objects, version
+        case copiedObjects, isHiddenActionList, objects, version
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         copiedObjects = try values.decode([Object].self, forKey: .copiedObjects)
-        isHiddenActionManager = try values.decode(Bool.self, forKey: .isHiddenActionManager)
+        isHiddenActionList = try values.decode(Bool.self, forKey: .isHiddenActionList)
         objects = try values.decode([Layout<Object>].self, forKey: .objects)
         version = try values.decode(Version.self, forKey: .version)
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(copiedObjects, forKey: .copiedObjects)
-        try container.encode(isHiddenActionManager, forKey: .isHiddenActionManager)
+        try container.encode(isHiddenActionList, forKey: .isHiddenActionList)
         try container.encode(objects, forKey: .objects)
         try container.encode(version, forKey: .version)
     }
@@ -47,8 +47,8 @@ extension Desktop: Referenceable {
     static let name = Text(english: "Desktop", japanese: "デスクトップ")
 }
 extension Desktop {
-    static let isHiddenActionManagerOption = BoolOption(defaultModel: false, cationModel: nil,
-                                                        name: ActionManager.name,
+    static let isHiddenActionListOption = BoolOption(defaultModel: false, cationModel: nil,
+                                                        name: ActionList.name,
                                                         info: .hidden)
     static let copiedObjectsInferenceName = Text(english: "Copied", japanese: "コピー済み")
 }
@@ -139,9 +139,9 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     let versionView: VersionView<Binder>
     let copiedObjectsNameView = TextFormView(text: Desktop.copiedObjectsInferenceName + ":")
     let copiedObjectsView: ArrayView<Object, Binder>
-    let isHiddenActionManagerView: BoolView<Binder>
+    let isHiddenActionListView: BoolView<Binder>
     let objectsView: ArrayView<Layout<Object>, Binder>
-    let actionManagerView: ActionManagerFormView
+    let actionListView: ActionListFormView
 
     var versionWidth = 150.0.cg
     var topViewsHeight = Layouter.basicHeight {
@@ -154,9 +154,9 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         self.binder = binder
         self.keyPath = keyPath
         
-        let ihamKeyPath = keyPath.appending(path: \Model.isHiddenActionManager)
-        isHiddenActionManagerView = BoolView(binder: binder, keyPath: ihamKeyPath,
-                                             option: Model.isHiddenActionManagerOption,
+        let ihamKeyPath = keyPath.appending(path: \Model.isHiddenActionList)
+        isHiddenActionListView = BoolView(binder: binder, keyPath: ihamKeyPath,
+                                             option: Model.isHiddenActionListOption,
                                              sizeType: sizeType)
         
         versionView = VersionView(binder: binder,
@@ -168,18 +168,18 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         objectsView = ArrayView(binder: binder,
                                 keyPath: keyPath.appending(path: \Model.objects),
                                 sizeType: sizeType, abstractType: .normal)
-        actionManagerView = ActionManagerFormView()
-        actionManagerView.isHidden = binder[keyPath: keyPath].isHiddenActionManager
+        actionListView = ActionListFormView()
+        actionListView.isHidden = binder[keyPath: keyPath].isHiddenActionList
         super.init()
         fillColor = .background
         
         children = [versionView, copiedObjectsNameView,
-                    isHiddenActionManagerView, actionManagerView]
+                    isHiddenActionListView, actionListView]
         children = [versionView, copiedObjectsNameView, copiedObjectsView,
-                    isHiddenActionManagerView, actionManagerView, objectsView]
+                    isHiddenActionListView, actionListView, objectsView]
         
-        isHiddenActionManagerView.notifications.append({ [unowned self] _, _ in
-            self.actionManagerView.isHidden = self.model.isHiddenActionManager
+        isHiddenActionListView.notifications.append({ [unowned self] _, _ in
+            self.actionListView.isHidden = self.model.isHiddenActionList
             self.updateLayout()
         })
     }
@@ -193,25 +193,25 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     override func updateLayout() {
         let padding = Layouter.basicPadding
-        let ihamvw = isHiddenActionManagerView.defaultBounds.width
+        let ihamvw = isHiddenActionListView.defaultBounds.width
         let headerY = bounds.height - topViewsHeight - padding
         versionView.frame = Rect(x: padding, y: headerY,
                                  width: versionWidth, height: topViewsHeight)
         copiedObjectsNameView.frame.origin = Point(x: versionView.frame.maxX + padding,
                                                    y: headerY + padding)
         let conw = copiedObjectsNameView.frame.width
-        let actionWidth = actionManagerView.width
+        let actionWidth = actionListView.width
         let cw = max(bounds.width - versionWidth - ihamvw - conw - padding * 3,
                      0)
         copiedObjectsView.frame = Rect(x: copiedObjectsNameView.frame.maxX, y: headerY,
                                        width: cw, height: topViewsHeight)
         updateCopiedObjectViewPositions()
-        isHiddenActionManagerView.frame = Rect(x: 100, y: headerY,
+        isHiddenActionListView.frame = Rect(x: 100, y: headerY,
                                                width: ihamvw, height: topViewsHeight)
-        isHiddenActionManagerView.frame = Rect(x: copiedObjectsView.frame.maxX, y: headerY,
+        isHiddenActionListView.frame = Rect(x: copiedObjectsView.frame.maxX, y: headerY,
                                                width: ihamvw, height: topViewsHeight)
         
-        if model.isHiddenActionManager {
+        if model.isHiddenActionList {
             objectsView.frame = Rect(x: padding,
                                      y: padding,
                                      width: bounds.width - padding * 2,
@@ -224,7 +224,7 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
                                      y: padding,
                                      width: ow,
                                      height: bounds.height - topViewsHeight - padding * 2)
-            actionManagerView.frame = Rect(x: padding + ow,
+            actionListView.frame = Rect(x: padding + ow,
                                            y: padding,
                                            width: actionWidth,
                                            height: h)
@@ -233,12 +233,12 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
                                           y: -(objectsView.frame.height / 2).rounded())
     }
     func updateWithModel() {
-        isHiddenActionManagerView.updateWithModel()
+        isHiddenActionListView.updateWithModel()
         copiedObjectsView.updateWithModel()
         objectsView.updateWithModel()
         versionView.updateWithModel()
-        if actionManagerView.isHidden != model.isHiddenActionManager {
-            actionManagerView.isHidden = model.isHiddenActionManager
+        if actionListView.isHidden != model.isHiddenActionList {
+            actionListView.isHidden = model.isHiddenActionList
             updateLayout()
         }
     }

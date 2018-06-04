@@ -46,13 +46,13 @@ protocol Bindable {
     func bind(for p: Point, _ verison: Version)
 }
 
-struct ZoomableActionManager: SubActionManagable {
-    let scrollAction = Action(name: Text(english: "Scroll", japanese: "スクロール"),
-                              quasimode: Quasimode([.scroll(.scroll)]),
-                              isEditable: false)
+struct ZoomableActionList: SubActionList {
     let zoomAction = Action(name: Text(english: "Zoom", japanese: "ズーム"),
                             quasimode: Quasimode([.pinch(.pinch)]),
                             isEditable: false)
+    let scrollAction = Action(name: Text(english: "Scroll", japanese: "スクロール"),
+                              quasimode: Quasimode([.scroll(.scroll)]),
+                              isEditable: false)
     let internalZoomAction = Action(name: Text(english: "Internal Zoom", japanese: "内部ズーム"),
                                     quasimode: Quasimode(modifier: [.input(.command)],
                                                          [.pinch(.pinch)]),
@@ -68,33 +68,33 @@ struct ZoomableActionManager: SubActionManagable {
                             quasimode: Quasimode([.input(.subClick)]),
                             isEditable: false)
     var actions: [Action] {
-        return [scrollAction, zoomAction, rotateAction, resetViewAction, bindAction]
+        return [zoomAction, scrollAction, rotateAction, resetViewAction, bindAction]
     }
 }
-extension ZoomableActionManager: SubSendable {
+extension ZoomableActionList: SubSendable {
     func makeSubSender() -> SubSender {
-        return ZoomableSender(actionManager: self)
+        return ZoomableSender(actionList: self)
     }
 }
 
 final class ZoomableSender: SubSender {
-    typealias ActionManager = ZoomableActionManager
+    typealias ActionList = ZoomableActionList
     
     typealias ScrollableReceiver = View & Scrollable
     typealias ZoomableReceiver = View & Zoomable
     typealias BindableReceiver = View & Bindable
     
-    var actionManager: ActionManager
+    var actionList: ActionList
     
-    init(actionManager: ActionManager) {
-        self.actionManager = actionManager
+    init(actionList: ActionList) {
+        self.actionList = actionList
     }
     
     private var viewScroller: ViewScroller?, viewZoomer: ViewZoomer?
     
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
-        case actionManager.scrollAction:
+        case actionList.scrollAction:
             if let eventValue = actionMap.eventValuesWith(ScrollEvent.self).first {
                 if actionMap.phase == .began,
                     let receiver = sender.mainIndicatedView as? ScrollableReceiver {
@@ -112,7 +112,7 @@ final class ZoomableSender: SubSender {
                     self.viewScroller = nil
                 }
             }
-        case actionManager.zoomAction:
+        case actionList.zoomAction:
             if let eventValue = actionMap.eventValuesWith(PinchEvent.self).first {
                 if actionMap.phase == .began, let receiver = sender.indicatedZoomableView {
                     viewZoomer = receiver.makeViewZoomer()
@@ -126,7 +126,7 @@ final class ZoomableSender: SubSender {
                     self.viewZoomer = nil
                 }
             }
-        case actionManager.rotateAction:
+        case actionList.rotateAction:
             if let eventValue = actionMap.eventValuesWith(RotateEvent.self).first {
                 if actionMap.phase == .began, let receiver = sender.indicatedZoomableView {
                     viewZoomer = receiver.makeViewZoomer()
@@ -140,7 +140,7 @@ final class ZoomableSender: SubSender {
                     self.viewZoomer = nil
                 }
             }
-        case actionManager.resetViewAction:
+        case actionList.resetViewAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.indicatedZoomableView {
@@ -148,7 +148,7 @@ final class ZoomableSender: SubSender {
                 let p = receiver.convertFromRoot(eventValue.rootLocation)
                 receiver.resetView(for: p, sender.indicatedVersionView.version)
             }
-        case actionManager.bindAction:
+        case actionList.bindAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? BindableReceiver {

@@ -100,23 +100,13 @@ struct Font {
 
 enum TextAlignment {
     case left, center, right, natural, justified
-    fileprivate var ct: CTTextAlignment {
-        switch self {
-        case .left: return .left
-        case .center: return .center
-        case .right: return .right
-        case .natural: return .natural
-        case .justified: return .justified
-        }
-    }
 }
 
 extension NSAttributedStringKey {
     static let ctFont = NSAttributedStringKey(rawValue: String(kCTFontAttributeName))
     static let ctForegroundColor
         = NSAttributedStringKey(rawValue: String(kCTForegroundColorAttributeName))
-    static let ctParagraphStyle
-        = NSAttributedStringKey(rawValue: String(kCTParagraphStyleAttributeName))
+    static let ctAlignment = NSAttributedStringKey(rawValue: "ctAlignment")
     static let ctForegroundColorFromContext
         = NSAttributedStringKey(rawValue: String(kCTForegroundColorFromContextAttributeName))
     static let ctBorder = NSAttributedStringKey(rawValue: "ctBorder")
@@ -124,20 +114,15 @@ extension NSAttributedStringKey {
 extension NSAttributedString {
     static func attributesWith(font: Font, color: Color, border: TextBorder?,
                                alignment: TextAlignment = .natural) -> [NSAttributedStringKey: Any] {
-        var alignment = alignment.ct
-        let settings = [CTParagraphStyleSetting(spec: .alignment,
-                                                valueSize: MemoryLayout<CTTextAlignment>.size,
-                                                value: &alignment)]
-        let style = CTParagraphStyleCreate(settings, settings.count)
         if let border = border {
             return [.ctFont: font.ctFont,
                     .ctForegroundColor: color.cg,
                     .ctBorder: border,
-                    .ctParagraphStyle: style]
+                    .ctAlignment: alignment]
         } else {
             return [.ctFont: font.ctFont,
                     .ctForegroundColor: color.cg,
-                    .ctParagraphStyle: style]
+                    .ctAlignment: alignment]
         }
     }
 }
@@ -228,11 +213,12 @@ struct TextFrame {
         }
     }
     
-    func bounds(padding: Real) -> Rect {
-        let w = frameWidth ?? ceil(typographicBounds.width)
+    var minWidth = 5.0.cg, maxWidth = 800.0.cg
+    func bounds(paddingSize: Size) -> Rect {
+        let w = min(frameWidth ?? ceil(typographicBounds.width), maxWidth)
         return Rect(x: 0, y: 0,
-                    width: max(w + padding * 2, 5),
-                    height: ceil(height + baselineDelta) + padding * 2)
+                    width: max(w + paddingSize.width * 2, minWidth),
+                    height: ceil(height + baselineDelta) + paddingSize.height * 2)
     }
     
     var lines = [TextLine]() {
@@ -242,25 +228,41 @@ struct TextFrame {
     }
     private static func lineWith(attributedString: NSAttributedString,
                                  frameWidth: Real?) -> [TextLine] {
-        let width = Double(frameWidth ?? Real.infinity)
+        let width = frameWidth ?? Real.infinity
         let typesetter = CTTypesetterCreateWithAttributedString(attributedString)
         let length = attributedString.length
-        var range = CFRange(), h = 0.0.cg
-        var ls = [(ctLine: CTLine, ascent: Real, descent: Real, leading: Real)]()
+        var range = CFRange(), h = 0.0.cg, maxWidth = 0.0.cg
+        var ls = [(ctLine: CTLine, ascent: Real, descent: Real, leading: Real, width: Real)]()
         while range.maxLocation < length {
-            range.length = CTTypesetterSuggestLineBreak(typesetter, range.location, width)
+            range.length = CTTypesetterSuggestLineBreak(typesetter, range.location, Double(width))
             let ctLine = CTTypesetterCreateLine(typesetter, range)
             var ascent = 0.0.cg, descent = 0.0.cg, leading =  0.0.cg
-            _ = CTLineGetTypographicBounds(ctLine, &ascent, &descent, &leading)
-            ls.append((ctLine, ascent, descent, leading))
+            let lineWidth = CTLineGetTypographicBounds(ctLine, &ascent, &descent, &leading).cg
+            maxWidth = max(lineWidth, maxWidth)
+            ls.append((ctLine, ascent, descent, leading, lineWidth))
             range = CFRange(location: range.maxLocation, length: 0)
             h += ascent + descent + leading
         }
+        maxWidth = maxWidth.rounded(.up)
         var origin = Point()
         return ls.reversed().map {
             origin.y += $0.descent + $0.leading
             let runs = $0.ctLine.runs.map { TextRun(ctRun: $0) }
-            let result = TextLine(ctLine: $0.ctLine, origin: origin, runs: runs)
+            var lineOrigin = origin
+            if let run = runs.first {
+                if let attributes = CTRunGetAttributes(run.ctRun) as? [NSAttributedStringKey: Any],
+                    let textAlignment = attributes[.ctAlignment] as? TextAlignment {
+                    
+                    if textAlignment == .right {
+                        if frameWidth == nil {
+                            lineOrigin.x += maxWidth - $0.width
+                        } else {
+                            lineOrigin.x += width - $0.width
+                        }
+                    }
+                }
+            }
+            let result = TextLine(ctLine: $0.ctLine, origin: lineOrigin, runs: runs)
             origin.y += $0.ascent
             return result
         }.reversed()

@@ -21,32 +21,32 @@ protocol Runnable {
     func run(for p: Point, _ version: Version)
 }
 
-struct RunnableActionManager: SubActionManagable {
+struct RunnableActionList: SubActionList {
     let runAction = Action(name: Text(english: "Run", japanese: "実行"),
                            quasimode: Quasimode([.input(.click)]))
     var actions: [Action] {
         return [runAction]
     }
 }
-extension RunnableActionManager: SubSendable {
+extension RunnableActionList: SubSendable {
     func makeSubSender() -> SubSender {
-        return RunnableSender(actionManager: self)
+        return RunnableSender(actionList: self)
     }
 }
 
 final class RunnableSender: SubSender {
     typealias Receiver = View & Runnable
     
-    typealias ActionManager = RunnableActionManager
-    var actionManager: ActionManager
+    typealias ActionList = RunnableActionList
+    var actionList: ActionList
     
-    init(actionManager: ActionManager) {
-        self.actionManager = actionManager
+    init(actionList: ActionList) {
+        self.actionList = actionList
     }
     
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
-        case actionManager.runAction:
+        case actionList.runAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
                 let receiver = sender.mainIndicatedView as? Receiver {

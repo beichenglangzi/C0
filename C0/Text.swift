@@ -157,7 +157,7 @@ final class TextFormView: View, TextViewProtocol {
             if isSizeToFit { sizeToFit() }
         }
     }
-    var padding: Real {
+    var paddingSize: Size {
         didSet { updateLayout() }
     }
     private var textFrame: TextFrame {
@@ -168,29 +168,30 @@ final class TextFormView: View, TextViewProtocol {
                      font: Font = .default, color: Color = .locked,
                      lineColor: Color? = nil, lineWidth: Real = 0,
                      frameAlignment: TextAlignment = .left, alignment: TextAlignment = .natural,
-                     frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
+                     frame: Rect = Rect(), paddingSize: Size = Size(square: 1),
+                     isSizeToFit: Bool = true) {
         
         let textMaterial = TextMaterial(font: font, color: color,
                                         lineColor: lineColor, lineWidth: lineWidth,
                                         frameAlignment: frameAlignment, alignment: alignment)
         self.init(text: text, textMaterial: textMaterial,
-                  frame: frame, padding: padding, isSizeToFit: isSizeToFit)
+                  frame: frame, paddingSize: paddingSize, isSizeToFit: isSizeToFit)
     }
     init(text: Text = "", textMaterial: TextMaterial = TextMaterial(),
-         frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
+         frame: Rect = Rect(), paddingSize: Size = Size(square: 1), isSizeToFit: Bool = true) {
         
         self.text = text
         self.textMaterial = textMaterial
         self.isSizeToFit = isSizeToFit
-        self.padding = padding
-        let textFrameWidth = TextFormView.textFrameWidthWith(frame: frame, padding: padding,
+        self.paddingSize = paddingSize
+        let textFrameWidth = TextFormView.textFrameWidthWith(frame: frame,
+                                                             paddingWidth: paddingSize.width,
                                                              isSizeToFit: isSizeToFit)
         textFrame = TextFrame(string: text.currentString, textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
         
         super.init(drawClosure: { $1.draw(in: $0) }, isLocked: true)
-        noIndicatedLineColor = nil
-        indicatedLineColor = .noBorderIndicated
+        lineColor = nil
         
         if isSizeToFit {
             sizeToFit()
@@ -200,7 +201,7 @@ final class TextFormView: View, TextViewProtocol {
     }
     
     override var defaultBounds: Rect {
-        return textFrame.bounds(padding: padding)
+        return textFrame.bounds(paddingSize: paddingSize)
     }
     override func updateLayout() {
         if !isSizeToFit {
@@ -220,15 +221,18 @@ final class TextFormView: View, TextViewProtocol {
     }
     
     var textFrameWidth: Real? {
-        return TextFormView.textFrameWidthWith(frame: frame, padding: padding,
+        return TextFormView.textFrameWidthWith(frame: frame,
+                                               paddingWidth: paddingSize.width,
                                                isSizeToFit: isSizeToFit)
     }
-    private static func textFrameWidthWith(frame: Rect, padding: Real, isSizeToFit: Bool) -> Real? {
-        return isSizeToFit ? nil : frame.width - padding * 2
+    private static func textFrameWidthWith(frame: Rect,
+                                           paddingWidth: Real, isSizeToFit: Bool) -> Real? {
+        return isSizeToFit ? nil : frame.width - paddingWidth * 2
     }
     
     override func draw(in ctx: CGContext) {
-        textFrame.draw(in: bounds.inset(by: padding), in: ctx)
+        textFrame.draw(in: bounds.insetBy(dx: paddingSize.width, dy: paddingSize.height),
+                       in: ctx)
     }
 }
 
@@ -253,7 +257,7 @@ final class TextGetterView<T: BinderProtocol>: ModelView, TextViewProtocol, Bind
             if isSizeToFit { sizeToFit() }
         }
     }
-    var padding: Real {
+    var paddingSize: Size {
         didSet { updateLayout() }
     }
     private var textFrame: TextFrame {
@@ -261,32 +265,30 @@ final class TextGetterView<T: BinderProtocol>: ModelView, TextViewProtocol, Bind
     }
     
     init(binder: Binder, keyPath: BinderKeyPath, textMaterial: TextMaterial = TextMaterial(),
-         frame: Rect = Rect(), padding: Real = 1, isSizeToFit: Bool = true) {
+         frame: Rect = Rect(), paddingSize: Size = Size(square: 1), isSizeToFit: Bool = true) {
         
         self.binder = binder
         self.keyPath = keyPath
         
         self.isSizeToFit = isSizeToFit
-        self.padding = padding
+        self.paddingSize = paddingSize
         self.textMaterial = textMaterial
         
-        let textFrameWidth = TextGetterView.textFrameWidthWith(frame: frame, padding: padding,
+        let textFrameWidth = TextGetterView.textFrameWidthWith(frame: frame,
+                                                               paddingWidth: paddingSize.width,
                                                                isSizeToFit: isSizeToFit)
         textFrame = TextFrame(string: binder[keyPath: keyPath].currentString,
                               textMaterial: textMaterial,
                               frameWidth: textFrameWidth)
         
         super.init(drawClosure: { $1.draw(in: $0) }, isLocked: false)
-        
-        noIndicatedLineColor = .getBorder
-        indicatedLineColor = .indicated
-        
+        lineColor = .getBorder
         self.frame = frame
         if isSizeToFit { sizeToFit() }
     }
     
     override var defaultBounds: Rect {
-        return textFrame.bounds(padding: padding)
+        return textFrame.bounds(paddingSize: paddingSize)
     }
     override func updateLayout() {
         if !isSizeToFit {
@@ -309,15 +311,17 @@ final class TextGetterView<T: BinderProtocol>: ModelView, TextViewProtocol, Bind
     }
     
     var textFrameWidth: Real? {
-        return TextGetterView.textFrameWidthWith(frame: frame, padding: padding,
+        return TextGetterView.textFrameWidthWith(frame: frame,
+                                                 paddingWidth: paddingSize.width,
                                                  isSizeToFit: isSizeToFit)
     }
-    private static func textFrameWidthWith(frame: Rect, padding: Real,
+    private static func textFrameWidthWith(frame: Rect, paddingWidth: Real,
                                            isSizeToFit: Bool) -> Real? {
-        return isSizeToFit ? nil : frame.width - padding * 2
+        return isSizeToFit ? nil : frame.width - paddingWidth * 2
     }
     
     override func draw(in ctx: CGContext) {
-        textFrame.draw(in: bounds.inset(by: padding), in: ctx)
+        textFrame.draw(in: bounds.insetBy(dx: paddingSize.width, dy: paddingSize.height),
+                       in: ctx)
     }
 }

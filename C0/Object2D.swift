@@ -123,15 +123,15 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
         
         self.sizeType = sizeType
         boundsPadding = Layouter.padding(with: sizeType)
-        boundsView = View()
+        boundsView = View(isLocked: true)
         boundsView.lineColor = .formBorder
-        let font = Font.default(with: .small)
+        let font = Font.default(with: sizeType)
         xNameView = TextFormView(text: "x:", font: font)
         xView = Assignable1DView(binder: binder, keyPath: keyPath.appending(path: \Model.xModel),
-                                 option: option.xOption, sizeType: .small)
+                                 option: option.xOption, sizeType: sizeType)
         yNameView = TextFormView(text: "y:", font: font)
         yView = Assignable1DView(binder: binder, keyPath: keyPath.appending(path: \Model.yModel),
-                                 option: option.yOption, sizeType: .small)
+                                 option: option.yOption, sizeType: sizeType)
         
         super.init()
         boundsView.append(child: knobView)
@@ -141,33 +141,32 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
     
     override var defaultBounds: Rect {
         let padding = Layouter.padding(with: sizeType)
-        let valueFrame = Layouter.valueFrame(with: sizeType)
-        let xWidth = xNameView.frame.width + valueFrame.width
-        let yWidth = yNameView.frame.height + valueFrame.width
+        let width = Layouter.valueWidth(with: sizeType)
+        let height = Layouter.textHeight(with: sizeType)
+        let w = max(xNameView.frame.width, yNameView.frame.height)
+        let h = height * 2
         return Rect(x: 0,
                     y: 0,
-                    width: max(xWidth, yWidth) + padding * 2,
-                    height: valueFrame.height * 2 + padding * 2)
+                    width: w + width + h + padding * 2,
+                    height: h + padding * 2)
     }
     override func updateLayout() {
         let padding = Layouter.padding(with: sizeType)
-        let valueFrame = Layouter.valueFrame(with: sizeType)
-        var x = bounds.width - padding, y = bounds.height - padding
-        x -= valueFrame.width
-        y -= valueFrame.height
-        xView.frame.origin = Point(x: x, y: y)
-        x -= xNameView.frame.width
-        xNameView.frame.origin = Point(x: x, y: y + padding)
-        x = bounds.width - padding
-        x -= valueFrame.width
-        y -= valueFrame.height
-        yView.frame.origin = Point(x: x, y: y)
-        x -= yNameView.frame.width
-        yNameView.frame.origin = Point(x: x, y: y + padding)
-        boundsView.frame = Rect(x: padding,
+        let width = Layouter.valueWidth(with: sizeType)
+        let height = Layouter.textHeight(with: sizeType)
+        let w = max(xNameView.frame.width, yNameView.frame.height)
+        let h = height * 2
+        var y = bounds.height - padding
+        y -= height
+        xNameView.frame.origin = Point(x: w - xNameView.frame.width, y: y)
+        xView.frame = Rect(x: w, y: y, width: width, height: height)
+        y -= height
+        yNameView.frame.origin = Point(x: w - yNameView.frame.width, y: y)
+        yView.frame = Rect(x: w, y: y, width: width, height: height)
+        boundsView.frame = Rect(x: bounds.width - h - padding,
                                 y: padding,
-                                width: bounds.width - valueFrame.width - padding * 3,
-                                height: bounds.height - padding * 2)
+                                width: h,
+                                height: h)
         updateKnobLayout()
     }
     private func updateKnobLayout() {

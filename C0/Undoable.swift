@@ -20,7 +20,7 @@
 protocol Undoable {
     var version: Version { get }
 }
-struct UndoableActionManager: SubActionManagable {
+struct UndoableActionList: SubActionList {
     let undoAction = Action(name: Text(english: "Undo", japanese: "取り消す"),
                             quasimode: Quasimode(modifier: [.input(.command)],
                                                  [.input(.z)]))
@@ -32,29 +32,29 @@ struct UndoableActionManager: SubActionManagable {
         return [undoAction, redoAction]
     }
 }
-extension UndoableActionManager: SubSendable {
+extension UndoableActionList: SubSendable {
     func makeSubSender() -> SubSender {
-        return UndoableSender(actionManager: self)
+        return UndoableSender(actionList: self)
     }
 }
 
 final class UndoableSender: SubSender {
     typealias Receiver = View & Undoable
-    typealias ActionManager = UndoableActionManager
+    typealias ActionList = UndoableActionList
     
-    var actionManager: ActionManager
+    var actionList: ActionList
     
-    init(actionManager: ActionManager) {
-        self.actionManager = actionManager
+    init(actionList: ActionList) {
+        self.actionList = actionList
     }
     
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
-        case actionManager.undoAction:
+        case actionList.undoAction:
             guard actionMap.phase == .began else { break }
             sender.stopAllEvents()
             sender.indicatedVersionView.version.undo()
-        case actionManager.redoAction:
+        case actionList.redoAction:
             guard actionMap.phase == .began else { break }
             sender.stopAllEvents()
             sender.indicatedVersionView.version.redo()

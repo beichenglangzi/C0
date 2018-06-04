@@ -111,6 +111,7 @@ extension Color {
     static let background = Color(white: 0.94)
     static let getSetBorder = Color(white: 0.7)
     static let getBorder = Color(white: 0.8)
+    static let sendBorder = Color(white: 0.6)
     static let formBorder = Color(white: 0.84)
     static let bindingBorder = Color(red: 1.0, green: 0.0, blue: 1.0)
     static let content = Color(white: 0.35)
@@ -676,6 +677,9 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
         }
     }
     
+    override var defaultBounds: Rect {
+        return Rect(x: 0, y: 0, width: 100, height: 100)
+    }
     override func updateLayout() {
         guard !bounds.isEmpty else { return }
         let padding = Layouter.smallPadding

@@ -70,6 +70,32 @@ extension Size {
     static let effectiveFieldSizeOfView = Size(width: tan(.pi * (30.0 / 2) / 180),
                                                height: tan(.pi * (20.0 / 2) / 180))
     
+    func contains(_ other: Size) -> Bool {
+        return width >= other.width && height >= other.height
+    }
+    func intersects(_ other: Size) -> Bool {
+        return width >= other.width || height >= other.height
+    }
+}
+extension Size: AnyInitializable {
+    init?(anyValue: Any) {
+        switch anyValue {
+        case let value as Size: self = value
+        case let value as String:
+            if let value = Size(jsonString: value) {
+                self = value
+            } else {
+                return nil
+            }
+        case let valueChain as ValueChain:
+            if let value = Size(anyValue: valueChain.rootChainValue) {
+                self = value
+            } else {
+                return nil
+            }
+        default: return nil
+        }
+    }
 }
 extension Size: Referenceable {
     static let name = Text(english: "Size", japanese: "サイズ")
@@ -86,7 +112,9 @@ extension Size: AbstractViewable {
         switch type {
         case .normal:
             let valueOption = PointOption.XOption(defaultModel: 0,
-                                                  minModel: -.infinity, maxModel: .infinity)
+                                                  minModel: -.greatestFiniteMagnitude,
+                                                  maxModel: .greatestFiniteMagnitude,
+                                                  modelInterval: 0.1)
             return DiscreteSizeView(binder: binder, keyPath: keyPath,
                                     option: SizeOption(xOption: valueOption,
                                                        yOption: valueOption),
@@ -123,14 +151,6 @@ struct SizeOption: Object2DOption {
     
     var xOption: XOption
     var yOption: YOption
-    
-    func model(with object: Any) -> Model? {
-        switch object {
-        case let value as Model: return value
-        case let value as String: return Model(jsonString: value)
-        default: return nil
-        }
-    }
 }
 typealias SlidableSizeView<Binder: BinderProtocol> = Slidable2DView<SizeOption, Binder>
 typealias DiscreteSizeView<Binder: BinderProtocol> = Discrete2DView<SizeOption, Binder>

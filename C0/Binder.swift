@@ -60,7 +60,7 @@ protocol Modeler: class {
 }
 typealias ModelView = View & Modeler
 
-protocol BindableReceiver: Modeler, Assignable {
+protocol BindableReceiver: Modeler, Assignable, IndicatableResponder {
     associatedtype Model: Object.Value
     associatedtype Binder: BinderProtocol
     associatedtype Notification: NotificationProtocol
@@ -97,6 +97,11 @@ extension BindableReceiver {
     }
 }
 extension BindableReceiver {
+    var indicatedLineColor: Color? {
+        return .indicated
+    }
+}
+extension BindableReceiver {
     func clippedModel(_ model: Model) -> Model {
         return model
     }
@@ -116,7 +121,7 @@ extension BindableReceiver {
     }
 }
 
-protocol BindableGetterReceiver: Modeler, Copiable {
+protocol BindableGetterReceiver: Modeler, Copiable, IndicatableResponder {
     associatedtype Model: Object.Value
     associatedtype Binder: BinderProtocol
     var model: Model { get }
@@ -127,6 +132,11 @@ extension BindableGetterReceiver {
     typealias BinderKeyPath = KeyPath<Binder, Model>
     var model: Model {
         return binder[keyPath: keyPath]
+    }
+}
+extension BindableGetterReceiver {
+    var indicatedLineColor: Color? {
+        return .indicated
     }
 }
 extension BindableGetterReceiver {

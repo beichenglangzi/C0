@@ -229,7 +229,7 @@ struct SineWaveOption {
     var amplitudeOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 10000,
                                      modelInterval: 0.01, numberOfDigits: 2)
     var frequencyOption = RealOption(defaultModel: 8, minModel: 0.1, maxModel: 100000,
-                                     modelInterval: 0.1, numberOfDigits: 1, unit: "rpb")
+                                     modelInterval: 0.1, numberOfDigits: 1, unit: " rpb")
 }
 
 final class SineWaveView<T: BinderProtocol>: ModelView, BindableReceiver {
@@ -305,14 +305,17 @@ final class SineWaveView<T: BinderProtocol>: ModelView, BindableReceiver {
         return Rect(x: 0, y: 0, width: w, height: h)
     }
     override func updateLayout() {
-        var y = bounds.height - Layouter.basicPadding - classNameView.frame.height
-        classNameView.frame.origin = Point(x: Layouter.basicPadding, y: y)
-        y = bounds.height - Layouter.basicPadding - Layouter.basicHeight
+        let padding = Layouter.padding(with: sizeType), height = Layouter.height(with: sizeType)
+        var y = bounds.height - padding - classNameView.frame.height
+        classNameView.frame.origin = Point(x: padding, y: y)
+        y = bounds.height - padding - height
         _ = Layouter.leftAlignment([.view(classFrequencyNameView), .view(frequencyView)],
-                                 y: y, height: Layouter.basicHeight)
-        y -= Layouter.basicHeight
-        classFrequencyNameView.frame.origin.x
-            = frequencyView.frame.minX - classFrequencyNameView.frame.width
+                                   minX: classNameView.frame.maxX + padding,
+                                   y: y, height: height)
+        y -= height
+        _ = Layouter.leftAlignment([.view(classAmplitudeNameView), .view(amplitudeView)],
+                                   minX: classNameView.frame.maxX + padding,
+                                   y: y, height: height)
     }
     func updateWithModel() {
         amplitudeView.updateWithModel()

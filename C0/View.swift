@@ -30,36 +30,6 @@ struct Screen {
  Issue: リニアワークフロー、マクロ拡散光
  */
 class View {
-    static var selection: View {
-        let view = View(isLocked: true)
-        view.fillColor = .select
-        view.lineColor = .selectBorder
-        return view
-    }
-    static var deselection: View {
-        let view = View(isLocked: true)
-        view.fillColor = .deselect
-        view.lineColor = .deselectBorder
-        return view
-    }
-    static func knob(radius: Real = 5, lineWidth: Real = 1) -> View {
-        let view = View(isLocked: true)
-        view.fillColor = .knob
-        view.lineColor = .getSetBorder
-        view.lineWidth = lineWidth
-        view.radius = radius
-        return view
-    }
-    static func discreteKnob(_ size: Size = Size(width: 10, height: 10),
-                             lineWidth: Real = 1) -> View {
-        let view = View(isLocked: true)
-        view.fillColor = .knob
-        view.lineColor = .getSetBorder
-        view.lineWidth = lineWidth
-        view.frame.size = size
-        return view
-    }
-    
     fileprivate var caLayer: CALayer
     init() {
         caLayer = CALayer.interface()
@@ -71,7 +41,6 @@ class View {
         self.fillColor = fillColor
         self.frame = frame
     }
-    
     init(gradient: Gradient, isLocked: Bool = true) {
         self.isLocked = isLocked
         var actions = CALayer.disabledAnimationActions
@@ -88,28 +57,6 @@ class View {
         self.gradient = gradient
         View.update(with: gradient, in: caGradientLayer)
     }
-    var gradient: Gradient? {
-        didSet {
-            guard let gradient = gradient,
-                let caGradientLayer = caLayer as? CAGradientLayer else {
-                    fatalError()
-            }
-            View.update(with: gradient, in: caGradientLayer)
-        }
-    }
-    private static func update(with gradient: Gradient,
-                               in caGradientLayer: CAGradientLayer) {
-        if gradient.values.isEmpty {
-            caGradientLayer.colors = nil
-            caGradientLayer.locations = nil
-        } else {
-            caGradientLayer.colors = gradient.values.map { $0.color.cg }
-            caGradientLayer.locations = gradient.values.map { NSNumber(value: Double($0.location)) }
-        }
-        caGradientLayer.startPoint = gradient.startPoint
-        caGradientLayer.endPoint = gradient.endPoint
-    }
-    
     init(path: Path, isLocked: Bool = true) {
         self.isLocked = isLocked
         let caShapeLayer = CAShapeLayer()
@@ -124,21 +71,6 @@ class View {
         caShapeLayer.path = path.cg
         caLayer = caShapeLayer
     }
-    var path: Path? {
-        get {
-            guard let caShapeLayer = caLayer as? CAShapeLayer,
-                let path = caShapeLayer.path else {
-                    return nil
-            }
-            return Path(path)
-        }
-        set {
-            guard let caShapeLayer = caLayer as? CAShapeLayer else { fatalError() }
-            caShapeLayer.path = newValue?.cg
-            changed(frame)
-        }
-    }
-    
     init(drawClosure: ((CGContext, View) -> ())?,
          fillColor: Color? = .background, lineColor: Color? = .getSetBorder,
          isLocked: Bool = true) {
@@ -153,25 +85,6 @@ class View {
         caDrawLayer.borderColor = lineColor?.cg
         caDrawLayer.borderWidth = lineColor == nil ? 0 : lineWidth
         caDrawLayer.drawClosure = { [unowned self] ctx in self.drawClosure?(ctx, self) }
-    }
-    var drawClosure: ((CGContext, View) -> ())? {
-        didSet {
-            (caLayer as! C0DrawLayer).drawClosure = { [unowned self] ctx in
-                self.drawClosure?(ctx, self)
-            }
-        }
-    }
-    func displayLinkDraw() {
-        caLayer.setNeedsDisplay()
-    }
-    func displayLinkDraw(_ rect: Rect) {
-        caLayer.setNeedsDisplay(rect)
-    }
-    func draw(in ctx: CGContext) {
-        caLayer.draw(in: ctx)
-    }
-    func render(in ctx: CGContext) {
-        (caLayer as! C0DrawLayer).safetyRender(in: ctx)
     }
     
     private(set) weak var parent: View?
@@ -273,6 +186,32 @@ class View {
             updateLayout()
         }
     }
+    var radius: Real {
+        get { return min(bounds.width, bounds.height) / 2 }
+        set {
+            frame = Rect(x: position.x - newValue, y: position.y - newValue,
+                         width: newValue * 2, height: newValue * 2)
+            cornerRadius = newValue
+        }
+    }
+    var cornerRadius: Real {
+        get { return caLayer.cornerRadius }
+        set { caLayer.cornerRadius = newValue }
+    }
+    var path: Path? {
+        get {
+            guard let caShapeLayer = caLayer as? CAShapeLayer,
+                let path = caShapeLayer.path else {
+                    return nil
+            }
+            return Path(path)
+        }
+        set {
+            guard let caShapeLayer = caLayer as? CAShapeLayer else { fatalError() }
+            caShapeLayer.path = newValue?.cg
+            changed(frame)
+        }
+    }
     
     func updateLayout() {}
     
@@ -283,6 +222,70 @@ class View {
         if let parent = parent {
             parent.changed(convert(frame, to: parent))
         }
+    }
+    
+    var fillColor: Color? {
+        didSet {
+            guard fillColor != oldValue else { return }
+            set(fillColor: fillColor?.cg)
+        }
+    }
+    private func set(fillColor: CGColor?) {
+        if let caShapeLayer = caLayer as? CAShapeLayer {
+            caShapeLayer.fillColor = fillColor
+        } else {
+            caLayer.backgroundColor = fillColor
+        }
+    }
+    
+    var lineColor: Color? = .getSetBorder {
+        didSet {
+            guard lineColor != oldValue else { return }
+            set(lineWidth: lineColor != nil ? lineWidth : 0)
+            set(lineColor: lineColor?.cg)
+        }
+    }
+    private func set(lineColor: CGColor?) {
+        if let caShapeLayer = caLayer as? CAShapeLayer {
+            caShapeLayer.strokeColor = lineColor
+        } else {
+            caLayer.borderColor = lineColor
+        }
+    }
+    
+    var lineWidth = 0.5.cg {
+        didSet {
+            set(lineWidth: lineColor != nil ? lineWidth : 0)
+        }
+    }
+    private func set(lineWidth: Real) {
+        if let caShapeLayer = caLayer as? CAShapeLayer {
+            caShapeLayer.lineWidth = lineWidth
+        } else {
+            caLayer.borderWidth = lineWidth
+        }
+    }
+    
+    var gradient: Gradient? {
+        didSet {
+            guard let gradient = gradient,
+                let caGradientLayer = caLayer as? CAGradientLayer else {
+                    fatalError()
+            }
+            View.update(with: gradient, in: caGradientLayer)
+        }
+    }
+    private static func update(with gradient: Gradient,
+                               in caGradientLayer: CAGradientLayer) {
+        if gradient.values.isEmpty {
+            caGradientLayer.colors = nil
+            caGradientLayer.locations = nil
+        } else {
+            caGradientLayer.colors = gradient.values.map { $0.color.cg }
+            caGradientLayer.locations = gradient.values.map { NSNumber(value: Double($0.location)) }
+        }
+        caGradientLayer.startPoint = gradient.startPoint
+        caGradientLayer.endPoint = gradient.endPoint
     }
     
     var isHidden: Bool {
@@ -321,7 +324,10 @@ class View {
     
     var transform = Transform() {
         didSet {
-            
+            CATransaction.disableAnimation {
+                caLayer.transform
+                    = CATransform3DMakeAffineTransform(childrenTransform.affineTransform)
+            }
         }
     }
     var childrenTransform = Transform() {
@@ -335,18 +341,6 @@ class View {
         }
     }
     
-    var radius: Real {
-        get { return min(bounds.width, bounds.height) / 2 }
-        set {
-            frame = Rect(x: position.x - newValue, y: position.y - newValue,
-                         width: newValue * 2, height: newValue * 2)
-            cornerRadius = newValue
-        }
-    }
-    var cornerRadius: Real {
-        get { return caLayer.cornerRadius }
-        set { caLayer.cornerRadius = newValue }
-    }
     var isClipped: Bool {
         get { return caLayer.masksToBounds }
         set { caLayer.masksToBounds = newValue }
@@ -370,20 +364,6 @@ class View {
             }
         }
     }
-    
-    var fillColor: Color? {
-        didSet {
-            guard fillColor != oldValue else { return }
-            set(fillColor: fillColor?.cg)
-        }
-    }
-    private func set(fillColor: CGColor?) {
-        if let caShapeLayer = caLayer as? CAShapeLayer {
-            caShapeLayer.fillColor = fillColor
-        } else {
-            caLayer.backgroundColor = fillColor
-        }
-    }
     var contentsScale: Real {
         get { return caLayer.contentsScale }
         set {
@@ -391,32 +371,39 @@ class View {
             caLayer.contentsScale = newValue
         }
     }
-    
-    var lineColor: Color? = .getSetBorder {
+    var drawClosure: ((CGContext, View) -> ())? {
         didSet {
-            guard lineColor != oldValue else { return }
-            set(lineWidth: lineColor != nil ? lineWidth : 0)
-            set(lineColor: lineColor?.cg)
+            (caLayer as! C0DrawLayer).drawClosure = { [unowned self] ctx in
+                self.drawClosure?(ctx, self)
+            }
         }
     }
-    var lineWidth = 0.5.cg {
-        didSet {
-            set(lineWidth: lineColor != nil ? lineWidth : 0)
-        }
+    func displayLinkDraw() {
+        caLayer.setNeedsDisplay()
     }
-    private func set(lineColor: CGColor?) {
-        if let caShapeLayer = caLayer as? CAShapeLayer {
-            caShapeLayer.strokeColor = lineColor
-        } else {
-            caLayer.borderColor = lineColor
-        }
+    func displayLinkDraw(_ rect: Rect) {
+        caLayer.setNeedsDisplay(rect)
     }
-    private func set(lineWidth: Real) {
-        if let caShapeLayer = caLayer as? CAShapeLayer {
-            caShapeLayer.lineWidth = lineWidth
-        } else {
-            caLayer.borderWidth = lineWidth
+    func draw(in ctx: CGContext) {
+        caLayer.draw(in: ctx)
+    }
+    func render(in ctx: CGContext) {
+        (caLayer as! C0DrawLayer).safetyRender(in: ctx)
+    }
+    func renderImage(with size: Size) -> Image? {
+        guard let ctx = CGContext.bitmap(with: size, CGColorSpace.default) else {
+            return nil
         }
+        let scale = size.width / frame.size.width
+        let viewTransform = Transform(translation: Point(x: size.width / 2, y: size.height / 2),
+                                      scale: Point(x: scale, y: scale),
+                                      rotation: 0)
+        let drawView = View(drawClosure: { ctx, _ in
+            ctx.concatenate(viewTransform.affineTransform)
+            self.draw(in: ctx)
+        })
+        drawView.render(in: ctx)
+        return ctx.renderImage
     }
     
     var isLocked = false
@@ -511,39 +498,41 @@ class View {
     func convert(_ rect: Rect, to view: View) -> Rect {
         return Rect(origin: convert(rect.origin, to: view), size: rect.size)
     }
-    
-    var isIndicated = false {
-        didSet { updateLineColorWithIsIndicated() }
-    }
-    var noIndicatedLineColor: Color? = .getSetBorder {
-        didSet { updateLineColorWithIsIndicated() }
-    }
-    var indicatedLineColor: Color? = .indicated {
-        didSet { updateLineColorWithIsIndicated() }
-    }
-    private func updateLineColorWithIsIndicated() {
-        lineColor = isIndicated ? indicatedLineColor : noIndicatedLineColor
-    }
-    
-    func renderImage(with size: Size) -> Image? {
-        guard let ctx = CGContext.bitmap(with: size, CGColorSpace.default) else {
-            return nil
-        }
-        let scale = size.width / frame.size.width
-        let viewTransform = Transform(translation: Point(x: size.width / 2, y: size.height / 2),
-                                      scale: Point(x: scale, y: scale),
-                                      rotation: 0)
-        let drawView = View(drawClosure: { ctx, _ in
-            ctx.concatenate(viewTransform.affineTransform)
-            self.draw(in: ctx)
-        })
-        drawView.render(in: ctx)
-        return ctx.renderImage
-    }
 }
 extension View: Equatable {
     static func ==(lhs: View, rhs: View) -> Bool {
         return lhs === rhs
+    }
+}
+extension View {
+    static var selection: View {
+        let view = View(isLocked: true)
+        view.fillColor = .select
+        view.lineColor = .selectBorder
+        return view
+    }
+    static var deselection: View {
+        let view = View(isLocked: true)
+        view.fillColor = .deselect
+        view.lineColor = .deselectBorder
+        return view
+    }
+    static func knob(radius: Real = 5, lineWidth: Real = 1) -> View {
+        let view = View(isLocked: true)
+        view.fillColor = .knob
+        view.lineColor = .getSetBorder
+        view.lineWidth = lineWidth
+        view.radius = radius
+        return view
+    }
+    static func discreteKnob(_ size: Size = Size(width: 10, height: 10),
+                             lineWidth: Real = 1) -> View {
+        let view = View(isLocked: true)
+        view.fillColor = .knob
+        view.lineColor = .getSetBorder
+        view.lineWidth = lineWidth
+        view.frame.size = size
+        return view
     }
 }
 
