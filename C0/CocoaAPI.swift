@@ -219,6 +219,8 @@ final class C0Document: NSDocument, NSWindowDelegate {
         c0View.desktopBinder.diffDesktopDataModel.didChangeIsWriteClosure = isWriteClosure
         preferenceDataModel.didChangeIsWriteClosure = isWriteClosure
         
+        c0View.desktopBinder.diffDesktopDataModel.isWrite = false
+        
         c0View.desktopView.copiedObjectsView.push(NSPasteboard.general.copiedObjects,
                                                   to: c0View.desktopView.version)
         c0View.desktopView.copiedObjectsView.notifications.append({ [unowned self] _, _ in
@@ -414,19 +416,19 @@ final class C0View: NSView, NSTextInputClient {
         var desktop = Desktop()
 
         //test
-//        desktop.objects.append(Layout(Object(Scene())))
-//        desktop.objects.append(Layout(Object(Timeline())))
-//        desktop.objects.append(Layout(Object(Sound())))
-//        desktop.objects.append(Layout(Object(Subtitle())))
-//        desktop.objects.append(Layout(Object(Canvas())))
-//        desktop.objects.append(Layout(Object(CellGroup())))
-//        desktop.objects.append(Layout(Object(Cell())))
+        desktop.objects.append(Layout(Object(Scene())))
+        desktop.objects.append(Layout(Object(Timeline())))
+        desktop.objects.append(Layout(Object(Sound())))
+        desktop.objects.append(Layout(Object(Subtitle())))
+        desktop.objects.append(Layout(Object(Canvas())))
+        desktop.objects.append(Layout(Object(CellGroup())))
+        desktop.objects.append(Layout(Object(Cell())))
         desktop.objects.append(Layout(Object(Material())))
         desktop.objects.append(Layout(Object(Material.MaterialType.normal)))
         desktop.objects.append(Layout(Object(BlendType.addition)))
         desktop.objects.append(Layout(Object(Effect())))
         desktop.objects.append(Layout(Object(Drawing())))
-        desktop.objects.append(Layout(Object(Lines())))
+////        desktop.objects.append(Layout(Object(Lines())))//drawing
         desktop.objects.append(Layout(Object(Line())))
         desktop.objects.append(Layout(Object(Color())))
         desktop.objects.append(Layout(Object(Transform())))
@@ -446,6 +448,7 @@ final class C0View: NSView, NSTextInputClient {
         desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
         sender = Sender(rootView: desktopView)
+        
         dragManager = DragManager(sender: sender, clickType: .click, dragType: .drag)
         subDragManager = DragManager(sender: sender, clickType: .subClick, dragType: .subDrag)
         super.init(coder: coder)

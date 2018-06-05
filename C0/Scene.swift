@@ -173,7 +173,7 @@ extension Scene: ObjectViewable {}
 
 struct SceneLayout {
     static let versionWidth = 120.0.cg, propertyWidth = 200.0.cg
-    static let canvasSize = Size(width: 730, height: 480), timelineHeight = 190.0.cg
+    static let canvasSize = Size(width: 650, height: 400), timelineHeight = 140.0.cg
 }
 
 /**
@@ -197,6 +197,9 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     let versionView: VersionView<Binder>
     
+    var sizeType: SizeType {
+        didSet { updateLayout() }
+    }
     let sizeView: DiscreteSizeView<Binder>
     let renderingVerticalResolutionView: DiscreteIntView<Binder>
     let isHiddenSubtitlesView: BoolView<Binder>
@@ -222,6 +225,8 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
         self.binder = binder
         self.keyPath = keyPath
         versionView = VersionView(binder: binder, keyPath: keyPath.appending(path: \Model.version))
+        
+        self.sizeType = sizeType
         
         let defaultSize = binder[keyPath: keyPath].canvas.frame.size
         let sizeWidthOption = RealOption(defaultModel: defaultSize.width,
@@ -281,15 +286,13 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     
     override var defaultBounds: Rect {
-        return Rect(x: 0, y: 0, width: 50, height: 50)
-        
-//        let padding = Layout.basicPadding, buttonH = Layout.basicHeight
-//        let h = buttonH + padding * 2
-//        let cs = SceneLayout.canvasSize, th = SceneLayout.timelineHeight
-//        let inWidth = cs.width + padding + SceneLayout.propertyWidth
-//        let width = inWidth + padding * 2
-//        let height = th + cs.height + h + buttonH + padding * 2
-//        return Rect(x: 0, y: 0, width: width, height: height)
+        let padding = Layouter.padding(with: sizeType), buttonH = Layouter.height(with: sizeType)
+        let h = buttonH + padding * 2
+        let cs = SceneLayout.canvasSize, th = SceneLayout.timelineHeight
+        let inWidth = cs.width + padding + SceneLayout.propertyWidth
+        let width = inWidth + padding * 2
+        let height = th + cs.height + h + buttonH + padding * 2
+        return Rect(x: 0, y: 0, width: width, height: height)
     }
     override func updateLayout() {
         let padding = Layouter.basicPadding, buttonH = Layouter.basicHeight
@@ -316,9 +319,6 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
         let ihpw = isHiddenPreviousView.defaultBounds.width
         topX -= ihpw
         isHiddenPreviousView.frame = Rect(x: topX, y: topY, width: ihpw, height: buttonH)
-        let tiw = Layouter.valueWidth(with: .regular)
-        topX -= tiw
-        timelineView.baseTimeIntervalView.frame = Rect(x: topX, y: topY, width: tiw, height: buttonH)
         topX = classNameView.frame.maxX + padding
         versionView.frame = Rect(x: topX, y: y, width: SceneLayout.versionWidth, height: buttonH)
         
@@ -328,12 +328,13 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
         ty -= cs.height
         canvasView.frame = Rect(x: padding, y: ty, width: cs.width, height: cs.height)
         ty -= h
-        playerView.frame = Rect(x: padding, y: ty, width: cs.width, height: h)
+        playerView.frame = Rect(x: canvasView.frame.maxX, y: ty,
+                                width: bounds.width - cs.width, height: 100)
         
         let px = padding * 2 + cs.width, propertyMaxY = y
         var py = propertyMaxY
         let sh = Layouter.smallHeight
-        let sph = sh + Layouter.smallPadding * 2
+        let sph = sizeView.defaultBounds.height
         py -= sph
         sizeView.frame = Rect(x: px, y: py, width: sizeView.defaultBounds.width, height: sph)
         py -= sh

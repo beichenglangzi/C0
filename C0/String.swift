@@ -328,13 +328,18 @@ extension StringView: KeyInputtable {
             } else {
                 self.isinputting = true
             }
+            
+            self.model.append(string)
+        }
+        let waitClosure: () -> () = { [unowned self] in
+            self.model.append(string)
         }
         let endClosure: () -> () = { [unowned self] in
             self.isinputting = false
         }
         timer.run(after: 1, dispatchQueue: .main,
                   beginClosure: beginClosure,
-                  waitClosure: {},
+                  waitClosure: waitClosure,
                   endClosure: endClosure)
     }
 }

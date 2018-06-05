@@ -48,6 +48,9 @@ extension Image {
     var size: Size {
         return cg?.size ?? Size()
     }
+    var isEmpty: Bool {
+        return cg == nil
+    }
 }
 extension Image {
     enum FileType: FileTypeProtocol {
@@ -89,14 +92,16 @@ extension Image: Codable {
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        let data = try values.decode(Data.self, forKey: .data)
-        guard let image = Image(data: data) else {
-            throw CodingError.decoding("\(dump(values))")
+        guard let data = try values.decodeIfPresent(Data.self, forKey: .data),
+            let image = Image(data: data) else {
+                cg = nil
+                return
         }
         self = image
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(data(.tiff), forKey: .data)
         if let data = data(.tiff) {
             try container.encode(data, forKey: .data)
         } else {

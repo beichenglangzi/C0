@@ -207,23 +207,21 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
 
     override func updateLayout() {
-        let paddingOrigin = Point(x: (bounds.width - scene.canvas.frame.size.width) / 2,
-                                  y: (bounds.height - scene.canvas.frame.size.height) / 2)
-        drawView.frame = Rect(origin: paddingOrigin, size: scene.canvas.frame.size)
+        let padding = Layouter.basicPadding, height = Layouter.basicHeight
+        
+        drawView.frame = Rect(x: padding, y: padding + height,
+                              width: bounds.width - padding * 2,
+                              height: bounds.height - height - padding * 2)
         screenTransform = AffineTransform(translation: drawView.bounds.midPoint)
         
-        let padding = Layouter.basicPadding, height = Layouter.basicHeight
-        let sliderY = ((frame.height - height) / 2).rounded()
-        let labelHeight = Layouter.basicHeight - padding * 2
-        let labelY = ((frame.height - labelHeight) / 2).rounded()
         
-        timeStringView.frame.origin = Point(x: padding, y: labelY)
+        timeStringView.frame.origin = Point(x: padding, y: padding * 2)
         let frw = Layouter.valueWidth(with: .regular)
         playingFrameRateView.frame = Rect(x: bounds.width - frw - padding,
                                           y: padding * 2, width: frw, height: height - padding * 2)
         let sliderWidth = playingFrameRateView.frame.minX - timeStringView.frame.maxX - padding * 2
         timeView.frame = Rect(x: timeStringView.frame.maxX + padding,
-                              y: sliderY, width: sliderWidth, height: height)
+                              y: padding, width: sliderWidth, height: height)
         timeView.backgroundViews = [ScenePlayerView.sliderView(with: timeView.bounds,
                                                                padding: timeView.padding)]
     }

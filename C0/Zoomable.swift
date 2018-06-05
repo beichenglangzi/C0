@@ -50,13 +50,13 @@ struct ZoomableActionList: SubActionList {
     let zoomAction = Action(name: Text(english: "Zoom", japanese: "ズーム"),
                             quasimode: Quasimode([.pinch(.pinch)]),
                             isEditable: false)
+    let internalZoomAction = Action(name: Text(english: "Internal Zoom", japanese: "内部ズーム"),
+                                    quasimode: Quasimode(modifier: [.input(.shift)],
+                                                         [.pinch(.pinch)]),
+                                    isEditable: false)
     let scrollAction = Action(name: Text(english: "Scroll", japanese: "スクロール"),
                               quasimode: Quasimode([.scroll(.scroll)]),
                               isEditable: false)
-    let internalZoomAction = Action(name: Text(english: "Internal Zoom", japanese: "内部ズーム"),
-                                    quasimode: Quasimode(modifier: [.input(.command)],
-                                                         [.pinch(.pinch)]),
-                                    isEditable: false)
     let rotateAction = Action(name: Text(english: "Rotate", japanese: "回転"),
                               quasimode: Quasimode([.rotate(.rotate)]),
                               isEditable: false)
@@ -68,7 +68,8 @@ struct ZoomableActionList: SubActionList {
                             quasimode: Quasimode([.input(.subClick)]),
                             isEditable: false)
     var actions: [Action] {
-        return [zoomAction, scrollAction, rotateAction, resetViewAction, bindAction]
+        return [zoomAction, internalZoomAction,
+                scrollAction, rotateAction, resetViewAction, bindAction]
     }
 }
 extension ZoomableActionList: SubSendable {
@@ -124,6 +125,19 @@ final class ZoomableSender: SubSender {
                                 magnification: eventValue.magnification, actionMap.phase)
                 if actionMap.phase == .ended {
                     self.viewZoomer = nil
+                }
+            }
+        case actionList.internalZoomAction:
+            if let eventValue = actionMap.eventValuesWith(PinchEvent.self).first {
+                if var receiver = sender.rootView.at(eventValue.rootLocation, Layoutable.self) {
+                    let scale = receiver.transform.scale.x//test
+                    switch eventValue.phase {
+                    case .began: break
+                    case .changed:
+                            let newScale = (scale * ((eventValue.magnification + 1) ** 2))
+                            receiver.transform.scale = Point(x: newScale, y: newScale)
+                    case .ended: break
+                    }
                 }
             }
         case actionList.rotateAction:

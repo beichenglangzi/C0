@@ -30,6 +30,7 @@ indirect enum AlgebraicTrack: Track {
     case transform(TransformTrack)
     case sineWave(SineWaveTrack)
     case sound(SoundTrack)
+    case lines(LinesTrack)
     
     var tempoTrack: TempoTrack? {
         get {
@@ -78,12 +79,13 @@ indirect enum AlgebraicTrack: Track {
         case .transform(let track): return track.animation
         case .sineWave(let track): return track.animation
         case .sound(let track): return track.animation
+        case .lines(let track): return track.animation
         }
     }
 }
 extension AlgebraicTrack: Codable {
     enum CodingKeys: CodingKey {
-        case tempo, subtitle, transform, sineWave, sound
+        case tempo, subtitle, transform, sineWave, sound, lines
     }
     enum CodingError: Error {
         case decoding(String)
@@ -102,6 +104,7 @@ extension AlgebraicTrack: Codable {
         case .transform: self = .transform(try value(type: TransformTrack.self))
         case .sineWave: self = .sineWave(try value(type: SineWaveTrack.self))
         case .sound: self = .sound(try value(type: SoundTrack.self))
+        case .lines: self = .lines(try value(type: LinesTrack.self))
         }
     }
     func encode(to encoder: Encoder) throws {
@@ -112,6 +115,7 @@ extension AlgebraicTrack: Codable {
         case .transform(let track): try container.encode(track, forKey: .transform)
         case .sineWave(let track): try container.encode(track, forKey: .sineWave)
         case .sound(let track): try container.encode(track, forKey: .sound)
+        case .lines(let track): try container.encode(track, forKey: .lines)
         }
     }
 }

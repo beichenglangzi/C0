@@ -443,123 +443,123 @@ final class AnimationViewPointMover<Value: KeyframeValue, Binder: BinderProtocol
 }
 
 
-extension CanvasView: Transformable {
-    func captureWillMoveObject(at p: Point, to version: Version) {
-        
-    }
-    
-    func makeViewTransformer() -> ViewTransformer {
-        return CanvasViewTransformer(canvasView: self)
-    }
-    
-    func makeViewMover() -> ViewMover {
-        return CanvasViewTransformer(canvasView: self)
-    }
-}
-final class CanvasViewTransformer<Binder: BinderProtocol>: ViewTransformer, ViewMover {
-    var transformableView: View & Transformable {
-        return canvasView
-    }
-    var movableView: View & Movable {
-        return canvasView
-    }
-    
-    var canvasView: CanvasView<Binder>
-    
-    init(canvasView: CanvasView<Binder>) {
-        self.canvasView = canvasView
-    }
-    
-    var transformBounds = Rect.null, beginPoint = Point(), anchorPoint = Point()
-    enum TransformEditType {
-        case move, transform, warp
-    }
-    func move(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        move(for: p, pressure: pressure, time: time, phase, type: .move)
-    }
-    func transform(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        move(for: p, pressure: pressure, time: time, phase, type: .transform)
-    }
-    func warp(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
-        move(for: p, pressure: pressure, time: time, phase, type: .warp)
-    }
-    let transformAngleTime = Second(0.1)
-    var transformAngleOldTime = Second(0.0)
-    var transformAnglePoint = Point(), transformAngleOldPoint = Point()
-    var isTransformAngle = false
-    var cellGroup: CellGroup?
-    func move(for point: Point, pressure: Real, time: Second, _ phase: Phase,
-              type: TransformEditType) {
-        let p = canvasView.convertToCurrentLocal(point)
-        
-        func transformAffineTransformWith(point: Point, oldPoint: Point,
-                                          anchorPoint: Point) -> AffineTransform {
-            guard oldPoint != anchorPoint else {
-                return AffineTransform.identity
-            }
-            let r = point.distance(anchorPoint), oldR = oldPoint.distance(anchorPoint)
-            let angle = anchorPoint.tangential(point)
-            let oldAngle = anchorPoint.tangential(oldPoint)
-            let scale = r / oldR
-            var affine = AffineTransform(translation: anchorPoint)
-            affine.rotate(by: angle.differenceRotation(oldAngle))
-            affine.scale(by: scale)
-            affine.translate(by: -anchorPoint)
-            return affine
-        }
-        func warpAffineTransformWith(point: Point, oldPoint: Point,
-                                     anchorPoint: Point) -> AffineTransform {
-            guard oldPoint != anchorPoint else {
-                return AffineTransform.identity
-            }
-            let theta = oldPoint.tangential(anchorPoint)
-            let angle = theta < 0 ? theta + .pi : theta - .pi
-            var pAffine = AffineTransform(rotationAngle: -angle)
-            pAffine.translate(by: -anchorPoint)
-            let newOldP = oldPoint * pAffine, newP = point * pAffine
-            let scaleX = newP.x / newOldP.x, skewY = (newP.y - newOldP.y) / newOldP.x
-            var affine = AffineTransform(translation: anchorPoint)
-            affine.rotate(by: angle)
-            affine.scale(by: Point(x: scaleX, y: 1))
-            if skewY != 0 {
-                let skewAffine = AffineTransform(a: 1, b: skewY,
-                                                 c: 0, d: 1,
-                                                 tx: 0, ty: 0)
-                affine = skewAffine * affine
-            }
-            affine.rotate(by: -angle)
-            affine.translate(by: -anchorPoint)
-            return affine
-        }
-        
-        func affineTransform(with cellGroup: CellGroup) -> AffineTransform {
-            switch type {
-            case .move:
-                return AffineTransform(translation: p - beginPoint)
-            case .transform:
-                return transformAffineTransformWith(point: p, oldPoint: beginPoint,
-                                                    anchorPoint: anchorPoint)
-            case .warp:
-                return warpAffineTransformWith(point: p, oldPoint: beginPoint,
-                                               anchorPoint: anchorPoint)
-            }
-        }
-        switch phase {
-        case .began:
-            //selectedLines
-            if type != .move {
-                self.transformAngleOldTime = time
-                self.transformAngleOldPoint = p
-                self.isTransformAngle = false
-            }
-            cellGroup = canvasView.model.editingCellGroup
-            beginPoint = p
-        case .changed, .ended:
-            guard let cellGroup = cellGroup else { return }
-            let affine = affineTransform(with: cellGroup)
-        }
-    }
-}
+//extension CanvasView: Transformable {
+//    func captureWillMoveObject(at p: Point, to version: Version) {
+//
+//    }
+//
+//    func makeViewTransformer() -> ViewTransformer {
+//        return CanvasViewTransformer(canvasView: self)
+//    }
+//
+//    func makeViewMover() -> ViewMover {
+//        return CanvasViewTransformer(canvasView: self)
+//    }
+//}
+//final class CanvasViewTransformer<Binder: BinderProtocol>: ViewTransformer, ViewMover {
+//    var transformableView: View & Transformable {
+//        return canvasView
+//    }
+//    var movableView: View & Movable {
+//        return canvasView
+//    }
+//
+//    var canvasView: CanvasView<Binder>
+//
+//    init(canvasView: CanvasView<Binder>) {
+//        self.canvasView = canvasView
+//    }
+//
+//    var transformBounds = Rect.null, beginPoint = Point(), anchorPoint = Point()
+//    enum TransformEditType {
+//        case move, transform, warp
+//    }
+//    func move(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+//        move(for: p, pressure: pressure, time: time, phase, type: .move)
+//    }
+//    func transform(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+//        move(for: p, pressure: pressure, time: time, phase, type: .transform)
+//    }
+//    func warp(for p: Point, first fp: Point, pressure: Real, time: Second, _ phase: Phase) {
+//        move(for: p, pressure: pressure, time: time, phase, type: .warp)
+//    }
+//    let transformAngleTime = Second(0.1)
+//    var transformAngleOldTime = Second(0.0)
+//    var transformAnglePoint = Point(), transformAngleOldPoint = Point()
+//    var isTransformAngle = false
+//    var cellGroup: CellGroup?
+//    func move(for point: Point, pressure: Real, time: Second, _ phase: Phase,
+//              type: TransformEditType) {
+//        let p = canvasView.convertToCurrentLocal(point)
+//
+//        func transformAffineTransformWith(point: Point, oldPoint: Point,
+//                                          anchorPoint: Point) -> AffineTransform {
+//            guard oldPoint != anchorPoint else {
+//                return AffineTransform.identity
+//            }
+//            let r = point.distance(anchorPoint), oldR = oldPoint.distance(anchorPoint)
+//            let angle = anchorPoint.tangential(point)
+//            let oldAngle = anchorPoint.tangential(oldPoint)
+//            let scale = r / oldR
+//            var affine = AffineTransform(translation: anchorPoint)
+//            affine.rotate(by: angle.differenceRotation(oldAngle))
+//            affine.scale(by: scale)
+//            affine.translate(by: -anchorPoint)
+//            return affine
+//        }
+//        func warpAffineTransformWith(point: Point, oldPoint: Point,
+//                                     anchorPoint: Point) -> AffineTransform {
+//            guard oldPoint != anchorPoint else {
+//                return AffineTransform.identity
+//            }
+//            let theta = oldPoint.tangential(anchorPoint)
+//            let angle = theta < 0 ? theta + .pi : theta - .pi
+//            var pAffine = AffineTransform(rotationAngle: -angle)
+//            pAffine.translate(by: -anchorPoint)
+//            let newOldP = oldPoint * pAffine, newP = point * pAffine
+//            let scaleX = newP.x / newOldP.x, skewY = (newP.y - newOldP.y) / newOldP.x
+//            var affine = AffineTransform(translation: anchorPoint)
+//            affine.rotate(by: angle)
+//            affine.scale(by: Point(x: scaleX, y: 1))
+//            if skewY != 0 {
+//                let skewAffine = AffineTransform(a: 1, b: skewY,
+//                                                 c: 0, d: 1,
+//                                                 tx: 0, ty: 0)
+//                affine = skewAffine * affine
+//            }
+//            affine.rotate(by: -angle)
+//            affine.translate(by: -anchorPoint)
+//            return affine
+//        }
+//
+//        func affineTransform(with cellGroup: CellGroup) -> AffineTransform {
+//            switch type {
+//            case .move:
+//                return AffineTransform(translation: p - beginPoint)
+//            case .transform:
+//                return transformAffineTransformWith(point: p, oldPoint: beginPoint,
+//                                                    anchorPoint: anchorPoint)
+//            case .warp:
+//                return warpAffineTransformWith(point: p, oldPoint: beginPoint,
+//                                               anchorPoint: anchorPoint)
+//            }
+//        }
+//        switch phase {
+//        case .began:
+//            //selectedLines
+//            if type != .move {
+//                self.transformAngleOldTime = time
+//                self.transformAngleOldPoint = p
+//                self.isTransformAngle = false
+//            }
+//            cellGroup = canvasView.model.editingCellGroup
+//            beginPoint = p
+//        case .changed, .ended:
+//            guard let cellGroup = cellGroup else { return }
+//            let affine = affineTransform(with: cellGroup)
+//        }
+//    }
+//}
 
 //final class ImageViewMover<Binder: BinderProtocol>: ViewMover {
 //    private enum DragType {

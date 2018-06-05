@@ -23,6 +23,8 @@ protocol Object2D: Object.Value {
     init(xModel: XModel, yModel: YModel)
     var xModel: XModel { get set }
     var yModel: YModel { get set }
+    static var xDisplayText: Text { get }
+    static var yDisplayText: Text { get }
 }
 
 struct Ratio2D {
@@ -126,10 +128,10 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
         boundsView = View(isLocked: true)
         boundsView.lineColor = .formBorder
         let font = Font.default(with: sizeType)
-        xNameView = TextFormView(text: "x:", font: font)
+        xNameView = TextFormView(text: Model.xDisplayText + ":", font: font)
         xView = Assignable1DView(binder: binder, keyPath: keyPath.appending(path: \Model.xModel),
                                  option: option.xOption, sizeType: sizeType)
-        yNameView = TextFormView(text: "y:", font: font)
+        yNameView = TextFormView(text: Model.yDisplayText + ":", font: font)
         yView = Assignable1DView(binder: binder, keyPath: keyPath.appending(path: \Model.yModel),
                                  option: option.yOption, sizeType: sizeType)
         
@@ -143,7 +145,7 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
         let padding = Layouter.padding(with: sizeType)
         let width = Layouter.valueWidth(with: sizeType)
         let height = Layouter.textHeight(with: sizeType)
-        let w = max(xNameView.frame.width, yNameView.frame.height)
+        let w = max(xNameView.frame.width, yNameView.frame.height) + padding
         let h = height * 2
         return Rect(x: 0,
                     y: 0,
@@ -154,7 +156,7 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
         let padding = Layouter.padding(with: sizeType)
         let width = Layouter.valueWidth(with: sizeType)
         let height = Layouter.textHeight(with: sizeType)
-        let w = max(xNameView.frame.width, yNameView.frame.height)
+        let w = max(xNameView.frame.width, yNameView.frame.height) + padding
         let h = height * 2
         var y = bounds.height - padding
         y -= height

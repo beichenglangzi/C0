@@ -167,6 +167,9 @@ final class EasingView<T: BinderProtocol>: ModelView, BindableReceiver {
         self.frame = frame
     }
     
+    override var defaultBounds: Rect {
+        return Rect(x: 0, y: 0, width: 100, height: 100)
+    }
     override func updateLayout() {
         cp0View.frame = Rect(x: padding,
                              y: padding,

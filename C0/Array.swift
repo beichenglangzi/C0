@@ -196,6 +196,11 @@ extension ArrayView: CollectionAssignable {
         remove(at: index, version)
     }
 }
+extension ArrayView {
+    func updateLayoutPositions() {
+        
+    }
+}
 extension ArrayView: Zoomable {
 //    override var transform: Transform {
 //        get { return childrenTransform }

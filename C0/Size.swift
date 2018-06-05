@@ -142,6 +142,8 @@ extension Size: Object2D {
         get { return height }
         set { height = newValue }
     }
+    static let xDisplayText = Text("w")
+    static let yDisplayText = Text("h")
 }
 
 struct SizeOption: Object2DOption {

@@ -114,6 +114,8 @@ final class Sender {
             if let actionMap = eventMap.actionMapWith(event, actionList.actions) {
                 actionMaps.append(actionMap)
                 subSenders.forEach { $0.send(actionMap, from: self) }
+            } else if let inputEvent = event as? InputEvent {
+                input(inputEvent)
             }
         case .changed:
             eventMap.replace(event)
@@ -121,6 +123,8 @@ final class Sender {
                 actionMaps[index].replace(event)
                 let actionMap = actionMaps[index]
                 subSenders.forEach { $0.send(actionMap, from: self) }
+            } else if let inputEvent = event as? InputEvent {
+                input(inputEvent)
             }
         case .ended:
             eventMap.replace(event)
@@ -129,8 +133,17 @@ final class Sender {
                 let actionMap = actionMaps[index]
                 subSenders.forEach { $0.send(actionMap, from: self) }
                 actionMaps.remove(at: index)
+            } else if let inputEvent = event as? InputEvent {
+                input(inputEvent)
             }
             eventMap.remove(event)
+        }
+    }
+    
+    func input(_ inputEvent: InputEvent) {
+        if let receiver = rootView.at(inputEvent.value.rootLocation, (View & KeyInputtable).self) {
+            let p = receiver.convertFromRoot(inputEvent.value.rootLocation)
+            receiver.insert(inputEvent.type.name.currentString, for: p, indicatedVersionView.version)
         }
     }
     

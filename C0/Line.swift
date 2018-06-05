@@ -30,28 +30,55 @@ struct Line: Codable {
             return Control(point: point.mid(other.point), pressure: (pressure + other.pressure) / 2)
         }
     }
-    var controls: [Control] {
+    var controls = [Control]() {
         didSet {
-            imageBounds = Line.imageBounds(with: controls)
-            firstAngle = controls[0].point.tangential(controls[1].point)
-            lastAngle = controls[controls.count - 2].point
+            imageBounds = controls.imageBounds
+            firstAngle = controls.count < 2 ? 0 : controls[0].point.tangential(controls[1].point)
+            lastAngle = controls.count < 2 ? 0 : controls[controls.count - 2].point
                 .tangential(controls[controls.count - 1].point)
         }
     }
-    private(set) var imageBounds: Rect, firstAngle: Real, lastAngle: Real
+    private(set) var imageBounds = Rect(), firstAngle = 0.0.cg, lastAngle = 0.0.cg
     
     init(bezier: Bezier2,
          p0Pressure: Real, cpPressure: Real, p1Pressure: Real) {
+        
         self.init(controls: [Control(point: bezier.p0, pressure: p0Pressure),
                              Control(point: bezier.cp, pressure: cpPressure),
                              Control(point: bezier.p1, pressure: p1Pressure)])
     }
     init(controls: [Control] = []) {
         self.controls = controls
-        imageBounds = Line.imageBounds(with: controls)
-        firstAngle = controls.isEmpty ? 0 : controls[0].point.tangential(controls[1].point)
-        lastAngle = controls.isEmpty ? 0 : controls[controls.count - 2].point
+        imageBounds = controls.imageBounds
+        firstAngle = controls.count < 2 ? 0 : controls[0].point.tangential(controls[1].point)
+        lastAngle = controls.count < 2 ? 0 : controls[controls.count - 2].point
             .tangential(controls[controls.count - 1].point)
+    }
+}
+extension Array where Element == Line.Control {
+    var imageBounds: Rect {
+        if isEmpty {
+            return Rect()//
+        } else if count == 1 {
+            return Rect(origin: self[0].point, size: Size())
+        } else if count == 2 {
+            return Bezier2.linear(self[0].point, self[count - 1].point).bounds
+        } else if count == 3 {
+            return Bezier2(p0: self[0].point,
+                           cp: self[1].point, p1: self[count - 1].point).bounds
+        } else {
+            var connectP = self[1].point.mid(self[2].point)
+            var b = Bezier2(p0: self[0].point, cp: self[1].point, p1: connectP).bounds
+            for i in 1..<count - 3 {
+                let newConnectP = self[i + 1].point.mid(self[i + 2].point)
+                b = b.union(Bezier2(p0: connectP, cp: self[i + 1].point, p1: newConnectP).bounds)
+                connectP = newConnectP
+            }
+            b = b.union(Bezier2(p0: connectP,
+                                cp: self[count - 2].point,
+                                p1: self[count - 1].point).bounds)
+            return b
+        }
     }
 }
 extension Line {
@@ -299,30 +326,6 @@ extension Line {
     }
     var lastPoint: Point {
         return controls[controls.count - 1].point
-    }
-    private static func imageBounds(with controls: [Control]) -> Rect {
-        if controls.isEmpty {
-            return Rect.null
-        } else if controls.count == 1 {
-            return Rect(origin: controls[0].point, size: Size())
-        } else if controls.count == 2 {
-            return Bezier2.linear(controls[0].point, controls[controls.count - 1].point).bounds
-        } else if controls.count == 3 {
-            return Bezier2(p0: controls[0].point,
-                           cp: controls[1].point, p1: controls[controls.count - 1].point).bounds
-        } else {
-            var connectP = controls[1].point.mid(controls[2].point)
-            var b = Bezier2(p0: controls[0].point, cp: controls[1].point, p1: connectP).bounds
-            for i in 1..<controls.count - 3 {
-                let newConnectP = controls[i + 1].point.mid(controls[i + 2].point)
-                b = b.union(Bezier2(p0: connectP, cp: controls[i + 1].point, p1: newConnectP).bounds)
-                connectP = newConnectP
-            }
-            b = b.union(Bezier2(p0: connectP,
-                                cp: controls[controls.count - 2].point,
-                                p1: controls[controls.count - 1].point).bounds)
-            return b
-        }
     }
     static func imageBounds(with lines: [Line], lineWidth: Real) -> Rect {
         guard let firstBounds = lines.first?.imageBounds else {

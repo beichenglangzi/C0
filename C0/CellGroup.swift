@@ -742,6 +742,11 @@ final class CellGroupView<T: BinderProtocol>: ModelView, BindableReceiver {
         self.frame = frame
     }
     
+    override var defaultBounds: Rect {
+        let padding = Layouter.padding(with: sizeType), h = Layouter.height(with: sizeType)
+        let tlw = classNameView.frame.width + isHiddenView.defaultBounds.width + padding * 3
+        return Rect(x: 0, y: 0, width: tlw, height: h + padding * 2)
+    }
     override func updateLayout() {
         let padding = Layouter.padding(with: sizeType)
         classNameView.frame.origin = Point(x: padding,

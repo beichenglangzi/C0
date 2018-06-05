@@ -384,6 +384,8 @@ extension Point: Object2D {
         get { return y }
         set { y = newValue }
     }
+    static let xDisplayText = Text("x")
+    static let yDisplayText = Text("y")
 }
 
 struct PointOption: Object2DOption {

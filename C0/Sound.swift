@@ -49,6 +49,10 @@ struct Sound {
     }
 }
 extension Sound {
+    var isEmpty: Bool {
+        return url == nil
+    }
+    
     func samples(withSampleRate sampleRate: Float64 = basicSampleRate) -> [Float] {
         guard let url = url else {
             return []
@@ -132,7 +136,7 @@ extension Sound: Codable {
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        bookmark = try values.decode(Data.self, forKey: .bookmark)
+        bookmark = try values.decodeIfPresent(Data.self, forKey: .bookmark)
         name = try values.decode(String.self, forKey: .name)
         volume = try values.decode(Double.self, forKey: .volume)
         isHidden = try values.decode(Bool.self, forKey: .isHidden)
@@ -140,7 +144,7 @@ extension Sound: Codable {
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(bookmark, forKey: .bookmark)
+        try container.encodeIfPresent(bookmark, forKey: .bookmark)
         try container.encode(name, forKey: .name)
         try container.encode(volume, forKey: .volume)
         try container.encode(isHidden, forKey: .isHidden)

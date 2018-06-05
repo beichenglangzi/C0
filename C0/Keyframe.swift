@@ -374,10 +374,18 @@ final class KeyframeTimingView<T: BinderProtocol>: ModelView, BindableReceiver {
         classNameView = TextFormView(text: Model.name, font: Font.bold(with: sizeType))
         
         super.init()
-        children = [labelView, loopView, interpolationView, easingView]
+        children = [classNameView, labelView, loopView, interpolationView, easingView]
         self.frame = frame
     }
     
+    override var defaultBounds: Rect {
+        let w = max(labelView.defaultBounds.width, interpolationView.defaultBounds.width,
+                    loopView.defaultBounds.width, easingView.defaultBounds.width)
+        let padding = Layouter.padding(with: sizeType)
+        let h = Layouter.height(with: sizeType)
+        let dh = h * 4 + easingView.frame.width + classNameView.frame.height
+        return Rect(x: 0, y: 0, width: w + padding * 2, height: dh + padding * 2)
+    }
     override func updateLayout() {
         let padding = Layouter.padding(with: sizeType)
         let w = bounds.width - padding * 2, h = Layouter.height(with: sizeType)

@@ -326,7 +326,7 @@ class View {
         didSet {
             CATransaction.disableAnimation {
                 caLayer.transform
-                    = CATransform3DMakeAffineTransform(childrenTransform.affineTransform)
+                    = CATransform3DMakeAffineTransform(transform.affineTransform)
             }
         }
     }

@@ -53,7 +53,16 @@ struct Timeline: Codable {
         self.subtitleTrack = subtitleTrack
         editingLinesTrackIndex = 0
         editingTrackIndex = 0
-        allTracks = []
+        let animation = Animation<Lines>(keyframes: [Keyframe(value: Lines(drawing: Drawing(),
+                                                                           geometries: []),
+                                                              timing: KeyframeTiming(time: 0,
+                                                                                     label: .main,
+                                                                                     loop: .none, interpolation: .spline,
+                                                                                     easing: Easing()))],
+                                         beginTime: 0, duration: 1,
+                                         editingKeyframeIndex: 0, selectedKeyframeIndexes: [])
+        allTracks = [AlgebraicTrack.lines(LinesTrack(animation: animation,
+                                                     cellTreeIndexes: []))]
         self.canvas = canvas
     }
 }
@@ -305,6 +314,9 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
         })
     }
     
+    override var defaultBounds: Rect {
+        return Rect(x: 0, y: 0, width: 200, height: 100)
+    }
     override func updateLayout() {
         let sp = Layouter.basicPadding
         let midX = bounds.midX

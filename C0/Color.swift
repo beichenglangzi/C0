@@ -108,7 +108,7 @@ extension Color {
     static let rgbBlue = Color(red: 0, green: 0, blue: 1)
     static let rgbMagenta = Color(red: 1, green: 0, blue: 1)
     
-    static let background = Color(white: 0.94)
+    static let background = Color(white: 0.93)
     static let getSetBorder = Color(white: 0.7)
     static let getBorder = Color(white: 0.8)
     static let sendBorder = Color(white: 0.6)
