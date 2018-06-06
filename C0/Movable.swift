@@ -217,18 +217,15 @@ final class MovableSender: SubSender {
                     beganViewFrames = receiver.parent?.children.map { $0.frame } ?? []
                 }
                 guard let viewTransformer = transformer else { return }
-                let p = viewTransformer.transformableView.convertFromRoot(eventValue.rootLocation)
+//                let p = viewTransformer.transformableView.convertFromRoot(eventValue.rootLocation)
                 if actionMap.action == actionList.transformAction {
                     
 //                    viewTransformer.transform(for: p, pressure: eventValue.pressure,
 //                                              time: eventValue.time, actionMap.phase)
                     
-                    
-//                    viewTransformer.transform(for: p, first: fp, pressure: eventValue.pressure,
-//                                              time: eventValue.time, actionMap.phase)
-//                    if let parent = viewTransformer.transformableView.parent {
-//                        updateLayout(with: [viewTransformer.transformableView], from: parent)
-//                    }
+                    if let parent = viewTransformer.transformableView.parent {
+                        updateLayout(with: [viewTransformer.transformableView], from: parent)
+                    }
                 } else {
 //                    viewTransformer.warp(for: p, first: fp, pressure: eventValue.pressure,
 //                                         time: eventValue.time, actionMap.phase)
