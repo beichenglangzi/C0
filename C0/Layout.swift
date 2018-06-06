@@ -41,7 +41,7 @@ protocol Layoutable {
 
 typealias LayoutValue = Codable & ThumbnailViewable & Referenceable & AbstractViewable
 
-struct Layout<Value: LayoutValue>: Layoutable, Codable {
+struct Layout<Value: LayoutValue>: Layoutable, InternalZoomable, Codable {
     var value: Value
     var transform: Transform
     var frame: Rect
@@ -221,7 +221,16 @@ enum Layouter {
 }
 
 final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
-: ModelView, BindableReceiver, Layoutable {
+: ModelView, BindableReceiver, Layoutable, Transformable {
+    
+    var oldFrame = Rect()
+    func transform(with affineTransform: AffineTransform) {
+        frame = oldFrame.applying(affineTransform)
+    }
+    
+    func captureWillMoveObject(at p: Point, to version: Version) {
+        oldFrame = frame
+    }
     
     typealias Model = Layout<Value>
     typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
@@ -277,4 +286,6 @@ final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
     func updateWithModel() {
         
     }
+    
+    
 }

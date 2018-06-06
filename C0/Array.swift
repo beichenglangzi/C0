@@ -201,24 +201,6 @@ extension ArrayView {
         
     }
 }
-extension ArrayView: Zoomable {
-//    override var transform: Transform {
-//        get { return childrenTransform }
-//        set { childrenTransform = newValue }
-//    }
-    
-    func resetView(for p: Point, _ version: Version) {
-        childrenTransform = Transform()
-    }
-    
-    func captureTransform(to version: Version) {
-        
-    }
-    
-    func makeViewZoomer() -> ViewZoomer {
-        return BasicViewZomer(zoomableView: self)
-    }
-}
 
 typealias ArrayCountElement = Equatable & Object.Value & AbstractViewable
 

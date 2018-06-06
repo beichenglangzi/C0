@@ -123,8 +123,6 @@ final class Sender {
                 actionMaps[index].replace(event)
                 let actionMap = actionMaps[index]
                 subSenders.forEach { $0.send(actionMap, from: self) }
-            } else if let inputEvent = event as? InputEvent {
-                input(inputEvent)
             }
         case .ended:
             eventMap.replace(event)
@@ -133,8 +131,6 @@ final class Sender {
                 let actionMap = actionMaps[index]
                 subSenders.forEach { $0.send(actionMap, from: self) }
                 actionMaps.remove(at: index)
-            } else if let inputEvent = event as? InputEvent {
-                input(inputEvent)
             }
             eventMap.remove(event)
         }

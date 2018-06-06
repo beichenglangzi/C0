@@ -261,7 +261,10 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
         self.frame = frame
         if isSizeToFit { sizeToFit() }
     }
-
+    deinit {
+        timer.cancel()
+    }
+    
     override var defaultBounds: Rect {
         return textFrame.bounds(paddingSize: paddingSize)
     }

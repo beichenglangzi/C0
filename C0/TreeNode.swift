@@ -142,7 +142,9 @@ struct TreeNodeIterator<T: TreeNode>: IteratorProtocol {
         }
         if lastParentIndex.index >= lastParentIndex.parent.children.count {
             parentIndexes.removeLast()
-            parentIndexes[parentIndexes.count - 1].index += 1
+            if !parentIndexes.isEmpty {
+                parentIndexes[parentIndexes.count - 1].index += 1
+            }
             return lastParentIndex.parent
         } else {
             let child = lastParentIndex.parent.children[lastParentIndex.index]
@@ -179,7 +181,9 @@ struct TreeIndexSequence<T: TreeNode>: Sequence, IteratorProtocol {
             indexPath.removeLast()
             parents.removeLast()
             let oldIndexPath = indexPath
-            indexPath[indexPath.count - 1] += 1
+            if !indexPath.isEmpty {
+                indexPath[indexPath.count - 1] += 1
+            }
             return (T.Index(indexPath: oldIndexPath), parent)
         } else {
             let child = parent.children[lastParentIndex]

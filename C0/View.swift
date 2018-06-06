@@ -418,6 +418,9 @@ class View {
     func contains(_ p: Point) -> Bool {
         return !isLocked && !isHidden && containsPath(p)
     }
+    func contains(_ rect: Rect) -> Bool {
+        return frame.intersects(rect)
+    }
     func at(_ p: Point) -> View? {
         guard !(isLocked && _children.isEmpty) else {
             return nil

@@ -22,6 +22,17 @@ import class Foundation.ByteCountFormatter
 import class Foundation.FileWrapper
 import class Foundation.JSONDecoder
 import class Foundation.JSONEncoder
+import struct Foundation.UUID
+
+struct DataModelItem<Value: Codable>: ValueChain, Codable {
+    var id: UUID
+    var isRead: Bool
+    var value: Value
+    
+    var chainValue: Any {
+        return value
+    }
+}
 
 extension Data {
     var bytesString: String {

@@ -221,8 +221,8 @@ final class C0Document: NSDocument, NSWindowDelegate {
         
         c0View.desktopBinder.diffDesktopDataModel.isWrite = false
         
-        c0View.desktopView.copiedObjectsView.push(NSPasteboard.general.copiedObjects,
-                                                  to: c0View.desktopView.version)
+        c0View.desktopView.copiedObjectsView.valuesView.push(NSPasteboard.general.copiedObjects,
+                                                             to: c0View.desktopView.version)
         c0View.desktopView.copiedObjectsView.notifications.append({ [unowned self] _, _ in
             self.didSetCopiedObjects()
         })
@@ -266,8 +266,8 @@ final class C0Document: NSDocument, NSWindowDelegate {
         let pasteboard = NSPasteboard.general
         if pasteboard.changeCount != oldChangeCountWithPsteboard {
             oldChangeCountWithPsteboard = pasteboard.changeCount
-            c0View.desktopView.copiedObjectsView.push(pasteboard.copiedObjects,
-                                                      to: c0View.desktopView.version)
+            c0View.desktopView.copiedObjectsView.valuesView.push(pasteboard.copiedObjects,
+                                                                 to: c0View.desktopView.version)
             oldChangeCountWithCopiedObjects = changeCountWithCopiedObjects
         }
     }
@@ -275,7 +275,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
         if oldChangeCountWithCopiedObjects != changeCountWithCopiedObjects {
             oldChangeCountWithCopiedObjects = changeCountWithCopiedObjects
             let pasteboard = NSPasteboard.general
-            pasteboard.set(copiedObjects: desktop.copiedObjects)
+            pasteboard.set(copiedObjects: desktop.copiedObjects.values)
             oldChangeCountWithPsteboard = pasteboard.changeCount
         }
     }
@@ -416,34 +416,34 @@ final class C0View: NSView, NSTextInputClient {
         var desktop = Desktop()
 
         //test
-        desktop.objects.append(Layout(Object(Scene())))
-        desktop.objects.append(Layout(Object(Timeline())))
-        desktop.objects.append(Layout(Object(Sound())))
-        desktop.objects.append(Layout(Object(Subtitle())))
-        desktop.objects.append(Layout(Object(Canvas())))
-        desktop.objects.append(Layout(Object(CellGroup())))
-        desktop.objects.append(Layout(Object(Cell())))
-        desktop.objects.append(Layout(Object(Material())))
-        desktop.objects.append(Layout(Object(Material.MaterialType.normal)))
-        desktop.objects.append(Layout(Object(BlendType.addition)))
-        desktop.objects.append(Layout(Object(Effect())))
-        desktop.objects.append(Layout(Object(Drawing())))
-////        desktop.objects.append(Layout(Object(Lines())))//drawing
-        desktop.objects.append(Layout(Object(Line())))
-        desktop.objects.append(Layout(Object(Color())))
-        desktop.objects.append(Layout(Object(Transform())))
-        desktop.objects.append(Layout(Object(SineWave())))
-        desktop.objects.append(Layout(Object(KeyframeTiming())))
-        desktop.objects.append(Layout(Object(KeyframeTiming.Label.main)))
-        desktop.objects.append(Layout(Object(KeyframeTiming.Loop.began)))
-        desktop.objects.append(Layout(Object(KeyframeTiming.Interpolation.linear)))
-        desktop.objects.append(Layout(Object(Easing())))
-        desktop.objects.append(Layout(Object(Size())))
-        desktop.objects.append(Layout(Object(Point())))
-        desktop.objects.append(Layout(Object(Real())))
-        desktop.objects.append(Layout(Object(Rational())))
-        desktop.objects.append(Layout(Object(Int())))
-        desktop.objects.append(Layout(Object(Bool())))
+        desktop.objects.values.append(Layout(Object(Scene())))
+        desktop.objects.values.append(Layout(Object(Timeline())))
+        desktop.objects.values.append(Layout(Object(Sound())))
+        desktop.objects.values.append(Layout(Object(Subtitle())))
+        desktop.objects.values.append(Layout(Object(Canvas())))
+        desktop.objects.values.append(Layout(Object(CellGroup())))
+        desktop.objects.values.append(Layout(Object(Cell())))
+        desktop.objects.values.append(Layout(Object(Material())))
+        desktop.objects.values.append(Layout(Object(Material.MaterialType.normal)))
+        desktop.objects.values.append(Layout(Object(BlendType.addition)))
+        desktop.objects.values.append(Layout(Object(Effect())))
+        desktop.objects.values.append(Layout(Object(Drawing())))
+////        desktop.objects.values.append(Layout(Object(Lines())))//drawing
+        desktop.objects.values.append(Layout(Object(Line())))
+        desktop.objects.values.append(Layout(Object(Color())))
+        desktop.objects.values.append(Layout(Object(Transform())))
+        desktop.objects.values.append(Layout(Object(SineWave())))
+        desktop.objects.values.append(Layout(Object(KeyframeTiming())))
+        desktop.objects.values.append(Layout(Object(KeyframeTiming.Label.main)))
+        desktop.objects.values.append(Layout(Object(KeyframeTiming.Loop.began)))
+        desktop.objects.values.append(Layout(Object(KeyframeTiming.Interpolation.linear)))
+        desktop.objects.values.append(Layout(Object(Easing())))
+        desktop.objects.values.append(Layout(Object(Size())))
+        desktop.objects.values.append(Layout(Object(Point())))
+        desktop.objects.values.append(Layout(Object(Real())))
+        desktop.objects.values.append(Layout(Object(Rational())))
+        desktop.objects.values.append(Layout(Object(Int())))
+        desktop.objects.values.append(Layout(Object(Bool())))
         
         desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)

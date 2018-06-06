@@ -47,7 +47,8 @@ struct TempoTrack: Track, Codable {
             }
         }
     }
-    
+}
+extension TempoTrack {
     func realBeatTime(withSecondTime second: Second,
                       defaultTempo: BPM = TempoTrack.defaultTempo) -> RealBeat {
         guard animation.loopFrames.count >= 2 else {

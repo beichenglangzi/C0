@@ -147,6 +147,10 @@ struct Animation<Value: KeyframeValue>: Codable {
     }
 
     var editingKeyframeIndex: KeyframeIndex
+    var editingKeyframe: Keyframe<Value> {
+        get { return keyframes[editingKeyframeIndex] }
+        set { keyframes[editingKeyframeIndex] = newValue }
+    }
     var selectedKeyframeIndexes: [KeyframeIndex]
 
     init(keyframes: [Keyframe<Value>] = [], beginTime: Rational = 0, duration: Rational = 1,
@@ -723,7 +727,7 @@ extension AnimationView: Newable {
                 if index == ii.index {
                     movedIndexes.insert(index + 1, at: i + 1)
                 }
-                pushSelectedKeyframeIndexes(movedIndexes, to: version)
+//                pushSelectedKeyframeIndexes(movedIndexes, to: version)
                 break
             }
         }

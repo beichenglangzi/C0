@@ -17,30 +17,33 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-struct Desktop {
-    var copiedObjects = [Object(false)]
+struct Desktop: Zoomable {
+    var version = Version()
+    var copiedObjects = Selection<Object>()
+    var transform = Transform()
+    var objects = Selection<Layout<Object>>()
     var isHiddenActionList = false
     let actionList = ActionList()
-    var objects = [Layout<Object>]()
-    var version = Version()
 }
 extension Desktop: Codable {
     private enum CodingKeys: String, CodingKey {
-        case copiedObjects, isHiddenActionList, objects, version
+        case version, copiedObjects, transform, objects, isHiddenActionList
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        copiedObjects = try values.decode([Object].self, forKey: .copiedObjects)
-        isHiddenActionList = try values.decode(Bool.self, forKey: .isHiddenActionList)
-        objects = try values.decode([Layout<Object>].self, forKey: .objects)
         version = try values.decode(Version.self, forKey: .version)
+        copiedObjects = try values.decode(Selection<Object>.self, forKey: .copiedObjects)
+        transform = try values.decode(Transform.self, forKey: .transform)
+        objects = try values.decode(Selection<Layout<Object>>.self, forKey: .objects)
+        isHiddenActionList = try values.decode(Bool.self, forKey: .isHiddenActionList)
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(copiedObjects, forKey: .copiedObjects)
-        try container.encode(isHiddenActionList, forKey: .isHiddenActionList)
-        try container.encode(objects, forKey: .objects)
         try container.encode(version, forKey: .version)
+        try container.encode(copiedObjects, forKey: .copiedObjects)
+        try container.encode(transform, forKey: .transform)
+        try container.encode(objects, forKey: .objects)
+        try container.encode(isHiddenActionList, forKey: .isHiddenActionList)
     }
 }
 extension Desktop: Referenceable {
@@ -48,8 +51,8 @@ extension Desktop: Referenceable {
 }
 extension Desktop {
     static let isHiddenActionListOption = BoolOption(defaultModel: false, cationModel: nil,
-                                                        name: ActionList.name,
-                                                        info: .hidden)
+                                                     name: ActionList.name,
+                                                     info: .hidden)
     static let copiedObjectsInferenceName = Text(english: "Copied", japanese: "コピー済み")
 }
 extension Desktop: AbstractViewable {
@@ -79,7 +82,7 @@ final class DesktopBinder: BinderProtocol {
         objectsDataModel = DataModel(key: objectsDataModelKey, directoryWith: [])
         dataModel = DataModel(key: dataModelKey,
                               directoryWith: [diffDesktopDataModel, objectsDataModel])
-
+        
         diffDesktopDataModel.dataClosure = { [unowned self] in self.rootModel.jsonData }
     }
     
@@ -91,7 +94,7 @@ final class DesktopBinder: BinderProtocol {
             } else {
                 dataModel.insert(objectsDataModel)
             }
-
+            
             if let dDesktopDataModel = dataModel.children[diffDesktopDataModelKey] {
                 self.diffDesktopDataModel = dDesktopDataModel
             } else {
@@ -104,9 +107,7 @@ final class DesktopBinder: BinderProtocol {
     var diffDesktopDataModel: DataModel {
         didSet {
             if let desktop = diffDesktopDataModel.readObject(Desktop.self) {
-                diffDesktopDataModel.stopIsWriteClosure {
-                    self.rootModel = desktop
-                }
+                diffDesktopDataModel.stopIsWriteClosure { self.rootModel = desktop }
             }
             diffDesktopDataModel.dataClosure = { [unowned self] in self.rootModel.jsonData }
         }
@@ -116,14 +117,9 @@ final class DesktopBinder: BinderProtocol {
     var objectsDataModel: DataModel
 }
 
-/**
- Issue: sceneViewを取り除く
- */
 final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Desktop
     typealias Binder = T
-    typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
-    typealias Notification = BasicNotification
     var binder: Binder {
         didSet { updateWithModel() }
     }
@@ -131,18 +127,19 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         didSet { updateWithModel() }
     }
     var notifications = [((DesktopView<Binder>, BasicNotification) -> ())]()
-
+    
     var defaultModel: Model {
         return Model()
     }
     
     let versionView: VersionView<Binder>
     let copiedObjectsNameView = TextFormView(text: Desktop.copiedObjectsInferenceName + ":")
-    let copiedObjectsView: ArrayView<Object, Binder>
+    let copiedObjectsView: SelectionView<Object, Binder>
+    //transformView
+    let objectsView: SelectionView<Layout<Object>, Binder>
     let isHiddenActionListView: BoolView<Binder>
-    let objectsView: ArrayView<Layout<Object>, Binder>
     let actionListView: ActionListFormView
-
+    
     var versionWidth = 150.0.cg
     var topViewsHeight = Layouter.basicHeight {
         didSet { updateLayout() }
@@ -150,26 +147,26 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     init(binder: Binder, keyPath: BinderKeyPath,
          frame: Rect = Rect(), sizeType: SizeType = .regular) {
-
+        
         self.binder = binder
         self.keyPath = keyPath
-        
-        let ihamKeyPath = keyPath.appending(path: \Model.isHiddenActionList)
-        isHiddenActionListView = BoolView(binder: binder, keyPath: ihamKeyPath,
-                                             option: Model.isHiddenActionListOption,
-                                             sizeType: sizeType)
         
         versionView = VersionView(binder: binder,
                                   keyPath: keyPath.appending(path: \Model.version),
                                   sizeType: sizeType)
-        copiedObjectsView = ArrayView(binder: binder,
-                                      keyPath: keyPath.appending(path: \Model.copiedObjects),
-                                      sizeType: .small, abstractType: .mini)
-        objectsView = ArrayView(binder: binder,
-                                keyPath: keyPath.appending(path: \Model.objects),
-                                sizeType: sizeType, abstractType: .normal)
+        copiedObjectsView = SelectionView(binder: binder,
+                                          keyPath: keyPath.appending(path: \Model.copiedObjects),
+                                          sizeType: .small, abstractType: .mini)
+        objectsView = SelectionView(binder: binder,
+                                    keyPath: keyPath.appending(path: \Model.objects),
+                                    sizeType: sizeType)
+        let ihamKeyPath = keyPath.appending(path: \Model.isHiddenActionList)
+        isHiddenActionListView = BoolView(binder: binder, keyPath: ihamKeyPath,
+                                          option: Model.isHiddenActionListOption,
+                                          sizeType: sizeType)
         actionListView = ActionListFormView()
         actionListView.isHidden = binder[keyPath: keyPath].isHiddenActionList
+        
         super.init()
         fillColor = .background
         
@@ -207,9 +204,9 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
                                        width: cw, height: topViewsHeight)
         updateCopiedObjectViewPositions()
         isHiddenActionListView.frame = Rect(x: 100, y: headerY,
-                                               width: ihamvw, height: topViewsHeight)
+                                            width: ihamvw, height: topViewsHeight)
         isHiddenActionListView.frame = Rect(x: copiedObjectsView.frame.maxX, y: headerY,
-                                               width: ihamvw, height: topViewsHeight)
+                                            width: ihamvw, height: topViewsHeight)
         
         if model.isHiddenActionList {
             objectsView.frame = Rect(x: padding,
@@ -225,9 +222,9 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
                                      width: ow,
                                      height: bounds.height - topViewsHeight - padding * 2)
             actionListView.frame = Rect(x: padding + ow,
-                                           y: padding,
-                                           width: actionWidth,
-                                           height: h)
+                                        y: padding,
+                                        width: actionWidth,
+                                        height: h)
         }
         objectsView.bounds.origin = Point(x: -(objectsView.frame.width / 2).rounded(),
                                           y: -(objectsView.frame.height / 2).rounded())
@@ -242,7 +239,7 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
             updateLayout()
         }
     }
-
+    
     var objectViewWidth = 80.0.cg
     private func updateCopiedObjectViews() {
         copiedObjectsView.updateWithModel()
@@ -268,10 +265,10 @@ extension DesktopView: Undoable {
 }
 extension DesktopView: CopiedObjectsViewer {
     var copiedObjects: [Object] {
-        get { return copiedObjectsView.model }
-        set { copiedObjectsView.model = newValue }
+        get { return copiedObjectsView.valuesView.model }
+        set { copiedObjectsView.valuesView.model = newValue }
     }
     func push(_ copiedObjects: [Object], to version: Version) {
-        copiedObjectsView.push(copiedObjects, to: version)
+        copiedObjectsView.valuesView.push(copiedObjects, to: version)
     }
 }

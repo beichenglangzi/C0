@@ -34,9 +34,10 @@ struct Sound {
         }
     }
     private var bookmark: Data?
+    
     var name = ""
     var volume = 1.0
-    var isHidden = false
+    var mute = false
     
     init() {}
     init?(url: URL) {
@@ -127,19 +128,19 @@ extension Sound {
 extension Sound: Equatable {
     static func ==(lhs: Sound, rhs: Sound) -> Bool {
         return lhs.url == rhs.url && lhs.name == rhs.name
-            && lhs.volume == rhs.volume && lhs.isHidden == rhs.isHidden
+            && lhs.volume == rhs.volume && lhs.mute == rhs.mute
     }
 }
 extension Sound: Codable {
     private enum CodingKeys: String, CodingKey {
-        case bookmark, name, volume, isHidden
+        case bookmark, name, volume, mute
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         bookmark = try values.decodeIfPresent(Data.self, forKey: .bookmark)
         name = try values.decode(String.self, forKey: .name)
         volume = try values.decode(Double.self, forKey: .volume)
-        isHidden = try values.decode(Bool.self, forKey: .isHidden)
+        mute = try values.decode(Bool.self, forKey: .mute)
         url = URL(bookmark: bookmark)
     }
     func encode(to encoder: Encoder) throws {
@@ -147,7 +148,7 @@ extension Sound: Codable {
         try container.encodeIfPresent(bookmark, forKey: .bookmark)
         try container.encode(name, forKey: .name)
         try container.encode(volume, forKey: .volume)
-        try container.encode(isHidden, forKey: .isHidden)
+        try container.encode(mute, forKey: .mute)
     }
 }
 extension Sound: Referenceable {

@@ -240,6 +240,9 @@ final class BasicViewStroker: ViewStroker {
             tempDistance = 0
             temps = [Temp(control: fc, speed: 0)]
             beginTime = time
+            if let lineView = line?.view(lineWidth: 1, fillColor: .black) {
+                view.append(child: lineView)
+            }
         case .changed:
             guard var line = line, p != oldPoint else { return }
             let d = p.distance(oldPoint)
@@ -274,7 +277,11 @@ final class BasicViewStroker: ViewStroker {
             line.controls[line.controls.count - 2] = lc
             line.controls[line.controls.count - 1] = lc
             self.line = line
-            
+            if let lineView = line.view(lineWidth: 1, fillColor: .black) {
+                view.children.last?.removeFromParent()
+                view.append(child: lineView)
+            }
+            print(line.controls)
             oldTime = time
             oldPoint = p
         case .ended:

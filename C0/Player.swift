@@ -21,10 +21,10 @@ import struct Foundation.Date
 import class CoreGraphics.CGContext
 
 struct Player: Codable {
-    var time = Second(0), isEnableDelay = false, volume = 1.0.cg, isMute = false
-    var playRange: ClosedRange<Double> = -0.5...2.0, isUsingRange = false
+    var time = Second(0.0), isEnableDelay = false, volume = 1.0.cg, isMute = false
+    var playRange: ClosedRange<Real> = -0.5...2.0, isUsingRange = false
     var isPlaying = false
-    var playingTime = Second(0), playingFrameRate = FPS(0)
+    var playingTime = Second(0.0), playingFrameRate = FPS(0.0)
     
     static func minuteSecondString(withSecond s: Int, frameRate: FPS) -> String {
         if s >= 60 {
