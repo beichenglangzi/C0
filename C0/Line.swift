@@ -82,11 +82,6 @@ extension Array where Element == Line.Control {
     }
 }
 extension Line {
-    static func *(lhs: Line, rhs: AffineTransform) -> Line {
-        return Line(controls: lhs.controls.map {
-            Control(point: $0.point * rhs, pressure: $0.pressure)
-        })
-    }
     func reversed() -> Line {
         return Line(controls: controls.reversed())
     }
@@ -734,12 +729,13 @@ extension Line {
             }
             
             let lp = controls[controls.count - 1].point
-            let lastTheta = lastAngle + .pi / 2, lpres = s * controls[controls.count - 1].pressure
+            let lastTheta = lastAngle - .pi / 2, lpres = s * controls[controls.count - 1].pressure
             es.append(.linear(lp + Point(x: lpres * cos(lastTheta),
                                          y: lpres * sin(lastTheta))))
             
             es.append(.arc(PathLine.Arc(radius: lpres,
-                                        startAngle: firstTheta + .pi, endAngle: firstTheta - .pi)))
+                                        startAngle: firstTheta + .pi,
+                                        endAngle: firstTheta - .pi)))
             es += res.reversed()
             es.append(.arc(PathLine.Arc(radius: fpres,
                                         startAngle: firstTheta - .pi, endAngle: firstTheta + .pi)))
@@ -751,6 +747,13 @@ extension Line {
             view.fillColor = fillColor
             return view
         }
+    }
+}
+extension Line: AppliableAffineTransform {
+    static func *(lhs: Line, rhs: AffineTransform) -> Line {
+        return Line(controls: lhs.controls.map {
+            Control(point: $0.point * rhs, pressure: $0.pressure)
+        })
     }
 }
 extension Line.Control: Codable {
@@ -836,8 +839,8 @@ extension Line: Interpolatable {
     }
 }
 extension Line: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
+    func thumbnailView(withFrame frame: Rect) -> View {
+        let thumbnailView = View(drawClosure: { self.draw(with: $2, in: $0) })
         thumbnailView.frame = frame
         return thumbnailView
     }
@@ -849,11 +852,10 @@ extension Line: ThumbnailViewable {
     }
 }
 extension Line: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
+    func abstractViewWith<T: BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Line>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
-        return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        return MiniView(binder: binder, keyPath: keyPath)
     }
 }
 extension Line: ObjectViewable {}

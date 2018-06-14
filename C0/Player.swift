@@ -40,19 +40,18 @@ extension Player: Referenceable {
     static let name = Text(english: "Player", japanese: "プレイヤー")
 }
 extension Player {
-    static let playingFrameRateOption = RealGetterOption(numberOfDigits: 1, unit: " fps")
+    static let playingFrameRateOption = RealGetterOption(numberOfDigits: 0, unit: " fps")
     static let timeOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1)
 }
 extension Player: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return "\(time) b".thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return "\(time) b".thumbnailView(withFrame: frame)
     }
 }
 extension Player: AbstractViewable {
     func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Player>,
-                             frame: Rect, _ sizeType: SizeType,
                              type: AbstractType) -> ModelView where T : BinderProtocol {
-        return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        return MiniView(binder: binder, keyPath: keyPath)
     }
 }
 extension Player: ObjectViewable {}
@@ -99,11 +98,11 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
     private(set) var second = 0 {
         didSet {
             guard second != oldValue else { return }
-            let oldBounds = timeStringView.bounds
+            let oldSize = timeStringView.minSize
             let string = Player.minuteSecondString(withSecond: second,
                                                    frameRate: scene.timeline.frameRate)
             timeStringView.text = Text(string)
-            if oldBounds.size != timeStringView.bounds.size { updateLayout() }
+            if oldSize != timeStringView.minSize { updateLayout() }
         }
     }
     
@@ -114,7 +113,7 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
     let timeStringView = TextFormView(text: "00:00", color: .locked)
     let playingFrameRateView: RealGetterView<Binder>
     let timeView: SlidableRealView<Binder>
-    let drawView = View(drawClosure: { _, _ in })
+    let drawView = View(drawClosure: { _, _, _ in })
     
     var isPlaying = false {
         didSet {
@@ -163,22 +162,20 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
         }
     }
     
-    init(binder: Binder, keyPath: BinderKeyPath, sceneKeyPath: KeyPath<Binder, Scene>,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath, sceneKeyPath: KeyPath<Binder, Scene>) {
         self.binder = binder
         self.keyPath = keyPath
         self.sceneKeyPath = sceneKeyPath
         playingFrameRateView
             = RealGetterView(binder: binder,
                              keyPath: keyPath.appending(path: \Model.playingFrameRate),
-                             option: Model.playingFrameRateOption,
-                             sizeType: sizeType)
+                             option: Model.playingFrameRateOption)
         
         timeView = SlidableRealView(binder: binder, keyPath: keyPath.appending(path: \Model.time),
-                                    option: Model.timeOption, sizeType: sizeType)
-        super.init()
-        drawView.drawClosure = { [unowned self] ctx, _ in self.draw(in: ctx) }
+                                    option: Model.timeOption)
+        
+        super.init(isLocked: false)
+        drawView.drawClosure = { [unowned self] ctx, _, _ in self.draw(in: ctx) }
         
         children = [drawView, timeStringView, playingFrameRateView, timeView]
         
@@ -206,17 +203,23 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
         return view
     }
 
+    var minSize: Size {
+        let padding = Layouter.basicPadding
+        let w = timeStringView.minSize.width
+            + timeView.minSize.width + playingFrameRateView.minSize.width
+        return Size(width: w + padding * 2, height: timeView.minSize.height + padding * 2)
+    }
     override func updateLayout() {
         let padding = Layouter.basicPadding, height = Layouter.basicHeight
         
         drawView.frame = Rect(x: padding, y: padding + height,
                               width: bounds.width - padding * 2,
                               height: bounds.height - height - padding * 2)
-        screenTransform = AffineTransform(translation: drawView.bounds.midPoint)
+//        screenTransform = AffineTransform(translation: drawView.bounds.centerPoint)
         
-        
-        timeStringView.frame.origin = Point(x: padding, y: padding * 2)
-        let frw = Layouter.valueWidth(with: .regular)
+        let timeMinSize = timeStringView.minSize
+        timeStringView.frame = Rect(origin: Point(x: padding, y: padding * 2), size: timeMinSize)
+        let frw = Layouter.basicValueWidth
         playingFrameRateView.frame = Rect(x: bounds.width - frw - padding,
                                           y: padding * 2, width: frw, height: height - padding * 2)
         let sliderWidth = playingFrameRateView.frame.minX - timeStringView.frame.maxX - padding * 2
@@ -226,14 +229,16 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
                                                                padding: timeView.padding)]
     }
     func updateWithModel() {
+        playingFrameRateView.updateWithModel()
+        timeView.updateWithModel()
         displayLink?.frameRate = scene.timeline.frameRate
     }
     private func updateWithFrameRate() {
-        let oldBounds = playingFrameRateView.bounds
+        let oldMinSize = playingFrameRateView.minSize
         playingFrameRateView.updateWithModel()
         playingFrameRateView.optionStringView.textMaterial.color
             = playingFrameRate < scene.timeline.frameRate ? .warning : .locked
-        if oldBounds.size != playingFrameRateView.bounds.size { updateLayout() }
+        if oldMinSize != playingFrameRateView.minSize { updateLayout() }
     }
     var allowableDelayTime = Second(0.1)
     private func updatePlayTime() {

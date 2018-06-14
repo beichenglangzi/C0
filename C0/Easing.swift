@@ -49,9 +49,9 @@ extension Easing {
         return cp0.x == cp0.y && cp1.x == cp1.y
     }
     func path(in pb: Rect) -> Path {
-        let b = bezier
-        let cp0 = Point(x: pb.minX + b.cp0.x * pb.width, y: pb.minY + b.cp0.y * pb.height)
-        let cp1 = Point(x: pb.minX + b.cp1.x * pb.width, y: pb.minY + b.cp1.y * pb.height)
+//        let b = bezier
+//        let cp0 = Point(x: pb.minX + b.cp0.x * pb.width, y: pb.minY + b.cp0.y * pb.height)
+//        let cp1 = Point(x: pb.minX + b.cp1.x * pb.width, y: pb.minY + b.cp1.y * pb.height)
         var path = Path()
 //        path.move(to: Point(x: pb.minX, y: pb.minY))
 //        path.addCurve(to: Point(x: pb.maxX, y: pb.maxY), control1: cp0, control2: cp1)
@@ -72,8 +72,8 @@ extension Easing: Referenceable {
     static let name = Text(english: "Easing", japanese: "イージング")
 }
 extension Easing: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
+    func thumbnailView(withFrame frame: Rect) -> View {
+        let thumbnailView = View(drawClosure: { self.draw(with: $2, in: $0) })
         thumbnailView.frame = frame
         return thumbnailView
     }
@@ -86,15 +86,17 @@ extension Easing: ThumbnailViewable {
     }
 }
 extension Easing: AbstractViewable {
+    var defaultAbstractConstraintSize: Size {
+        return Size(width: 100, height: 100)
+    }
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Easing>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return EasingView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+            return EasingView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -118,13 +120,10 @@ final class EasingView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     let cp0View: SlidablePointView<Binder>, cp1View: SlidablePointView<Binder>
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     var padding = Layouter.basicPadding {
         didSet { updateLayout() }
     }
-    private let classXNameView: TextFormView, classYNameView: TextFormView
+    private let xNameView: TextFormView, yNameView: TextFormView
     private let controlLinePathView: View = {
         let controlLine = View(path: Path())
         controlLine.lineColor = .content
@@ -144,9 +143,7 @@ final class EasingView<T: BinderProtocol>: ModelView, BindableReceiver {
         return axisPathView
     } ()
     
-    init(binder: T, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: T, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
@@ -157,18 +154,17 @@ final class EasingView<T: BinderProtocol>: ModelView, BindableReceiver {
                                     keyPath: keyPath.appending(path: \Model.cp1),
                                     option: Easing.cp1Option)
         
-        self.sizeType = sizeType
-        classXNameView = TextFormView(text: "t", font: Font.italic(with: sizeType))
-        classYNameView = TextFormView(text: "t'", font: Font.italic(with: sizeType))
+        xNameView = TextFormView(text: "t", font: .italic)
+        yNameView = TextFormView(text: "t'", font: .italic)
         
-        super.init()
-        children = [classXNameView, classYNameView,
+        super.init(isLocked: false)
+        children = [xNameView, yNameView,
                     controlLinePathView, easingLinePathView, axisPathView, cp0View, cp1View]
-        self.frame = frame
     }
     
-    override var defaultBounds: Rect {
-        return Rect(x: 0, y: 0, width: 100, height: 100)
+    var minSize: Size {
+        return Size(square: Layouter.defaultMinWidth * 2
+            + cp0View.padding + cp1View.padding + Layouter.basicPadding * 2)
     }
     override func updateLayout() {
         cp0View.frame = Rect(x: padding,
@@ -179,26 +175,28 @@ final class EasingView<T: BinderProtocol>: ModelView, BindableReceiver {
                              y: padding + (bounds.height - padding * 2) / 2,
                              width: (bounds.width - padding * 2) / 2,
                              height: (bounds.height - padding * 2) / 2)
+        let xNameMinSize = xNameView.minSize, yNameMinSize = yNameView.minSize
         var path = Path()
         let sp = Layouter.smallPadding
         let p0 = Point(x: padding + cp0View.padding,
-                       y: bounds.height - padding - classYNameView.frame.height - sp)
+                       y: bounds.height - padding - yNameMinSize.height - sp)
         let p1 = Point(x: padding + cp0View.padding,
                        y: padding + cp0View.padding)
-        let p2 = Point(x: bounds.width - padding - classXNameView.frame.width - sp,
+        let p2 = Point(x: bounds.width - padding - xNameMinSize.width - sp,
                        y: padding + cp0View.padding)
         path.append(PathLine(points: [p0, p1, p2]))
         axisPathView.path = path
-        classXNameView.frame.origin = Point(x: bounds.width - padding - classXNameView.frame.width,
-                                            y: padding)
-        classYNameView.frame.origin = Point(x: padding,
-                                            y: bounds.height - padding - classYNameView.frame.height)
+        xNameView.position = Point(x: bounds.width - padding - xNameMinSize.width,
+                                   y: padding)
+        yNameView.position = Point(x: padding,
+                                   y: bounds.height - padding - yNameMinSize.height)
         updatePathLayout()
     }
     private func updatePathLayout() {
-        guard !bounds.isEmpty else { return }
-        easingLinePathView.path = model.path(in: bounds.insetBy(dx: padding + cp0View.padding,
-                                                                dy: padding + cp0View.padding))
+        let pathBounds = bounds.insetBy(dx: padding + cp0View.padding,
+                                        dy: padding + cp1View.padding)
+        guard !pathBounds.isEmpty else { return }
+        easingLinePathView.path = model.path(in: pathBounds)
         var knobLinePath = Path()
         knobLinePath.append(PathLine(points: [Point(x: cp0View.frame.minX + cp0View.padding,
                                                     y: cp0View.frame.minY + cp0View.padding),

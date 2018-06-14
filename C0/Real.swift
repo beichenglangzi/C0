@@ -177,13 +177,12 @@ extension Real: Referenceable {
                            japanese: "実数 (\(MemoryLayout<Real>.size * 8)bit)")
 }
 extension Real: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return String(self).thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return String(self).thumbnailView(withFrame: frame)
     }
 }
 extension Real: AbstractViewable {
     func abstractViewWith<T: BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Real>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
@@ -191,10 +190,9 @@ extension Real: AbstractViewable {
                                     option: RealOption(defaultModel: 0,
                                                        minModel: -.greatestFiniteMagnitude,
                                                        maxModel: .greatestFiniteMagnitude,
-                                                       modelInterval: 0.1),
-                                    frame: frame, sizeType: sizeType)
+                                                       modelInterval: 0.1))
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }

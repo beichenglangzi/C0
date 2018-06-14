@@ -60,21 +60,19 @@ extension Keyframe: Referenceable {
     }
 }
 extension Keyframe: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return timing.interpolation.displayText.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return timing.interpolation.displayText.thumbnailView(withFrame: frame)
     }
 }
 extension Keyframe: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Keyframe>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return KeyframeView(binder: binder, keyPath: keyPath,
-                                frame: frame, sizeType: sizeType)
+            return KeyframeView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -128,15 +126,13 @@ extension KeyframeTiming.Label: AbstractViewable {
     func abstractViewWith
         <T : BinderProtocol>(binder: T,
                              keyPath: ReferenceWritableKeyPath<T, KeyframeTiming.Label>,
-                             frame: Rect, _ sizeType: SizeType,
                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return EnumView(binder: binder, keyPath: keyPath,
-                            option: KeyframeTiming.Label.defaultOption,
-                            frame: frame, sizeType: sizeType)
+                            option: KeyframeTiming.Label.defaultOption)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -173,15 +169,13 @@ extension KeyframeTiming.Loop: AbstractViewable {
     func abstractViewWith
         <T : BinderProtocol>(binder: T,
                              keyPath: ReferenceWritableKeyPath<T, KeyframeTiming.Loop>,
-                             frame: Rect, _ sizeType: SizeType,
                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return EnumView(binder: binder, keyPath: keyPath,
-                            option: KeyframeTiming.Loop.defaultOption,
-                            frame: frame, sizeType: sizeType)
+                            option: KeyframeTiming.Loop.defaultOption)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -220,37 +214,33 @@ extension KeyframeTiming.Interpolation: AbstractViewable {
     func abstractViewWith
         <T : BinderProtocol>(binder: T,
                              keyPath: ReferenceWritableKeyPath<T, KeyframeTiming.Interpolation>,
-                             frame: Rect, _ sizeType: SizeType,
                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return EnumView(binder: binder, keyPath: keyPath,
-                            option: KeyframeTiming.Interpolation.defaultOption,
-                            frame: frame, sizeType: sizeType)
+                            option: KeyframeTiming.Interpolation.defaultOption)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
 extension KeyframeTiming.Interpolation: ObjectViewable {}
 
 extension KeyframeTiming: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return interpolation.displayText.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return interpolation.displayText.thumbnailView(withFrame: frame)
     }
 }
 extension KeyframeTiming: AbstractViewable {
     func abstractViewWith
         <T : BinderProtocol>(binder: T,
                              keyPath: ReferenceWritableKeyPath<T, KeyframeTiming>,
-                             frame: Rect, _ sizeType: SizeType,
                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return KeyframeTimingView(binder: binder, keyPath: keyPath,
-                                      frame: frame, sizeType: sizeType)
+            return KeyframeTimingView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -293,26 +283,27 @@ final class KeyframeView<Value: KeyframeValue, T: BinderProtocol>: ModelView, Bi
     
     var defaultModel = Model()
     
-    var keyValueView: View
+    var keyValueView: View & LayoutMinSize
     var keyframeTimingView: KeyframeTimingView<Binder>
     
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         let keyValueKeyPath = keyPath.appending(path: \Model.value)
         keyValueView = binder[keyPath: keyPath].value.abstractViewWith(binder: binder,
                                                                        keyPath: keyValueKeyPath,
-                                                                       frame: Rect(),
-                                                                       sizeType, type: .normal)
+                                                                       type: .normal)
         keyframeTimingView = KeyframeTimingView(binder: binder,
-                                                keyPath: keyPath.appending(path: \Model.timing),
-                                                sizeType: sizeType)
-        super.init()
+                                                keyPath: keyPath.appending(path: \Model.timing))
+        
+        super.init(isLocked: false)
         
     }
     
+    var minSize: Size {
+        let kvms = keyValueView.minSize, ktms = keyframeTimingView.minSize
+        return Size(width: max(kvms.width, ktms.width), height: kvms.height + ktms.height)
+    }
     override func updateLayout() {
         
     }
@@ -346,64 +337,57 @@ final class KeyframeTimingView<T: BinderProtocol>: ModelView, BindableReceiver {
     let interpolationView: EnumView<KeyframeTiming.Interpolation, Binder>
     let easingView: EasingView<Binder>
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     let classNameView: TextFormView
     
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
         labelView = EnumView(binder: binder,
                              keyPath: keyPath.appending(path: \Model.label),
-                             option: Model.labelOption, sizeType: sizeType)
+                             option: Model.labelOption, isUninheritance: true)
         loopView = EnumView(binder: binder,
                             keyPath: keyPath.appending(path: \Model.loop),
-                            option: Model.loopOption, sizeType: sizeType)
+                            option: Model.loopOption, isUninheritance: true)
         interpolationView = EnumView(binder: binder,
                                      keyPath: keyPath.appending(path: \Model.interpolation),
-                                     option: Model.interpolationOption, sizeType: sizeType)
+                                     option: Model.interpolationOption, isUninheritance: true)
         easingView = EasingView(binder: binder,
-                                keyPath: keyPath.appending(path: \Model.easing),
-                                sizeType: sizeType)
+                                keyPath: keyPath.appending(path: \Model.easing))
         
-        self.sizeType = sizeType
-        classNameView = TextFormView(text: Model.name, font: Font.bold(with: sizeType))
+        classNameView = TextFormView(text: Model.name, font: .bold)
         
-        super.init()
+        super.init(isLocked: false)
         children = [classNameView, labelView, loopView, interpolationView, easingView]
-        self.frame = frame
     }
     
-    override var defaultBounds: Rect {
-        let w = max(labelView.defaultBounds.width, interpolationView.defaultBounds.width,
-                    loopView.defaultBounds.width, easingView.defaultBounds.width)
-        let padding = Layouter.padding(with: sizeType)
-        let h = Layouter.height(with: sizeType)
-        let dh = h * 4 + easingView.frame.width + classNameView.frame.height
-        return Rect(x: 0, y: 0, width: w + padding * 2, height: dh + padding * 2)
+    var minSize: Size {
+        let w = max(labelView.minSize.width, interpolationView.minSize.width,
+                    loopView.minSize.width, easingView.minSize.width)
+        let padding = Layouter.basicPadding
+        let h = Layouter.basicHeight
+        let dh = h * 4 + easingView.minSize.width + classNameView.frame.height
+        return Size(width: w + padding * 2, height: dh + padding * 2)
     }
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType)
-        let w = bounds.width - padding * 2, h = Layouter.height(with: sizeType)
+        let padding = Layouter.basicPadding
+        let classNameSize = classNameView.minSize
+        let classNameOrigin = Point(x: padding,
+                                    y: bounds.height - classNameSize.height - padding)
+        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
+        
+        let w = bounds.width - padding * 2, h = Layouter.basicHeight
         var y = bounds.height - classNameView.frame.height - padding
-        classNameView.frame.origin = Point(x: padding, y: y)
+        let labelSize = labelView.minSize
         labelView.frame = Rect(x: classNameView.frame.maxX + padding, y: y - padding * 2,
-                                 width: w - classNameView.frame.width - padding, height: h)
+                                 width: labelSize.width, height: labelSize.height)
         y -= h + padding * 2
-        interpolationView.frame = Rect(x: padding, y: y, width: w, height: h)
+        let interpolationSize = interpolationView.minSize
+        interpolationView.frame = Rect(origin: Point(x: padding, y: y), size: interpolationSize)
         y -= h
-        loopView.frame = Rect(x: padding, y: y, width: w, height: h)
+        let loopSize = loopView.minSize
+        loopView.frame = Rect(origin: Point(x: padding, y: y), size: loopSize)
         easingView.frame = Rect(x: padding, y: padding, width: w, height: y - padding)
-    }
-    func updateWithModel() {
-        labelView.updateWithModel()
-        loopView.updateWithModel()
-        interpolationView.updateWithModel()
-        easingView.updateWithModel()
     }
     
     func clippedModel(_ model: Model) -> Model {

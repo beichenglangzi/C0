@@ -92,21 +92,19 @@ extension Material: Interpolatable {
 extension Material: Initializable {}
 extension Material: KeyframeValue {}
 extension Material: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return View(frame: frame, fillColor: color, isLocked: true)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return View(frame: frame, fillColor: color)
     }
 }
 extension Material: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Material>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return MaterialView(binder: binder, keyPath: keyPath,
-                                frame: frame, sizeType: sizeType)
+            return MaterialView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -127,7 +125,7 @@ extension Material.MaterialType: DisplayableText {
         case .subtract: return Text(english: "Subtract", japanese: "減算")
         }
     }
-    static var displayTexts: [Text] {
+    static var displayTexts: [Text] {//swfit4.2
         return [normal.displayText,
                 lineless.displayText,
                 blur.displayText,
@@ -148,15 +146,13 @@ extension Material.MaterialType: AbstractViewable {
     func abstractViewWith
         <T : BinderProtocol>(binder: T,
                              keyPath: ReferenceWritableKeyPath<T, Material.MaterialType>,
-                             frame: Rect, _ sizeType: SizeType,
                              type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return EnumView(binder: binder, keyPath: keyPath,
-                            option: Material.MaterialType.defaultOption,
-                            frame: frame, sizeType: sizeType)
+                            option: Material.MaterialType.defaultOption)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -212,41 +208,39 @@ final class MaterialView<T: BinderProtocol>: ModelView, BindableReceiver {
     let classNameView = TextFormView(text: Material.name, font: .bold)
     private let lineColorNameView = TextFormView(text: Text(english: "Line Color",
                                                             japanese: "線のカラー") + ":")
-    private let lineWidthNameView = TextFormView(text: Text(english: "Line Color",
+    private let lineWidthNameView = TextFormView(text: Text(english: "Line Width",
                                                             japanese: "線の幅") + ":")
     
-    init(binder: T, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: T, keyPath: BinderKeyPath, option: ModelOption = ModelOption()) {
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
         
-        typeView = EnumView(binder: binder, keyPath: keyPath.appending(path: \Model.type),
-                            option: option.typeOption, sizeType: sizeType)
-        colorView = ColorView(binder: binder, keyPath: keyPath.appending(path: \Model.color),
-                              sizeType: sizeType)
+        typeView = EnumView(binder: binder,
+                            keyPath: keyPath.appending(path: \Model.type),
+                            option: option.typeOption, isUninheritance: true)
+        colorView = ColorView(binder: binder,
+                              keyPath: keyPath.appending(path: \Model.color))
         lineWidthView = DiscreteRealView(binder: binder,
                                          keyPath: keyPath.appending(path: \Model.lineWidth),
-                                         option: option.lineWidthOption, sizeType: sizeType)
+                                         option: option.lineWidthOption)
         opacityView = SlidableRealView(binder: binder,
                                        keyPath: keyPath.appending(path: \Model.opacity),
-                                       option: option.opacityOption, sizeType: sizeType)
-        lineColorView = ColorView(binder: binder, keyPath: keyPath.appending(path: \Model.lineColor),
-                                  hLineWidth: 2, hWidth: 8, slPadding: 4, sizeType: .small)
+                                       option: option.opacityOption)
+        lineColorView = ColorView(binder: binder,
+                                  keyPath: keyPath.appending(path: \Model.lineColor),
+                                  hLineWidth: 2, hWidth: 8, slPadding: 4)
         
-        super.init()
+        super.init(isLocked: false)
         children = [classNameView,
                     typeView,
                     colorView, lineColorNameView, lineColorView, lineWidthNameView,
                     lineWidthView, opacityView]
-        self.frame = frame
-    }
+}
     
-    override var defaultBounds: Rect {
+    var minSize: Size {
         let padding = Layouter.basicPadding, h = Layouter.basicHeight, cw = MaterialLayout.width
-        return Rect(x: 0, y: 0,
-                    width: cw + MaterialLayout.rightWidth + padding * 2,
+        return Size(width: cw + MaterialLayout.rightWidth + padding * 2,
                     height: cw + classNameView.frame.height + h + padding * 2)
     }
     func defaultBounds(withWidth width: Real) -> Rect {
@@ -260,8 +254,12 @@ final class MaterialView<T: BinderProtocol>: ModelView, BindableReceiver {
         let padding = Layouter.basicPadding
         let h = Layouter.basicHeight, rw = MaterialLayout.rightWidth
         let cw = bounds.width - rw - padding * 2
-        classNameView.frame.origin = Point(x: padding,
-                                           y: bounds.height - classNameView.frame.height - padding)
+        
+        let classNameSize = classNameView.minSize
+        let classNameOrigin = Point(x: padding,
+                                    y: bounds.height - classNameSize.height - padding)
+        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
+        
         let tx = classNameView.frame.maxX + padding
         typeView.frame = Rect(x: tx,
                               y: bounds.height - h * 2 - padding,
@@ -279,12 +277,5 @@ final class MaterialView<T: BinderProtocol>: ModelView, BindableReceiver {
         y -= h
         let opacityFrame = Rect(x: padding + cw, y: y, width: rw, height: h)
         opacityView.updateOpacityViews(withFrame: opacityFrame)
-    }
-    func updateWithModel() {
-        typeView.updateWithModel()
-        colorView.updateWithModel()
-        lineColorView.updateWithModel()
-        lineWidthView.updateWithModel()
-        opacityView.updateWithModel()
     }
 }

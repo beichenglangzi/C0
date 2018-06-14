@@ -28,8 +28,8 @@ extension Variable: Referenceable {
     static let name = Text(english: "Variable", japanese: "変数")
 }
 extension Variable: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return rawValue.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return rawValue.thumbnailView(withFrame: frame)
     }
 }
 

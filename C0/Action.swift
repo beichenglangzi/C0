@@ -67,66 +67,61 @@ extension ActionList: Referenceable {
     static let name = Text(english: "Action List", japanese: "アクション一覧")
 }
 
-final class ActionFormView: View {
+final class ActionFormView: View, LayoutMinSize {
     var action: Action
     
     var nameView: TextFormView, quasimodeDisplayTextView: TextFormView
     
-    init(action: Action, frame: Rect = Rect()) {
+    init(action: Action) {
         self.action = action
         
         nameView = TextFormView(text: action.name)
         quasimodeDisplayTextView = TextFormView(text: action.quasimode.displayText,
                                                 font: Font(monospacedSize: 10),
-                                                frameAlignment: .right, alignment: .right)
+                                                alignment: .right)
         
-        super.init(isLocked: true)
+        super.init()
         lineColor = .formBorder
-        self.frame = frame
         children = [nameView, quasimodeDisplayTextView]
     }
     
-    override var defaultBounds: Rect {
-        let padding = Layouter.basicPadding
-        let width = nameView.bounds.width + padding + quasimodeDisplayTextView.bounds.width
-        let height = nameView.frame.height + Layouter.smallPadding * 2
-        return Rect(x: 0, y: 0, width: width, height: height)
+    var minSize: Size {
+        let nameViewMinSize = nameView.minSize
+        let quasimodeDisplayTextMinSize = quasimodeDisplayTextView.minSize
+        let padding = Layouter.basicPadding, smallPadding = Layouter.smallPadding
+        let width = nameViewMinSize.width + padding + quasimodeDisplayTextMinSize.width
+        let height = nameViewMinSize.height + smallPadding * 2
+        return Size(width: width, height: height)
     }
     override func updateLayout() {
-        let padding = Layouter.smallPadding
-        nameView.frame.origin = Point(x: padding,
-                                      y: bounds.height - nameView.frame.height - padding)
-        quasimodeDisplayTextView.frame.origin
-            = Point(x: bounds.width - quasimodeDisplayTextView.frame.width - padding,
-                    y: bounds.height - nameView.frame.height - padding)
+        let padding = Layouter.basicPadding, smallPadding = Layouter.smallPadding
+        let nameSize = nameView.minSize, quasimodeSize = quasimodeDisplayTextView.minSize
+        let nameOrigin = Point(x: padding,
+                               y: bounds.height - nameSize.height - smallPadding)
+        nameView.frame = Rect(origin: nameOrigin, size: nameSize)
+        
+        let qx = bounds.width - quasimodeSize.width - padding
+        let qy = bounds.height - nameSize.height - smallPadding
+        quasimodeDisplayTextView.frame = Rect(origin: Point(x: qx, y: qy), size: quasimodeSize)
     }
 }
 
-final class SubActionListFormView<T: SubActionList>: View {
+final class SubActionListFormView<T: SubActionList>: View, LayoutMinSize {
     var subActionList: T
     
     init(_ subActionList: T) {
         self.subActionList = subActionList
         
-        super.init(isLocked: true)
+        super.init()
         lineColor = nil
-        bounds = defaultBounds
-        let padding = Layouter.basicPadding
-        let ah = Layouter.basicTextHeight + Layouter.smallPadding * 2
-        let aw = bounds.width - padding * 2
-        var y = bounds.height - padding
-        children = subActionList.actions.map {
-            y -= ah
-            return ActionFormView(action: $0,
-                                  frame: Rect(x: padding, y: y, width: aw, height: ah))
-        }
+        children = subActionList.actions.map { ActionFormView(action: $0) }
     }
     
-    override var defaultBounds: Rect {
+    var minSize: Size {
         let padding = Layouter.basicPadding
         let actionHeight = Layouter.basicTextHeight + Layouter.smallPadding * 2
         let height = actionHeight * Real(subActionList.actions.count) + padding * 2
-        return Rect(x: 0, y: 0, width: Layouter.propertyWidth, height: height)
+        return Size(width: Layouter.propertyWidth, height: height)
     }
     override func updateLayout() {
         let padding = Layouter.basicPadding
@@ -153,12 +148,12 @@ final class ActionListFormView: View {
     let runnableActionListView = SubActionListFormView(RunnableActionList())
     let strokableActionListView = SubActionListFormView(StrokableActionList())
     let movableActionListView = SubActionListFormView(MovableActionList())
-    let subActionListViews: [View]
+    let subActionListViews: [View & LayoutMinSize]
     
     let classNameView = TextFormView(text: ActionList.name, font: .bold)
     var width = 200.0.cg
     
-    init(actionList: ActionList = ActionList(), frame: Rect = Rect()) {
+    init(actionList: ActionList = ActionList()) {
         self.actionList = actionList
         
         subActionListViews = [selectableActionListView, zoomableActionListView,
@@ -166,28 +161,28 @@ final class ActionListFormView: View {
                               runnableActionListView, strokableActionListView,
                               movableActionListView]
         
-        super.init(isLocked: true)
+        super.init()
         lineColor = nil
         children = [classNameView] + subActionListViews
-        self.frame = frame
     }
     
-    override var defaultBounds: Rect {
+    var minSize: Size {
         let padding = Layouter.basicPadding
-        let ah = subActionListViews.reduce(0.0.cg) { $0 + $1.bounds.height }
-        let height = classNameView.frame.height + padding * 3 + ah
-        return Rect(x: 0, y: 0,
-                    width: width + padding * 2, height: height)
+        let ah = subActionListViews.reduce(0.0.cg) { $0 + $1.minSize.height }
+        let height = classNameView.minSize.height + padding * 3 + ah
+        return Size(width: width + padding * 2, height: height)
     }
     override func updateLayout() {
         let padding = Layouter.basicPadding
         let w = bounds.width - padding * 2
-        var y = bounds.height - classNameView.frame.height - padding
-        classNameView.frame.origin = Point(x: padding, y: y)
+        let classNameFitSize = classNameView.minSize
+        var y = bounds.height - classNameFitSize.height - padding
+        classNameView.frame = Rect(origin: Point(x: padding, y: y), size: classNameFitSize)
         y -= padding
         _ = subActionListViews.reduce(y) {
-            let ny = $0 - $1.frame.height
-            $1.frame = Rect(x: padding, y: ny, width: w, height: $1.frame.height)
+            let h = $1.minSize.height
+            let ny = $0 - h
+            $1.frame = Rect(x: padding, y: ny, width: w, height: h)
             return ny
         }
     }

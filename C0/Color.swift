@@ -33,9 +33,7 @@ struct Color: Codable {
         didSet { rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb }
     }
     var sl: Point {
-        get {
-            return Point(x: saturation, y: lightness)
-        }
+        get { return Point(x: saturation, y: lightness) }
         set {
             self.saturation = newValue.x
             self.lightness = newValue.y
@@ -231,7 +229,7 @@ extension Color {
     
     private static func hsl(with hsv: HSV) -> (h: Real, s: Real, l: Real) {
         let h = hslHue(withHSVHue: hsv.h), s = hsv.s, v = hsv.v
-        let y = Color.y(withHue: h)
+        let y = Color.y(withHSLHue: h)
         let n = s * (1 - y) + y
         let nb = n == 0 ? 0 : y * v / n
         if nb < y {
@@ -243,7 +241,7 @@ extension Color {
         }
     }
     private static func hsvWithHSL(h: Real, s: Real, l: Real) -> HSV {
-        let y = Color.y(withHue: h)
+        let y = Color.y(withHSLHue: h)
         if y < l {
             let by = y == 1 ? 0 : (l - y) / (1 - y)
             return HSV(h: hsvHue(withHSLHue: h),
@@ -260,7 +258,10 @@ extension Color {
         return Color.hsvWithHSL(h: hue, s: saturation, l: lightness)
     }
     
-    static func y(withHue hue: Real) -> Real {
+    static func y(withHSLHue hue: Real) -> Real {
+        return y(withHSVHue: hsvHue(withHSLHue: hue))
+    }
+    static func y(withHSVHue hue: Real) -> Real {
         let hueRGB = HSV(h: hue, s: 1, v: 1).rgb
         return 0.299 * hueRGB.r + 0.587 * hueRGB.g + 0.114 * hueRGB.b
     }
@@ -334,20 +335,22 @@ extension Color: Interpolatable {
     }
 }
 extension Color: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return View(frame: frame, fillColor: self, isLocked: true)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return View(frame: frame, fillColor: self)
     }
 }
 extension Color: AbstractViewable {
+    var defaultAbstractConstraintSize: Size {
+        return Size(square: 150)
+    }
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Color>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return ColorView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+            return ColorView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -612,13 +615,13 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
     var slRatio = 0.82.cg {
         didSet { updateLayout() }
     }
-    let hueDrawView = View(drawClosure: { _, _ in })
+    let hueDrawView = View(drawClosure: { _, _, _ in })
     let slColorGradientView: View
     let slBlackWhiteGradientView: View
     
     init(binder: Binder, keyPath: BinderKeyPath,
-         hLineWidth: Real = 2.5, hWidth: Real = 16, slPadding: Real? = nil, slRatio: Real = 0.82,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+         hLineWidth: Real = 2.5, hWidth: Real = 16,
+         slPadding: Real? = nil, slRatio: Real = 0.82) {
         
         self.binder = binder
         self.keyPath = keyPath
@@ -630,10 +633,6 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
         slView = SlidablePointView(binder: binder, keyPath: keyPath.appending(path: \Color.sl),
                                    option: slOption)
         
-        if sizeType == .small {
-            slView.knobView.radius = 4
-            hueView.knobView.radius = 4
-        }
         if let slPadding = slPadding {
             slView.padding = slPadding
         }
@@ -642,10 +641,12 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
         self.slRatio = slRatio
         
         let hue = binder[keyPath: keyPath].hue
-        let y = Color.y(withHue: hue)
-        let slcValues = [Gradient.Value(color: Color(hue: hue, saturation: 0, brightness: y),
+        let y = Color.y(withHSLHue: hue)
+        let slcValues = [Gradient.Value(color: Color(hue: hue, saturation: 0,
+                                                     lightnessFromMaxSaturation: y),
                                         location: 0),
-                         Gradient.Value(color: Color(hue: hue, saturation: 1, brightness: 1),
+                         Gradient.Value(color: Color(hue: hue, saturation: 1,
+                                                     lightnessFromMaxSaturation: 1),
                                         location: 1)]
         slColorGradientView = View(gradient: Gradient(values: slcValues,
                                                       startPoint: Point(x: 0, y: 0),
@@ -658,47 +659,49 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
                                                            startPoint: Point(x: 0, y: 0),
                                                            endPoint: Point(x: 0, y: 1)))
         
-        super.init()
+        super.init(isLocked: false)
         hueDrawView.fillColor = nil
         hueDrawView.lineColor = nil
         slBlackWhiteGradientView.lineColor = nil
         slColorGradientView.lineColor = nil
-        hueDrawView.drawClosure = { [unowned self] ctx, _ in self.hueCircle.draw(in: ctx) }
+        hueDrawView.drawClosure = { [unowned self] ctx, _, _ in self.hueCircle.draw(in: ctx) }
         hueView.backgroundViews = [hueDrawView]
         slView.children = [slColorGradientView, slBlackWhiteGradientView, slView.knobView]
         children = [hueView, slView]
-        self.frame = frame
         
-        hueView.notifications.append { [unowned self] (view, notification) in
-            self.updateGradient()
-        }
-        slView.notifications.append { [unowned self] (view, notification) in
-            self.updateGradient()
-        }
+        hueView.notifications.append { [unowned self] (_, _) in self.updateGradient() }
+        slView.notifications.append { [unowned self] (_, _) in self.updateGradient() }
     }
     
-    override var defaultBounds: Rect {
-        return Rect(x: 0, y: 0, width: 100, height: 100)
+    var minSize: Size {
+        return Size(square: hueView.width * 2
+            + Layouter.smallPadding * 2
+            + ((Layouter.defaultMinWidth + slView.padding * 2) * sqrt(2)).rounded(.up))
     }
     override func updateLayout() {
-        guard !bounds.isEmpty else { return }
         let padding = Layouter.smallPadding
-        let r = floor(min(bounds.size.width, bounds.size.height) / 2) - padding
-        hueView.frame = Rect(x: padding, y: padding, width: r * 2, height: r * 2)
+        let r = floor(min(bounds.width, bounds.height) / 2) - padding
+        let hueSize = Size(width: r * 2, height: r * 2)
+        let hueBounds = Rect(origin: Point(), size: hueSize)
+        hueView.path = hueView.circularPath(withBounds: hueBounds)
+        hueView.position = Point(x: padding, y: padding)
         let sr = r - hueView.width
         let b2 = floor(sr * slRatio)
         let a2 = floor(sqrt(sr * sr - b2 * b2))
-        slView.frame = Rect(x: bounds.size.width / 2 - a2,
-                            y: bounds.size.height / 2 - b2,
-                            width: a2 * 2,
-                            height: b2 * 2)
-        let slInFrame = slView.bounds.inset(by: slView.padding)
+        let slFrame = Rect(x: bounds.width / 2 - a2,
+                           y: bounds.height / 2 - b2,
+                           width: a2 * 2,
+                           height: b2 * 2)
+        slView.frame = slFrame
+        let slInFrame = Rect(origin: Point(), size: slFrame.size).inset(by: slView.padding)
         slColorGradientView.frame = slInFrame
         slBlackWhiteGradientView.frame = slInFrame
         
-        hueDrawView.frame = hueView.bounds.inset(by: ceil((hueView.width - hueLineWidth) / 2))
+        let hueDrawPadding = ceil((hueView.width - hueLineWidth) / 2)
+        let hueDrawFrame = Rect(origin: Point(), size: hueSize).inset(by: hueDrawPadding)
+        hueDrawView.frame = hueDrawFrame
         hueCircle = HueCircle(lineWidth: hueLineWidth,
-                              bounds: hueDrawView.bounds,
+                              bounds: Rect(origin: Point(), size: hueDrawFrame.size),
                               rgbColorSpace: model.rgbColorSpace)
     }
     func updateWithModel() {
@@ -710,9 +713,11 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
         updateGradient()
     }
     private func updateGradient() {
-        let y = Color.y(withHue: model.hue)
-        slColorGradientView.gradient?.colors = [Color(hue: model.hue, saturation: 0, brightness: y),
-                                                Color(hue: model.hue, saturation: 1, brightness: 1)]
+        let y = Color.y(withHSLHue: model.hue)
+        slColorGradientView.gradient?.colors = [Color(hue: model.hue, saturation: 0,
+                                                      lightnessFromMaxSaturation: y),
+                                                Color(hue: model.hue, saturation: 1,
+                                                      lightnessFromMaxSaturation: 1)]
         slBlackWhiteGradientView.gradient?.locations = [0, y, y, 1]
     }
     private func updateWithColorSpace() {

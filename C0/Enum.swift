@@ -58,57 +58,54 @@ final class EnumView<T: EnumType, U: BinderProtocol>: ModelView, BindableReceive
         return option.defaultModel
     }
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     let classNameView: TextFormView
     let nameViews: [TextFormView]
     let knobView: View
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+         isUninheritance: Bool = false) {
         
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
         
-        self.sizeType = sizeType
-        classNameView = TextFormView(text: Model.uninheritanceName, font: Font.bold(with: sizeType))
-        nameViews = option.names.map { TextFormView(text: $0, font: Font.default(with: sizeType)) }
-        knobView = sizeType == .small ?
-            View.discreteKnob(Size(square: 6), lineWidth: 1) :
-            View.discreteKnob(Size(square: 8), lineWidth: 1)
+        let className = isUninheritance ? Model.uninheritanceName : Model.name
+        classNameView = TextFormView(text: className, font: .bold)
+        nameViews = option.names.map { TextFormView(text: $0) }
+        knobView = View.discreteKnob(Size(square: 8), lineWidth: 1)
         
-        super.init()
+        super.init(isLocked: false)
         nameViews.forEach { $0.fillColor = nil }
         children = [classNameView, knobView] + nameViews
-        self.frame = frame
         updateWithModel()
     }
     
-    override var defaultBounds: Rect {
-        let padding = Layouter.padding(with: sizeType), height = Layouter.height(with: sizeType)
+    var minSize: Size {
+        let padding = Layouter.basicPadding, height = Layouter.basicHeight
         let np = Real(nameViews.count - 1) * padding
-        let nw = nameViews.reduce(0.0.cg) { $0 + $1.frame.width } + np
-        return Rect(x: 0, y: 0, width: classNameView.frame.width + nw + padding * 2, height: height)
+        let nw = nameViews.reduce(0.0.cg) { $0 + $1.minSize.width } + np
+        return Size(width: classNameView.minSize.width + nw + padding * 3, height: height)
     }
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType)
-        classNameView.frame.origin = Point(x: padding,
-                                           y: bounds.height - classNameView.frame.height - padding)
+        let padding = Layouter.basicPadding
+        let classNameSize = classNameView.minSize
+        let classNameOrigin = Point(x: padding,
+                                    y: bounds.height - classNameSize.height - padding)
+        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
         
-        let h = Layouter.height(with: sizeType) - padding * 2
+        let h = Layouter.basicHeight - padding * 2
         var y = bounds.height - padding - h
         _ = nameViews.reduce(classNameView.frame.maxX + padding) {
             let x: Real
-            if $0 + $1.frame.width + padding > bounds.width {
+            let minSize = $1.minSize
+            if $0 + minSize.width + padding > bounds.width {
                 x = padding
                 y -= h + padding
             } else {
                 x = $0
             }
-            $1.frame.origin = Point(x: x, y: y)
-            return x + $1.frame.width + padding
+            $1.frame = Rect(origin: Point(x: x, y: y), size: minSize)
+            return x + minSize.width + padding
         }
         
         updateKnobLayout()

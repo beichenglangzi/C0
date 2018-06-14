@@ -152,20 +152,19 @@ extension Scene: Referenceable {
     static let name = Text(english: "Scene", japanese: "シーン")
 }
 extension Scene: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return name.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return name.thumbnailView(withFrame: frame)
     }
 }
 extension Scene: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Scene>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return SceneView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+            return SceneView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -196,10 +195,6 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     
     let versionView: VersionView<Binder>
-    
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     let sizeView: DiscreteSizeView<Binder>
     let renderingVerticalResolutionView: DiscreteIntView<Binder>
     let isHiddenSubtitlesView: BoolView<Binder>
@@ -219,14 +214,10 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
     var encoderViews = [View]()
     private let encoderWidth = 200.0.cg
     
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath, frame: Rect = Rect()) {
         self.binder = binder
         self.keyPath = keyPath
         versionView = VersionView(binder: binder, keyPath: keyPath.appending(path: \Model.version))
-        
-        self.sizeType = sizeType
         
         let defaultSize = binder[keyPath: keyPath].canvas.frame.size
         let sizeWidthOption = RealOption(defaultModel: defaultSize.width,
@@ -238,17 +229,15 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
         sizeView = DiscreteSizeView(binder: binder,
                                     keyPath: keyPath.appending(path: \Scene.canvas.frame.size),
                                     option: SizeOption(xOption: sizeWidthOption,
-                                                       yOption: sizeHeightOption),
-                                    sizeType: .small)
+                                                       yOption: sizeHeightOption))
         
         renderingVerticalResolutionView
             = DiscreteIntView(binder: binder,
                               keyPath: keyPath.appending(path: \Scene.renderingVerticalResolution),
-                              option: Scene.renderingVerticalResolutionOption,
-                              frame: Layouter.valueFrame(with: .small), sizeType: .small)
+                              option: Scene.renderingVerticalResolutionOption)
         isHiddenSubtitlesView = BoolView(binder: binder,
                                          keyPath: keyPath.appending(path: \Scene.isHiddenSubtitles),
-                                         option: Scene.isHiddenSubtitlesOption, sizeType: .small)
+                                         option: Scene.isHiddenSubtitlesOption)
         isHiddenPreviousView = BoolView(binder: binder,
                                         keyPath: keyPath.appending(path: \Scene.isHiddenPrevious),
                                         option: Scene.isHiddenPreviousOption)
@@ -256,17 +245,14 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
                                     keyPath: keyPath.appending(path: \Scene.isHiddenNext),
                                     option: Scene.isHiddenNextOption)
         timelineView = TimelineView(binder: binder,
-                                    keyPath: keyPath.appending(path: \Model.timeline),
-                                    sizeType: sizeType)
+                                    keyPath: keyPath.appending(path: \Model.timeline))
         canvasView = CanvasView(binder: binder,
-                                keyPath: keyPath.appending(path: \Model.canvas),
-                                sizeType: sizeType)
+                                keyPath: keyPath.appending(path: \Model.canvas))
         playerView = ScenePlayerView(binder: binder,
                                      keyPath: keyPath.appending(path: \Model.player),
-                                     sceneKeyPath: keyPath, sizeType: sizeType)
+                                     sceneKeyPath: keyPath)
         
-        super.init()
-        bounds = defaultBounds
+        super.init(isLocked: false)
         
         children = [classNameView, versionView,
                     sizeView, renderingVerticalResolutionView,
@@ -285,38 +271,42 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
         encodingQueue.cancelAllOperations()
     }
     
-    override var defaultBounds: Rect {
-        let padding = Layouter.padding(with: sizeType), buttonH = Layouter.height(with: sizeType)
-        let h = buttonH + padding * 2
+    var minSize: Size {
+        let padding = Layouter.basicPadding, buttonH = Layouter.basicHeight
+//        let h = buttonH + padding * 2
         let cs = SceneLayout.canvasSize, th = SceneLayout.timelineHeight
         let inWidth = cs.width + padding + SceneLayout.propertyWidth
         let width = inWidth + padding * 2
-        let height = th + cs.height + h + buttonH + padding * 2
-        return Rect(x: 0, y: 0, width: width, height: height)
+        let height = th + cs.height + buttonH + padding * 2
+        return Size(width: width, height: height)
     }
     override func updateLayout() {
         let padding = Layouter.basicPadding, buttonH = Layouter.basicHeight
         let h = buttonH + padding * 2
         let cs = SceneLayout.canvasSize, th = SceneLayout.timelineHeight
-        let pw = SceneLayout.propertyWidth
+//        let pw = SceneLayout.propertyWidth
         let y = bounds.height - buttonH - padding
         
-        classNameView.frame.origin = Point(x: padding,
-                                           y: bounds.height - classNameView.frame.height - padding)
+        let classNameSize = classNameView.minSize
+        let classNameOrigin = Point(x: padding,
+                                    y: bounds.height - classNameSize.height - padding)
+        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
         
         var topX = bounds.width - padding
         let topY = bounds.height - buttonH - padding
-        let esw = exportSubtitlesView.defaultBounds.width
+        let esw = exportSubtitlesView.minSize.width
         topX -= esw
         exportSubtitlesView.frame = Rect(x: topX, y: y, width: esw, height: buttonH)
-        topX -= esw
-        exportImageView.frame = Rect(x: topX, y: y, width: esw, height: buttonH)
-        topX -= esw
-        exportMovieView.frame = Rect(x: topX, y: y, width: esw, height: buttonH)
-        let ihnw = isHiddenNextView.defaultBounds.width
+        let eiw = exportImageView.minSize.width
+        topX -= eiw
+        exportImageView.frame = Rect(x: topX, y: y, width: eiw, height: buttonH)
+        let emw = exportMovieView.minSize.width
+        topX -= emw
+        exportMovieView.frame = Rect(x: topX, y: y, width: emw, height: buttonH)
+        let ihnw = isHiddenNextView.minSize.width
         topX -= ihnw + padding
         isHiddenNextView.frame = Rect(x: topX, y: topY, width: ihnw, height: buttonH)
-        let ihpw = isHiddenPreviousView.defaultBounds.width
+        let ihpw = isHiddenPreviousView.minSize.width
         topX -= ihpw
         isHiddenPreviousView.frame = Rect(x: topX, y: topY, width: ihpw, height: buttonH)
         topX = classNameView.frame.maxX + padding
@@ -328,23 +318,19 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
         ty -= cs.height
         canvasView.frame = Rect(x: padding, y: ty, width: cs.width, height: cs.height)
         ty -= h
-        playerView.frame = Rect(x: canvasView.frame.maxX, y: ty,
-                                width: bounds.width - cs.width, height: 100)
+        playerView.frame = Rect(x: canvasView.frame.maxX, y: padding,
+                                width: bounds.width - canvasView.frame.maxX - padding, height: 100)
         
         let px = padding * 2 + cs.width, propertyMaxY = y
         var py = propertyMaxY
-        let sh = Layouter.smallHeight
-        let sph = sizeView.defaultBounds.height
-        py -= sph
-        sizeView.frame = Rect(x: px, y: py, width: sizeView.defaultBounds.width, height: sph)
-        py -= sh
-        isHiddenSubtitlesView.frame = Rect(x: px, y: py, width: pw / 2, height: sh)
-    }
-    func updateWithModel() {
-        renderingVerticalResolutionView.updateWithModel()
-        isHiddenSubtitlesView.updateWithModel()
-        isHiddenPreviousView.updateWithModel()
-        isHiddenNextView.updateWithModel()
+//        let sh = Layouter.smallHeight
+        let sms = sizeView.minSize
+        py -= sms.height
+        sizeView.frame = Rect(x: px, y: py, width: sms.width, height: sms.height)
+        //renderingVerticalResolutionView
+        let ss = isHiddenSubtitlesView.minSize
+        py -= ss.height
+        isHiddenSubtitlesView.frame = Rect(x: px, y: py, width: ss.width, height: ss.height)
     }
     
     private func updateEncoderPositions() {

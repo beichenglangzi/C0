@@ -342,22 +342,21 @@ extension Animation: Referenceable {
     }
 }
 extension Animation: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+    func thumbnailView(withFrame frame: Rect) -> View {
         let text = Text(english: "\(keyframes.count) Keyframes",
                         japanese: "\(keyframes.count)キーフレーム")
-        return text.thumbnailView(withFrame: frame, sizeType)
+        return text.thumbnailView(withFrame: frame)
     }
 }
 extension Animation: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Animation>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return AnimationView(binder: binder, keyPath: keyPath, sizeType: sizeType)
+            return AnimationView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -389,14 +388,14 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
     
     private var knobViews = [View]()
     let editView: View = {
-        let view = View(isLocked: true)
+        let view = View()
         view.fillColor = .selected
         view.lineColor = nil
         view.isHidden = true
         return view
     } ()
     let indicatedView: View = {
-        let view = View(isLocked: true)
+        let view = View()
         view.fillColor = .subIndicated
         view.lineColor = nil
         view.isHidden = true
@@ -419,15 +418,11 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
     var smallHeight: Real {
         didSet { updateWithHeight() }
     }
-    var sizeType = SizeType.small {
-        didSet { updateWithHeight() }
-    }
     
     init(binder: Binder, keyPath: BinderKeyPath,
          beginBaseTime: Rational = 0, baseTimeInterval: Rational = Rational(1, 16),
          origin: Point = Point(),
-         height: Real = Layouter.basicHeight, smallHeight: Real = 8.0,
-         sizeType: SizeType = .regular) {
+         height: Real = Layouter.basicHeight, smallHeight: Real = 8.0) {
         
         self.binder = binder
         self.keyPath = keyPath
@@ -436,14 +431,13 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
         self.baseTimeInterval = baseTimeInterval
         self.height = height
         self.smallHeight = smallHeight
-        self.sizeType = sizeType
         keyframesView = ArrayView(binder: binder,
                                   keyPath: keyPath.appending(path: \Model.keyframes),
-                                  sizeType: sizeType, abstractType: .normal)
+                                  abstractType: .normal)
         
-        super.init()
+        super.init(isLocked: false)
         frame = Rect(x: origin.x, y: origin.y,
-                     width: 0, height: sizeType == .small ? smallHeight : height)
+                     width: 0, height: height)
         updateLayout()
     }
 
@@ -509,11 +503,13 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
         return view
     }
     
+    var minSize: Size {
+        return Size(width: x(withTime: model.duration), height: height)
+    }
     override func updateLayout() {
         let height = frame.height
         let midY = height / 2, lineWidth = 2.0.cg
-        let khh = sizeType == .small ? smallKnobHalfHeight : self.knobHalfHeight
-        let skhh = sizeType == .small ? smallSubKnobHalfHeight : self.subKnobHalfHeight
+        let khh = knobHalfHeight, skhh = subKnobHalfHeight
         let selectedStartIndex = model.selectedKeyframeIndexes.first
             ?? model.keyframes.count - 1
         let selectedEndIndex = model.selectedKeyframeIndexes.last ?? 0
@@ -528,44 +524,42 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
             let width = nextX - x
             let position = Point(x: x, y: midY)
 
-            if sizeType == .regular {
-                let keyLineColor = Color.content
-                let keyLine = AnimationView.keyLinePathViewWith(keyframe,
-                                                                lineColor: keyLineColor,
-                                                                baseWidth: baseWidth,
-                                                                lineWidth: lineWidth,
-                                                                maxLineWidth: maxLineWidth,
-                                                                position: position, width: width)
-                keyLineViews.append(keyLine)
-
-                let knobLine = AnimationView.knobLinePathView(from: position,
-                                                              lineColor: keyLineColor,
-                                                              baseWidth: baseWidth,
-                                                              lineHeight: height - 2,
-                                                              with: keyframe.timing.interpolation)
-                keyLineViews.append(knobLine)
-
-                if li.loopCount > 0 {
-                    var path = Path()
-                    if i > 0 && model.loopFrames[i - 1].loopCount < li.loopCount {
-                        path.append(PathLine(points: [Point(x: x, y: midY + height / 2 - 4),
-                                                      Point(x: x + 3, y: midY + height / 2 - 1),
-                                                      Point(x: x, y: midY + height / 2 - 1)]))
-                    }
-                    path.append(Rect(x: x, y: midY + height / 2 - 2, width: width, height: 1))
-                    if li.loopingCount > 0 {
-                        if i > 0 && model.loopFrames[i - 1].loopingCount < li.loopingCount {
-                            path.append(PathLine(points: [Point(x: x, y: 1),
-                                                          Point(x: x + 3, y: 1),
-                                                          Point(x: x, y: 4)]))
-                        }
-                        path.append(Rect(x: x, y: 1, width: width, height: 1))
-                    }
-
-                    let layer = View(path: path)
-                    layer.fillColor = keyLineColor
-                    keyLineViews.append(layer)
+            let keyLineColor = Color.content
+            let keyLine = AnimationView.keyLinePathViewWith(keyframe,
+                                                            lineColor: keyLineColor,
+                                                            baseWidth: baseWidth,
+                                                            lineWidth: lineWidth,
+                                                            maxLineWidth: maxLineWidth,
+                                                            position: position, width: width)
+            keyLineViews.append(keyLine)
+            
+            let knobLine = AnimationView.knobLinePathView(from: position,
+                                                          lineColor: keyLineColor,
+                                                          baseWidth: baseWidth,
+                                                          lineHeight: height - 2,
+                                                          with: keyframe.timing.interpolation)
+            keyLineViews.append(knobLine)
+            
+            if li.loopCount > 0 {
+                var path = Path()
+                if i > 0 && model.loopFrames[i - 1].loopCount < li.loopCount {
+                    path.append(PathLine(points: [Point(x: x, y: midY + height / 2 - 4),
+                                                  Point(x: x + 3, y: midY + height / 2 - 1),
+                                                  Point(x: x, y: midY + height / 2 - 1)]))
                 }
+                path.append(Rect(x: x, y: midY + height / 2 - 2, width: width, height: 1))
+                if li.loopingCount > 0 {
+                    if i > 0 && model.loopFrames[i - 1].loopingCount < li.loopingCount {
+                        path.append(PathLine(points: [Point(x: x, y: 1),
+                                                      Point(x: x + 3, y: 1),
+                                                      Point(x: x, y: 4)]))
+                    }
+                    path.append(Rect(x: x, y: 1, width: width, height: 1))
+                }
+                
+                let layer = View(path: path)
+                layer.fillColor = keyLineColor
+                keyLineViews.append(layer)
             }
             
             if i > 0 {
@@ -599,14 +593,6 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
 
         let maxX = self.x(withTime: model.duration)
 
-        if sizeType == .small {
-            let keyLineView = View(isLocked: true)
-            keyLineView.frame = Rect(x: 0, y: midY - 0.5, width: maxX, height: 1)
-            keyLineView.fillColor = .content
-            keyLineView.lineColor = nil
-            keyLineViews.append(keyLineView)
-        }
-
         let durationFillColor = Color.knob
         let durationLineColor = ((model.duration + beginBaseTime) / baseTimeInterval).isInteger ?
             Color.getSetBorder : Color.warning
@@ -637,7 +623,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
         
     }
     private func updateWithHeight() {
-        frame.size.height = sizeType == .small ? smallHeight : height
+        frame.size.height = height
         updateLayout()
     }
     

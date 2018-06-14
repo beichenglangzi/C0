@@ -43,22 +43,20 @@ extension Bool: AnyInitializable {
     }
 }
 extension Bool: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+    func thumbnailView(withFrame frame: Rect) -> View {
         let boolInfo = BoolOption.Info()
         let text = self ? boolInfo.trueName : boolInfo.falseName
-        return text.thumbnailView(withFrame: frame, sizeType)
+        return text.thumbnailView(withFrame: frame)
     }
 }
 extension Bool: AbstractViewable {
     func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Bool>,
-                             frame: Rect, _ sizeType: SizeType,
-                             type: AbstractType) -> ModelView where T : BinderProtocol {
+                             type: AbstractType) -> ModelView where T: BinderProtocol {
         switch type {
         case .normal:
-            return BoolView(binder: binder, keyPath: keyPath, option: BoolOption(),
-                            frame: frame, sizeType: sizeType)
+            return BoolView(binder: binder, keyPath: keyPath, option: BoolOption())
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -71,8 +69,8 @@ struct BoolOption {
         
         static let hidden = Info(trueName: Text(english: "Hidden", japanese: "隠し済み"),
                                  falseName: Text(english: "Shown", japanese: "表示済み"))
-        static let locked = Info(trueName: Text(english: "Locked", japanese: "ロック済み"),
-                                 falseName: Text(english: "Unlocked", japanese: "未ロック"))
+        static let locked = Info(trueName: Text(english: "Locked", japanese: "ロックあり"),
+                                 falseName: Text(english: "Unlocked", japanese: "ロックなし"))
     }
     
     var defaultModel = false
@@ -105,58 +103,60 @@ final class BoolView<Binder: BinderProtocol>: ModelView, BindableReceiver {
         return option.defaultModel
     }
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     let optionStringView: TextFormView
     let optionTrueNameView: TextFormView
     let optionFalseNameView: TextFormView
     let knobView: View
     
-    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption = ModelOption()) {
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
         
-        self.sizeType = sizeType
-        let font = Font.default(with: sizeType)
+        let font = Font.default
         optionStringView = TextFormView(text: option.name.isEmpty ? "" : option.name + ":",
                                         font: font)
         optionTrueNameView = TextFormView(text: option.info.trueName, font: font)
         optionFalseNameView = TextFormView(text: option.info.falseName, font: font)
-        optionFalseNameView.fillColor = nil
         optionTrueNameView.fillColor = nil
+        optionFalseNameView.fillColor = nil
         knobView = View.discreteKnob()
         
-        super.init()
+        super.init(isLocked: false)
         children = [optionStringView, knobView, optionTrueNameView, optionFalseNameView]
-        self.frame = frame
         updateWithModel()
     }
     
-    override var defaultBounds: Rect {
-        let padding = Layouter.padding(with: sizeType)
-        if optionStringView.text.isEmpty {
-            let width = optionFalseNameView.frame.width
-                + optionTrueNameView.frame.width + padding * 3
-            let height = optionFalseNameView.frame.height + padding * 2
-            return Rect(x: 0, y: 0, width: width, height: height)
+    var minSize: Size {
+        let padding = Layouter.basicPadding
+        let minTrueSize = optionTrueNameView.minSize
+        let minFalseSize = optionFalseNameView.minSize
+        if option.name.isEmpty {
+            let width = minTrueSize.width + minFalseSize.width + padding * 3
+            let height = max(minTrueSize.height, minFalseSize.height) + padding * 2
+            return Size(width: width, height: height)
         } else {
-            let width = optionStringView.frame.width
-                + optionFalseNameView.frame.width + optionTrueNameView.frame.width + padding * 4
-            let height = optionStringView.frame.height + padding * 2
-            return Rect(x: 0, y: 0, width: width, height: height)
+            let minStringSize = optionStringView.minSize
+            let width = minStringSize.width + minTrueSize.width + minFalseSize.width + padding * 4
+            let height = max(minStringSize.height,
+                             minTrueSize.height, minFalseSize.height) + padding * 2
+            return Size(width: width, height: height)
         }
     }
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType)
-        optionStringView.frame.origin = Point(x: padding, y: padding)
-        let x = optionStringView.text.isEmpty ? padding : optionStringView.frame.maxX + padding
-        optionFalseNameView.frame.origin = Point(x: x, y: padding)
-        optionTrueNameView.frame.origin = Point(x: optionFalseNameView.frame.maxX + padding,
-                                                y: padding)
+        let padding = Layouter.basicPadding
+        let minTrueSize = optionTrueNameView.minSize
+        let minFalseSize = optionFalseNameView.minSize
+        var x = padding
+        if !option.name.isEmpty {
+            let minStringSize = optionStringView.minSize
+            optionStringView.frame = Rect(origin: Point(x: x, y: padding), size: minStringSize)
+            x += minStringSize.width + padding
+        }
+        optionFalseNameView.frame = Rect(origin: Point(x: x, y: padding), size: minFalseSize)
+        x += minFalseSize.width + padding
+        optionTrueNameView.frame = Rect(origin: Point(x: x, y: padding), size: minTrueSize)
+        
         updateKnobLayout()
     }
     private func updateKnobLayout() {
@@ -179,7 +179,9 @@ final class BoolView<Binder: BinderProtocol>: ModelView, BindableReceiver {
         return option.cationModel == model ? .warning : .getSetBorder
     }
     func model(at p: Point) -> Bool {
-        return optionFalseNameView.frame.distance²(p) > optionTrueNameView.frame.distance²(p)
+        let trueFrame = optionTrueNameView.frame
+        let falseFrame = optionFalseNameView.frame
+        return falseFrame.distance²(p) > trueFrame.distance²(p)
     }
 }
 extension BoolView: Runnable {

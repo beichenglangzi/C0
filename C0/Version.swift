@@ -99,15 +99,16 @@ extension Version: Codable {
     func encode(to encoder: Encoder) throws {}
 }
 extension Version: AbstractViewable {
+    var defaultAbstractConstraintSize: Size {
+        return Size(width: 120, height: 0)
+    }
     func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Version>,
-                             frame: Rect, _ sizeType: SizeType,
-                             type: AbstractType) -> ModelView where T : BinderProtocol {
+                             type: AbstractType) -> ModelView where T: BinderProtocol {
         switch type {
         case .normal:
-            return VersionView(binder: binder, keyPath: keyPath,
-                               frame: frame, sizeType: sizeType)
+            return VersionView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -135,45 +136,50 @@ final class VersionView<T: BinderProtocol>: ModelView, BindableReceiver {
     let indexView: IntGetterView<Binder>
     let undoedDiffCountView: IntGetterView<Binder>
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     let classNameView: TextFormView
     
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
-        self.sizeType = sizeType
-        classNameView = TextFormView(text: Version.name, font: Font.bold(with: sizeType))
         indexView = IntGetterView(binder: binder,
                                   keyPath: keyPath.appending(path: \Model.index),
-                                  option: IntGetterOption(unit: ""), sizeType: sizeType)
+                                  option: IntGetterOption(unit: ""))
         undoedDiffCountView = IntGetterView(binder: binder,
                                             keyPath: keyPath.appending(path: \Model.undoedDiffCount),
-                                            option: IntGetterOption(unit: ""), sizeType: sizeType)
+                                            option: IntGetterOption(unit: ""))
         
-        super.init()
+        classNameView = TextFormView(text: Version.name, font: .bold)
+        
+        super.init(isLocked: false)
         isClipped = true
         children = [classNameView, indexView]
-        self.frame = frame
         updateWithModel()
     }
     
-    override var defaultBounds: Rect {
-        return Rect(x: 0, y: 0, width: 120, height: Layouter.height(with: sizeType))
+    var minSize: Size {
+        let cnms = classNameView.minSize
+        let ims = indexView.minSize
+        if model.undoedIndex < model.index {
+            return Size(width: cnms.width + ims.width,
+                        height: Layouter.basicHeight)
+        } else {
+            let udcms = undoedDiffCountView.minSize
+            return Size(width: cnms.width + ims.width + udcms.width,
+                        height: Layouter.basicHeight)
+        }
     }
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType)
-        classNameView.frame.origin = Point(x: padding,
-                                           y: bounds.height - classNameView.frame.height - padding)
+        let padding = Layouter.basicPadding
+        let classNameSize = classNameView.minSize
+        let classNameOrigin = Point(x: padding,
+                                    y: bounds.height - classNameSize.height - padding)
+        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
         let items: [Layouter.Item] = model.undoedIndex < model.index ?
             [.view(indexView), .xPadding(padding), .view(undoedDiffCountView)] :
             [.view(indexView)]
         _ = Layouter.leftAlignment(items, minX: classNameView.frame.maxX + padding,
-                                 height: frame.height)
+                                   height: frame.height)
     }
     func updateWithModel() {
         model.indexNotification = { [unowned self] _, _ in self.updateWithVersionIndex() }
@@ -184,15 +190,16 @@ final class VersionView<T: BinderProtocol>: ModelView, BindableReceiver {
         if model.undoedIndex < model.index {
             indexView.updateWithModel()
             undoedDiffCountView.updateWithModel()
-            indexView.bounds = indexView.optionStringView.defaultBounds
-            undoedDiffCountView.bounds = undoedDiffCountView.optionStringView.defaultBounds
+            indexView.bounds = Rect(origin: Point(), size: indexView.minSize)
+            undoedDiffCountView.bounds = Rect(origin: Point(), size: undoedDiffCountView.minSize)
             undoedDiffCountView.optionStringView.textMaterial.color = .warning
-            if undoedDiffCountView.parent == nil {
+            if !children.contains(undoedDiffCountView) {
                 children = [classNameView, indexView, undoedDiffCountView]
             }
         } else {
             indexView.updateWithModel()
-            if undoedDiffCountView.parent != nil {
+            indexView.bounds = Rect(origin: Point(), size: indexView.minSize)
+            if children.contains(undoedDiffCountView) {
                 children = [classNameView, indexView]
             }
         }

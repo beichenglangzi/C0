@@ -631,20 +631,19 @@ extension CellGroup: Referenceable {
     static let name = Text(english: "CellGroup", japanese: "ノード")
 }
 extension CellGroup: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return name.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return name.thumbnailView(withFrame: frame)
     }
 }
 extension CellGroup: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, CellGroup>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return CellGroupView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+            return CellGroupView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -679,18 +678,16 @@ extension CellGroupChildren: Referenceable {
                            japanese: "セルグループチルドレン")
 }
 extension CellGroupChildren: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return children.count.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return children.count.thumbnailView(withFrame: frame)
     }
 }
 extension CellGroupChildren: AbstractViewable {
     func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, CellGroupChildren>,
-                             frame: Rect, _ sizeType: SizeType,
                              type: AbstractType) -> ModelView where T : BinderProtocol {
         switch type {
-        case .normal: return CellGroupChildrenView(binder: binder, keyPath: keyPath,
-                                                   frame: frame, sizeType: sizeType)
-        case .mini: return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        case .normal: return CellGroupChildrenView(binder: binder, keyPath: keyPath)
+        case .mini: return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -718,45 +715,36 @@ final class CellGroupView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     var defaultModel = Model()
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     private let classNameView: TextFormView
     private let isHiddenView: BoolView<Binder>
     
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
-        self.sizeType = sizeType
-        classNameView = TextFormView(text: CellGroup.name, font: Font.bold(with: sizeType))
+        classNameView = TextFormView(text: CellGroup.name, font: .bold)
         isHiddenView = BoolView(binder: binder, keyPath: keyPath.appending(path: \Model.isHidden),
                                 option: BoolOption(defaultModel: false, cationModel: true,
-                                                   name: "", info: .hidden),
-                                sizeType: sizeType)
+                                                   name: "", info: .hidden))
         
-        super.init()
+        super.init(isLocked: false)
         children = [classNameView, isHiddenView]
-        self.frame = frame
     }
     
-    override var defaultBounds: Rect {
-        let padding = Layouter.padding(with: sizeType), h = Layouter.height(with: sizeType)
-        let tlw = classNameView.frame.width + isHiddenView.defaultBounds.width + padding * 3
-        return Rect(x: 0, y: 0, width: tlw, height: h + padding * 2)
+    var minSize: Size {
+        let padding = Layouter.basicPadding, h = Layouter.basicHeight
+        let tlw = classNameView.minSize.width + isHiddenView.minSize.width + padding * 3
+        return Size(width: tlw, height: h + padding * 2)
     }
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType)
-        classNameView.frame.origin = Point(x: padding,
-                                           y: bounds.height - classNameView.frame.height - padding)
+        let padding = Layouter.basicPadding
+        let classNameSize = classNameView.minSize
+        let classNameOrigin = Point(x: padding,
+                                    y: bounds.height - classNameSize.height - padding)
+        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
         isHiddenView.frame = Rect(x: classNameView.frame.maxX + padding, y: padding,
                                   width: bounds.width - classNameView.frame.width - padding * 3,
-                                  height: Layouter.height(with: sizeType))
-    }
-    func updateWithModel() {
-        isHiddenView.updateWithModel()
+                                  height: Layouter.basicHeight)
     }
 }
 
@@ -771,29 +759,26 @@ final class CellGroupChildrenView<T: BinderProtocol>: ModelView, BindableGetterR
     }
     var notifications = [((CellGroupView<Binder>, BasicNotification) -> ())]()
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     private let classNameView: TextFormView
     
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
-        self.sizeType = sizeType
-        classNameView = TextFormView(text: CellGroupChildren.name, font: Font.bold(with: sizeType))
+        classNameView = TextFormView(text: CellGroupChildren.name, font: .bold)
         
-        super.init()
+        super.init(isLocked: false)
         children = [classNameView]
-        self.frame = frame
     }
     
-    override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType)
-        classNameView.frame.origin = Point(x: padding,
-                                           y: bounds.height - classNameView.frame.height - padding)
+    var minSize: Size {
+        return classNameView.minSize + Layouter.basicPadding * 2
     }
-    func updateWithModel() {}
+    override func updateLayout() {
+        let padding = Layouter.basicPadding
+        let classNameSize = classNameView.minSize
+        let classNameOrigin = Point(x: padding,
+                                    y: bounds.height - classNameSize.height - padding)
+        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
+    }
 }

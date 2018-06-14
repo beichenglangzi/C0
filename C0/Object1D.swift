@@ -61,41 +61,41 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: ModelView, B
         return option.defaultModel
     }
     
-    var sizeType: SizeType
     let optionTextView: TextFormView
     
-    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption) {
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
         
-        self.sizeType = sizeType
         optionTextView = TextFormView(text: option.displayText(with: binder[keyPath: keyPath]),
-                                      font: Font.default(with: sizeType),
-                                      frameAlignment: .right, alignment: .right,
+                                      alignment: .right,
                                       paddingSize: Size(width: 3, height: 1))
         
-        super.init()
+        super.init(isLocked: false)
         lineColor = .getBorder
         isClipped = true
         children = [optionTextView]
-        self.frame = frame
     }
     
-    override var defaultBounds: Rect {
-        return optionTextView.defaultBounds
+    var minSize: Size {
+        return optionTextView.minSize
     }
     override func updateLayout() {
-        optionTextView.frame.origin = Point(x: bounds.width - optionTextView.frame.width,
-                                            y: bounds.height - optionTextView.frame.height)
+        updateTextPosition()
+    }
+    private func updateTextPosition() {
+        let optionTextSize = optionTextView.minSize
+        let optiontextOrigin = Point(x: bounds.width - optionTextSize.width,
+                                     y: bounds.height - optionTextSize.height)
+        optionTextView.frame = Rect(origin: optiontextOrigin, size: optionTextSize)
     }
     func updateWithModel() {
         updateString()
     }
     private func updateString() {
         optionTextView.text = option.displayText(with: model)
+        updateTextPosition()
     }
     
     func clippedModel(_ model: Model) -> Model {
@@ -139,58 +139,54 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
         return option.defaultModel
     }
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     var xyOrientation: Orientation.XY {
         didSet { updateLayout() }
     }
     var interval = 1.5.cg
     private var knobLineFrame = Rect()
-    let labelPaddingX: Real, knobPadding: Real
-    let knobView = View.discreteKnob(Size(width: 6, height: 4), lineWidth: 1)
+    let labelPaddingX: Real, knobPadding = 3.0.cg
+    let knobView = View.discreteKnob(Size(width: 6, height: 5), lineWidth: 1)
     let linePathView: View = {
-        let linePathView = View(isLocked: true)
+        let linePathView = View()
         linePathView.lineColor = .content
         return linePathView
     } ()
     let optionStringView: TextFormView
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
-         xyOrientation: Orientation.XY = .horizontal(.leftToRight),
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+         xyOrientation: Orientation.XY = .horizontal(.leftToRight)) {
         
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
         
-        self.sizeType = sizeType
         self.xyOrientation = xyOrientation
-        knobPadding = sizeType == .small ? 2 : 3
-        labelPaddingX = Layouter.padding(with: sizeType)
-        optionStringView = TextFormView(font: Font.default(with: sizeType),
-                                      frameAlignment: .right, alignment: .right)
+        labelPaddingX = Layouter.basicPadding
+        optionStringView = TextFormView(font: .default, alignment: .right)
         
-        super.init()
+        super.init(isLocked: false)
         isClipped = true
         children = [optionStringView, linePathView, knobView]
-        self.frame = frame
         updateWithModel()
     }
     
-    override var defaultBounds: Rect {
-        return Rect(x: 0, y: 0, width: 80, height: Layouter.height(with: sizeType))
+    var minSize: Size {
+        return Size(width: max(80, optionStringView.minSize.width),
+                    height: Layouter.basicHeight)
     }
     override func updateLayout() {
-        let paddingX = sizeType == .small ? 3.0.cg : 5.0.cg
-        knobLineFrame = Rect(x: paddingX, y: sizeType == .small ? 1 : 2,
+        let paddingX = 5.0.cg
+        knobLineFrame = Rect(x: paddingX, y: 2,
                              width: bounds.width - paddingX * 2, height: 1)
         linePathView.frame = knobLineFrame
-        let x = bounds.width - optionStringView.frame.width - labelPaddingX
-        let y = ((bounds.height - optionStringView.frame.height) / 2).rounded()
-        optionStringView.frame.origin = Point(x: x, y: y)
-        
+        updateTextPosition()
         updateknobLayout()
+    }
+    private func updateTextPosition() {
+        let optionStringMinSize = optionStringView.minSize
+        let x = bounds.width - optionStringMinSize.width - labelPaddingX
+        let y = ((bounds.height - optionStringMinSize.height) / 2).rounded()
+        optionStringView.frame = Rect(origin: Point(x: x, y: y), size: optionStringMinSize)
     }
     private func updateknobLayout() {
         let t = option.ratioFromDefaultModel(with: model)
@@ -211,6 +207,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
     }
     private func updateString() {
         optionStringView.text = option.displayText(with: model)
+        updateTextPosition()
     }
     
     func model(at p: Point, first fp: Point, old oldModel: Model) -> Model {
@@ -267,13 +264,10 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>
         return option.defaultModel
     }
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     var xyOrientation: Orientation.XY {
         didSet { updateLayout() }
     }
-    var padding: Real {
+    var padding = 8.0.cg {
         didSet { updateLayout() }
     }
     let knobView: View
@@ -284,24 +278,28 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>
     }
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
-         xyOrientation: Orientation.XY = .horizontal(.leftToRight),
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+         xyOrientation: Orientation.XY = .horizontal(.leftToRight)) {
         
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
         
-        self.sizeType = sizeType
         self.xyOrientation = xyOrientation
-        padding = sizeType == .small ? 6 : 8
-        knobView = sizeType == .small ? View.knob(radius: 4) : View.knob()
+        knobView = View.knob()
         
-        super.init()
+        super.init(isLocked: false)
         append(child: knobView)
-        self.frame = frame
         updateWithModel()
     }
     
+    var minSize: Size {
+        switch xyOrientation {
+        case .horizontal:
+            return Size(width: Layouter.defaultMinWidth + padding, height: Layouter.basicHeight)
+        case .vertical:
+            return Size(width: Layouter.basicHeight, height: Layouter.defaultMinWidth + padding)
+        }
+    }
     override func updateLayout() {
         updateKnobLayout()
     }
@@ -322,6 +320,9 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>
         updateKnobLayout()
     }
     func model(at point: Point) -> Model {
+        guard !bounds.isEmpty else {
+            return option.model(withRatio: 0)
+        }
         let t: Real
         switch xyOrientation {
         case .horizontal(let horizontal):
@@ -362,9 +363,11 @@ extension Slidable1DView {
                                                      startPoint: Point(x: 0, y: 0),
                                                      endPoint: Point(x: 1, y: 0)))
         backgroundView.frame = frame
+        backgroundView.lineColor = nil
         
         let checkerboardView = View(path: Path.checkerboard(with: Size(square: checkerWidth),
                                                             in: frame))
+        checkerboardView.lineColor = nil
         checkerboardView.fillColor = .content
         
         return [backgroundView, checkerboardView]
@@ -372,8 +375,9 @@ extension Slidable1DView {
     func updateOpacityViews(withFrame frame: Rect) {
         guard self.frame != frame else { return }
         self.frame = frame
+        let checkerWidth = knobView.bounds.width / 2
         backgroundViews = Slidable1DView.opacityViewViews(with: frame,
-                                                          checkerWidth: knobView.radius,
+                                                          checkerWidth: checkerWidth,
                                                           padding: padding)
     }
 }
@@ -409,9 +413,6 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>
         return option.defaultModel
     }
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     var circularOrientation: Orientation.Circular {
         didSet { updateLayout() }
     }
@@ -431,27 +432,24 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
          circularOrientation: Orientation.Circular = .counterClockwise,
-         startAngle: Real = -.pi, width: Real = 16,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+         startAngle: Real = -.pi, width: Real = 16) {
         
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
         
-        self.sizeType = sizeType
         self.circularOrientation = circularOrientation
         self.startAngle = startAngle
         self.width = width
-        knobView = sizeType == .small ? View.knob(radius: 4) : View.knob()
+        knobView = View.knob()
         
         super.init(path: Path(), isLocked: false)
         fillColor = nil
         lineWidth = 0.5
         append(child: knobView)
-        self.frame = frame
     }
     
-    override func updateLayout() {
+    func circularPath(withBounds bounds: Rect) -> Path {
         let cp = Point(x: bounds.midX, y: bounds.midY), r = bounds.width / 2
         let mr = r - width
         let fp0 = cp + Point(x: r, y: 0)
@@ -462,24 +460,33 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>
         
         path.append(PathLine(firstPoint: fp0, elements: [.arc(arc0)]))
         path.append(PathLine(firstPoint: fp1, elements: [.arc(arc1)]))
-        self.path = path
+        return path
+    }
+    
+    var minSize: Size {
+        return Size(square: width * 2)
+    }
+    override func updateLayout() {
         updateKnobLayout()
     }
     private func updateKnobLayout() {
+        let pathBounds = path.boundingBoxOfPath
         let t = option.ratioFromDefaultModel(with: model)
         let theta = circularOrientation == .clockwise ?
             startAngle - t * (2 * .pi) : startAngle + t * (2 * .pi)
-        let cp = Point(x: bounds.midX, y: bounds.midY), r = bounds.width / 2 - width / 2
+        let cp = Point(x: pathBounds.midX, y: pathBounds.midY)
+        let r = pathBounds.width / 2 - width / 2
         knobView.position = cp + r * Point(x: cos(theta), y: sin(theta))
     }
     func updateWithModel() {
         updateKnobLayout()
     }
     func model(at p: Point) -> Model {
-        guard !bounds.isEmpty else {
+        let pathBounds = path.boundingBoxOfPath
+        guard !pathBounds.isEmpty else {
             return self.model
         }
-        let cp = Point(x: bounds.midX, y: bounds.midY)
+        let cp = Point(x: pathBounds.midX, y: pathBounds.midY)
         let theta = cp.tangential(p)
         let ct = (theta > startAngle ?
             theta - startAngle : theta - startAngle + 2 * .pi) / (2 * .pi)

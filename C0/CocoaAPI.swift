@@ -428,7 +428,6 @@ final class C0View: NSView, NSTextInputClient {
         desktop.objects.values.append(Layout(Object(BlendType.addition)))
         desktop.objects.values.append(Layout(Object(Effect())))
         desktop.objects.values.append(Layout(Object(Drawing())))
-////        desktop.objects.values.append(Layout(Object(Lines())))//drawing
         desktop.objects.values.append(Layout(Object(Line())))
         desktop.objects.values.append(Layout(Object(Color())))
         desktop.objects.values.append(Layout(Object(Transform())))
@@ -458,6 +457,7 @@ final class C0View: NSView, NSTextInputClient {
     func setup() {
         acceptsTouchEvents = true
         wantsLayer = true
+        layerUsesCoreImageFilters = true
         guard let layer = layer else { return }
         
         desktopView.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }
@@ -510,7 +510,7 @@ final class C0View: NSView, NSTextInputClient {
     }
     
     func updateFrame() {
-        desktopView.frame.size = bounds.size
+        desktopView.bounds = bounds
     }
     
     func screenPoint(with event: NSEvent) -> Point {

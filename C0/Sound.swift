@@ -174,20 +174,19 @@ extension Sound: Interpolatable {
 }
 extension Sound: KeyframeValue {}
 extension Sound: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return name.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return name.thumbnailView(withFrame: frame)
     }
 }
 extension Sound: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Sound>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return SoundView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+            return SoundView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -287,7 +286,7 @@ final class SoundWaveformView: View {
         case .normal:
             let samples = sound.samples(withSampleRate: sampleRate)
             guard !samples.isEmpty else {
-                waveformView.path = nil
+                waveformView.path = Path()
                 secondDuration = 0
                 duration = 0
                 return
@@ -316,7 +315,7 @@ final class SoundWaveformView: View {
             if cacheDBFSs.isEmpty || isRefreshCache {
                 let samples = sound.samples(withSampleRate: sampleRate)
                 guard !samples.isEmpty else {
-                    waveformView.path = nil
+                    waveformView.path = Path()
                     secondDuration = 0
                     duration = 0
                     return
@@ -364,33 +363,34 @@ final class SoundView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     var defaultModel = Sound()
     
-    var sizeType: SizeType
     let classNameView: TextFormView
     let nameView: StringView<Binder>
     
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
-        self.sizeType = sizeType
-        classNameView = TextFormView(text: Sound.name, font: Font.bold(with: sizeType))
-        var textMaterial = TextMaterial()
-        textMaterial.font = Font.default(with: sizeType)
-        nameView = StringView(binder: binder, keyPath: keyPath.appending(path: \Model.name),
-                              textMaterial: textMaterial, isSizeToFit: false)
+        classNameView = TextFormView(text: Sound.name, font: .bold)
+        nameView = StringView(binder: binder, keyPath: keyPath.appending(path: \Model.name))
         
-        super.init()
+        super.init(isLocked: false)
         isClipped = true
         children = [classNameView, nameView]
-        self.frame = frame
     }
     
+    var minSize: Size {
+        let padding = Layouter.basicPadding
+        let cns = classNameView.minSize, ns = nameView.minSize
+        return Size(width: cns.width + Layouter.propertyWidth + padding * 3,
+                    height: max(cns.height, ns.height) + padding * 2)
+    }
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType)
-        let y = bounds.height - padding - classNameView.frame.height
-        classNameView.frame.origin = Point(x: padding, y: y)
+        let padding = Layouter.basicPadding
+        let classNameSize = classNameView.minSize
+        let classNameOrigin = Point(x: padding,
+                                    y: bounds.height - classNameSize.height - padding)
+        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
+        
         nameView.frame = Rect(x: classNameView.frame.maxX + padding, y: padding,
                                 width: bounds.width - classNameView.frame.maxX - padding * 2,
                                 height: bounds.height - padding * 2)

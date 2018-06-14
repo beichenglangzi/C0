@@ -60,11 +60,14 @@ extension Size {
     init(square: Real) {
         self.init(width: square, height: square)
     }
+    static func +(lhs: Size, rhs: Real) -> Size {
+        return Size(width: lhs.width + rhs, height: lhs.height + rhs)
+    }
+    static func +(lhs: Size, rhs: Size) -> Size {
+        return Size(width: lhs.width + rhs.width, height: lhs.height + rhs.height)
+    }
     static func *(lhs: Size, rhs: Real) -> Size {
         return Size(width: lhs.width * rhs, height: lhs.height * rhs)
-    }
-    static func *(lhs: Size, rhs: AffineTransform) -> Size {
-        return lhs.applying(rhs)
     }
     
     static let effectiveFieldSizeOfView = Size(width: tan(.pi * (30.0 / 2) / 180),
@@ -75,6 +78,11 @@ extension Size {
     }
     func intersects(_ other: Size) -> Bool {
         return width >= other.width || height >= other.height
+    }
+}
+extension Size: AppliableAffineTransform {
+    static func *(lhs: Size, rhs: AffineTransform) -> Size {
+        return lhs.applying(rhs)
     }
 }
 extension Size: AnyInitializable {
@@ -101,13 +109,12 @@ extension Size: Referenceable {
     static let name = Text(english: "Size", japanese: "サイズ")
 }
 extension Size: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return (jsonString ?? "").thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return (jsonString ?? "").thumbnailView(withFrame: frame)
     }
 }
 extension Size: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Size>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
@@ -117,10 +124,9 @@ extension Size: AbstractViewable {
                                                   modelInterval: 0.1)
             return DiscreteSizeView(binder: binder, keyPath: keyPath,
                                     option: SizeOption(xOption: valueOption,
-                                                       yOption: valueOption),
-                                    frame: frame, sizeType: sizeType)
+                                                       yOption: valueOption))
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }

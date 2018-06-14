@@ -53,18 +53,15 @@ extension ObjectDecodable {
 }
 
 protocol ObjectViewable
-: Codable, Referenceable, ThumbnailViewable, ObjectDecodable, AnyInitializable {
+: Codable, Referenceable, ThumbnailViewable, ObjectDecodable, AbstractConstraint, AnyInitializable {
 
     func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
-                           frame: Rect, _ sizeType: SizeType,
                            type: AbstractType) -> ModelView where T: BinderProtocol
 }
 extension ObjectViewable where Self: Codable & Referenceable & AbstractViewable {
     func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
-                           frame: Rect, _ sizeType: SizeType,
                            type: AbstractType) -> ModelView where T: BinderProtocol {
-        return ObjectView(binder: binder, keyPath: keyPath, value: self,
-                          frame: frame, sizeType: sizeType, type: type)
+        return ObjectView(binder: binder, keyPath: keyPath, value: self, type: type)
     }
 }
 
@@ -184,24 +181,23 @@ extension Object: Codable {
     }
 }
 extension Object: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return value.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return value.thumbnailView(withFrame: frame)
     }
 }
 extension Object: ObjectViewable {
     func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
-                           frame: Rect, _ sizeType: SizeType,
                            type: AbstractType) -> ModelView where T: BinderProtocol {
-        return value.objectViewWith(binder: binder, keyPath: keyPath,
-                                    frame: frame, sizeType, type: type)
+        return value.objectViewWith(binder: binder, keyPath: keyPath, type: type)
     }
 }
 extension Object: AbstractViewable {
+    var defaultAbstractConstraintSize: Size {
+        return value.defaultAbstractConstraintSize
+    }
     func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
-                             frame: Rect, _ sizeType: SizeType,
                              type: AbstractType) -> ModelView where T: BinderProtocol {
-        return value.objectViewWith(binder: binder, keyPath: keyPath,
-                                    frame: frame, sizeType, type: type)
+        return value.objectViewWith(binder: binder, keyPath: keyPath, type: type)
     }
 }
 
@@ -223,7 +219,7 @@ final class ObjectView<Value: Object.Value & AbstractViewable, T: BinderProtocol
     var notifications = [((ObjectView<Value, Binder>, BasicNotification) -> ())]()
     
     var valueBinder: BasicBinder<Value>
-    var valueView: View
+    var valueView: ModelView & LayoutMinSize
     var value: Value? {
         return binder[keyPath: keyPath].value as? Value
     }
@@ -235,39 +231,28 @@ final class ObjectView<Value: Object.Value & AbstractViewable, T: BinderProtocol
         return model
     }
     
-    var sizeType: SizeType {
-        didSet { updateWithModel() }
-    }
     var type: AbstractType {
         didSet { updateWithModel() }
     }
     
-    init(binder: Binder, keyPath: BinderKeyPath, value: Value,
-         frame: Rect = Rect(), sizeType: SizeType = .regular, type: AbstractType) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath, value: Value, type: AbstractType) {
         self.binder = binder
         self.keyPath = keyPath
-        
-        self.sizeType = sizeType
         self.type = type
         
         valueBinder = BasicBinder(rootModel: value)
         valueView = value.abstractViewWith(binder: valueBinder,
                                            keyPath: \BasicBinder<Value>.rootModel,
-                                           frame: Rect(origin: Point(), size: frame.size),
-                                           sizeType, type: type)
+                                           type: type)
         
-        super.init()
+        super.init(isLocked: false)
         lineColor = nil
-        valueBinder.notification = { [unowned self] binder, _ in
-            self.set(binder.rootModel)
-        }
+        valueBinder.notification = { [unowned self] binder, _ in self.set(binder.rootModel) }
         children = [valueView]
-        self.frame = frame
     }
     
-    override var defaultBounds: Rect {
-        return valueView.defaultBounds
+    var minSize: Size {
+        return valueView.minSize
     }
     override func updateLayout() {
         valueView.frame = bounds
@@ -278,8 +263,7 @@ final class ObjectView<Value: Object.Value & AbstractViewable, T: BinderProtocol
         
         valueView = value.abstractViewWith(binder: valueBinder,
                                            keyPath: \BasicBinder<Value>.rootModel,
-                                           frame: Rect(origin: Point(), size: frame.size),
-                                           sizeType, type: type)
+                                           type: type)
         
         children = [valueView]
     }

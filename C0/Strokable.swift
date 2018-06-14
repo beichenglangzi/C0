@@ -260,7 +260,7 @@ final class BasicViewStroker: ViewStroker {
             
             let mlc = lc.mid(temps[temps.count - 2].control)
             if let jc = join.joinControlWith(line, lastControl: mlc) {
-                line.controls[line.controls.count - 2] = jc
+                line.controls.insert(jc, at: line.controls.count - 2)
                 temps = [Temp(control: lc, speed: speed)]
                 oldTempTime = time
                 tempDistance = 0
@@ -268,7 +268,7 @@ final class BasicViewStroker: ViewStroker {
                                                  deltaTime: time - oldTempTime,
                                                  temps,
                                                  scale: view.viewScale) {
-                line.controls[line.controls.count - 2] = lc
+                line.controls.insert(lc, at: line.controls.count - 2)
                 temps = [Temp(control: lc, speed: speed)]
                 oldTempTime = time
                 tempDistance = 0
@@ -281,7 +281,6 @@ final class BasicViewStroker: ViewStroker {
                 view.children.last?.removeFromParent()
                 view.append(child: lineView)
             }
-            print(line.controls)
             oldTime = time
             oldPoint = p
         case .ended:

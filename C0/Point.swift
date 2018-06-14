@@ -242,15 +242,17 @@ extension Point {
     static func *(lhs: Point, rhs: Real) -> Point {
         return Point(x: lhs.x * rhs, y: lhs.y * rhs)
     }
-    static func *(lhs: Point, rhs: AffineTransform) -> Point {
-        return lhs.applying(rhs)
-    }
     static func /(lhs: Point, rhs: Real) -> Point {
         return Point(x: lhs.x / rhs, y: lhs.y / rhs)
     }
     
     func rounded() -> Point {
         return Point(x: x.rounded(), y: y.rounded())
+    }
+}
+extension Point: AppliableAffineTransform {
+    static func *(lhs: Point, rhs: AffineTransform) -> Point {
+        return lhs.applying(rhs)
     }
 }
 extension Point {
@@ -260,8 +262,8 @@ extension Point {
         view.fillColor = fillColor
         view.lineColor = lineColor
         view.lineWidth = lineWidth
-        view.cornerRadius = r
-        view.frame = Rect(x: x - r, y: y - r, width: r * 2, height: r * 2)
+        view.radius = r
+        view.position = Point(x: x, y: y)
         return view
     }
 }
@@ -314,13 +316,12 @@ extension Point: Referenceable {
     static let name = Text(english: "Point", japanese: "ポイント")
 }
 extension Point: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return (jsonString ?? "").thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return (jsonString ?? "").thumbnailView(withFrame: frame)
     }
 }
 extension Point: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Point>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
@@ -330,10 +331,9 @@ extension Point: AbstractViewable {
                                                   modelInterval: 0.1)
             return DiscretePointView(binder: binder, keyPath: keyPath,
                                      option: PointOption(xOption: valueOption,
-                                                         yOption: valueOption),
-                                     frame: frame, sizeType: sizeType)
+                                                         yOption: valueOption))
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }

@@ -55,12 +55,74 @@ enum BasicPhaseNotification<Model>: NotificationProtocol {
     }
 }
 
+protocol ConcreteViewable {
+    func concreteViewWith
+        <T: BinderProtocol>(binder: T,
+                            keyPath: ReferenceWritableKeyPath<T, Self>) -> ModelView
+}
+
+enum AbstractType {
+    case normal, mini
+}
+protocol AbstractConstraint {
+    var defaultAbstractConstraintSize: Size { get }
+}
+extension AbstractConstraint {
+    var defaultAbstractConstraintSize: Size {
+        return Size()
+    }
+}
+protocol AbstractViewable: AbstractConstraint {
+    func abstractViewWith<T: BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Self>,
+                                             type: AbstractType) -> ModelView
+}
+
+protocol ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect) -> View
+}
+extension ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect) -> View {
+        let view = View()
+        view.bounds = frame
+        view.lineColor = .formBorder
+        return view
+    }
+}
+protocol DisplayableText {
+    var displayText: Text { get }
+}
+extension ThumbnailViewable where Self: DisplayableText {
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return displayText.thumbnailView(withFrame: frame)
+    }
+}
+protocol MiniViewable {
+    func miniViewWith<T: BinderProtocol>(binder: T,
+                                         keyPath: ReferenceWritableKeyPath<T, Self>) -> ModelView
+}
+extension MiniViewable where Self: Object0D {
+    func miniViewWith<T: BinderProtocol>(binder: T,
+                                         keyPath: ReferenceWritableKeyPath<T, Self>) -> ModelView {
+        return MiniView(binder: binder, keyPath: keyPath)
+    }
+}
+
 protocol Modeler: class {
     func updateWithModel()
 }
-typealias ModelView = View & Modeler
+typealias ModelView = View & Modeler & LayoutMinSize
+extension Modeler where Self: View {
+    func updateWithModel() {
+        children.forEach { ($0 as? ModelView)?.updateWithModel() }
+    }
+}
+extension LayoutMinSize where Self: View {
+    func updateMinSize() {
+        (parent as? LayoutMinSize)?.updateMinSize()
+    }
+}
 
-protocol BindableReceiver: Modeler, Assignable, IndicatableResponder {
+protocol BindableReceiver: Modeler, Assignable, IndicatableResponder, LayoutMinSize {
     associatedtype Model: Object.Value
     associatedtype Binder: BinderProtocol
     associatedtype Notification: NotificationProtocol
@@ -121,7 +183,7 @@ extension BindableReceiver {
     }
 }
 
-protocol BindableGetterReceiver: Modeler, Copiable, IndicatableResponder {
+protocol BindableGetterReceiver: Modeler, Copiable, IndicatableResponder, LayoutMinSize {
     associatedtype Model: Object.Value
     associatedtype Binder: BinderProtocol
     var model: Model { get }
@@ -144,4 +206,3 @@ extension BindableGetterReceiver {
         return [Object(model)]
     }
 }
-

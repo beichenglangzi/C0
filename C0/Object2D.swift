@@ -103,12 +103,7 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
     let xView: Assignable1DView<ModelOption.XOption, Binder>
     let yView: Assignable1DView<ModelOption.YOption, Binder>
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
-    var boundsPadding: Real {
-        didSet { updateLayout() }
-    }
+    let boundsPadding = Layouter.basicPadding
     var interval = 1.5.cg, minDelta = 5.0.cg
     let knobView = View.discreteKnob()
     let boundsView: View
@@ -116,54 +111,48 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
     let yNameView: TextFormView
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
-         xyOrientation: Orientation.XY = .horizontal(.leftToRight),
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
+         xyOrientation: Orientation.XY = .horizontal(.leftToRight)) {
         
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
         
-        self.sizeType = sizeType
-        boundsPadding = Layouter.padding(with: sizeType)
-        boundsView = View(isLocked: true)
+        boundsView = View()
         boundsView.lineColor = .formBorder
-        let font = Font.default(with: sizeType)
-        xNameView = TextFormView(text: Model.xDisplayText + ":", font: font)
+        xNameView = TextFormView(text: Model.xDisplayText + ":")
         xView = Assignable1DView(binder: binder, keyPath: keyPath.appending(path: \Model.xModel),
-                                 option: option.xOption, sizeType: sizeType)
-        yNameView = TextFormView(text: Model.yDisplayText + ":", font: font)
+                                 option: option.xOption)
+        yNameView = TextFormView(text: Model.yDisplayText + ":")
         yView = Assignable1DView(binder: binder, keyPath: keyPath.appending(path: \Model.yModel),
-                                 option: option.yOption, sizeType: sizeType)
+                                 option: option.yOption)
         
-        super.init()
+        super.init(isLocked: false)
         boundsView.append(child: knobView)
         children = [boundsView, xNameView, xView, yNameView, yView]
-        self.frame = frame
     }
     
-    override var defaultBounds: Rect {
-        let padding = Layouter.padding(with: sizeType)
-        let width = Layouter.valueWidth(with: sizeType)
-        let height = Layouter.textHeight(with: sizeType)
-        let w = max(xNameView.frame.width, yNameView.frame.height) + padding
+    var minSize: Size {
+        let padding = Layouter.basicPadding
+        let width = Layouter.basicValueWidth
+        let height = Layouter.basicTextHeight
+        let w = max(xNameView.minSize.width, yNameView.minSize.height) + padding
         let h = height * 2
-        return Rect(x: 0,
-                    y: 0,
-                    width: w + width + h + padding * 2,
+        return Size(width: w + width + h + padding * 2,
                     height: h + padding * 2)
     }
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType)
-        let width = Layouter.valueWidth(with: sizeType)
-        let height = Layouter.textHeight(with: sizeType)
-        let w = max(xNameView.frame.width, yNameView.frame.height) + padding
+        let padding = Layouter.basicPadding
+        let width = Layouter.basicValueWidth
+        let height = Layouter.basicTextHeight
+        let xNameSize = xNameView.minSize, yNameSize = yNameView.minSize
+        let w = max(xNameSize.width, yNameSize.height) + padding
         let h = height * 2
         var y = bounds.height - padding
         y -= height
-        xNameView.frame.origin = Point(x: w - xNameView.frame.width, y: y)
+        xNameView.frame = Rect(origin: Point(x: w - xNameSize.width, y: y), size: xNameSize)
         xView.frame = Rect(x: w, y: y, width: width, height: height)
         y -= height
-        yNameView.frame.origin = Point(x: w - yNameView.frame.width, y: y)
+        yNameView.frame = Rect(origin: Point(x: w - yNameSize.width, y: y), size: yNameSize)
         yView.frame = Rect(x: w, y: y, width: width, height: height)
         boundsView.frame = Rect(x: bounds.width - h - padding,
                                 y: padding,
@@ -233,18 +222,18 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>
     }
     let knobView = View.knob()
     
-    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
-         frame: Rect = Rect()) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption) {
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
         
-        super.init()
-        self.frame = frame
+        super.init(isLocked: false)
         append(child: knobView)
     }
     
+    var minSize: Size {
+        return Size(square: Layouter.defaultMinWidth + padding)
+    }
     override func updateLayout() {
         updateKnobLayout()
     }
@@ -256,6 +245,10 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>
     }
     func model(at p: Point) -> Model {
         let inBounds = bounds.inset(by: padding)
+        guard !inBounds.isEmpty else {
+            let model = option.model(withRatio: Ratio2D(x: 0, y: 0))
+            return option.clippedModel(model)
+        }
         let x = (p.x - inBounds.origin.x) / inBounds.width
         let y = (p.y - inBounds.origin.y) / inBounds.height
         let model = option.model(withRatio: Ratio2D(x: x, y: y))
@@ -263,6 +256,9 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>
     }
     func position(from model: Model) -> Point {
         let inBounds = bounds.inset(by: padding)
+        guard !inBounds.isEmpty else {
+            return Point()
+        }
         let ratio2D = option.ratio2D(with: model)
         let x = inBounds.width * ratio2D.x + inBounds.origin.x
         let y = inBounds.height * ratio2D.y + inBounds.origin.y

@@ -26,67 +26,10 @@ struct Screen {
 }
 
 /**
- Issue: CoreGraphicsとQuartzCoreを廃止し、VulkanまたはMetalでGPUレンダリング
+ Issue: CoreGraphicsとQuartzCoreを廃止し、MetalでGPUレンダリング
  Issue: リニアワークフロー、マクロ拡散光
  */
 class View {
-    fileprivate var caLayer: CALayer
-    init() {
-        caLayer = CALayer.interface()
-    }
-    
-    init(frame: Rect = Rect(), fillColor: Color? = nil, isLocked: Bool) {
-        self.isLocked = isLocked
-        caLayer = CALayer.interface(backgroundColor: fillColor)
-        self.fillColor = fillColor
-        self.frame = frame
-    }
-    init(gradient: Gradient, isLocked: Bool = true) {
-        self.isLocked = isLocked
-        var actions = CALayer.disabledAnimationActions
-        actions["colors"] = NSNull()
-        actions["locations"] = NSNull()
-        actions["startPoint"] = NSNull()
-        actions["endPoint"] = NSNull()
-        let caGradientLayer = CAGradientLayer()
-        caGradientLayer.actions = actions
-        caGradientLayer.anchorPoint = Point()
-        caGradientLayer.borderWidth = 0.5
-        caGradientLayer.borderColor = Color.getSetBorder.cg
-        caLayer = caGradientLayer
-        self.gradient = gradient
-        View.update(with: gradient, in: caGradientLayer)
-    }
-    init(path: Path, isLocked: Bool = true) {
-        self.isLocked = isLocked
-        let caShapeLayer = CAShapeLayer()
-        var actions = CALayer.disabledAnimationActions
-        actions["fillColor"] = NSNull()
-        actions["strokeColor"] = NSNull()
-        caShapeLayer.actions = actions
-        caShapeLayer.anchorPoint = Point()
-        caShapeLayer.fillColor = nil
-        caShapeLayer.lineWidth = 0
-        caShapeLayer.strokeColor = lineColor?.cg
-        caShapeLayer.path = path.cg
-        caLayer = caShapeLayer
-    }
-    init(drawClosure: ((CGContext, View) -> ())?,
-         fillColor: Color? = .background, lineColor: Color? = .getSetBorder,
-         isLocked: Bool = true) {
-        
-        self.isLocked = isLocked
-        let caDrawLayer = C0DrawLayer()
-        caLayer = caDrawLayer
-        self.fillColor = fillColor
-        self.lineColor = lineColor
-        self.drawClosure = drawClosure
-        caDrawLayer.backgroundColor = fillColor?.cg
-        caDrawLayer.borderColor = lineColor?.cg
-        caDrawLayer.borderWidth = lineColor == nil ? 0 : lineWidth
-        caDrawLayer.drawClosure = { [unowned self] ctx in self.drawClosure?(ctx, self) }
-    }
-    
     private(set) weak var parent: View?
     private var _children = [View]()
     var children: [View] {
@@ -129,14 +72,21 @@ class View {
         self.parent = nil
     }
     
-    func allChildrenAndSelf(_ closure: (View) -> Void) {
+    func allChildrenAndSelf(_ closure: (View) -> ()) {
         func allChildrenRecursion(_ child: View, _ closure: (View) -> Void) {
             child._children.forEach { allChildrenRecursion($0, closure) }
             closure(child)
         }
         allChildrenRecursion(self, closure)
     }
-    func selfAndAllParents(closure: (View, inout Bool) -> Void) {
+    func allParents(closure: (View, inout Bool) -> ()) {
+        guard let parent = parent else { return }
+        var stop = false
+        closure(parent, &stop)
+        guard !stop else { return }
+        parent.allParents(closure: closure)
+    }
+    func selfAndAllParents(closure: (View, inout Bool) -> ()) {
         var stop = false
         closure(self, &stop)
         guard !stop else { return }
@@ -146,154 +96,102 @@ class View {
         return parent?.root ?? self
     }
     
-    var defaultBounds: Rect {
-        return Rect()
+    var isEmpty: Bool {
+        return bounds.isEmpty && path.isEmpty
     }
-    private var _bounds = Rect(), _frame = Rect()
-    var bounds: Rect {
-        get { return _bounds }
-        set {
-            guard newValue != _bounds else { return }
-            _bounds = newValue
-            caLayer.bounds = newValue
-            if _frame.size != newValue.size {
-                _frame.size = newValue.size
-                changed(_frame)
+    var bounds = Rect.null {
+        didSet {
+            guard bounds != oldValue else { return }
+            if !bounds.isNull {
+                caLayer.bounds = bounds
+                caLayer.position = bounds.origin
+            } else {
+                caLayer.frame = Rect()
             }
-            updateLayout()
-        }
-    }
-    var frame: Rect {
-        get { return _frame }
-        set {
-            guard newValue != _frame else { return }
-            _frame = newValue
-            if _bounds.size != newValue.size {
-                _bounds.size = newValue.size
-            }
-            caLayer.frame = newValue
-            changed(newValue)
-            updateLayout()
-        }
-    }
-    var position: Point {
-        get { return _frame.midPoint }
-        set {
-            _frame.origin = Point(x: newValue.x - _frame.width / 2,
-                                  y: newValue.y - _frame.height / 2)
-            caLayer.frame.origin = _frame.origin
-            changed(_frame)
             updateLayout()
         }
     }
     var radius: Real {
-        get { return min(bounds.width, bounds.height) / 2 }
+        get { return caLayer.cornerRadius }
         set {
-            frame = Rect(x: position.x - newValue, y: position.y - newValue,
-                         width: newValue * 2, height: newValue * 2)
-            cornerRadius = newValue
+            caLayer.cornerRadius = newValue
+            bounds = Rect(origin: Point(x: -radius, y: -radius),
+                          size: Size(square: radius * 2))
         }
     }
-    var cornerRadius: Real {
-        get { return caLayer.cornerRadius }
-        set { caLayer.cornerRadius = newValue }
-    }
-    var path: Path? {
+    var path: Path {
         get {
             guard let caShapeLayer = caLayer as? CAShapeLayer,
                 let path = caShapeLayer.path else {
-                    return nil
+                    return Path()
             }
             return Path(path)
         }
         set {
             guard let caShapeLayer = caLayer as? CAShapeLayer else { fatalError() }
-            caShapeLayer.path = newValue?.cg
-            changed(frame)
+            caShapeLayer.path = newValue.isEmpty ? nil : newValue.cg
+            updateLayout()
+        }
+    }
+    var isClipped = false {
+        didSet {
+            guard isClipped != oldValue else { return }
+            if !bounds.isNull {
+                caLayer.mask = nil
+                caLayer.masksToBounds = isClipped
+            } else {
+                caLayer.masksToBounds = false
+                if isClipped {
+                    let shapelayer = CAShapeLayer()
+                    shapelayer.path = path.cg
+                    caLayer.mask = shapelayer
+                } else {
+                    caLayer.mask = nil
+                }
+            }
         }
     }
     
     func updateLayout() {}
     
-    var changedFrame: ((Rect) -> ())?
-    func changed(_ frame: Rect) {
-        guard !isLocked else { return }
-        changedFrame?(frame)
-        if let parent = parent {
-            parent.changed(convert(frame, to: parent))
-        }
-    }
-    
-    var fillColor: Color? {
+    var transform = Transform() {
         didSet {
-            guard fillColor != oldValue else { return }
-            set(fillColor: fillColor?.cg)
-        }
-    }
-    private func set(fillColor: CGColor?) {
-        if let caShapeLayer = caLayer as? CAShapeLayer {
-            caShapeLayer.fillColor = fillColor
-        } else {
-            caLayer.backgroundColor = fillColor
-        }
-    }
-    
-    var lineColor: Color? = .getSetBorder {
-        didSet {
-            guard lineColor != oldValue else { return }
-            set(lineWidth: lineColor != nil ? lineWidth : 0)
-            set(lineColor: lineColor?.cg)
-        }
-    }
-    private func set(lineColor: CGColor?) {
-        if let caShapeLayer = caLayer as? CAShapeLayer {
-            caShapeLayer.strokeColor = lineColor
-        } else {
-            caLayer.borderColor = lineColor
-        }
-    }
-    
-    var lineWidth = 0.5.cg {
-        didSet {
-            set(lineWidth: lineColor != nil ? lineWidth : 0)
-        }
-    }
-    private func set(lineWidth: Real) {
-        if let caShapeLayer = caLayer as? CAShapeLayer {
-            caShapeLayer.lineWidth = lineWidth
-        } else {
-            caLayer.borderWidth = lineWidth
-        }
-    }
-    
-    var gradient: Gradient? {
-        didSet {
-            guard let gradient = gradient,
-                let caGradientLayer = caLayer as? CAGradientLayer else {
-                    fatalError()
+            guard transform != oldValue else { return }
+            CATransaction.disableAnimation {
+//                caLayer.position = transform.translation
+                caLayer.transform
+                    = CATransform3DMakeAffineTransform(transform.affineTransform)
+//                parent?.updateLayout()
             }
-            View.update(with: gradient, in: caGradientLayer)
         }
     }
-    private static func update(with gradient: Gradient,
-                               in caGradientLayer: CAGradientLayer) {
-        if gradient.values.isEmpty {
-            caGradientLayer.colors = nil
-            caGradientLayer.locations = nil
-        } else {
-            caGradientLayer.colors = gradient.values.map { $0.color.cg }
-            caGradientLayer.locations = gradient.values.map { NSNumber(value: Double($0.location)) }
+    var frame: Rect {
+        get {
+            guard !bounds.isNull else {
+                return Rect()
+            }
+            return Rect(origin: transform.translation, size: bounds.size)
         }
-        caGradientLayer.startPoint = gradient.startPoint
-        caGradientLayer.endPoint = gradient.endPoint
+        set {
+            transform.translation = newValue.origin
+            bounds = Rect(origin: Point(), size: newValue.size)
+        }
+    }
+    var transformedBoundingBox: Rect {
+        if !bounds.isNull {
+            return bounds * transform.affineTransform
+        } else {
+            return path.boundingBoxOfPath * transform.affineTransform
+        }
+    }
+    var position: Point {
+        get { return transform.translation }
+        set { transform.translation = newValue }
     }
     
     var isHidden: Bool {
         get { return caLayer.isHidden }
-        set {
-            caLayer.isHidden = newValue
-            changed(frame)
-        }
+        set { caLayer.isHidden = newValue }
     }
     var effect = Effect() {
         didSet {
@@ -322,30 +220,61 @@ class View {
         }
     }
     
-    var transform = Transform() {
+    var lineColor: Color? = .getSetBorder {
         didSet {
-            CATransaction.disableAnimation {
-                caLayer.transform
-                    = CATransform3DMakeAffineTransform(transform.affineTransform)
+            guard lineColor != oldValue else { return }
+            set(lineWidth: lineColor != nil ? lineWidth : 0)
+            if let caShapeLayer = caLayer as? CAShapeLayer {
+                caShapeLayer.strokeColor = lineColor?.cg
+            } else {
+                caLayer.borderColor = lineColor?.cg
             }
         }
     }
-    var childrenTransform = Transform() {
+    var lineWidth = 0.5.cg {
         didSet {
-            CATransaction.disableAnimation {
-                caLayer.sublayerTransform
-                    = CATransform3DMakeAffineTransform(childrenTransform.affineTransform)
-                caLayer.bounds.origin = -Point(x: bounds.width / 2, y: bounds.height / 2)
-                    - childrenTransform.translation
-            }
+            set(lineWidth: lineColor != nil ? lineWidth : 0)
+        }
+    }
+    private func set(lineWidth: Real) {
+        if let caShapeLayer = caLayer as? CAShapeLayer {
+            caShapeLayer.lineWidth = lineWidth
+        } else {
+            caLayer.borderWidth = lineWidth
         }
     }
     
-    var isClipped: Bool {
-        get { return caLayer.masksToBounds }
-        set { caLayer.masksToBounds = newValue }
+    var fillColor: Color? {
+        didSet {
+            guard fillColor != oldValue else { return }
+            if let caShapeLayer = caLayer as? CAShapeLayer {
+                caShapeLayer.fillColor = fillColor?.cg
+            } else {
+                caLayer.backgroundColor = fillColor?.cg
+            }
+        }
     }
-    
+    var gradient: Gradient? {
+        didSet {
+            guard let gradient = gradient,
+                let caGradientLayer = caLayer as? CAGradientLayer else {
+                    fatalError()
+            }
+            View.update(with: gradient, in: caGradientLayer)
+        }
+    }
+    private static func update(with gradient: Gradient,
+                               in caGradientLayer: CAGradientLayer) {
+        if gradient.values.isEmpty {
+            caGradientLayer.colors = nil
+            caGradientLayer.locations = nil
+        } else {
+            caGradientLayer.colors = gradient.values.map { $0.color.cg }
+            caGradientLayer.locations = gradient.values.map { NSNumber(value: Double($0.location)) }
+        }
+        caGradientLayer.startPoint = gradient.startPoint
+        caGradientLayer.endPoint = gradient.endPoint
+    }
     var image: Image? {
         get {
             guard let contents = caLayer.contents else {
@@ -371,10 +300,10 @@ class View {
             caLayer.contentsScale = newValue
         }
     }
-    var drawClosure: ((CGContext, View) -> ())? {
+    var drawClosure: ((CGContext, View, Rect) -> ())? {
         didSet {
             (caLayer as! C0DrawLayer).drawClosure = { [unowned self] ctx in
-                self.drawClosure?(ctx, self)
+                self.drawClosure?(ctx, self, ctx.boundingBoxOfClipPath)
             }
         }
     }
@@ -392,13 +321,14 @@ class View {
     }
     func renderImage(with size: Size) -> Image? {
         guard let ctx = CGContext.bitmap(with: size, CGColorSpace.default) else {
-            return nil
+                return nil
         }
+        let frame = transformedBoundingBox
         let scale = size.width / frame.size.width
         let viewTransform = Transform(translation: Point(x: size.width / 2, y: size.height / 2),
                                       scale: Point(x: scale, y: scale),
                                       rotation: 0)
-        let drawView = View(drawClosure: { ctx, _ in
+        let drawView = View(drawClosure: { ctx, _, _ in
             ctx.concatenate(viewTransform.affineTransform)
             self.draw(in: ctx)
         })
@@ -408,33 +338,110 @@ class View {
     
     var isLocked = false
     
-    func containsPath(_ p: Point) -> Bool {
-        if let path = path {
-            return path.contains(p)
-        } else {
-            return bounds.contains(p)
+    fileprivate var caLayer: CALayer
+    init(isLocked: Bool = true) {
+        self.isLocked = isLocked
+        caLayer = CALayer.interface()
+        self.bounds = Rect()
+    }
+    
+    init(frame: Rect, fillColor: Color? = nil, isLocked: Bool = true) {
+        self.isLocked = isLocked
+        caLayer = CALayer.interface(backgroundColor: fillColor)
+        self.fillColor = fillColor
+        self.frame = frame
+    }
+    init(gradient: Gradient, isLocked: Bool = true) {
+        self.isLocked = isLocked
+        var actions = CALayer.disabledAnimationActions
+        actions["colors"] = NSNull()
+        actions["locations"] = NSNull()
+        actions["startPoint"] = NSNull()
+        actions["endPoint"] = NSNull()
+        let caGradientLayer = CAGradientLayer()
+        caGradientLayer.actions = actions
+        caGradientLayer.anchorPoint = Point()
+        caGradientLayer.borderWidth = 0.5
+        caGradientLayer.borderColor = Color.getSetBorder.cg
+        caLayer = caGradientLayer
+        self.gradient = gradient
+        View.update(with: gradient, in: caGradientLayer)
+    }
+    init(path: Path, isLocked: Bool = true) {
+        self.isLocked = isLocked
+        let caShapeLayer = CAShapeLayer()
+        var actions = CALayer.disabledAnimationActions
+        actions["fillColor"] = NSNull()
+        actions["strokeColor"] = NSNull()
+        caShapeLayer.actions = actions
+        caShapeLayer.anchorPoint = Point()
+        caShapeLayer.fillColor = nil
+        caShapeLayer.lineWidth = 0
+        caShapeLayer.strokeColor = lineColor?.cg
+        caShapeLayer.path = path.cg
+        caLayer = caShapeLayer
+    }
+    init(drawClosure: ((CGContext, View, Rect) -> ())?,
+         fillColor: Color? = .background, lineColor: Color? = .getSetBorder,
+         isLocked: Bool = true) {
+        
+        self.isLocked = isLocked
+        let caDrawLayer = C0DrawLayer()
+        caLayer = caDrawLayer
+        self.fillColor = fillColor
+        self.lineColor = lineColor
+        self.drawClosure = drawClosure
+        caDrawLayer.backgroundColor = fillColor?.cg
+        caDrawLayer.borderColor = lineColor?.cg
+        caDrawLayer.borderWidth = lineColor == nil ? 0 : lineWidth
+        caDrawLayer.drawClosure = { [unowned self] ctx in
+            self.drawClosure?(ctx, self, ctx.boundingBoxOfClipPath)
         }
     }
+}
+extension View {
     func contains(_ p: Point) -> Bool {
         return !isLocked && !isHidden && containsPath(p)
     }
-    func contains(_ rect: Rect) -> Bool {
-        return frame.intersects(rect)
+    private func containsPath(_ p: Point) -> Bool {
+        if !bounds.isNull {
+            return bounds.contains(p)
+        } else {
+            return path.contains(p)
+        }
     }
+    func contains(_ rect: Rect) -> Bool {
+        if !bounds.isNull {
+            return bounds.intersects(rect)
+        } else {
+            return path.contains(rect)
+        }
+    }
+    func containsFromAllParents(_ parent: View) -> Bool {
+        var isParent = false
+        allParents { (view, stop) in
+            if view == parent {
+                isParent = true
+                stop = true
+            }
+        }
+        return isParent
+    }
+    
     func at(_ p: Point) -> View? {
         guard !(isLocked && _children.isEmpty) else {
             return nil
         }
-        guard containsPath(p) && !isHidden else {
+        guard ((!isClipped && isEmpty) || containsPath(p)) && !isHidden else {
             return nil
         }
         for child in _children.reversed() {
-            let inPoint = child.convert(p, from: self)
+            let inPoint = p * child.transform.affineTransform.inverted()
             if let view = child.at(inPoint) {
                 return view
             }
         }
-        return isLocked ? nil : self
+        return isLocked || (!isClipped && isEmpty) ? nil : self
     }
     func at<T>(_ p: Point, _ type: T.Type) -> T? {
         return at(p)?.withSelfAndAllParents(with: type)
@@ -450,56 +457,65 @@ class View {
         return t
     }
     
-    func convertFromRoot(_ point: Point) -> Point {
-        return point - convertToRoot(Point(), stop: nil).point
-    }
-    func convert(_ point: Point, from view: View) -> Point {
-        guard self !== view else {
-            return point
+    func convert<T: AppliableAffineTransform>(_ value: T, from view: View) -> T {
+        guard self != view else {
+            return value
         }
-        let result = view.convertToRoot(point, stop: self)
-        return !result.isRoot ?
-            result.point : result.point - convertToRoot(Point(), stop: nil).point
-    }
-    func convertToRoot(_ point: Point) -> Point {
-        return convertToRoot(point, stop: nil).point
-    }
-    func convert(_ point: Point, to view: View) -> Point {
-        guard self !== view else {
-            return point
-        }
-        let result = convertToRoot(point, stop: view)
-        return !result.isRoot ?
-            result.point : result.point - view.convertToRoot(Point(), stop: nil).point
-    }
-    private func convertToRoot(_ point: Point,
-                               stop view: View?) -> (point: Point, isRoot: Bool) {
-        if let parent = parent {
-            let p = point - bounds.origin
-            let parentPoint: Point
-            if parent.childrenTransform.isIdentity {
-                parentPoint = p + frame.origin
-            } else {
-                parentPoint = p * parent.childrenTransform.affineTransform + frame.origin
-            }
-            return parent === view ?
-                (parentPoint, false) : parent.convertToRoot(parentPoint, stop: view)
+        if containsFromAllParents(view) {
+            return convert(value, fromParent: view)
+        } else if view.containsFromAllParents(self) {
+            return view.convert(value, toParent: self)
         } else {
-            return (point, true)
+            let rootValue = view.convertToRoot(value)
+            return convertFromRoot(rootValue)
         }
+    }
+    private func convert<T: AppliableAffineTransform>(_ value: T, fromParent: View) -> T {
+        var affine = AffineTransform.identity
+        selfAndAllParents { (view, stop) in
+            if view == fromParent {
+                stop = true
+            } else {
+                affine *= view.transform.affineTransform
+            }
+        }
+        return value * affine.inverted()
+    }
+    func convertFromRoot<T: AppliableAffineTransform>(_ value: T) -> T {
+        var affine = AffineTransform.identity
+        selfAndAllParents { (view, _) in
+            if view.parent != nil {
+                affine *= view.transform.affineTransform
+            }
+        }
+        return value * affine.inverted()
     }
     
-    func convertFromRoot(_ rect: Rect) -> Rect {
-        return Rect(origin: convertFromRoot(rect.origin), size: rect.size)
+    func convert<T: AppliableAffineTransform>(_ value: T, to view: View) -> T {
+        guard self != view else {
+            return value
+        }
+        if containsFromAllParents(view) {
+            return convert(value, toParent: view)
+        } else if view.containsFromAllParents(self) {
+            return view.convert(value, fromParent: self)
+        } else {
+            let rootValue = convertToRoot(value)
+            return view.convertFromRoot(rootValue)
+        }
     }
-    func convert(_ rect: Rect, from view: View) -> Rect {
-        return Rect(origin: convert(rect.origin, from: view), size: rect.size)
+    private func convert<T: AppliableAffineTransform>(_ value: T, toParent: View) -> T {
+        guard let parent = parent else {
+            return value
+        }
+        if parent == toParent {
+            return value * transform.affineTransform
+        } else {
+            return parent.convert(value * transform.affineTransform, toParent: toParent)
+        }
     }
-    func convertToRoot(_ rect: Rect) -> Rect {
-        return Rect(origin: convertToRoot(rect.origin), size: rect.size)
-    }
-    func convert(_ rect: Rect, to view: View) -> Rect {
-        return Rect(origin: convert(rect.origin, to: view), size: rect.size)
+    func convertToRoot<T: AppliableAffineTransform>(_ value: T) -> T {
+        return parent?.convertToRoot(value * transform.affineTransform) ?? value
     }
 }
 extension View: Equatable {
@@ -509,19 +525,19 @@ extension View: Equatable {
 }
 extension View {
     static var selection: View {
-        let view = View(isLocked: true)
+        let view = View()
         view.fillColor = .select
         view.lineColor = .selectBorder
         return view
     }
     static var deselection: View {
-        let view = View(isLocked: true)
+        let view = View()
         view.fillColor = .deselect
         view.lineColor = .deselectBorder
         return view
     }
     static func knob(radius: Real = 5, lineWidth: Real = 1) -> View {
-        let view = View(isLocked: true)
+        let view = View()
         view.fillColor = .knob
         view.lineColor = .getSetBorder
         view.lineWidth = lineWidth
@@ -530,11 +546,11 @@ extension View {
     }
     static func discreteKnob(_ size: Size = Size(width: 10, height: 10),
                              lineWidth: Real = 1) -> View {
-        let view = View(isLocked: true)
+        let view = View()
         view.fillColor = .knob
         view.lineColor = .getSetBorder
         view.lineWidth = lineWidth
-        view.frame.size = size
+        view.bounds = Rect(origin: Point(x: -size.width / 2, y: -size.height / 2), size: size)
         return view
     }
 }
@@ -735,42 +751,5 @@ final class DisplayLink {
 extension C0View {
     func backingLayer(with view: View) -> CALayer {
         return view.caLayer
-    }
-}
-
-enum SizeType {
-    case small, regular
-}
-
-protocol ConcreteViewable {
-    func concreteViewWith<T: BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Self>,
-                                             frame: Rect, _ sizeType: SizeType) -> ModelView
-}
-
-enum AbstractType {
-    case normal, mini
-}
-protocol AbstractViewable {
-    func abstractViewWith<T: BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Self>,
-                                             frame: Rect, _ sizeType: SizeType,
-                                             type: AbstractType) -> ModelView
-}
-protocol ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View
-}
-extension ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        let view = View(isLocked: true)
-        view.frame = frame
-        view.lineColor = .formBorder
-        return view
-    }
-}
-protocol DisplayableText {
-    var displayText: Text { get }
-}
-extension ThumbnailViewable where Self: DisplayableText {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return displayText.thumbnailView(withFrame: frame, sizeType)
     }
 }

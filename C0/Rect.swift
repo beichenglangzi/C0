@@ -122,19 +122,36 @@ extension Rect {
     func inset(by width: Real) -> Rect {
         return insetBy(dx: width, dy: width)
     }
-    var centerPoint: Point {
-        return Point(x: midX, y: midY)
-    }
     mutating func formUnion(_ other: Rect) {
         self = union(other)
     }
     
-    static func *(lhs: Rect, rhs: AffineTransform) -> Rect {
-        return lhs.applying(rhs)
+    var minXminYPoint: Point {
+        return Point(x: minX, y: minY)
     }
-    
-    var midPoint: Point {
+    var midXminYPoint: Point {
+        return Point(x: midX, y: minY)
+    }
+    var maxXminYPoint: Point {
+        return Point(x: maxX, y: minY)
+    }
+    var minXmidYPoint: Point {
+        return Point(x: minX, y: midY)
+    }
+    var centerPoint: Point {
         return Point(x: midX, y: midY)
+    }
+    var maxXmidYPoint: Point {
+        return Point(x: maxX, y: midY)
+    }
+    var minXmaxYPoint: Point {
+        return Point(x: minX, y: maxY)
+    }
+    var midXmaxYPoint: Point {
+        return Point(x: midX, y: maxY)
+    }
+    var maxXmaxYPoint: Point {
+        return Point(x: maxX, y: maxY)
     }
     
     static func boundingBox(with points: [Point]) -> Rect {
@@ -147,6 +164,11 @@ extension Rect {
         let minX = points.min { $0.x < $1.x }!.x, maxX = points.max { $0.x < $1.x }!.x
         let minY = points.min { $0.y < $1.y }!.y, maxY = points.max { $0.y < $1.y }!.y
         return AABB(minX: minX, maxX: maxX, minY: minY, maxY: maxY).rect
+    }
+}
+extension Rect: AppliableAffineTransform {
+    static func *(lhs: Rect, rhs: AffineTransform) -> Rect {
+        return lhs.applying(rhs)
     }
 }
 extension Array where Element == Rect {
@@ -276,7 +298,7 @@ struct RotatedRect: Codable, Equatable {
                 minBounds = bounds
             }
         }
-        centerPoint = minBounds.midPoint * AffineTransform(rotationAngle: minAngle)
+        centerPoint = minBounds.centerPoint * AffineTransform(rotationAngle: minAngle)
         size = minBounds.size
         angle = minAngle
     }

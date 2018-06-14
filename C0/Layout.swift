@@ -34,22 +34,41 @@ enum Orientation {
     case xy(XY), circular(Circular)
 }
 
+typealias LayoutValue = Codable & ThumbnailViewable & Referenceable & AbstractViewable
+
 protocol Layoutable {
     var frame: Rect { get set }
     var transform: Transform { get set }
 }
 
-typealias LayoutValue = Codable & ThumbnailViewable & Referenceable & AbstractViewable
+protocol LayoutMinSize {
+    func updateMinSize()
+    var minSize: Size { get }
+}
 
-struct Layout<Value: LayoutValue>: Layoutable, InternalZoomable, Codable {
+enum ConstraintType {
+    case none, width, height, widthAndHeight
+}
+
+protocol LayoutProtocol {
+    var transform: Transform { get set }
+    var constraintSize: Size { get set }
+//    var origin: Point { get set }
+}
+struct Layout<Value: LayoutValue>: Codable, LayoutProtocol {
     var value: Value
     var transform: Transform
-    var frame: Rect
+    var constraintSize: Size
+//    var origin: Point
     
-    init(_ value: Value, transform: Transform = Transform(), frame: Rect = Rect()) {
+    init(_ value: Value, transform: Transform = Transform(),
+         constraintSize: Size = Size()//, origin: Point = Point()
+        ) {
+        
         self.value = value
         self.transform = transform
-        self.frame = frame
+        self.constraintSize = constraintSize
+//        self.origin = origin
     }
 }
 extension Layout: ValueChain {
@@ -58,9 +77,10 @@ extension Layout: ValueChain {
 extension Layout: AnyInitializable {
     init?(anyValue: Any) {
         if let value = (anyValue as? ValueChain)?.value(Value.self) {
-            self = Layout(value)
+            print(type(of: anyValue), type(of: value), value.defaultAbstractConstraintSize)
+            self = Layout(value, constraintSize: value.defaultAbstractConstraintSize)
         } else if let value = anyValue as? Value {
-            self = Layout(value)
+            self = Layout(value, constraintSize: value.defaultAbstractConstraintSize)
         } else {
             return nil
         }
@@ -72,21 +92,19 @@ extension Layout: Referenceable {
     }
 }
 extension Layout: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return value.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return value.thumbnailView(withFrame: frame)
     }
 }
 extension Layout: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Layout<Value>>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return LayoutView(binder: binder, keyPath: keyPath,
-                              frame: frame, sizeType: sizeType)
+            return LayoutView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -94,6 +112,7 @@ extension Layout: ObjectViewable {}
 
 enum Layouter {
     static let smallPadding = 2.0.cg, basicPadding = 3.0.cg, basicLargePadding = 14.0.cg
+    static let defaultMinWidth = 30.0.cg
     static let smallRatio = Font.small.size / Font.default.size
     static let basicTextHeight = Font.default.ceilHeight(withPadding: 1)
     static let basicTextSmallHeight = Font.small.ceilHeight(withPadding: 1)
@@ -105,24 +124,9 @@ enum Layouter {
     static let smallValueFrame = Rect(x: 0, y: smallPadding,
                                       width: smallValueWidth, height: smallHeight)
     static let propertyWidth = 140.0.cg
-    static func padding(with sizeType: SizeType) -> Real {
-        return sizeType == .small ? smallPadding : basicPadding
-    }
-    static func height(with sizeType: SizeType) -> Real {
-        return sizeType == .small ? smallHeight : basicHeight
-    }
-    static func textHeight(with sizeType: SizeType) -> Real {
-        return sizeType == .small ? basicTextSmallHeight : basicTextHeight
-    }
-    static func valueWidth(with sizeType: SizeType) -> Real {
-        return sizeType == .small ? smallValueWidth : basicValueWidth
-    }
-    static func valueFrame(with sizeType: SizeType) -> Rect {
-        return sizeType == .small ? smallValueFrame : basicValueFrame
-    }
     
     enum Item {
-        case view(View), xPadding(Real), yPadding(Real)
+        case view(View & LayoutMinSize), xPadding(Real), yPadding(Real)
         
         var view: View? {
             switch self {
@@ -132,76 +136,85 @@ enum Layouter {
         }
         var width: Real {
             switch self {
-            case .view(let view): return view.bounds.width
+            case .view(let view): return view.transformedBoundingBox.width
             case .xPadding(let padding): return padding
             case .yPadding: return 0
             }
         }
         var height: Real {
             switch self {
-            case .view(let view): return view.bounds.width
+            case .view(let view): return view.transformedBoundingBox.height
             case .xPadding: return 0
             case .yPadding(let padding): return padding
             }
         }
-        var bounds: Rect {
+        var minWidth: Real {
             switch self {
-            case .view(let view): return view.bounds
-            case .xPadding(let padding): return Rect(x: 0, y: 0, width: padding, height: 0)
-            case .yPadding(let padding): return Rect(x: 0, y: 0, width: 0, height: padding)
+            case .view(let view): return view.minSize.width
+            case .xPadding(let padding): return padding
+            case .yPadding: return 0
             }
         }
-        var defaultBounds: Rect {
+        var minHeight: Real {
             switch self {
-            case .view(let view): return view.defaultBounds
-            case .xPadding(let padding): return Rect(x: 0, y: 0, width: padding, height: 0)
-            case .yPadding(let padding): return Rect(x: 0, y: 0, width: 0, height: padding)
+            case .view(let view): return view.minSize.height
+            case .xPadding: return 0
+            case .yPadding(let padding): return padding
+            }
+        }
+        var minSize: Size {
+            switch self {
+            case .view(let view): return view.minSize
+            case .xPadding(let padding): return Size(width: padding, height: 0)
+            case .yPadding(let padding): return Size(width: 0, height: padding)
             }
         }
     }
     
     static func centered(_ items: [Item],
                          in bounds: Rect, paddingWidth: Real = 0) {
-        let w = items.reduce(-paddingWidth) { $0 +  $1.bounds.width + paddingWidth }
+        let w = items.reduce(-paddingWidth) { $0 +  $1.width + paddingWidth }
         _ = items.reduce(((bounds.width - w) / 2).rounded(.down)) { x, item in
             item.view?.frame.origin.x = x
-            return x + item.width + paddingWidth
+            return x + item.minWidth + paddingWidth
         }
     }
     static func leftAlignmentWidth(_ items: [Item], minX: Real = basicPadding,
                                    paddingWidth: Real = 0) -> Real {
-        return items.reduce(minX) { $0 + $1.bounds.width + paddingWidth } - paddingWidth
+        return items.reduce(minX) { $0 + $1.width + paddingWidth } - paddingWidth
     }
     static func leftAlignment(_ items: [Item], minX: Real = basicPadding,
                               y: Real = 0, paddingWidth: Real = 0) {
         _ = items.reduce(minX) { x, item in
             item.view?.frame.origin = Point(x: x, y: y)
-            return x + item.width + paddingWidth
+            return x + item.minWidth + paddingWidth
         }
     }
     static func leftAlignment(_ items: [Item], minX: Real = basicPadding,
                               y: Real = 0, height: Real, paddingWidth: Real = 0) -> Size {
         let width = items.reduce(minX) { x, item in
-            item.view?.frame.origin = Point(x: x,
-                                            y: y + ((height - item.bounds.height) / 2).rounded())
-            return x + item.width + paddingWidth
+            let minSize = item.minSize
+            item.view?.frame = Rect(origin: Point(x: x,
+                                                  y: y + ((height - minSize.height) / 2).rounded()),
+                                    size: minSize)
+            return x + minSize.width + paddingWidth
         }
         return Size(width: width, height: height)
     }
     static func topAlignment(_ items: [Item],
                              minX: Real = basicPadding, minY: Real = basicPadding,
                              minSize: inout Size, padding: Real = Layouter.basicPadding) {
-        let width = items.reduce(0.0.cg) { max($0, $1.defaultBounds.width) } + padding * 2
+        let width = items.reduce(0.0.cg) { max($0, $1.minWidth) } + padding * 2
         let height = items.reversed().reduce(minY) { y, item in
-            item.view?.frame = Rect(x: minX, y: y, width: width, height: item.defaultBounds.height)
-            return y + item.height
+            item.view?.frame = Rect(x: minX, y: y, width: width, height: item.height)
+            return y + item.minHeight
         }
         minSize = Size(width: width, height: height - minY)
     }
     static func autoHorizontalAlignment(_ items: [Item],
                                         padding: Real = 0, in bounds: Rect) {
         guard !items.isEmpty else { return }
-        let w = items.reduce(0.0.cg) { $0 +  $1.defaultBounds.width + padding } - padding
+        let w = items.reduce(0.0.cg) { $0 +  $1.minWidth + padding } - padding
         let dx = (bounds.width - w) / Real(items.count)
         _ = items.enumerated().reduce(bounds.minX) { x, value in
             let (i, item) = value
@@ -212,9 +225,9 @@ enum Layouter {
             } else {
                 item.view?.frame = Rect(x: x,
                                         y: bounds.minY,
-                                        width: (value.element.defaultBounds.width + dx).rounded(),
+                                        width: (value.element.minWidth + dx).rounded(),
                                         height: bounds.height)
-                return x + item.width + padding
+                return x + item.minWidth + padding
             }
         }
     }
@@ -222,16 +235,6 @@ enum Layouter {
 
 final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
 : ModelView, BindableReceiver, Layoutable, Transformable {
-    
-    var oldFrame = Rect()
-    func transform(with affineTransform: AffineTransform) {
-        frame = oldFrame.applying(affineTransform)
-    }
-    
-    func captureWillMoveObject(at p: Point, to version: Version) {
-        oldFrame = frame
-    }
-    
     typealias Model = Layout<Value>
     typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
     var binder: Binder {
@@ -242,50 +245,120 @@ final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
     }
     var notifications = [((LayoutView<Value, Binder>, BasicPhaseNotification<Model>) -> ())]()
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
-    
     var defaultModel: Layout<Value> {
         return Layout(model.value)
     }
     
-    let valueView: View
+    let valueView: View & LayoutMinSize
     
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
-        let padding = Layouter.padding(with: sizeType)
-        let valueFrame = Size(square: padding).intersects(binder[keyPath: keyPath].frame.size) ?
-            Rect() :
-            binder[keyPath: keyPath].frame.inset(by: padding)
-        self.sizeType = sizeType
         valueView = binder[keyPath: keyPath].value
             .abstractViewWith(binder: binder,
                               keyPath: keyPath.appending(path: \Model.value),
-                              frame: valueFrame, sizeType, type: .normal)
-        if valueView.frame.isEmpty {
-            valueView.frame.size = valueView.defaultBounds.size
-        }
-        super.init()
-        self.model.frame.size = valueView.frame.inset(by: -padding).size
-        self.frame = self.model.frame
+                              type: .normal)
+        
+        super.init(isLocked: false)
         children = [valueView]
+        updateWithModel()
     }
     
-    override var defaultBounds: Rect {
-        return valueView.defaultBounds.inset(by: -Layouter.padding(with: sizeType))
+    var minSize: Size {
+        return valueView.minSize + Layouter.basicPadding * 2
     }
     override func updateLayout() {
-        model.frame = frame
-        valueView.frame = bounds.inset(by: Layouter.padding(with: sizeType))
+        valueView.frame = bounds.inset(by: Layouter.basicPadding)
     }
     func updateWithModel() {
-        
+//        var transform = model.transform
+//        transform.translation += model.origin
+        self.transform = model.transform//transform
+        let minSize = self.minSize
+        let width = max(model.constraintSize.width, minSize.width)
+        let height = max(model.constraintSize.height, minSize.height)
+        bounds = Rect(origin: Point(), size: Size(width: width, height: height))
     }
     
+    var movingOrigin: Point {
+        get { return model.transform.translation }
+        set {
+            binder[keyPath: keyPath].transform.translation = newValue
+            self.transform.translation = newValue
+        }
+    }
     
+    var oldFrame = Rect()
+    func transform(with affineTransform: AffineTransform) {
+        frame = oldFrame.applying(affineTransform)
+//        model.transform = 
+    }
+    func anchorPoint(from p: Point) -> Point {
+        let frame = transformedBoundingBox
+        var minD = p.distance²(frame.minXminYPoint), anchorPoint = frame.maxXmaxYPoint
+        var d = p.distance²(frame.midXminYPoint)
+        if d < minD {
+            anchorPoint = frame.midXmaxYPoint
+            minD = d
+        }
+        d = p.distance²(frame.maxXminYPoint)
+        if d < minD {
+            anchorPoint = frame.minXmaxYPoint
+            minD = d
+        }
+        d = p.distance²(frame.minXmidYPoint)
+        if d < minD {
+            anchorPoint = frame.maxXmidYPoint
+            minD = d
+        }
+        d = p.distance²(frame.maxXmidYPoint)
+        if d < minD {
+            anchorPoint = frame.minXmidYPoint
+            minD = d
+        }
+        d = p.distance²(frame.minXmaxYPoint)
+        if d < minD {
+            anchorPoint = frame.maxXminYPoint
+            minD = d
+        }
+        d = p.distance²(frame.midXmaxYPoint)
+        if d < minD {
+            anchorPoint = frame.midXminYPoint
+            minD = d
+        }
+        d = p.distance²(frame.maxXmaxYPoint)
+        if d < minD {
+            anchorPoint = frame.minXminYPoint
+            minD = d
+        }
+        return anchorPoint
+    }
+    
+    func captureWillMoveObject(at p: Point, to version: Version) {
+        oldFrame = frame
+    }
+}
+extension LayoutView: InternalZoomable {
+    func captureTransform(to version: Version) {
+        version.registerUndo(withTarget: self) { [zoomingTransform] in
+            $0.zoomingTransform = zoomingTransform
+        }
+    }
+    var zoomingView: View {
+        return parent ?? self
+    }
+    var zoomingTransform: Transform {
+        get { return model.transform }
+        set {
+            binder[keyPath: keyPath].transform = newValue
+            transform = newValue
+        }
+    }
+    func convertZoomingLocalFromZoomingView(_ p: Point) -> Point {
+        return convert(p, from: zoomingView)
+    }
+    func convertZoomingLocalToZoomingView(_ p: Point) -> Point {
+        return convert(p, to: zoomingView)
+    }
 }

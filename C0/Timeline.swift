@@ -181,20 +181,19 @@ extension Timeline: Referenceable {
     static let name = Text(english: "Timeline", japanese: "タイムライン")
 }
 extension Timeline: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return "\(duration) b".thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return "\(duration) b".thumbnailView(withFrame: frame)
     }
 }
 extension Timeline: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Timeline>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return TimelineView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+            return TimelineView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -221,15 +220,12 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
     let frameRateView: DiscreteRealView<Binder>
     let baseTimeIntervalView: DiscreteRationalView<Binder>
     let curretEditKeyframeTimeView: TextFormView
-    let timeRulerView = RulerView()
     
-    let tempoAnimationClipView = View(isLocked: true)
+    let tempoAnimationClipView = View()
     let tempoAnimationView: AnimationView<BPM, Binder>
     let soundWaveformView = SoundWaveformView()
-    let cutViewsView = View(isLocked: true)
-    let sumAnimationNameView = TextFormView(text: Text(english: "Sum:", japanese: "合計:"),
-                                            font: .small)
-    let sumKeyTimesClipView = View(isLocked: true)
+    let cutViewsView = View()
+    let sumKeyTimesClipView = View()
     
     var baseWidth = 6.0.cg {
         didSet {
@@ -248,7 +244,7 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
     private(set) var maxScrollX = 0.0.cg, cutHeight = 0.0.cg
     private let leftWidth = 80.0.cg
     let timeView: View = {
-        let view = View(isLocked: true)
+        let view = View()
         view.fillColor = .editing
         view.lineColor = nil
         return view
@@ -257,23 +253,17 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     var baseTimeIntervalBeginSecondTime: Second?
     
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
         frameRateView = DiscreteRealView(binder: binder,
                                          keyPath: keyPath.appending(path: \Model.frameRate),
-                                         option: Model.frameRateOption,
-                                         frame: Layouter.valueFrame(with: .small),
-                                         sizeType: .small)
+                                         option: Model.frameRateOption)
         baseTimeIntervalView
             = DiscreteRationalView(binder: binder,
                                    keyPath: keyPath.appending(path: \Model.baseTimeInterval),
-                                   option: Model.baseTimeIntervalOption,
-                                   frame: Layouter.valueFrame(with: .regular),
-                                   sizeType: sizeType)
+                                   option: Model.baseTimeIntervalOption)
         
         let editingTimeString = binder[keyPath: keyPath]
             .curretEditingKeyframeTimeExpression.displayString
@@ -284,13 +274,11 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
                             keyPath: keyPath.appending(path: \Model.tempoTrack.animation),
                             beginBaseTime: 0, baseTimeInterval: baseTimeInterval,
                             origin: Point(), height: timeHeight,
-                            smallHeight: sumKeyTimesHeight,
-                            sizeType: sizeType)
+                            smallHeight: sumKeyTimesHeight)
         
-        super.init()
+        super.init(isLocked: false)
         children = [timeView, curretEditKeyframeTimeView,
-                    beatsView, sumAnimationNameView, sumKeyTimesClipView,
-                    timeRulerView,
+                    beatsView, sumKeyTimesClipView,
                     tempoAnimationClipView, baseTimeIntervalView,
                     cutViewsView]
         
@@ -314,8 +302,8 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
         })
     }
     
-    override var defaultBounds: Rect {
-        return Rect(x: 0, y: 0, width: 200, height: 100)
+    var minSize: Size {
+        return Size(width: 200, height: 100)
     }
     override func updateLayout() {
         let sp = Layouter.basicPadding
@@ -329,8 +317,9 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
                               width: baseWidth, height: bounds.height - sp * 2)
         beatsView.frame = Rect(x: rightX, y: 0,
                                width: bounds.width - rightX, height: bounds.height)
-        let bx = sp + (sumKeyTimesHeight - baseTimeIntervalView.frame.height) / 2
-        baseTimeIntervalView.frame.origin = Point(x: sp, y: bx)
+        let bx = sp + (sumKeyTimesHeight - Layouter.basicValueFrame.height) / 2
+        baseTimeIntervalView.frame = Rect(origin: Point(x: sp, y: bx),
+                                          size: Layouter.basicValueFrame.size)
         
         _scrollPoint.x = x(withTime: model.editingTime)
         _intervalScrollPoint.x = x(withTime: time(withLocalX: _scrollPoint.x))
@@ -339,6 +328,9 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
         _scrollPoint.x = x(withTime: model.editingTime)
         _intervalScrollPoint.x = x(withTime: time(withLocalX: _scrollPoint.x))
         
+        frameRateView.updateWithModel()
+        baseTimeIntervalView.updateWithModel()
+        tempoAnimationView.updateWithModel()
     }
     
     private var _scrollPoint = Point(), _intervalScrollPoint = Point()
@@ -402,26 +394,26 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     
     func updateTimeRuler() {
-        let minTime = time(withLocalX: convertToLocalX(bounds.minX + leftWidth))
-        let maxTime = time(withLocalX: convertToLocalX(bounds.maxX))
-        let minSecond = Int((model.secondTime(withBeatTime: minTime)).rounded(.down))
-        let maxSecond = Int((model.secondTime(withBeatTime: maxTime)).rounded(.up))
-        guard minSecond < maxSecond else {
-            timeRulerView.scaleStringViews = []
-            return
-        }
-        timeRulerView.scrollPosition.x = localDeltaX
-        timeRulerView.scaleStringViews = (minSecond...maxSecond).compactMap {
-            guard !(maxSecond - minSecond > Int(bounds.width / 40) && $0 % 5 != 0) else {
-                return nil
-            }
-            let timeView = TimelineView.timeView(withSecound: $0)
-            timeView.fillColor = nil
-            let secondX = x(withTime: model.basedBeatTime(withSecondTime: Second($0)))
-            timeView.frame.origin = Point(x: secondX - timeView.frame.width / 2,
-                                          y: Layouter.smallPadding)
-            return timeView
-        }
+//        let minTime = time(withLocalX: convertToLocalX(bounds.minX + leftWidth))
+//        let maxTime = time(withLocalX: convertToLocalX(bounds.maxX))
+//        let minSecond = Int((model.secondTime(withBeatTime: minTime)).rounded(.down))
+//        let maxSecond = Int((model.secondTime(withBeatTime: maxTime)).rounded(.up))
+//        guard minSecond < maxSecond else {
+//            timeRulerView.scaleStringViews = []
+//            return
+//        }
+//        timeRulerView.scrollPosition.x = localDeltaX
+//        timeRulerView.scaleStringViews = (minSecond...maxSecond).compactMap {
+//            guard !(maxSecond - minSecond > Int(bounds.width / 40) && $0 % 5 != 0) else {
+//                return nil
+//            }
+//            let timeView = TimelineView.timeView(withSecound: $0)
+//            timeView.fillColor = nil
+//            let secondX = x(withTime: model.basedBeatTime(withSecondTime: Second($0)))
+//            timeView.frame.origin = Point(x: secondX - timeView.frame.width / 2,
+//                                          y: Layouter.smallPadding)
+//            return timeView
+//        }
     }
     static func timeView(withSecound i: Int) -> TextFormView {
         let minute = i / 60
@@ -435,7 +427,7 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
     let beatsLineWidth = 1.0.cg, barLineWidth = 3.0.cg, beatsPerBar = 0
     func updateBeats() {
         guard baseTimeInterval < 1 else {
-            beatsView.path = nil
+            beatsView.path = Path()
             return
         }
         let minX = localDeltaX
@@ -443,7 +435,7 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
         let maxTime = time(withLocalX: convertToLocalX(bounds.maxX))
         let intMinTime = floor(minTime).integralPart, intMaxTime = ceil(maxTime).integralPart
         guard intMinTime < intMaxTime else {
-            beatsView.path = nil
+            beatsView.path = Path()
             return
         }
         let padding = Layouter.basicPadding
@@ -507,7 +499,6 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
             baseTimeIntervalView.model = baseTimeInterval
             
             model.baseTimeInterval = baseTimeInterval
-            
         }
     }
     
@@ -542,30 +533,5 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
         let x = (scrollPoint.x - scrollDeltaPoint.x).clip(min: 0, max: maxX)
         scrollPoint = Point(x: phase == .began ?
             self.x(withTime: self.time(withLocalX: x)) : x, y: 0)
-    }
-}
-
-final class RulerView: View {
-    private let scrollView: View = {
-        let view = View(isLocked: true)
-        view.lineColor = nil
-        return view
-    } ()
-    
-    override init() {
-        super.init()
-        append(child: scrollView)
-    }
-    
-    var scrollPosition: Point {
-        get { return scrollView.frame.origin }
-        set { scrollView.frame.origin = newValue }
-    }
-    var scrollFrame = Rect()
-    
-    var scaleStringViews = [TextFormView]() {
-        didSet {
-            scrollView.children = scaleStringViews
-        }
     }
 }

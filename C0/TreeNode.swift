@@ -132,33 +132,33 @@ struct TreeNodeIterator<T: TreeNode>: IteratorProtocol {
     typealias Element = T
     
     init(rootNode: T) {
-        parentIndexes = [(rootNode, 0)]
+        nodeIndexes = [(rootNode, 0)]
     }
     
-    private var parentIndexes = [(parent: T, index: Int)]()
+    private var nodeIndexes = [(node: T, index: Int)]()
     mutating func next() -> T? {
-        guard let lastParentIndex = parentIndexes.last else {
+        guard let lastNodeIndex = nodeIndexes.last else {
             return nil
         }
-        if lastParentIndex.index >= lastParentIndex.parent.children.count {
-            parentIndexes.removeLast()
-            if !parentIndexes.isEmpty {
-                parentIndexes[parentIndexes.count - 1].index += 1
+        if lastNodeIndex.index >= lastNodeIndex.node.children.count {
+            nodeIndexes.removeLast()
+            if !nodeIndexes.isEmpty {
+                nodeIndexes[nodeIndexes.count - 1].index += 1
             }
-            return lastParentIndex.parent
+            return lastNodeIndex.node
         } else {
-            let child = lastParentIndex.parent.children[lastParentIndex.index]
+            let child = lastNodeIndex.node.children[lastNodeIndex.index]
             if child.children.isEmpty {
-                parentIndexes[parentIndexes.count - 1].index += 1
+                nodeIndexes[nodeIndexes.count - 1].index += 1
                 return child
             } else {
-                var aParent = child
+                var aNode = child
                 repeat {
-                    parentIndexes.append((aParent, 0))
-                    aParent = aParent.children[0]
-                } while !aParent.children.isEmpty
-                parentIndexes[parentIndexes.count - 1].index += 1
-                return aParent
+                    nodeIndexes.append((aNode, 0))
+                    aNode = aNode.children[0]
+                } while !aNode.children.isEmpty
+                nodeIndexes[nodeIndexes.count - 1].index += 1
+                return aNode
             }
         }
     }
@@ -168,39 +168,39 @@ struct TreeIndexSequence<T: TreeNode>: Sequence, IteratorProtocol {
     typealias Element = (T.Index, T)
     
     init(rootNode: T) {
-        parents = [rootNode]
+        nodes = [rootNode]
         indexPath = IndexPath(index: 0)
     }
     
-    private var indexPath: IndexPath, parents: [T]
+    private var indexPath: IndexPath, nodes: [T]
     mutating func next() -> Element? {
-        guard let lastParentIndex = indexPath.last, let parent = parents.last else {
+        guard let lastNodeIndex = indexPath.last, let node = nodes.last else {
             return nil
         }
-        if lastParentIndex >= parent.children.count {
+        if lastNodeIndex >= node.children.count {
             indexPath.removeLast()
-            parents.removeLast()
+            nodes.removeLast()
             let oldIndexPath = indexPath
             if !indexPath.isEmpty {
                 indexPath[indexPath.count - 1] += 1
             }
-            return (T.Index(indexPath: oldIndexPath), parent)
+            return (T.Index(indexPath: oldIndexPath), node)
         } else {
-            let child = parent.children[lastParentIndex]
+            let child = node.children[lastNodeIndex]
             if child.children.isEmpty {
                 let oldIndexPath = indexPath
                 indexPath[indexPath.count - 1] += 1
                 return (T.Index(indexPath: oldIndexPath), child)
             } else {
-                var aParent = child
+                var aNode = child
                 repeat {
                     indexPath.append(0)
-                    parents.append(aParent)
-                    aParent = aParent.children[0]
-                } while !aParent.children.isEmpty
+                    nodes.append(aNode)
+                    aNode = aNode.children[0]
+                } while !aNode.children.isEmpty
                 let oldIndexPath = indexPath
                 indexPath[indexPath.count - 1] += 1
-                return (T.Index(indexPath: oldIndexPath), aParent)
+                return (T.Index(indexPath: oldIndexPath), aNode)
             }
         }
     }

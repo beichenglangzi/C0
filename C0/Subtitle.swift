@@ -78,9 +78,11 @@ extension Subtitle {
         let ratio = bounds.size.width / 640
         let view = TextFormView(text: Text(string), font: option.font, color: option.fillColor,
                                 lineColor: option.lineColor, lineWidth: (3 * ratio).rounded(.up),
-                                frameAlignment: .center, alignment: .center)
-        view.frame.origin = Point(x: (bounds.midX - view.bounds.midX).rounded(),
-                                  y: (bounds.minY + 20 * ratio).rounded())
+                                alignment: .center)
+        let minSize = view.minSize
+        view.frame = Rect(origin: Point(x: (bounds.midX - minSize.width / 2).rounded(),
+                                        y: (bounds.minY + 20 * ratio).rounded()),
+                          size: minSize)
         return view
     }
 }
@@ -110,22 +112,21 @@ extension Subtitle: Referenceable {
 }
 extension Subtitle: KeyframeValue {}
 extension Subtitle: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return string.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return string.thumbnailView(withFrame: frame)
     }
 }
 extension Subtitle: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Subtitle>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return string.abstractViewWith(binder: binder,
                                            keyPath: keyPath.appending(path: \Subtitle.string),
-                                           frame: frame, sizeType, type: .normal)
+                                           type: type)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }

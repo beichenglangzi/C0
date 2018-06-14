@@ -27,6 +27,12 @@ protocol Selectable: class {
     
     var valueViews: [View] { get }
     var selectedIndexes: [Int] { get set }
+    var selectedViews: [View] { get }
+}
+extension Selectable {
+    var selectedViews: [View] {
+        return selectedIndexes.map { valueViews[$0] }
+    }
 }
 struct Selection<Value: SelectionValue>: ValueChain, Codable {
     typealias Index = Array<Value>.Index
@@ -44,21 +50,19 @@ extension Selection: Referenceable {
     }
 }
 extension Selection: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
+    func thumbnailView(withFrame frame: Rect) -> View {
         return View()
     }
 }
 extension Selection: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Selection<Value>>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return SelectionView(binder: binder, keyPath: keyPath,
-                                 frame: frame, sizeType: sizeType, abstractType: type)
+            return SelectionView(binder: binder, keyPath: keyPath, abstractType: type)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -77,54 +81,49 @@ final class SelectionView<Value: Object.Value & AbstractViewable, T: BinderProto
     }
     var notifications = [((SelectionView<Value, Binder>, BasicPhaseNotification<Model>) -> ())]()
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
-    
     var defaultModel: Selection<Value> {
         return Selection()
     }
     
     let valuesView: ArrayView<Value, Binder>
     
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular, abstractType: AbstractType = .normal) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath, abstractType: AbstractType = .normal) {
         self.binder = binder
         self.keyPath = keyPath
         
-        self.sizeType = sizeType
+        valuesView = ArrayView(binder: binder,
+                               keyPath: keyPath.appending(path: \Model.values),
+                               abstractType: abstractType)
         
-        valuesView = ArrayView(binder: binder, keyPath: keyPath.appending(path: \Model.values),
-                               sizeType: sizeType, abstractType: abstractType)
-        
-        super.init()
+        super.init(isLocked: false)
         children = [valuesView]
-        self.frame = frame
     }
     
-    override var defaultBounds: Rect {
-        return valuesView.defaultBounds.inset(by: -Layouter.padding(with: sizeType))
+    var minSize: Size {
+        let minSize = valuesView.minSize, padding = Layouter.basicPadding
+        return Size(width: minSize.width + padding, height: minSize.height + padding)
     }
     override func updateLayout() {
-        valuesView.frame = bounds.inset(by: Layouter.padding(with: sizeType))
+        valuesView.bounds = bounds.inset(by: Layouter.basicPadding) * valuesView.transform.affineTransform.inverted()
     }
     func updateWithModel() {
-        
+        valuesView.updateWithModel()
     }
     
     var valueViews: [View] {
-        return valuesView.children
+        return valuesView.rootView.children
     }
     var selectedIndexes: [Selection<Value>.Index] {
         get { return model.selectedIndexes }
         set {
             model.selectedIndexes.forEach {
-                valuesView.children[$0].lineColor = .getSetBorder
+                valueViews[$0].lineWidth = 0.5
+                valueViews[$0].lineColor = .getSetBorder
             }
-            model.selectedIndexes = newValue
+            binder[keyPath: keyPath].selectedIndexes = newValue
             newValue.forEach {
-                valuesView.children[$0].lineColor = .selected
+                valueViews[$0].lineWidth = 2
+                valueViews[$0].lineColor = .selected
             }
         }
     }
@@ -191,9 +190,25 @@ final class SelectableSender: SubSender {
                 sender.currentRootLocation = eventValue.rootLocation
                 sender.mainIndicatedView
                     = sender.rootView.at(eventValue.rootLocation) ?? sender.rootView
+                
                 if let receiver = sender.mainIndicatedView as? IndicatableReceiver {
                     let p = receiver.convertFromRoot(eventValue.rootLocation)
                     receiver.indicate(at: p)
+                }
+                
+                guard let selectionReceiver = sender.mainIndicatedView
+                    .withSelfAndAllParents(with: SelectableReceiver.self) else { return }
+                var containsIndicatedViews = false
+                sender.mainIndicatedView.selfAndAllParents { (view, stop) in
+                    if selectionReceiver.valueViews.contains(view) {
+                        containsIndicatedViews = true
+                        stop = true
+                    }
+                }
+                if containsIndicatedViews {
+                    sender.indictedViews = selectionReceiver.selectedViews
+                } else {
+                    sender.indictedViews = [sender.mainIndicatedView]
                 }
             }
         case actionList.selectAction, actionList.deselectAction:
@@ -203,7 +218,9 @@ final class SelectableSender: SubSender {
             }
         case actionList.selectAllAction, actionList.deselectAllAction:
             guard actionMap.phase == .began else { break }
-            if let receiver = sender.mainIndicatedView as? SelectableReceiver {
+            if let receiver = sender.mainIndicatedView
+                .withSelfAndAllParents(with: SelectableReceiver.self) {
+                
 //                receiver.captureSelections(to: sender.indicatedVersionView.version)
                 if actionMap.action == actionList.deselectAllAction {
 //                    receiver.deselectAll()
@@ -225,7 +242,11 @@ final class SelectableSender: SubSender {
         var beganSeletedIndexes = [Int]()
         
         func indexes(from rect: Rect, from receiver: SelectableReceiver) -> [Int] {
-            return (0..<receiver.valueViews.count).filter { receiver.valueViews[$0].contains(rect) }
+            return (0..<receiver.valueViews.count).filter {
+                let view = receiver.valueViews[$0]
+                let convertedRect = view.convert(rect, from: receiver)
+                return view.contains(convertedRect)
+            }
         }
         
         func send(_ event: DragEvent.Value, _ phase: Phase,
@@ -276,9 +297,9 @@ final class SelectableSender: SubSender {
                     oldIsDeselect = isDeselect
                 }
                 let lp = event.rootLocation
-                selectionView?.frame = Rect(origin: startRootPoint,
-                                            size: Size(width: lp.x - startRootPoint.x,
-                                                       height: lp.y - startRootPoint.y))
+                let rootAABB = AABB(minX: min(startRootPoint.x, lp.x), maxX: max(startRootPoint.x, lp.x),
+                                    minY: min(startRootPoint.y, lp.y), maxY: max(startRootPoint.y, lp.y))
+                selectionView?.frame = rootAABB.rect
                 let p = receiver.convertFromRoot(event.rootLocation)
                 let aabb = AABB(minX: min(startPoint.x, p.x), maxX: max(startPoint.x, p.x),
                                 minY: min(startPoint.y, p.y), maxY: max(startPoint.y, p.y))

@@ -34,16 +34,6 @@ struct Font {
     static let action = Font(boldMonospacedSize: 9)
     static let subtitle = Font(boldMonospacedSize: 20)
     
-    static func `default`(with sizeType: SizeType) -> Font {
-        return sizeType == .small ? small : self.default
-    }
-    static func bold(with sizeType: SizeType) -> Font {
-        return sizeType == .small ? smallBold : bold
-    }
-    static func italic(with sizeType: SizeType) -> Font {
-        return sizeType == .small ? smallItalic : italic
-    }
-    
     var name: String {
         didSet {
             updateWith(name: name, size: size)
@@ -160,34 +150,48 @@ struct TextBorder {
 struct TextFrame {
     var attributedString = NSMutableAttributedString() {
         didSet {
-            self.lines = TextFrame.lineWith(attributedString: attributedString,
-                                            frameWidth: frameWidth)
-            
+            lines = TextFrame.lineWith(attributedString: attributedString,
+                                       lineBreakWidth: lineBreakWidth)
             (baselineDelta, height) = TextFrame.baselineWith(lines, baseFont: baseFont)
         }
     }
-    
+    var paddingSize: Size
     var baseFont: Font
     var baselineDelta: Real, height: Real
-    
-    var frameWidth: Real? {
+    var lineBreakWidth: Real {
         didSet {
-            guard frameWidth != oldValue else { return }
-            lines = TextFrame.lineWith(attributedString: attributedString, frameWidth: frameWidth)
+            guard lineBreakWidth != oldValue else { return }
+            lines = TextFrame.lineWith(attributedString: attributedString,
+                                       lineBreakWidth: lineBreakWidth)
         }
     }
     
+    private(set) var lines = [TextLine]() {
+        didSet {
+            typographicBounds = TextFrame.typographicBounds(with: lines)
+        }
+    }
     private(set) var typographicBounds = Rect()
+    var fitSize: Size {
+        return Size(width: (typographicBounds.width + paddingSize.width * 2).rounded(.up),
+                    height: (height + baselineDelta + paddingSize.height * 2).rounded(.up))
+    }
     
-    init(attributedString: NSMutableAttributedString, baseFont: Font, frameWidth: Real? = nil) {
+    init(attributedString: NSMutableAttributedString, baseFont: Font,
+         lineBreakWidth: Real = .infinity, paddingSize: Size = Size(square: 1)) {
+        
         self.attributedString = attributedString
         self.baseFont = baseFont
-        self.frameWidth = frameWidth
-        lines = TextFrame.lineWith(attributedString: attributedString, frameWidth: frameWidth)
+        self.lineBreakWidth = lineBreakWidth
+        self.paddingSize = paddingSize
+        lines = TextFrame.lineWith(attributedString: attributedString,
+                                   lineBreakWidth: lineBreakWidth)
         typographicBounds = TextFrame.typographicBounds(with: lines)
         (baselineDelta, height) = TextFrame.baselineWith(lines, baseFont: baseFont)
     }
-    init(string: String = "", textMaterial: TextMaterial, frameWidth: Real? = nil) {
+    init(string: String = "", textMaterial: TextMaterial,
+         lineBreakWidth: Real = .infinity, paddingSize: Size = Size(square: 1)) {
+        
         let border: TextBorder?
         if let borderColor = textMaterial.lineColor, textMaterial.lineWidth > 0 {
             border = TextBorder(lineColor: borderColor.cg, lineWidth: textMaterial.lineWidth)
@@ -199,8 +203,10 @@ struct TextFrame {
                                                            border: border,
                                                            alignment: textMaterial.alignment)
         let attributedString = NSMutableAttributedString(string: string, attributes: attributes)
+        
         self.init(attributedString: attributedString,
-                  baseFont: textMaterial.font, frameWidth: frameWidth)
+                  baseFont: textMaterial.font,
+                  lineBreakWidth: lineBreakWidth, paddingSize: paddingSize)
     }
     
     private static func baselineWith(_ lines: [TextLine],
@@ -212,29 +218,15 @@ struct TextFrame {
             return (-baseFont.descent, baseFont.ascent)
         }
     }
-    
-    var minWidth = 5.0.cg, maxWidth = 800.0.cg
-    func bounds(paddingSize: Size) -> Rect {
-        let w = min(frameWidth ?? ceil(typographicBounds.width), maxWidth)
-        return Rect(x: 0, y: 0,
-                    width: max(w + paddingSize.width * 2, minWidth),
-                    height: ceil(height + baselineDelta) + paddingSize.height * 2)
-    }
-    
-    var lines = [TextLine]() {
-        didSet {
-            self.typographicBounds = TextFrame.typographicBounds(with: lines)
-        }
-    }
     private static func lineWith(attributedString: NSAttributedString,
-                                 frameWidth: Real?) -> [TextLine] {
-        let width = frameWidth ?? Real.infinity
+                                 lineBreakWidth: Real) -> [TextLine] {
         let typesetter = CTTypesetterCreateWithAttributedString(attributedString)
         let length = attributedString.length
         var range = CFRange(), h = 0.0.cg, maxWidth = 0.0.cg
         var ls = [(ctLine: CTLine, ascent: Real, descent: Real, leading: Real, width: Real)]()
         while range.maxLocation < length {
-            range.length = CTTypesetterSuggestLineBreak(typesetter, range.location, Double(width))
+            range.length = CTTypesetterSuggestLineBreak(typesetter, range.location,
+                                                        Double(lineBreakWidth))
             let ctLine = CTTypesetterCreateLine(typesetter, range)
             var ascent = 0.0.cg, descent = 0.0.cg, leading =  0.0.cg
             let lineWidth = CTLineGetTypographicBounds(ctLine, &ascent, &descent, &leading).cg
@@ -244,6 +236,7 @@ struct TextFrame {
             h += ascent + descent + leading
         }
         maxWidth = maxWidth.rounded(.up)
+        let width = lineBreakWidth.isInfinite ? maxWidth : lineBreakWidth
         var origin = Point()
         return ls.reversed().map {
             origin.y += $0.descent + $0.leading
@@ -254,11 +247,7 @@ struct TextFrame {
                     let textAlignment = attributes[.ctAlignment] as? TextAlignment {
                     
                     if textAlignment == .right {
-                        if frameWidth == nil {
-                            lineOrigin.x += maxWidth - $0.width
-                        } else {
-                            lineOrigin.x += width - $0.width
-                        }
+                        lineOrigin.x += width - $0.width
                     }
                 }
             }
@@ -267,7 +256,14 @@ struct TextFrame {
             return result
         }.reversed()
     }
-    
+    static func typographicBounds(with lines: [TextLine]) -> Rect {
+        return lines.reduce(into: Rect.null) {
+            let bounds = $1.typographicBounds
+            $0.formUnion(Rect(origin: $1.origin + bounds.origin, size: bounds.size))
+        }
+    }
+}
+extension TextFrame {
     func line(for point: Point) -> TextLine? {
         guard let lastLine = lines.last else {
             return nil
@@ -331,12 +327,6 @@ struct TextFrame {
             $0.formUnion(imageBounds)
         }
     }
-    static func typographicBounds(with lines: [TextLine]) -> Rect {
-        return lines.reduce(into: Rect.null) {
-            let bounds = $1.typographicBounds
-            $0.formUnion(Rect(origin: $1.origin + bounds.origin, size: bounds.size))
-        }
-    }
     func typographicBounds(for range: NSRange) -> Rect {
         return lines.reduce(into: Rect.null) {
             let bounds = $1.typographicBounds(for: range)
@@ -354,6 +344,7 @@ struct TextFrame {
     
     func draw(in bounds: Rect, in ctx: CGContext) {
         guard let firstLine = lines.first else { return }
+        let bounds = bounds.insetBy(dx: paddingSize.width, dy: paddingSize.height)
         ctx.saveGState()
         let height = firstLine.origin.y + baseFont.ascent
         ctx.translateBy(x: bounds.origin.x, y: bounds.maxY - height)
@@ -373,7 +364,8 @@ struct TextLine {
     let ctLine: CTLine
     let origin: Point
     let runs: [TextRun]
-    
+}
+extension TextLine {
     func contains(at i: Int) -> Bool {
         let range = CTLineGetStringRange(ctLine)
         return i >= range.location && i < range.location + range.length
@@ -392,7 +384,7 @@ struct TextLine {
     }
     func typographicBounds(for range: NSRange) -> Rect {
         guard contains(for: range) else {
-            return Rect.null
+            return .null
         }
         return ctLine.runs.reduce(into: Rect.null) {
             var origin = Point()

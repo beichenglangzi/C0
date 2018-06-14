@@ -23,35 +23,28 @@ final class ClosureView: ModelView, IndicatableResponder {
     typealias Model = Closure
     var model: Model
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     let nameView: TextFormView
     
-    init(model: @escaping Model = { _ in }, name: Text = "",
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(model: @escaping Model = { _ in }, name: Text = "") {
         self.model = model
         
-        self.sizeType = sizeType
-        self.nameView = TextFormView(text: name, font: Font.default(with: sizeType), color: .locked)
+        self.nameView = TextFormView(text: name)
         
-        super.init()
+        super.init(isLocked: false)
         lineColor = .sendBorder
         children = [nameView]
-        self.frame = frame
     }
     
-    override var defaultBounds: Rect {
-        let fitSize = nameView.defaultBounds.size, padding = Layouter.padding(with: sizeType)
-        return Rect(x: 0, y: 0,
-                    width: fitSize.width + padding * 2, height: fitSize.height + padding * 2)
+    var minSize: Size {
+        let minSize = nameView.minSize, padding = Layouter.basicPadding
+        return Size(width: minSize.width + padding * 2, height: minSize.height + padding * 2)
     }
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType)
-        nameView.frame.origin = Point(x: padding, y: bounds.height - nameView.frame.height - padding)
+        let minSize = nameView.minSize, padding = Layouter.basicPadding
+        let nameOrigin = Point(x: padding,
+                               y: bounds.height - minSize.height - padding)
+        nameView.frame = Rect(origin: nameOrigin, size: minSize)
     }
-    func updateWithModel() {}
     
     var indicatedLineColor: Color? {
         return .indicated

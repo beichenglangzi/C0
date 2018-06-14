@@ -45,16 +45,15 @@ extension URL: Referenceable {
     static let name = Text("URL")
 }
 extension URL: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return lastPathComponent.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return lastPathComponent.thumbnailView(withFrame: frame)
     }
 }
 extension URL: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, URL>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
-        return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+        return MiniView(binder: binder, keyPath: keyPath)
     }
 }
 extension URL: ObjectViewable {}

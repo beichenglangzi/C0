@@ -22,19 +22,18 @@ extension Optional: Referenceable {
         return Text(english: "Optional", japanese: "オプショナル")
     }
 }
+extension Optional: AbstractConstraint where Wrapped: AbstractConstraint {}
 extension Optional: AnyInitializable where Wrapped: ObjectDecodable {}
 extension Optional: ObjectDecodable where Wrapped: ObjectDecodable {}
 extension Optional: ThumbnailViewable where Wrapped: ThumbnailViewable {}
 extension Optional: AbstractViewable where Wrapped: Object.Value & AbstractViewable {
     func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Optional>,
-                             frame: Rect, _ sizeType: SizeType,
                              type: AbstractType) -> ModelView where T : BinderProtocol {
         switch type {
         case .normal:
-            return OptionalView(binder: binder, keyPath: keyPath,
-                                frame: frame, sizeType: sizeType)
+            return OptionalView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -57,48 +56,51 @@ final class OptionalView<Wrapped: Object.Value & AbstractViewable, U: BinderProt
         return .none
     }
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     var type: AbstractType {
         didSet { updateLayout() }
     }
-    
     var wrappedView: ModelView?
     var noneNameView: TextFormView
     
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular, type: AbstractType = .normal) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath, type: AbstractType = .normal) {
         self.binder = binder
         self.keyPath = keyPath
         
-        self.sizeType = sizeType
         self.type = type
         let name = Wrapped.name + ": " + Text(english: "None", japanese: "なし")
-        noneNameView = TextFormView(text: name,
-                                    textMaterial: TextMaterial(font: Font.default(with: sizeType)))
+        noneNameView = TextFormView(text: name)
         
-        super.init()
+        super.init(isLocked: false)
         if let wrapped = binder[keyPath: keyPath] {
             let wrappedView = wrapped.abstractViewWith(binder: binder,
                                                        keyPath: keyPath.appending(path: \Model.!),
-                                                       frame: Rect(),
-                                                       sizeType, type: type)
+                                                       type: type)
             self.wrappedView = wrappedView
             children = [wrappedView]
         } else {
             children = [noneNameView]
         }
-        self.frame = frame
+    }
+    
+    var minSize: Size {
+        let padding = Layouter.basicPadding
+        let size: Size
+        if let wrappedView = wrappedView {
+            size = wrappedView.minSize
+        } else {
+            size = noneNameView.minSize
+        }
+        return size + padding * 2
     }
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType)
+        let padding = Layouter.basicPadding
         if let wrappedView = wrappedView {
             wrappedView.frame = bounds.inset(by: padding)
         } else {
-            noneNameView.frame.origin = Point(x: padding,
-                                              y: bounds.height - noneNameView.frame.height - padding)
+            let noneNameMinSize = noneNameView.minSize
+            let origin =  Point(x: padding,
+                                y: bounds.height - noneNameMinSize.height - padding)
+            noneNameView.frame = Rect(origin: origin, size: noneNameMinSize)
         }
     }
     func updateWithModel() {
@@ -107,8 +109,7 @@ final class OptionalView<Wrapped: Object.Value & AbstractViewable, U: BinderProt
                 let wrappedView
                     = wrapped.abstractViewWith(binder: binder,
                                                keyPath: keyPath.appending(path: \Model.!),
-                                               frame: Rect(),
-                                               sizeType, type: type)
+                                               type: type)
                 self.wrappedView = wrappedView
                 children = [wrappedView]
                 updateLayout()

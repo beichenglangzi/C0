@@ -123,10 +123,10 @@ extension AlgebraicTrack: Codable {
 final class TrackItemView<T: BinderProtocol>: ModelView {
     
     init(binder: T) {
-        super.init()
+        super.init(isLocked: false)
     }
     
-    func updateWithModel() {
-        
+    var minSize: Size {
+        return Size(square: Layouter.defaultMinWidth)
     }
 }

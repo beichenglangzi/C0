@@ -66,21 +66,19 @@ extension SineWave: Referenceable {
 }
 extension SineWave: KeyframeValue {}
 extension SineWave: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return View(frame: frame, isLocked: true)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return View(frame: frame)
     }
 }
 extension SineWave: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, SineWave>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return SineWaveView(binder: binder, keyPath: keyPath, option: SineWaveOption(),
-                                frame: frame, sizeType: sizeType)
+            return SineWaveView(binder: binder, keyPath: keyPath, option: SineWaveOption())
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -258,62 +256,52 @@ final class SineWaveView<T: BinderProtocol>: ModelView, BindableReceiver {
     let amplitudeView: DiscreteRealView<Binder>
     let frequencyView: DiscreteRealView<Binder>
     
-    var sizeType: SizeType {
-        didSet {
-            amplitudeView.sizeType = sizeType
-            frequencyView.sizeType = sizeType
-            updateLayout()
-        }
-    }
     let classNameView: TextFormView
-    let classAmplitudeNameView: TextFormView
-    let classFrequencyNameView: TextFormView
+    let amplitudeNameView: TextFormView
+    let frequencyNameView: TextFormView
     
-    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption) {
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
         
         amplitudeView = DiscreteRealView(binder: binder,
                                          keyPath: keyPath.appending(path: \SineWave.amplitude),
-                                         option: option.amplitudeOption,
-                                         frame: Layouter.valueFrame(with: sizeType),
-                                         sizeType: sizeType)
+                                         option: option.amplitudeOption)
         frequencyView = DiscreteRealView(binder: binder,
                                          keyPath: keyPath.appending(path: \SineWave.frequency),
-                                         option: option.frequencyOption,
-                                         frame: Layouter.valueFrame(with: sizeType),
-                                         sizeType: sizeType)
+                                         option: option.frequencyOption)
         
-        self.sizeType = sizeType
-        classNameView = TextFormView(text: SineWave.name, font: Font.bold(with: sizeType))
-        classAmplitudeNameView = TextFormView(text: "A:", font: Font.default(with: sizeType))
-        classFrequencyNameView = TextFormView(text: "ƒ:")
+        classNameView = TextFormView(text: SineWave.name, font: .bold)
+        amplitudeNameView = TextFormView(text: "A:")
+        frequencyNameView = TextFormView(text: "ƒ:")
         
-        super.init()
+        super.init(isLocked: false)
         children = [classNameView,
-                    classAmplitudeNameView, amplitudeView,
-                    classFrequencyNameView, frequencyView]
-        self.frame = frame
+                    amplitudeNameView, amplitudeView,
+                    frequencyNameView, frequencyView]
     }
     
-    override var defaultBounds: Rect {
+    var minSize: Size {
         let w = Layouter.propertyWidth + Layouter.basicPadding * 2
         let h = Layouter.basicHeight * 2 + Layouter.basicPadding * 2
-        return Rect(x: 0, y: 0, width: w, height: h)
+        return Size(width: w, height: h)
     }
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType), height = Layouter.height(with: sizeType)
+        let padding = Layouter.basicPadding
+        let classNameSize = classNameView.minSize
+        let classNameOrigin = Point(x: padding,
+                                    y: bounds.height - classNameSize.height - padding)
+        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
+        
+        let height = Layouter.basicHeight
         var y = bounds.height - padding - classNameView.frame.height
-        classNameView.frame.origin = Point(x: padding, y: y)
         y = bounds.height - padding - height
-        _ = Layouter.leftAlignment([.view(classFrequencyNameView), .view(frequencyView)],
+        _ = Layouter.leftAlignment([.view(frequencyNameView), .view(frequencyView)],
                                    minX: classNameView.frame.maxX + padding,
                                    y: y, height: height)
         y -= height
-        _ = Layouter.leftAlignment([.view(classAmplitudeNameView), .view(amplitudeView)],
+        _ = Layouter.leftAlignment([.view(amplitudeNameView), .view(amplitudeView)],
                                    minX: classNameView.frame.maxX + padding,
                                    y: y, height: height)
     }

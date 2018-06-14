@@ -55,23 +55,25 @@ extension String: AnyInitializable {
     }
 }
 extension String: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return TextFormView(text: Text(self), font: Font.default(with: sizeType),
-                            frame: frame, isSizeToFit: false)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        let view = TextFormView(text: Text(self), font: .small)
+        view.frame = frame
+        return view
     }
 }
 extension String: AbstractViewable {
+    var defaultAbstractConstraintSize: Size {
+        return Size(width: 400, height: Layouter.basicTextHeight)
+    }
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, String>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
             return StringView(binder: binder, keyPath: keyPath, option: StringOption(),
-                              textMaterial: TextMaterial(font: Font.default(with: sizeType)),
-                              frame: frame)
+                              lineBreakWidth: 400)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -115,10 +117,8 @@ final class StringGetterView<T: BinderProtocol>: ModelView, BindableGetterReceiv
     var textMaterial: TextMaterial {
         didSet { updateWithModel() }
     }
-    var isSizeToFit: Bool {
-        didSet {
-            if isSizeToFit { sizeToFit() }
-        }
+    var lineBreakWidth: Real? {
+        didSet { updateText() }
     }
     var paddingSize: Size {
         didSet { updateLayout() }
@@ -128,61 +128,41 @@ final class StringGetterView<T: BinderProtocol>: ModelView, BindableGetterReceiv
     }
     
     init(binder: Binder, keyPath: BinderKeyPath, textMaterial: TextMaterial = TextMaterial(),
-         frame: Rect = Rect(), paddingSize: Size = Size(square: 1), isSizeToFit: Bool = true) {
+         lineBreakWidth: Real? = .infinity, paddingSize: Size = Size(square: 1)) {
         
         self.binder = binder
         self.keyPath = keyPath
         
-        self.isSizeToFit = isSizeToFit
-        self.paddingSize = paddingSize
         self.textMaterial = textMaterial
+        self.lineBreakWidth = lineBreakWidth
+        self.paddingSize = paddingSize
         
-        let textFrameWidth = StringGetterView.textFrameWidthWith(frame: frame,
-                                                                 paddingWidth: paddingSize.width,
-                                                                 isSizeToFit: isSizeToFit)
-        textFrame = TextFrame(string: binder[keyPath: keyPath], textMaterial: textMaterial,
-                              frameWidth: textFrameWidth)
+        textFrame = TextFrame(string: binder[keyPath: keyPath],
+                              textMaterial: textMaterial,
+                              lineBreakWidth: 0,
+                              paddingSize: paddingSize)
         
-        super.init(drawClosure: { $1.draw(in: $0) }, isLocked: false)
+        super.init(drawClosure: { ctx, view, _ in view.draw(in: ctx) }, isLocked: false)
         lineColor = .getBorder
-        
-        self.frame = frame
-        if isSizeToFit { sizeToFit() }
     }
     
-    override var defaultBounds: Rect {
-        return textFrame.bounds(paddingSize: paddingSize)
+    var minSize: Size {
+        return Size(width: Layouter.defaultMinWidth, height: Layouter.basicTextHeight)
+    }
+    var fitSize: Size {
+        return textFrame.fitSize
     }
     override func updateLayout() {
-        if !isSizeToFit {
-            textFrame = TextFrame(string: model, textMaterial: textMaterial,
-                                  frameWidth: textFrameWidth)
-        }
+        updateText()
     }
-    func updateWithModel() {
-        textFrame = TextFrame(string: model, textMaterial: textMaterial,
-                              frameWidth: textFrameWidth)
-        if isSizeToFit {
-            sizeToFit()
-        }
-    }
-    func sizeToFit() {
-        frame = textMaterial.fitFrameWith(defaultBounds: defaultBounds, frame: frame)
-    }
-    
-    var textFrameWidth: Real? {
-        return StringGetterView.textFrameWidthWith(frame: frame,
-                                                   paddingWidth: paddingSize.width,
-                                                   isSizeToFit: isSizeToFit)
-    }
-    private static func textFrameWidthWith(frame: Rect,
-                                           paddingWidth: Real, isSizeToFit: Bool) -> Real? {
-        return isSizeToFit ? nil : frame.width - paddingWidth * 2
+    func updateText() {
+        textFrame = TextFrame(string: model,
+                              textMaterial: textMaterial,
+                              lineBreakWidth: lineBreakWidth ?? frame.width - paddingSize.width * 2)
     }
     
     override func draw(in ctx: CGContext) {
-        textFrame.draw(in: bounds.insetBy(dx: paddingSize.width, dy: paddingSize.height),
-                       in: ctx)
+        textFrame.draw(in: bounds, in: ctx)
     }
 }
 
@@ -226,10 +206,8 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
     var textMaterial: TextMaterial {
         didSet { updateWithModel() }
     }
-    var isSizeToFit: Bool {
-        didSet {
-            if isSizeToFit { sizeToFit() }
-        }
+    var lineBreakWidth: Real? {
+        didSet { updateText() }
     }
     var paddingSize: Size {
         didSet { updateLayout() }
@@ -240,60 +218,46 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
 
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
          textMaterial: TextMaterial = TextMaterial(),
-         frame: Rect = Rect(), paddingSize: Size = Size(square: 1), isSizeToFit: Bool = true) {
+         lineBreakWidth: Real? = .infinity, paddingSize: Size = Size(square: 1)) {
 
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
 
-        self.isSizeToFit = isSizeToFit
-        self.paddingSize = paddingSize
         self.textMaterial = textMaterial
+        self.lineBreakWidth = lineBreakWidth
+        self.paddingSize = paddingSize
         
-        let textFrameWidth = StringView.textFrameWidthWith(frame: frame,
-                                                           paddingWidth: paddingSize.width,
-                                                           isSizeToFit: isSizeToFit)
-        textFrame = TextFrame(string: binder[keyPath: keyPath], textMaterial: textMaterial,
-                              frameWidth: textFrameWidth)
+        textFrame = TextFrame(string: binder[keyPath: keyPath],
+                              textMaterial: textMaterial,
+                              lineBreakWidth: lineBreakWidth ?? 0,
+                              paddingSize: paddingSize)
 
-        super.init(drawClosure: { $1.draw(in: $0) }, isLocked: false)
-
-        self.frame = frame
-        if isSizeToFit { sizeToFit() }
+        super.init(drawClosure: { ctx, view, _ in view.draw(in: ctx) }, isLocked: false)
     }
     deinit {
         timer.cancel()
     }
     
-    override var defaultBounds: Rect {
-        return textFrame.bounds(paddingSize: paddingSize)
+    var minSize: Size {
+        if lineBreakWidth == nil {
+            return Size(width: Layouter.defaultMinWidth, height: Layouter.basicTextHeight)
+        } else {
+            return textFrame.fitSize
+        }
     }
     override func updateLayout() {
-        if !isSizeToFit {
-            textFrame = TextFrame(string: model, textMaterial: textMaterial,
-                                  frameWidth: textFrameWidth)
-        }
+        updateText()
     }
     func updateWithModel() {
-        textFrame = TextFrame(string: model, textMaterial: textMaterial,
-                              frameWidth: textFrameWidth)
-        if isSizeToFit {
-            sizeToFit()
-        }
+        updateText()
     }
-    func sizeToFit() {
-        frame = textMaterial.fitFrameWith(defaultBounds: defaultBounds, frame: frame)
+    func updateText() {
+        textFrame = TextFrame(string: model,
+                              textMaterial: textMaterial,
+                              lineBreakWidth: lineBreakWidth ?? frame.width - paddingSize.width * 2)
     }
-
-    var textFrameWidth: Real? {
-        return StringView.textFrameWidthWith(frame: frame, paddingWidth: paddingSize.width,
-                                             isSizeToFit: isSizeToFit)
-    }
-    private static func textFrameWidthWith(frame: Rect,
-                                           paddingWidth: Real, isSizeToFit: Bool) -> Real? {
-        return isSizeToFit ? nil : frame.width - paddingWidth * 2
-    }
-
+    
     func convertToLocal(_ p: Point) -> Point {
         return p - Point(x: paddingSize.width,
                          y: bounds.height - textFrame.height - paddingSize.height)
@@ -310,8 +274,7 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     
     override func draw(in ctx: CGContext) {
-        textFrame.draw(in: bounds.insetBy(dx: paddingSize.width, dy: paddingSize.height),
-                       in: ctx)
+        textFrame.draw(in: bounds, in: ctx)
     }
 
     private let timer = RunTimer()

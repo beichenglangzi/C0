@@ -62,9 +62,11 @@ extension Cell {
         return isEmpty
     }
     var imageBounds: Rect {
-        return geometry.isEmpty ?
-            Rect.null : Line.visibleImageBoundsWith(imageBounds: geometry.path.boundingBoxOfPath,
-                                                    lineWidth: material.lineWidth * 2)
+        guard !geometry.isEmpty else {
+            return .null
+        }
+        return Line.visibleImageBoundsWith(imageBounds: geometry.path.boundingBoxOfPath,
+                                           lineWidth: material.lineWidth * 2)
     }
     var allImageBounds: Rect {
         return children.reduce(into: imageBounds) { $0.formUnion($1.imageBounds) }
@@ -270,7 +272,9 @@ extension Cell {
         children.forEach {
             $0.indexViews(&views)
             let view = TextFormView(text: Text("\(views.count - 1)"), font: .small)
-            view.frame.origin = (imageBounds.midPoint - view.bounds.midPoint).rounded()
+            let bounds = Rect(origin: Point(), size: view.minSize)
+            view.bounds = bounds
+            view.position = (imageBounds.centerPoint - bounds.centerPoint).rounded()
             views.append(view)
         }
     }
@@ -279,8 +283,8 @@ extension Cell: Referenceable {
     static let name = Text(english: "Cell", japanese: "セル")
 }
 extension Cell: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
+    func thumbnailView(withFrame frame: Rect) -> View {
+        let thumbnailView = View(drawClosure: { self.draw(with: $2, in: $0) })
         thumbnailView.frame = frame
         return thumbnailView
     }
@@ -305,13 +309,12 @@ extension Cell: ThumbnailViewable {
 extension Cell: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Cell>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return CellView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+            return CellView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -332,45 +335,39 @@ final class CellView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     private let isLockedView: BoolView<Binder>
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     private let classNameView: TextFormView
     
-    init(binder: Binder, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
         isLockedView = BoolView(binder: binder,
                                 keyPath: keyPath.appending(path: \Model.isLocked),
                                 option: BoolOption(defaultModel: false, cationModel: true,
-                                                   name: "", info: .locked),
-                                sizeType: sizeType)
+                                                   name: "", info: .locked))
         
-        self.sizeType = sizeType
-        classNameView = TextFormView(text: Cell.name, font: Font.bold(with: sizeType))
+        classNameView = TextFormView(text: Cell.name, font: .bold)
         
-        super.init()
+        super.init(isLocked: false)
         children = [classNameView, isLockedView]
-        self.frame = frame
     }
     
-    override var defaultBounds: Rect {
-        let padding = Layouter.padding(with: sizeType), h = Layouter.height(with: sizeType)
-        let tlw = classNameView.frame.width + isLockedView.defaultBounds.width + padding * 3
-        return Rect(x: 0, y: 0, width: tlw, height: h + padding * 2)
+    var minSize: Size {
+        let padding = Layouter.basicPadding
+        let cnms = classNameView.minSize, ilms = isLockedView.minSize
+        let tlw = cnms.width + ilms.width + padding * 3
+        return Size(width: tlw, height: ilms.height + padding * 2)
     }
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType), h = Layouter.height(with: sizeType)
+        let padding = Layouter.basicPadding
+        let classNameSize = classNameView.minSize
+        let classNameOrigin = Point(x: padding,
+                                    y: bounds.height - classNameSize.height - padding)
+        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
+        
+        let ilms = isLockedView.minSize
         let tlw = bounds.width - classNameView.frame.width - padding * 3
-        classNameView.frame.origin = Point(x: padding,
-                                           y: bounds.height - classNameView.frame.height - padding)
         isLockedView.frame = Rect(x: classNameView.frame.maxX + padding, y: padding,
-                                  width: tlw, height: h)
-    }
-    func updateWithModel() {
-        isLockedView.updateWithModel()
+                                  width: tlw, height: ilms.height)
     }
 }

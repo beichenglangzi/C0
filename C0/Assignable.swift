@@ -27,7 +27,7 @@ protocol Copiable {
 }
 protocol Assignable: Copiable {
     func reset(for p: Point, _ version: Version)
-    func paste(_ objects: [Any], for p: Point, _ version: Version)
+    func paste(_ objects: [Any], for p: Point, _ version: Version)// throws
 }
 protocol CollectionAssignable: Assignable {
     func remove(for p: Point, _ version: Version)
@@ -41,7 +41,7 @@ struct AssignableActionList: SubActionList {
     let cutAction = Action(name: Text(english: "Cut", japanese: "カット"),
                            quasimode: Quasimode(modifier: [.input(.command)],
                                                 [.input(.x)]))
-    let resetAction = Action(name: Text(english: "Reset", japanese: "初期化"),
+    let resetAction = Action(name: Text(english: "Reset", japanese: "リセット"),
                              quasimode: Quasimode(modifier: [.input(.shift),
                                                              .input(.command)],
                                                   [.input(.x)]))
@@ -51,7 +51,7 @@ struct AssignableActionList: SubActionList {
     let pasteAction = Action(name: Text(english: "Paste", japanese: "ペースト"),
                              quasimode: Quasimode(modifier: [.input(.command)],
                                                   [.input(.v)]))
-    let addAction = Action(name: Text(english: "Add", japanese: "加算"),
+    let addAction = Action(name: Text(english: "Add", japanese: "追加"),
                            quasimode: Quasimode(modifier: [.input(.command)],
                                                 [.input(.d)]))
     let newAction = Action(name: Text(english: "New", japanese: "新規"),

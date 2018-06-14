@@ -26,13 +26,10 @@ protocol SubSendable {
     func makeSubSender() -> SubSender
 }
 
-/**
- Issue: プロトコルアクション設計の対応範囲を拡げる
- */
 final class Sender {
     typealias UndoableView = View & Undoable
     typealias ZoomableView = View & Zoomable
-    typealias RootView = ModelView & Undoable & IndicatableResponder
+    typealias RootView = ModelView & Undoable & Zoomable & IndicatableResponder
     typealias IndicatedReciver = View & IndicatableResponder
     
     var rootView: RootView
@@ -50,14 +47,17 @@ final class Sender {
             if let view = mainIndicatedView.withSelfAndAllParents(with: UndoableView.self) {
                 self.indicatedVersionView = view
             }
-            if let view = mainIndicatedView.withSelfAndAllParents(with: ZoomableView.self) {
-                self.indicatedZoomableView = view
-            }
+        }
+    }
+    var indictedViews: [View] {
+        didSet {
+//            guard indictedViews != oldValue else { return }
+////            oldValue.forEach { $0.lineColor =  }
         }
     }
     var oldMainIndicatedViewColor: Color?
     var indicatedVersionView: UndoableView
-    var indicatedZoomableView: ZoomableView?
+    var indicatedZoomableView: ZoomableView
     
     let actionList = ActionList()
     let subSenders: [SubSender]
@@ -83,15 +83,16 @@ final class Sender {
         
         mainIndicatedView = rootView
         oldMainIndicatedViewColor = mainIndicatedView.lineColor
+        indicatedZoomableView = rootView
         indicatedVersionView = rootView
-        
-        rootView.changedFrame = { [unowned self] in self.updateIndicatedView(with: $0) }
+        indictedViews = [mainIndicatedView]
     }
     
     var locale = Locale.current {
         didSet {
             if locale.languageCode != oldValue.languageCode {
                 rootView.allChildrenAndSelf { ($0 as? TextViewProtocol)?.updateText() }
+                rootView.allChildrenAndSelf { ($0 as? ModelView & Layoutable)?.updateWithModel() }
                 rootView.allChildrenAndSelf { $0.updateLayout() }
             }
         }
@@ -164,5 +165,90 @@ final class Sender {
             subSenders.forEach { $0.send(actionMap, from: self) }
         }
         actionMaps = []
+    }
+    
+    var beganMovingOrigins = [Point]()
+    enum DirectionOfMovement {
+        case left, right, up, down
+        
+        func move(_ view: View & Movable, pushView: View) {
+            let viewFrame = view.transformedBoundingBox
+            let pushViewFrame = pushView.transformedBoundingBox
+            switch self {
+            case .left: view.movingOrigin.x -= viewFrame.maxX - pushViewFrame.minX
+            case .right: view.movingOrigin.x += pushViewFrame.maxX - viewFrame.minX
+            case .up: view.movingOrigin.y -= viewFrame.maxY - pushViewFrame.minY
+            case .down: view.movingOrigin.y += pushViewFrame.maxY - viewFrame.minY
+            }
+            
+        }
+    }
+    func updateLayout(withMovedViews movedViews: [View], from views: [View & Movable]) {
+        let movedViews = movedViews, unmovedViews = views
+        
+        for (i, unmovedView) in unmovedViews.enumerated() {
+            if !movedViews.contains(unmovedView) {
+                unmovedView.movingOrigin = beganMovingOrigins[i]
+            }
+        }
+        
+        for unmovedView in unmovedViews {
+            guard !movedViews.contains(unmovedView) else { continue }
+            if let direction = move(unmovedView, pushViews: movedViews) {
+                move(unmovedView, unmovedViews: unmovedViews, movedViews: movedViews, direction)
+            }
+        }
+    }
+    func move(_ view: View & Movable, pushViews: [View]) -> DirectionOfMovement? {
+        guard var nearestPushView = pushViews.first else {
+            return nil
+        }
+        var minD = Real.infinity
+        for pushView in pushViews {
+            let d = view.transformedBoundingBox.centerPoint
+                .distance²(pushView.transformedBoundingBox.centerPoint)
+            if d < minD {
+                nearestPushView = pushView
+                minD = d
+            }
+        }
+        
+        let viewFrame = view.transformedBoundingBox
+        let pushViewFrame = nearestPushView.transformedBoundingBox
+        
+        let left = viewFrame.maxX - pushViewFrame.minX
+        let right = pushViewFrame.maxX - viewFrame.minX
+        let up = viewFrame.maxY - pushViewFrame.minY
+        let down = pushViewFrame.maxY - viewFrame.minY
+        let minValue = min(left, right, up, down)
+        
+        let direction: DirectionOfMovement
+        switch minValue {
+        case left: direction = .left
+        case right: direction = .right
+        case up: direction = .up
+        default: direction = .down
+        }
+        
+        var isMoved = false
+        pushViews.forEach { pushView in
+            let viewFrame = view.transformedBoundingBox
+            let pushViewFrame = pushView.transformedBoundingBox
+            guard viewFrame.intersects(pushViewFrame) else { return }
+            isMoved = true
+            direction.move(view, pushView: pushView)
+        }
+        return isMoved ? direction : nil
+    }
+    func move(_ view: View, unmovedViews: [View & Movable],
+              movedViews: [View], _ direction: DirectionOfMovement) {
+        for unmovedView in unmovedViews {
+            if view != unmovedView && !movedViews.contains(unmovedView) &&
+                unmovedView.transformedBoundingBox.intersects(view.transformedBoundingBox) {
+                
+                direction.move(unmovedView, pushView: view)
+                move(unmovedView, unmovedViews: unmovedViews, movedViews: movedViews, direction)
+            }
+        }
     }
 }

@@ -110,22 +110,24 @@ extension Image: Codable {
     }
 }
 extension Image: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        let view = View(frame: frame, isLocked: true)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        let view = View(frame: frame)
         view.image = self
         return view
     }
 }
 extension Image: AbstractViewable {
+    var defaultAbstractConstraintSize: Size {
+        return size
+    }
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Image>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return ImageView(binder: binder, keyPath: keyPath, frame: frame)
+            return ImageView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -179,6 +181,7 @@ extension CALayer {
         }
         set {
             contents = newValue?.cg
+            contentsGravity = kCAGravityResizeAspect
             if newValue != nil {
                 minificationFilter = kCAFilterTrilinear
                 magnificationFilter = kCAFilterTrilinear
@@ -203,27 +206,19 @@ final class ImageView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     var defaultModel = Model()
     
-    init(binder: Binder, keyPath: BinderKeyPath, frame: Rect = Rect()) {
+    init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
-        super.init()
-        self.image = model
-        self.frame = frame
+        super.init(isLocked: false)
+        updateWithModel()
     }
     
     func updateWithModel() {
         self.image = model
     }
     
-    var defaultMinSize = Size(width: 50, height: 50)
-    var defaultMaxSize = Size(width: 400, height: 400)
-    override var defaultBounds: Rect {
-        let size = model.size
-        return Rect(x: 0, y: 0,
-                    width: size.width.clip(min: defaultMinSize.width,
-                                           max: defaultMaxSize.width),
-                    height: size.height.clip(min: defaultMinSize.height,
-                                             max: defaultMaxSize.height))
+    var minSize: Size {
+        return Size(square: Layouter.defaultMinWidth)
     }
 }

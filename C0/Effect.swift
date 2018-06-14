@@ -48,14 +48,12 @@ extension BlendType {
 extension BlendType: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, BlendType>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return EnumView(binder: binder, keyPath: keyPath, option: BlendType.defaultOption,
-                            frame: frame, sizeType: sizeType)
+            return EnumView(binder: binder, keyPath: keyPath, option: BlendType.defaultOption)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -115,21 +113,19 @@ extension Effect: Interpolatable {
 extension Effect: Initializable {}
 extension Effect: KeyframeValue {}
 extension Effect: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return blendType.displayText.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return blendType.displayText.thumbnailView(withFrame: frame)
     }
 }
 extension Effect: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Effect>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return EffectView(binder: binder, keyPath: keyPath,
-                              frame: frame, sizeType: sizeType)
+            return EffectView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -176,60 +172,62 @@ final class EffectView<T: BinderProtocol>: ModelView, BindableReceiver {
     let blurRadiusView: DiscreteRealView<Binder>
     let opacityView: SlidableRealView<Binder>
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     let classNameView: TextFormView
-    let classBlurNameView: TextFormView
+    let blurNameView: TextFormView
     
-    init(binder: T, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: T, keyPath: BinderKeyPath, option: ModelOption = ModelOption()) {
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
         
-        blendTypeView = EnumView(binder: binder, keyPath: keyPath.appending(path: \Model.blendType),
-                                 option: option.blendTypeOption, sizeType: sizeType)
+        blendTypeView = EnumView(binder: binder,
+                                 keyPath: keyPath.appending(path: \Model.blendType),
+                                 option: option.blendTypeOption)
         blurRadiusView = DiscreteRealView(binder: binder,
                                           keyPath: keyPath.appending(path: \Model.blurRadius),
-                                          option: option.blurRadiusOption, sizeType: sizeType)
+                                          option: option.blurRadiusOption)
         opacityView = SlidableRealView(binder: binder,
                                        keyPath: keyPath.appending(path: \Model.opacity),
-                                       option: option.opacityOption, sizeType: sizeType)
+                                       option: option.opacityOption)
         
-        self.sizeType = sizeType
-        classNameView = TextFormView(text: Effect.name, font: Font.bold(with: sizeType))
-        let blurPropertyText = Effect.displayText(with: \Effect.blurRadius) + ":"
-        classBlurNameView = TextFormView(text: blurPropertyText, font: Font.default(with: sizeType))
+        classNameView = TextFormView(text: Effect.name, font: .bold)
+        let blurNameText = Effect.displayText(with: \Effect.blurRadius) + ":"
+        blurNameView = TextFormView(text: blurNameText)
         
-        super.init()
+        super.init(isLocked: false)
         children = [classNameView,
-                    blendTypeView, classBlurNameView, blurRadiusView, opacityView]
-        self.frame = frame
+                    blendTypeView, blurNameView, blurRadiusView, opacityView]
     }
     
-    override var defaultBounds: Rect {
-        let padding = Layouter.padding(with: sizeType), height = Layouter.height(with: sizeType)
+    var minSize: Size {
+        let padding = Layouter.basicPadding, height = Layouter.basicHeight
         let viewHeight = height * 2 + padding * 2
-        return Rect(x: 0, y: 0, width: 220, height: viewHeight)
+        return Size(width: 220, height: viewHeight)
     }
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType), h = Layouter.height(with: sizeType)
+        let padding = Layouter.basicPadding
+        let classNameSize = classNameView.minSize
+        let classNameOrigin = Point(x: padding,
+                                    y: bounds.height - classNameSize.height - padding)
+        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
+        
+        let h = Layouter.basicHeight
         let cw = bounds.width - padding * 2
-        let rw = cw - classNameView.frame.width - padding
-        let px = bounds.width - rw - padding
-        classNameView.frame.origin = Point(x: padding,
-                                           y: bounds.height - classNameView.frame.height - padding)
-        blendTypeView.frame = Rect(x: px, y: padding + h, width: rw, height: h)
-        classBlurNameView.frame.origin = Point(x: padding, y: padding * 2)
-        let blurW = ((cw - classBlurNameView.frame.width) / 2).rounded(.up)
-        blurRadiusView.frame = Rect(x: classBlurNameView.frame.maxX, y: padding,
+        
+        let btms = blendTypeView.minSize
+        blendTypeView.frame = Rect(x: classNameView.frame.maxX + padding,
+                                   y: padding + h,
+                                   width: btms.width, height: btms.height)
+        let bnms = blurNameView.minSize
+        blurNameView.frame = Rect(origin: Point(x: padding, y: padding * 2), size: bnms)
+        let blurW = ((cw - blurNameView.frame.width) / 2).rounded(.up)
+        blurRadiusView.frame = Rect(x: blurNameView.frame.maxX, y: padding,
                                     width: blurW, height: h)
         let ow = bounds.width - blurRadiusView.frame.maxX - padding
         opacityView.updateOpacityViews(withFrame: Rect(x: blurRadiusView.frame.maxX, y: padding,
                                                        width: ow, height: h))
     }
+    
     func updateWithModel() {
         blendTypeView.updateWithModel()
         blurRadiusView.updateWithModel()

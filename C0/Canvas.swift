@@ -72,20 +72,19 @@ extension Canvas: Referenceable {
     static let name = Text(english: "Canvas", japanese: "キャンバス")
 }
 extension Canvas: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return View(frame: frame, isLocked: true)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return View(frame: frame)
     }
 }
 extension Canvas: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Canvas>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return CanvasView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+            return CanvasView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -108,27 +107,26 @@ final class CanvasView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     var defaultModel = Model()
     
-    init(binder: T, keyPath: BinderKeyPath,
-         frame: Rect = Rect(), sizeType: SizeType = .regular) {
-        
+    init(binder: T, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
-        super.init()
+        super.init(isLocked: false)
         children = [model.view()]
-//        super.init(drawClosure: { _, _ in }, isLocked: false)
+//        super.init(drawClosure: { _, _, _ in }, isLocked: false)
 //        drawClosure = { [unowned self] in self.model.draw(in: $0) }
     }
     
     var screenTransform = AffineTransform.identity
+    
+    var minSize: Size {
+        return Size(square: Layouter.defaultMinWidth)
+    }
     override func updateLayout() {
         updateScreenTransform()
     }
     private func updateScreenTransform() {
-        screenTransform = AffineTransform(translation: bounds.midPoint)
-    }
-    func updateWithModel() {
-        
+//        screenTransform = AffineTransform(translation: bounds.centerPoint)
     }
     
     func updateEditPoint(with point: Point) {

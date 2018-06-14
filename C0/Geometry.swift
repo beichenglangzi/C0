@@ -165,9 +165,6 @@ struct Geometry {
     }
 }
 extension Geometry {
-    static func *(lhs: Geometry, rhs: AffineTransform) -> Geometry {
-        return Geometry(lines: lhs.lines.map { $0 * rhs })
-    }
     func warpedWith(deltaPoint dp: Point, controlPoint: Point,
                     minDistance: Real, maxDistance: Real) -> Geometry {
         func warped(p: Point) -> Point {
@@ -466,11 +463,16 @@ extension Geometry {
         let view = View(path: Path())
         view.effect.opacity = color.alpha
         view.children = geometries.map {
-            let gv = View(path: $0.path, isLocked: true)
+            let gv = View(path: $0.path)
             gv.fillColor = fillColor
             return gv
         }
         return view
+    }
+}
+extension Geometry: AppliableAffineTransform {
+    static func *(lhs: Geometry, rhs: AffineTransform) -> Geometry {
+        return Geometry(lines: lhs.lines.map { $0 * rhs })
     }
 }
 extension Geometry: Equatable {

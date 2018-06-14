@@ -176,14 +176,13 @@ extension Rational: Referenceable {
                            japanese: "有理数 (\(MemoryLayout<Rational>.size * 8)bit)")
 }
 extension Rational: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return description.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return description.thumbnailView(withFrame: frame)
     }
 }
 extension Rational: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Rational>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
@@ -193,10 +192,9 @@ extension Rational: AbstractViewable {
                                                                maxModel: .max,
                                                                modelInterval: Rational(1, 10),
                                                                descriptionQ: 10,
-                                                               isInfinitesimal: false),
-                                        frame: frame, sizeType: sizeType)
+                                                               isInfinitesimal: false))
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }

@@ -110,9 +110,14 @@ struct Path {
         }
     }
     
-    
+    var isEmpty: Bool {
+        return mcg.isEmpty
+    }
     func contains(_ p: Point) -> Bool {
         return mcg.contains(p)
+    }
+    func contains(_ rect: Rect) -> Bool {
+        fatalError()
     }
     var boundingBoxOfPath: Rect {
         return mcg.boundingBoxOfPath

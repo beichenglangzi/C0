@@ -55,7 +55,7 @@ enum VideoCodec {
 
 final class SceneVideoEncoder: MediaEncoder {
     private var scene: Scene, size: Size, videoType: VideoType, codec: VideoCodec
-    private let drawView = View(drawClosure: { _, _ in })
+    private let drawView = View(drawClosure: { _, _, _ in })
     private var screenTransform = Transform()
     
     init(scene: Scene, size: Size, videoType: VideoType = .mp4, codec: VideoCodec = .h264) {
@@ -68,8 +68,8 @@ final class SceneVideoEncoder: MediaEncoder {
         self.screenTransform = Transform(translation: Point(x: size.width / 2, y: size.height / 2),
                                          scale: Point(x: scale, y: scale),
                                          rotation: 0)
-        drawView.bounds.size = size
-//        drawView.drawClosure = { [unowned self] ctx, _ in self.scene.canvas.draw(in: ctx) }
+        drawView.bounds = Rect(origin: Point(), size: size)
+//        drawView.drawClosure = { [unowned self] ctx, _, _ in self.scene.canvas.draw(in: ctx) }
     }
     
     func write(to url: URL,
@@ -286,31 +286,30 @@ final class MediaEncoderView<T: MediaEncoder>: View {
     var encoder: T
     var operation: Operation?
     
-    var sizeType: SizeType {
-        didSet { updateLayout() }
-    }
     var textView: TextFormView
     let stopView = ClosureView(name: Text(english: "Stop", japanese: "中止"))
     
-    init(encoder: T, frame: Rect = Rect(), sizeType: SizeType = .regular) {
+    init(encoder: T, frame: Rect = Rect()) {
         self.encoder = encoder
-        self.sizeType = sizeType
-        textView = TextFormView(text: Text(),
-                                textMaterial: TextMaterial(font: Font.default(with: sizeType)))
+        textView = TextFormView(text: Text())
         
-        super.init()
+        super.init(isLocked: false)
         stopView.model = { [unowned self] _ in self.stop() }
         children = [textView, stopView]
         self.frame = frame
     }
     
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType)
-        let y = bounds.height - textView.bounds.height - padding
-        textView.frame.origin = Point(x: padding, y: y)
-        let sb = stopView.defaultBounds
-        stopView.frame = Rect(x: bounds.width - sb.width - padding, y: y,
-                              width: sb.width, height: sb.height)
+        let padding = Layouter.basicPadding
+        let textSize = textView.minSize
+        let textOrigin = Point(x: padding,
+                               y: bounds.height - textSize.height - padding)
+        textView.frame = Rect(origin: textOrigin, size: textSize)
+        
+        let y = textOrigin.y
+        let stopSize = stopView.minSize
+        stopView.frame = Rect(x: bounds.width - stopSize.width - padding, y: y,
+                              width: stopSize.width, height: stopSize.height)
     }
     
     func write(to e: URL.File) -> BlockOperation {

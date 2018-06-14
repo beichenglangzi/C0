@@ -53,14 +53,13 @@ extension Int: Referenceable {
                            japanese: "整数 (\(MemoryLayout<Int>.size * 8)bit)")
 }
 extension Int: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return String(self).thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return String(self).thumbnailView(withFrame: frame)
     }
 }
 extension Int: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Int>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
@@ -68,10 +67,9 @@ extension Int: AbstractViewable {
                                    option: IntOption(defaultModel: 0,
                                                      minModel: Int(Int32.min),
                                                      maxModel: Int(Int32.max),
-                                                     modelInterval: 1),
-                                   frame: frame, sizeType: sizeType)
+                                                     modelInterval: 1))
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }

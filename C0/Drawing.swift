@@ -115,8 +115,8 @@ extension Drawing: Referenceable {
     static let name = Text(english: "Drawing", japanese: "ドローイング")
 }
 extension Drawing: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        let thumbnailView = View(drawClosure: { self.draw(with: $1.bounds, in: $0) })
+    func thumbnailView(withFrame frame: Rect) -> View {
+        let thumbnailView = View(drawClosure: { self.draw(with: $2, in: $0) })
         thumbnailView.frame = frame
         return thumbnailView
     }
@@ -125,21 +125,20 @@ extension Drawing: ThumbnailViewable {
         let centering = AffineTransform.centering(from: imageBounds, to: bounds.inset(by: 5))
         let view = View()
         view.bounds = bounds
-//        ctx.concatenate(centering.affine)
-//        draw(lineWidth: 0.5 / centering.scale, lineColor: Color.strokeLine, in: ctx)
-//        drawDraft(lineWidth: 0.5 / centering.scale, lineColor: Color.draft, in: ctx)
+        //        ctx.concatenate(centering.affine)
+        //        draw(lineWidth: 0.5 / centering.scale, lineColor: Color.strokeLine, in: ctx)
+        //        drawDraft(lineWidth: 0.5 / centering.scale, lineColor: Color.draft, in: ctx)
     }
 }
 extension Drawing: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Drawing>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return DrawingView(binder: binder, keyPath: keyPath, frame: frame, sizeType: sizeType)
+            return DrawingView(binder: binder, keyPath: keyPath)
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -215,21 +214,19 @@ extension Lines: Referenceable {
     static let name = Text(english: "Lines Keyframe Value", japanese: "線キーフレーム値")
 }
 extension Lines: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect, _ sizeType: SizeType) -> View {
-        return drawing.thumbnailView(withFrame: frame, sizeType)
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return drawing.thumbnailView(withFrame: frame)
     }
 }
 extension Lines: AbstractViewable {
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Lines>,
-                                              frame: Rect, _ sizeType: SizeType,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
-            return DrawingView(binder: binder, keyPath: keyPath.appending(path: \Lines.drawing),
-                               frame: frame, sizeType: sizeType)
+            return DrawingView(binder: binder, keyPath: keyPath.appending(path: \Lines.drawing))
         case .mini:
-            return MiniView(binder: binder, keyPath: keyPath, frame: frame, sizeType)
+            return MiniView(binder: binder, keyPath: keyPath)
         }
     }
 }
@@ -254,57 +251,60 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
     let linesView: ArrayCountView<Line, Binder>
     let draftLinesView: ArrayCountView<Line, Binder>
     
-    var sizeType: SizeType
     let classNameView: TextFormView
     let draftLinesNameView = TextFormView(text: Text(english: "Draft Lines:", japanese: "下書き線:"))
     let changeToDraftView = ClosureView(name: Text(english: "Change to Draft", japanese: "下書き化"))
     let exchangeWithDraftView = ClosureView(name: Text(english: "Exchange with Draft",
                                                        japanese: "下書きと交換"))
     
-    init(binder: T, keyPath: BinderKeyPath, frame: Rect = Rect(), sizeType: SizeType = .regular) {
+    init(binder: T, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
-        self.sizeType = sizeType
-        classNameView = TextFormView(text: Model.name, font: Font.bold(with: sizeType))
+        classNameView = TextFormView(text: Model.name, font: .bold)
         linesView = ArrayCountView(binder: binder,
-                                   keyPath: keyPath.appending(path: \Model.lines),
-                                   sizeType: sizeType)
+                                   keyPath: keyPath.appending(path: \Model.lines))
         draftLinesView = ArrayCountView(binder: binder,
-                                        keyPath: keyPath.appending(path: \Model.draftLines),
-                                        sizeType: sizeType)
+                                        keyPath: keyPath.appending(path: \Model.draftLines))
         
-        super.init()
+        super.init(isLocked: false)
         changeToDraftView.model = { [unowned self] in self.changeToDraft($0) }
         exchangeWithDraftView.model = { [unowned self] in self.exchangeWithDraft($0) }
+        
         children = [classNameView,
                     linesView,
                     draftLinesNameView, draftLinesView,
                     changeToDraftView, exchangeWithDraftView]
     }
     
-    override var defaultBounds: Rect {
-        let padding = Layouter.padding(with: sizeType), buttonH = Layouter.height(with: sizeType)
-        return Rect(x: 0, y: 0, width: 170,
-                      height: buttonH * 4 + padding * 2)
+    var minSize: Size {
+        let padding = Layouter.basicPadding, buttonH = Layouter.basicHeight
+        return Size(width: 170,
+                    height: buttonH * 4 + padding * 2)
     }
     override func updateLayout() {
-        let padding = Layouter.padding(with: sizeType), buttonH = Layouter.height(with: sizeType)
+        let padding = Layouter.basicPadding
+        let classNameSize = classNameView.minSize
+        let classNameOrigin = Point(x: padding,
+                                    y: bounds.height - classNameSize.height - padding)
+        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
+        
+        let buttonH = Layouter.basicHeight
         let px = padding, pw = bounds.width - padding * 2
         var py = bounds.height - padding
         py -= classNameView.frame.height
-        classNameView.frame.origin = Point(x: padding, y: py)
-        let lsdb = linesView.defaultBounds
+        let lsms = linesView.minSize
         py = bounds.height - padding
-        py -= lsdb.height
-        linesView.frame = Rect(x: bounds.maxX - lsdb.width - padding, y: py,
-                                 width: lsdb.width, height: lsdb.height)
-        py -= lsdb.height
-        draftLinesView.frame = Rect(x: bounds.maxX - lsdb.width - padding, y: py,
-                                      width: lsdb.width, height: lsdb.height)
-        let fcdlnvw = draftLinesNameView.frame.width
-        draftLinesNameView.frame.origin = Point(x: draftLinesView.frame.minX - fcdlnvw,
-                                                           y: py + padding)
+        py -= lsms.height
+        linesView.frame = Rect(x: bounds.maxX - lsms.width - padding, y: py,
+                               width: lsms.width, height: lsms.height)
+        py -= lsms.height
+        draftLinesView.frame = Rect(x: bounds.maxX - lsms.width - padding, y: py,
+                                    width: lsms.width, height: lsms.height)
+        let dlnms = draftLinesNameView.minSize
+        draftLinesNameView.frame = Rect(origin: Point(x: draftLinesView.frame.minX - dlnms.width,
+                                                      y: py + padding),
+                                        size: dlnms)
         py -= buttonH
         changeToDraftView.frame = Rect(x: px, y: py, width: pw, height: buttonH)
         py -= buttonH
