@@ -317,11 +317,11 @@ struct RationalOption: Object1DOption {
         let newModel: Model
         if isInfinitesimal {
             if oldModel.q == 1 {
-                let p = oldModel.p - Int(delta)
-                newModel = p < 1 ? Beat(1, 2 - p) : Beat(p)
+                let p = oldModel.p + Int(delta)
+                newModel = p < 1 ? Rational(1, 2 - p) : Rational(p)
             } else {
-                let q = oldModel.q + Int(delta)
-                newModel = q < 1 ? Beat(2 - q) : Beat(1, q)
+                let q = oldModel.q - Int(delta)
+                newModel = q < 1 ? Rational(2 - q) : Rational(1, q)
             }
         } else {
             newModel = oldModel.interval(scale: modelInterval) + model(withDelta: delta)

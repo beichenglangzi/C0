@@ -57,21 +57,21 @@ struct Geometry {
             return
         }
         guard lines.count > 1 else {
-            let snapedPointLines = Geometry.snapedPointLinesWith(lines: [firstLine.autoPressure()],
+            let snapedPointLines = Geometry.snapedPointLinesWith(lines: [firstLine],
                                                                  scale: scale)
             self.lines = snapedPointLines
             self.path = Geometry.path(with: snapedPointLines)
             return
         }
         
-        enum FirstEnd {
-            case first, end
+        enum FirstLast {
+            case first, last
         }
         var cellLines = [firstLine]
-        var oldLines = lines, firstEnds = [FirstEnd.first], oldP = firstLine.lastPoint
+        var oldLines = lines, firstEnds = [FirstLast.first], oldP = firstLine.lastPoint
         oldLines.removeFirst()
         while !oldLines.isEmpty {
-            var minLine = oldLines[0], minFirstEnd = FirstEnd.first
+            var minLine = oldLines[0], minFirstLast = FirstLast.first
             var minIndex = 0, minD = Real.infinity
             for (i, aLine) in oldLines.enumerated() {
                 let firstP = aLine.firstPoint, lastP = aLine.lastPoint
@@ -82,21 +82,21 @@ struct Geometry {
                         minD = fds
                         minLine = aLine
                         minIndex = i
-                        minFirstEnd = .first
+                        minFirstLast = .first
                     }
                 } else {
                     if lds < minD {
                         minD = lds
                         minLine = aLine
                         minIndex = i
-                        minFirstEnd = .end
+                        minFirstLast = .last
                     }
                 }
             }
             oldLines.remove(at: minIndex)
             cellLines.append(minLine)
-            firstEnds.append(minFirstEnd)
-            oldP = minFirstEnd == .first ? minLine.lastPoint : minLine.firstPoint
+            firstEnds.append(minFirstLast)
+            oldP = minFirstLast == .first ? minLine.lastPoint : minLine.firstPoint
         }
         let count = 10000 / (cellLines.count * cellLines.count)
         for _ in 0..<count {
@@ -114,9 +114,9 @@ struct Geometry {
                     let b1 = b1IsFirst ? b1Line.firstPoint : b1Line.lastPoint
                     if a0.distance(a1) + b0.distance(b1) > a0.distance(b0) + a1.distance(b1) {
                         cellLines[ai1] = b0Line
-                        firstEnds[ai1] = b0IsFirst ? .end : .first
+                        firstEnds[ai1] = b0IsFirst ? .last : .first
                         cellLines[bi0] = a1Line
-                        firstEnds[bi0] = a1IsFirst ? .end : .first
+                        firstEnds[bi0] = a1IsFirst ? .last : .first
                         isChanged = true
                     }
                 }
@@ -126,12 +126,12 @@ struct Geometry {
             }
         }
         for (i, line) in cellLines.enumerated() {
-            if firstEnds[i] == .end {
+            if firstEnds[i] == .last {
                 cellLines[i] = line.reversed()
             }
         }
         
-        let newLines = Geometry.snapedPointLinesWith(lines: cellLines.map { $0.autoPressure() },
+        let newLines = Geometry.snapedPointLinesWith(lines: cellLines.map { $0 },
                                                      scale: scale)
         self.lines = newLines
         self.path = Geometry.path(with: newLines)
@@ -144,23 +144,23 @@ struct Geometry {
         return lines.map { line in
             let lp = oldLine.lastPoint, fp = line.firstPoint
             let d = lp.distance²(fp)
-            let controls: [Line.Control]
-            if d < vd * (line.pointsLength / vertexLineLength).clip(min: 0.1, max: 1) {
+            let points: [Point]
+            if d < vd * (line.pointsLinearLength / vertexLineLength).clip(min: 0.1, max: 1) {
                 let dp = Point(x: fp.x - lp.x, y: fp.y - lp.y)
-                var cs = line.controls, dd = 1.0.cg
-                for (i, fp) in line.controls.enumerated() {
-                    cs[i].point = Point(x: fp.point.x - dp.x * dd, y: fp.point.y - dp.y * dd)
+                var ps = line.points, dd = 1.0.cg
+                for (i, fp) in line.points.enumerated() {
+                    ps[i] = fp - dp * dd
                     dd *= 0.5
-                    if dd <= minSnapRatio || i >= line.controls.count - 2 {
+                    if dd <= minSnapRatio || i >= line.points.count - 2 {
                         break
                     }
                 }
-                controls = cs
+                points = ps
             } else {
-                controls = line.controls
+                points = line.points
             }
             oldLine = line
-            return Line(controls: controls)
+            return Line(points: points)
         }
     }
 }
@@ -195,7 +195,7 @@ extension Geometry {
         return geometries.map {
             if i < $0.lines.count {
                 var lines = $0.lines
-                lines[i] = lines[i].splited(at: pointIndex).autoPressure()
+                lines[i] = lines[i].splited(at: pointIndex)
                 return Geometry(lines: lines)
             } else {
                 return $0
@@ -207,20 +207,15 @@ extension Geometry {
         return geometries.map {
             if li < $0.lines.count {
                 var lines = $0.lines
-                if lines[li].controls.count == 2 {
+                if lines[li].points.count == 2 {
                     lines.remove(at: li)
                 } else {
-                    lines[li] = lines[li].removedControl(at: i).autoPressure()
+                    lines[li].points.remove(at: i)
                 }
                 return Geometry(lines: lines)
             } else {
                 return $0
             }
-        }
-    }
-    static func bezierLineGeometries(with geometries: [Geometry], scale: Real) -> [Geometry] {
-        return geometries.map {
-            return Geometry(lines: $0.lines.map { $0.bezierLine(withScale: scale) })
         }
     }
     
@@ -271,7 +266,7 @@ extension Geometry {
     }
     
     func maxDistance²(at p: Point) -> Real {
-        return Line.maxDistance²(at: p, with: lines)
+        return lines.maxDistance²(at: p)
     }
     func minDistance²(at p: Point, maxDistance²: Real) -> Real {
         var minD² = Real.infinity
@@ -356,8 +351,8 @@ extension Geometry {
                 return true
             }
         }
-        for control in otherLine.controls {
-            if contains(control.point) {
+        for point in otherLine.points {
+            if contains(point) {
                 return true
             }
         }
@@ -457,11 +452,9 @@ extension Geometry {
     static func view(with geometries: [Geometry], color: Color) -> View {
         let fillColor: Color = {
             var color = color
-            color.alpha = 1
             return color
         } ()
         let view = View(path: Path())
-        view.effect.opacity = color.alpha
         view.children = geometries.map {
             let gv = View(path: $0.path)
             gv.fillColor = fillColor
@@ -583,7 +576,7 @@ struct GeometryLasso {
             isSplitLine = true
         }
         if isSplitLine && !lastPointInPath {
-            let endIndex = otherLine.controls.count <= 2 ? 0 : otherLine.controls.count - 3
+            let endIndex = otherLine.points.count <= 2 ? 0 : otherLine.points.count - 3
             newSplitedIndexes.append(Splited.Index(startIndex: oldIndex, startT: oldT,
                                                    endIndex: endIndex, endT: 1))
         }

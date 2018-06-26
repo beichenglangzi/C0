@@ -28,6 +28,9 @@ typealias Real32 = Float
 
 extension Real: AdditiveGroup {}
 extension Real {
+    var isInteger: Bool {
+        return Int(exactly: self) != nil
+    }
     func interval(scale: Real) -> Real {
         if scale == 0 {
             return self

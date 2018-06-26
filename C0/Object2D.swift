@@ -105,7 +105,7 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
     
     let boundsPadding = Layouter.basicPadding
     var interval = 1.5.cg, minDelta = 5.0.cg
-    let knobView = View.discreteKnob()
+    let knobView = View.discreteKnob(Size(square: 8), lineWidth: 1)
     let boundsView: View
     let xNameView: TextFormView
     let yNameView: TextFormView
@@ -135,28 +135,34 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
         let padding = Layouter.basicPadding
         let width = Layouter.basicValueWidth
         let height = Layouter.basicTextHeight
-        let w = max(xNameView.minSize.width, yNameView.minSize.height) + padding
-        let h = height * 2
-        return Size(width: w + width + h + padding * 2,
-                    height: h + padding * 2)
+        let xNameSize = xNameView.minSize, yNameSize = yNameView.minSize
+        var w = 0.0.cg
+        w += xNameSize.width + width
+        w += padding
+        w += yNameSize.width + width
+        w += padding
+        w += width
+        let h = height
+        return Size(width: w + padding * 2, height: h + padding * 2)
     }
     override func updateLayout() {
         let padding = Layouter.basicPadding
         let width = Layouter.basicValueWidth
         let height = Layouter.basicTextHeight
         let xNameSize = xNameView.minSize, yNameSize = yNameView.minSize
-        let w = max(xNameSize.width, yNameSize.height) + padding
-        let h = height * 2
-        var y = bounds.height - padding
-        y -= height
-        xNameView.frame = Rect(origin: Point(x: w - xNameSize.width, y: y), size: xNameSize)
-        xView.frame = Rect(x: w, y: y, width: width, height: height)
-        y -= height
-        yNameView.frame = Rect(origin: Point(x: w - yNameSize.width, y: y), size: yNameSize)
-        yView.frame = Rect(x: w, y: y, width: width, height: height)
-        boundsView.frame = Rect(x: bounds.width - h - padding,
+        var x = padding
+        let y = padding, h = height
+        xNameView.frame = Rect(origin: Point(x: x, y: y), size: xNameSize)
+        x += xNameSize.width
+        xView.frame = Rect(x: x, y: y, width: width, height: height)
+        x += width + padding
+        yNameView.frame = Rect(origin: Point(x: x, y: y), size: yNameSize)
+        x += yNameSize.width
+        yView.frame = Rect(x: x, y: y, width: width, height: height)
+        x += width + padding
+        boundsView.frame = Rect(x: x,
                                 y: padding,
-                                width: h,
+                                width: width,
                                 height: h)
         updateKnobLayout()
     }

@@ -161,12 +161,7 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
                                               binder: binder, keyPath: keyPath,
                                               type: abstractType)
         if let views = modelViews as? [LayoutView<Object, Binder>] {
-//            print("B")
-//            views.forEach { print($0.model.origin) }
-//            print("A")
             views.forEach { $0.updateWithModel() }
-//            views.forEach { print($0.model.origin) }
-            //updateLayoutPositions
         }
         self.rootView.children = modelViews
         updateLayout()

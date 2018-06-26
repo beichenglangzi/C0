@@ -53,22 +53,22 @@ enum ConstraintType {
 protocol LayoutProtocol {
     var transform: Transform { get set }
     var constraintSize: Size { get set }
-//    var origin: Point { get set }
 }
 struct Layout<Value: LayoutValue>: Codable, LayoutProtocol {
     var value: Value
     var transform: Transform
     var constraintSize: Size
-//    var origin: Point
     
-    init(_ value: Value, transform: Transform = Transform(),
-         constraintSize: Size = Size()//, origin: Point = Point()
-        ) {
+    init(_ value: Value, transform: Transform = Transform()) {
         
         self.value = value
         self.transform = transform
+        self.constraintSize = value.defaultAbstractConstraintSize
+    }
+    init(_ value: Value, transform: Transform = Transform(), constraintSize: Size) {
+        self.value = value
+        self.transform = transform
         self.constraintSize = constraintSize
-//        self.origin = origin
     }
 }
 extension Layout: ValueChain {
@@ -77,7 +77,6 @@ extension Layout: ValueChain {
 extension Layout: AnyInitializable {
     init?(anyValue: Any) {
         if let value = (anyValue as? ValueChain)?.value(Value.self) {
-            print(type(of: anyValue), type(of: value), value.defaultAbstractConstraintSize)
             self = Layout(value, constraintSize: value.defaultAbstractConstraintSize)
         } else if let value = anyValue as? Value {
             self = Layout(value, constraintSize: value.defaultAbstractConstraintSize)
@@ -184,13 +183,6 @@ enum Layouter {
         return items.reduce(minX) { $0 + $1.width + paddingWidth } - paddingWidth
     }
     static func leftAlignment(_ items: [Item], minX: Real = basicPadding,
-                              y: Real = 0, paddingWidth: Real = 0) {
-        _ = items.reduce(minX) { x, item in
-            item.view?.frame.origin = Point(x: x, y: y)
-            return x + item.minWidth + paddingWidth
-        }
-    }
-    static func leftAlignment(_ items: [Item], minX: Real = basicPadding,
                               y: Real = 0, height: Real, paddingWidth: Real = 0) -> Size {
         let width = items.reduce(minX) { x, item in
             let minSize = item.minSize
@@ -272,9 +264,7 @@ final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
         valueView.frame = bounds.inset(by: Layouter.basicPadding)
     }
     func updateWithModel() {
-//        var transform = model.transform
-//        transform.translation += model.origin
-        self.transform = model.transform//transform
+        self.transform = model.transform
         let minSize = self.minSize
         let width = max(model.constraintSize.width, minSize.width)
         let height = max(model.constraintSize.height, minSize.height)

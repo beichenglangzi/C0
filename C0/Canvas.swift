@@ -19,54 +19,27 @@
 
 struct Canvas: Codable {
     var frame: Rect
-    var transform: Transform {
-        didSet {
-            reciprocalScale = 1 / transform.scale.x
+    var centeringSize: Size {
+        get { return frame.size }
+        set {
+            frame = Rect(origin: Point(x: -(newValue.width / 2).rounded(),
+                                       y: -(newValue.height / 2).rounded()),
+                         size: newValue)
         }
     }
-    var scale: Real { return transform.scale.x }
-    private(set) var reciprocalScale: Real
-    var currentReciprocalScale: Real {
-        return reciprocalScale / editingCellGroup.worldScale(at: editingCellGroupTreeIndex)
-    }
-    
-    var rootCellGroup: CellGroup
-    var editingCellGroupTreeIndex: TreeIndex<CellGroup> {
-        didSet {
-            editingWorldAffieTransform
-                = rootCellGroup.worldAffineTransform(at: editingCellGroupTreeIndex)
-        }
-    }
-    var editingCellGroup: CellGroup {
-        get { return rootCellGroup[editingCellGroupTreeIndex] }
-        set { rootCellGroup[editingCellGroupTreeIndex] = newValue }
-    }
-    private(set) var editingWorldAffieTransform: AffineTransform
+    var transform: Transform
     
     init(frame: Rect = Rect(x: -288, y: -162, width: 576, height: 324),
-         transform: Transform = Transform(), rootCellGroup: CellGroup = CellGroup(),
-         editingCellGroupTreeIndex: TreeIndex<CellGroup> = TreeIndex()) {
+         transform: Transform = Transform()) {
         
         self.frame = frame
         self.transform = transform
-        self.rootCellGroup = rootCellGroup
-        self.editingCellGroupTreeIndex = editingCellGroupTreeIndex
-        reciprocalScale = 1 / transform.scale.x
-        editingWorldAffieTransform
-            = rootCellGroup.worldAffineTransform(at: editingCellGroupTreeIndex)
     }
 }
 extension Canvas {
     func view() -> View {
         return View()
     }
-    //view
-//    func draw(in ctx: CGContext) {
-//        ctx.saveGState()
-//        ctx.concatenate(transform.affineTransform)
-//        rootCellGroup.draw
-//        ctx.restoreGState()
-//    }
 }
 extension Canvas: Referenceable {
     static let name = Text(english: "Canvas", japanese: "キャンバス")
@@ -77,6 +50,9 @@ extension Canvas: ThumbnailViewable {
     }
 }
 extension Canvas: AbstractViewable {
+    var defaultAbstractConstraintSize: Size {
+        return Size(width: 200, height: 200)
+    }
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Canvas>,
                                               type: AbstractType) -> ModelView {
@@ -90,10 +66,6 @@ extension Canvas: AbstractViewable {
 }
 extension Canvas: ObjectViewable {}
 
-/**
- Issue: Z移動を廃止してセルツリー表示を作成、セルクリップや全てのロック解除などを廃止
- Issue: スクロール後の元の位置までの距離を表示
- */
 final class CanvasView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Canvas
     typealias Binder = T
@@ -107,90 +79,75 @@ final class CanvasView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     var defaultModel = Model()
     
+    let rootView = View()
+    var contentsViews: [View & Strokable] {
+        get { return rootView.children as? [View & Strokable] ?? [] }
+        set { rootView.children = [canvasBorderView, canvasSubBorderView] + newValue }
+    }
+    let canvasBorderView = View()
+    let canvasSubBorderView = View()
+    let transformView: BasicTransformView<Binder>
+    
     init(binder: T, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
+        transformView = BasicTransformView(binder: binder,
+                                           keyPath: keyPath.appending(path: \Model.transform),
+                                           option: TransformOption())
+        
         super.init(isLocked: false)
-        children = [model.view()]
-//        super.init(drawClosure: { _, _, _ in }, isLocked: false)
-//        drawClosure = { [unowned self] in self.model.draw(in: $0) }
+        isClipped = true
+        
+//        canvasBorderView.lineColor = Color(red: 0.3, green: 0.46, blue: 0.7, alpha: 0.5)
+//        canvasSubBorderView.lineColor = Color.background.multiply(alpha: 0.5)
+        rootView.children = [canvasBorderView, canvasSubBorderView]
+        children = [model.view(), rootView]
     }
-    
-    var screenTransform = AffineTransform.identity
     
     var minSize: Size {
         return Size(square: Layouter.defaultMinWidth)
     }
     override func updateLayout() {
-        updateScreenTransform()
+        updateTransform()
     }
-    private func updateScreenTransform() {
-//        screenTransform = AffineTransform(translation: bounds.centerPoint)
+    func updateWithModel() {
+        updateCanvasSize()
     }
-    
-    func updateEditPoint(with point: Point) {
-        
-    }
-    var screenToEditingCellGroupTransform: AffineTransform {
-        var affine = AffineTransform.identity
-        affine *= model.editingWorldAffieTransform
-        affine *= model.transform.affineTransform
-        affine *= screenTransform
-        return affine
-    }
-    func convertToCurrentLocal(_ r: Rect) -> Rect {
-        let transform = screenToEditingCellGroupTransform
-        return transform.isIdentity ? r : r * transform.inverted()
-    }
-    func convertFromCurrentLocal(_ r: Rect) -> Rect {
-        let transform = screenToEditingCellGroupTransform
-        return transform.isIdentity ? r : r * transform
-    }
-    func convertToCurrentLocal(_ p: Point) -> Point {
-        let transform = screenToEditingCellGroupTransform
-        return transform.isIdentity ? p : p * transform.inverted()
-    }
-    func convertFromCurrentLocal(_ p: Point) -> Point {
-        let transform = screenToEditingCellGroupTransform
-        return transform.isIdentity ? p : p * transform
-    }
-    func displayLinkDraw(inCurrentLocalBounds rect: Rect) {
-        displayLinkDraw(convertFromCurrentLocal(rect))
+    func updateCanvasSize() {
+        canvasBorderView.frame = model.frame
     }
     
-    var viewTransform: Transform {
+    var zoomingTransform: Transform {
         get { return model.transform }
-        set { model.transform = newValue }
+        set {
+            binder[keyPath: keyPath].transform = newValue
+            updateTransform()
+            transformView.updateWithModel()
+        }
     }
-    var viewScale: Real { return model.scale }
-    
-    func resetView(for p: Point) {
-        guard !viewTransform.isIdentity else { return }
-        viewTransform = Transform()
+    func convertZoomingLocalFromZoomingView(_ p: Point) -> Point {
+        return zoomingLocalView.convert(p, from: zoomingView)
+    }
+    func convertZoomingLocalToZoomingView(_ p: Point) -> Point {
+        return zoomingLocalView.convert(p, to: zoomingView)
+    }
+    func updateTransform() {
+        var transform = zoomingTransform
+        let objectsPosition = Point(x: (bounds.width / 2).rounded(),
+                                    y: (bounds.height / 2).rounded())
+        transform.translation += objectsPosition
+        zoomingLocalView.transform = transform
+    }
+    var zoomingView: View {
+        return self
+    }
+    var zoomingLocalView: View {
+        return rootView
     }
 }
-extension CanvasView: Newable {
-    func new(for p: Point, _ version: Version) {
-        let editingCellGroup = model.editingCellGroup
-        let geometry = Geometry(lines: editingCellGroup.drawing.editLines, scale: model.scale)
-        guard !geometry.isEmpty else { return }
-        let isDrawingSelectedLines = !editingCellGroup.drawing.selectedLineIndexes.isEmpty
-        let unselectedLines = editingCellGroup.drawing.uneditLines
-        //remove Lines
-        //insertCell
-    }
-}
-extension CanvasView: Strokable, ZoomableStrokable {
-    func insertWillStorkeObject(at p: Point, to version: Version) {
-        
-    }
-    
-    func captureWillEraseObject(at p: Point, to version: Version) {
-        
-    }
-    
-    func makeViewStroker() -> ViewStroker {
-        return BasicViewStroker(zoomableSstokableView: self)
+extension CanvasView: InternalZoomable {
+    func captureTransform(to version: Version) {
+        transformView.push(model.transform, to: version)
     }
 }

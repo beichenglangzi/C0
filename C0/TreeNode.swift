@@ -25,10 +25,10 @@ struct TreeIndex<T>: Codable, Hashable {
     func reversed() -> TreeIndex<T> {
         return TreeIndex(indexPath: IndexPath(indexes: indexPath.reversed()))
     }
-    var removedFirst: TreeIndex<Cell> {
+    var removedFirst: TreeIndex<Membrane> {
         var indexPath = self.indexPath
         _ = indexPath.removeFirst()
-        return TreeIndex<Cell>(indexPath: indexPath)
+        return TreeIndex<Membrane>(indexPath: indexPath)
     }
 }
 

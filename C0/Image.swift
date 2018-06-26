@@ -171,27 +171,6 @@ extension CGImage {
         }
     }
 }
-extension CALayer {
-    var image: Image? {
-        get {
-            guard let contents = contents else {
-                return nil
-            }
-            return Image(contents as! CGImage)
-        }
-        set {
-            contents = newValue?.cg
-            contentsGravity = kCAGravityResizeAspect
-            if newValue != nil {
-                minificationFilter = kCAFilterTrilinear
-                magnificationFilter = kCAFilterTrilinear
-            } else {
-                minificationFilter = kCAFilterLinear
-                magnificationFilter = kCAFilterLinear
-            }
-        }
-    }
-}
 
 final class ImageView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Image

@@ -19,7 +19,7 @@
 
 struct Gradient {
     struct Value {
-        var color: Color
+        var colorComposition: Composition<Color>
         var location: Real
     }
     
@@ -27,13 +27,13 @@ struct Gradient {
     var startPoint = Point(), endPoint = Point(x: 1, y: 0)
 }
 extension Gradient {
-    var colors: [Color] {
+    var colorCompositions: [Composition<Color>] {
         get {
-            return values.map { $0.color }
+            return values.map { $0.colorComposition }
         }
         set {
             newValue.enumerated().forEach { (i, color) in
-                values[i].color = color
+                values[i].colorComposition = color
             }
         }
     }

@@ -55,7 +55,7 @@ enum VideoCodec {
 
 final class SceneVideoEncoder: MediaEncoder {
     private var scene: Scene, size: Size, videoType: VideoType, codec: VideoCodec
-    private let drawView = View(drawClosure: { _, _, _ in })
+    private let drawView = View()
     private var screenTransform = Transform()
     
     init(scene: Scene, size: Size, videoType: VideoType = .mp4, codec: VideoCodec = .h264) {
@@ -69,7 +69,6 @@ final class SceneVideoEncoder: MediaEncoder {
                                          scale: Point(x: scale, y: scale),
                                          rotation: 0)
         drawView.bounds = Rect(origin: Point(), size: size)
-//        drawView.drawClosure = { [unowned self] ctx, _, _ in self.scene.canvas.draw(in: ctx) }
     }
     
     func write(to url: URL,
@@ -111,7 +110,7 @@ final class SceneVideoEncoder: MediaEncoder {
         }
         writer.startSession(atSourceTime: kCMTimeZero)
         
-        let allFrameCount = scene.timeline.frameTime(withBeatTime: scene.timeline.duration)
+        let allFrameCount = scene.timeline.frameTime(withTime: scene.timeline.duration)
         let timeScale = Int32(scene.timeline.frameRate)
         
         var append = false, stop = false
@@ -145,10 +144,11 @@ final class SceneVideoEncoder: MediaEncoder {
                                        bytesPerRow: CVPixelBufferGetBytesPerRow(pb),
                                        space: colorSpace,
                                        bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) {
-                    scene.timeline.editingTime = scene.timeline.beatTime(withFrameTime: i)
+                    scene.timeline.editingTime = scene.timeline.time(withFrameTime: i)
                     drawView.render(in: ctx)
                 }
-                CVPixelBufferUnlockBaseAddress(pb, CVPixelBufferLockFlags(rawValue: CVOptionFlags(0)))
+                CVPixelBufferUnlockBaseAddress(pb,
+                                               CVPixelBufferLockFlags(rawValue: CVOptionFlags(0)))
                 append = adaptor.append(pb, withPresentationTime: CMTime(value: Int64(i),
                                                                          timescale: timeScale))
             }
@@ -170,78 +170,7 @@ final class SceneVideoEncoder: MediaEncoder {
         } else {
             writer.endSession(atSourceTime: CMTime(value: Int64(allFrameCount),
                                                    timescale: timeScale))
-            writer.finishWriting {
-                let soundTuples = self.scene.timeline.soundTuples
-                guard !soundTuples.isEmpty else {
-                    completionClosure(nil)
-                    return
-                }
-                do {
-                    try self.wrireAudio(to: url, self.videoType.av, soundTuples) { error in
-                        completionClosure(error)
-                    }
-                } catch {
-                    if fileManager.fileExists(atPath: url.path) {
-                        try? fileManager.removeItem(at: url)
-                    }
-                }
-            }
-        }
-    }
-    
-    func wrireAudio(to videoURL: URL, _ fileType: AVFileType,
-                    _ soundTuples: [(sound: Sound, startFrameTime: FrameTime)],
-                    completionClosure: @escaping (Error?) -> ()) throws {
-        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent(videoURL.lastPathComponent)
-        
-        let composition = AVMutableComposition()
-        let compositionVideoTrack
-            = composition.addMutableTrack(withMediaType: .video,
-                                          preferredTrackID: kCMPersistentTrackID_Invalid)
-        let compositionAudioTrack
-            = composition.addMutableTrack(withMediaType: .audio,
-                                          preferredTrackID: kCMPersistentTrackID_Invalid)
-        
-        let videoAsset = AVURLAsset(url: videoURL)
-        guard let videoAssetTrack = videoAsset.tracks(withMediaType: .video).first else {
-            throw NSError(domain: AVFoundationErrorDomain, code: AVError.Code.exportFailed.rawValue)
-        }
-        try compositionVideoTrack?.insertTimeRange(videoAssetTrack.timeRange,
-                                                   of: videoAssetTrack,
-                                                   at: kCMTimeZero)
-        
-        let timeScale = Int32(scene.timeline.frameRate)
-        for (sound, startFrameTime) in soundTuples {
-            guard let url = sound.url else { continue }
-            let audioAsset = AVURLAsset(url: url)
-            guard let audioAssetTrack = audioAsset.tracks(withMediaType: .audio).first else {
-                throw NSError(domain: AVFoundationErrorDomain,
-                              code: AVError.Code.exportFailed.rawValue)
-            }
-            try compositionAudioTrack?.insertTimeRange(audioAssetTrack.timeRange,
-                                                       of: audioAssetTrack,
-                                                       at: CMTime(value: Int64(startFrameTime),
-                                                                  timescale: timeScale))
-        }
-        
-        guard let aes = AVAssetExportSession(asset: composition,
-                                             presetName: AVAssetExportPresetHighestQuality) else {
-            throw NSError(domain: AVFoundationErrorDomain, code: AVError.Code.exportFailed.rawValue)
-        }
-        aes.outputFileType = fileType
-        aes.outputURL = tempURL
-        aes.exportAsynchronously { [unowned aes] in
-            let fileManager = FileManager.default
-            do {
-                try _ = fileManager.replaceItemAt(videoURL, withItemAt: tempURL)
-                if fileManager.fileExists(atPath: tempURL.path) {
-                    try fileManager.removeItem(at: tempURL)
-                }
-                completionClosure(aes.error)
-            } catch {
-                completionClosure(error)
-            }
+            writer.finishWriting {}
         }
     }
 }
@@ -264,23 +193,6 @@ final class SceneImageEncoder: MediaEncoder {
     }
 }
 typealias SceneImageEncoderView = MediaEncoderView<SceneImageEncoder>
-
-final class SceneSubtitlesEncoder: MediaEncoder {
-    private var timeline: Timeline, fileType: Subtitle.FileType
-    init(timeline: Timeline, fileType: Subtitle.FileType) {
-        self.timeline = timeline
-        self.fileType = fileType
-    }
-    
-    func write(to url: URL,
-               progressClosure: @escaping (Real, inout Bool) -> (),
-               completionClosure: @escaping (Error?) -> ()) throws {
-        let vttData = timeline.vtt
-        try vttData?.write(to: url)
-        completionClosure(nil)
-    }
-}
-typealias SceneSubtitlesEncoderView = MediaEncoderView<SceneSubtitlesEncoder>
 
 final class MediaEncoderView<T: MediaEncoder>: View {
     var encoder: T

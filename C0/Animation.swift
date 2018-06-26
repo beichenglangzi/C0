@@ -19,7 +19,7 @@
 
 import CoreGraphics
 
-typealias KeyframeIndex = KeyframeTimingCollection.Index
+typealias KeyframeIndex = KeyframeTimeCollection.Index
 
 struct LoopFrame: Codable, Hashable {
     var index: KeyframeIndex, time: Rational, loopCount: Int, loopingCount: Int
@@ -36,7 +36,7 @@ struct AnimatableTimeInfo {
     var internalRatio: Real
 }
 
-enum Interpolation {
+enum Interpolated {
     case step(LoopFrame)
     case linear(LoopFrame, LoopFrame)
     case monospline(LoopFrame, LoopFrame, LoopFrame, LoopFrame)
@@ -46,13 +46,13 @@ enum Interpolation {
 
 protocol Animatable {
     var beginTime: Rational { get }
-    var keyframeTimings: KeyframeTimingCollection { get }
+    var keyframeTimings: KeyframeTimeCollection { get }
     var duration: Rational { get }
     var loopFrames: [LoopFrame] { get }
     var editingKeyframeIndex: KeyframeIndex { get }
     var selectedKeyframeIndexes: [KeyframeIndex] { get }
     func timeInfo(atTime time: Rational) -> AnimatableTimeInfo?
-    func interpolation(atLoopFrameIndex li: LoopFrameIndex) -> Interpolation
+    func interpolation(atLoopFrameIndex li: LoopFrameIndex) -> Interpolated
     func indexInfo(atTime t: Rational) -> LoopFrameIndexInfo?
     func keyframeIndex(atTime t: Rational) -> KeyframeIndex?
     func loopedKeyframeIndex(atTime t: Rational) -> KeyframeIndex?
@@ -117,8 +117,8 @@ struct Animation<Value: KeyframeValue>: Codable {
             if keyframe.timing.loop == .ended, let previousIndex = previousIndexes.last {
                 let loopCount = previousIndexes.count
                 previousIndexes.removeLast()
-                let time = keyframe.timing.time
-                let nextTime = i + 1 >= keyframes.count ? duration : keyframes[i + 1].timing.time
+                let time = keyframe.time
+                let nextTime = i + 1 >= keyframes.count ? duration : keyframes[i + 1].time
                 appendLoopFrameWith(time: time, nextTime: nextTime,
                                     previousIndex: previousIndex, currentIndex: i,
                                     loopCount: loopCount)
@@ -136,12 +136,12 @@ struct Animation<Value: KeyframeValue>: Codable {
         return loopFrames
     }
     
-    mutating func fit(repeating: Value, with keyframeTimings: [KeyframeTiming]) {
-        if keyframeTimings.count < keyframes.count {
-            keyframes = Array(keyframes[..<keyframeTimings.count])
-        } else if keyframeTimings.count > keyframes.count {
-            keyframes += keyframeTimings[(keyframes.count - 1)...].map {
-                Keyframe(value: repeating, timing: $0)
+    mutating func fit(repeating: Value, with keyframeTimes: [Rational]) {
+        if keyframeTimes.count < keyframes.count {
+            keyframes = Array(keyframes[..<keyframeTimes.count])
+        } else if keyframeTimes.count > keyframes.count {
+            keyframes += keyframeTimes[(keyframes.count - 1)...].map {
+                Keyframe(value: repeating, time: $0)
             }
         }
     }
@@ -164,13 +164,13 @@ struct Animation<Value: KeyframeValue>: Codable {
         self.selectedKeyframeIndexes = selectedKeyframeIndexes
     }
     
-    init(repeating: Value, keyframeTimings: [KeyframeTiming]) {
-        self.init(keyframes: keyframeTimings.map { Keyframe(value: repeating, timing: $0) })
+    init(repeating: Value, keyframeTimes: [Rational]) {
+        self.init(keyframes: keyframeTimes.map { Keyframe(value: repeating, time: $0) })
     }
 }
 extension Animation: Animatable {
-    var keyframeTimings: KeyframeTimingCollection {
-        return KeyframeTimingCollection(keyframes: keyframes)
+    var keyframeTimings: KeyframeTimeCollection {
+        return KeyframeTimeCollection(keyframes: keyframes)
     }
     
     var isEmpty: Bool {
@@ -183,10 +183,7 @@ extension Animation: Animatable {
         }
         let li1 = indexInfo.loopFrameIndex, internalTime = indexInfo.keyframeInternalTime
         let lf1 = loopFrames[li1]
-        let k1 = keyframes[lf1.index]
-        if internalTime == 0 || indexInfo.keyframeDuration == 0
-            || li1 + 1 >= loopFrames.count || k1.timing.interpolation == .none {
-            
+        if internalTime == 0 || indexInfo.keyframeDuration == 0 || li1 + 1 >= loopFrames.count {
             return AnimatableTimeInfo(time: time,
                                       isInterpolated: false,
                                       loopframeIndex: li1, keyframeIndex: lf1.index,
@@ -216,19 +213,14 @@ extension Animation: Animatable {
         guard timeInfo.isInterpolated else {
             return Value.step(value(lf1))
         }
-        let k1 = keyframes[lf1.index]
         let lf2 = loopFrames[li1 + 1]
         
-        let t = k1.timing.easing.convertT(timeInfo.internalRatio)
-        guard k1.timing.interpolation != .linear && keyframes.count > 2 else {
+        let t = timeInfo.internalRatio
+        guard keyframes.count > 2 else {
             return Value.linear(value(lf1), value(lf2), t: t)
         }
-        let isUseIndex0 = li1 - 1 >= 0
-            && k1.timing.interpolation != .bound
-            && loopFrames[li1 - 1].time != lf1.time
-        let isUseIndex3 = li1 + 2 < loopFrames.count
-            && keyframes[lf2.index].timing.interpolation != .bound
-            && loopFrames[li1 + 2].time != lf2.time
+        let isUseIndex0 = li1 - 1 >= 0 && loopFrames[li1 - 1].time != lf1.time
+        let isUseIndex3 = li1 + 2 < loopFrames.count && loopFrames[li1 + 2].time != lf2.time
         if isUseIndex0 {
             if isUseIndex3 {
                 let lf0 = loopFrames[li1 - 1], lf3 = loopFrames[li1 + 2]
@@ -251,20 +243,14 @@ extension Animation: Animatable {
         }
     }
     
-    func interpolation(atLoopFrameIndex li: LoopFrameIndex) -> Interpolation {
+    func interpolation(atLoopFrameIndex li: LoopFrameIndex) -> Interpolated {
         let lf1 = loopFrames[li], lf2 = loopFrames[li + 1]
         let k1 = keyframes[lf1.index], k2 = keyframes[lf2.index]
-        if k1.timing.interpolation == .none || lf2.time - lf1.time == 0 {
+        if lf2.time - lf1.time == 0 {
             return .step(lf1)
-        } else if k1.timing.interpolation == .linear {
-            return .linear(lf1, lf2)
         } else {
-            let isUseIndex0 = li - 1 >= 0
-                && k2.timing.interpolation != .bound
-                && loopFrames[li - 1].time != lf1.time
-            let isUseIndex3 = li + 2 < loopFrames.count
-                && k2.timing.interpolation != .bound
-                && loopFrames[li + 2].time != lf2.time
+            let isUseIndex0 = li - 1 >= 0 && loopFrames[li - 1].time != lf1.time
+            let isUseIndex3 = li + 2 < loopFrames.count && loopFrames[li + 2].time != lf2.time
             if isUseIndex0 {
                 if isUseIndex3 {
                     let lf0 = loopFrames[li - 1], lf3 = loopFrames[li + 2]
@@ -306,7 +292,7 @@ extension Animation: Animatable {
             return nil
         }
         for i in (0..<keyframes.count).reversed() {
-            if t >= keyframes[i].timing.time {
+            if t >= keyframes[i].time {
                 return i
             }
         }
@@ -317,13 +303,13 @@ extension Animation: Animatable {
     }
     
     func time(atKeyframeIndex index: KeyframeIndex) -> Rational {
-        return keyframes[index].timing.time
+        return keyframes[index].time
     }
     func time(atLoopFrameIndex index: LoopFrameIndex) -> Rational {
         return loopFrames[index].time
     }
     var lastKeyframeTime: Rational? {
-        return keyframes.last?.timing.time
+        return keyframes.last?.time
     }
     var lastLoopedKeyframeTime: Rational? {
         return loopFrames.last?.time
@@ -444,7 +430,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
     private static func knobLinePathView(from p: Point, lineColor: Color,
                                          baseWidth: Real, lineHeight: Real,
                                          lineWidth: Real = 4, linearLineWidth: Real = 2,
-                                         with interpolation: KeyframeTiming.Interpolation) -> View {
+                                         with interpolation: Interpolation) -> View {
         var path = Path()
         switch interpolation {
         case .spline:
@@ -467,7 +453,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
                                  fillColor: Color, lineColor: Color,
                                  baseWidth: Real,
                                  knobHalfHeight: Real, subKnobHalfHeight: Real,
-                                 with label: KeyframeTiming.Label) -> View {
+                                 with label: Timing.Label) -> View {
         let kh = label == .main ? knobHalfHeight : subKnobHalfHeight
         let knobView = View.discreteKnob(Size(width: baseWidth, height: kh * 2))
         knobView.position = p
@@ -504,7 +490,8 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
     }
     
     var minSize: Size {
-        return Size(width: x(withTime: model.duration), height: height)
+        return Size(width: x(withTime: model.duration) + baseWidth / 2 + Layouter.basicPadding,
+                    height: height)
     }
     override func updateLayout() {
         let height = frame.height
@@ -585,8 +572,8 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
                 path.append(Rect(x: position.x, y: 0, width: width, height: h))
                 path.append(Rect(x: position.x, y: height - h, width: width, height: h))
                 let view = View(path: path)
-                view.fillColor = .select
-                view.lineColor = .selectBorder
+                view.fillColorComposition = .select
+                view.lineColorComposition = .selectBorder
                 selectedViews.append(view)
             }
         }
@@ -627,20 +614,20 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
         updateLayout()
     }
     
-    func beatTime(withBaseTime baseTime: BaseTime) -> Rational {
+    func time(withBaseTime baseTime: Rational) -> Rational {
         return baseTime * baseTimeInterval
     }
-    func baseTime(withRationalTime beatTime: Rational) -> BaseTime {
-        return beatTime / baseTimeInterval
+    func baseTime(withRationalTime time: Rational) -> Rational {
+        return time / baseTimeInterval
     }
     func basedRationalTime(withRealBaseTime realBaseTime: Real) -> Rational {
         return Rational(Int(realBaseTime)) * baseTimeInterval
     }
-    func realBaseTime(withRationalTime beatTime: Rational) -> Real {
-        return RealBaseTime(beatTime / baseTimeInterval)
+    func realBaseTime(withRationalTime time: Rational) -> Real {
+        return Real(time / baseTimeInterval)
     }
     func realBaseTime(withX x: Real) -> Real {
-        return RealBaseTime(x / baseWidth)
+        return Real(x / baseWidth)
     }
     func basedRationalTime(withRealTime realTime: Real) -> Rational {
         return Rational(Int(realTime / Real(baseTimeInterval))) * baseTimeInterval
@@ -658,10 +645,10 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
     }
     func clipDeltaTime(withTime time: Rational) -> Rational {
         let ft = baseTime(withRationalTime: time)
-        let fft = ft + BaseTime(1, 2)
-        return fft - floor(fft) < BaseTime(1, 2) ?
-            beatTime(withBaseTime: ceil(ft)) - time :
-            beatTime(withBaseTime: floor(ft)) - time
+        let fft = ft + Rational(1, 2)
+        return fft - floor(fft) < Rational(1, 2) ?
+            self.time(withBaseTime: ceil(ft)) - time :
+            self.time(withBaseTime: floor(ft)) - time
     }
     func nearestKeyframeIndex(at p: Point) -> Int? {
         guard !model.keyframes.isEmpty else {
@@ -677,7 +664,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
             }
         }
         for (i, keyframe) in model.keyframes.enumerated().reversed() {
-            updateMin(index: i, time: keyframe.timing.time)
+            updateMin(index: i, time: keyframe.time)
         }
         updateMin(index: nil, time: model.duration)
         return minIndex

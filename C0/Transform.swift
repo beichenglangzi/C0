@@ -107,7 +107,7 @@ protocol AppliableAffineTransform {
     static func *(lhs: Self, rhs: AffineTransform) -> Self
 }
 
-struct Transform: Codable, Initializable {//OrderedAfineTransform items
+struct Transform: Codable, Initializable {
     var translation: Point {
         didSet {
             affineTransform = Transform.affineTransform(translation: translation,
@@ -265,16 +265,6 @@ extension Transform: AbstractViewable {
 }
 extension Transform: ObjectViewable {}
 
-struct TransformTrack: Track, Codable {
-    var animation = Animation<Transform>()
-    var animatable: Animatable {
-        return animation
-    }
-}
-extension TransformTrack: Referenceable {
-    static let name = Text(english: "Transform Track", japanese: "トランスフォームトラック")
-}
-
 struct TransformOption {
     var defaultModel = Transform()
     var translationValueOption = RealOption(defaultModel: 0, minModel: -1000000, maxModel: 1000000,
@@ -356,7 +346,7 @@ final class TransformView<T: BinderProtocol>: ModelView, BindableReceiver {
         let padding = Layouter.basicPadding
         let classNameSize = classNameView.minSize
         let classNameOrigin = Point(x: padding,
-                                    y: bounds.height - classNameSize.height - padding)
+                                    y: bounds.height - classNameSize.height - padding * 2)
         classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
         
         let tds = translationView.minSize

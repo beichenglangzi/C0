@@ -142,7 +142,6 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     var topViewsHeight = Layouter.basicHeight {
         didSet { updateLayout() }
     }
-//    let transformFormView: View
 
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
@@ -157,10 +156,8 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         transformView = BasicTransformView(binder: binder,
                                            keyPath: keyPath.appending(path: \Model.transform),
                                            option: TransformOption())
-//        transformFormView = View(isLocked: false)
         objectsView = SelectionView(binder: binder,
                                     keyPath: keyPath.appending(path: \Model.objects))
-//        transformFormView.append(child: objectsView)
 
         isHiddenActionListView
             = BoolView(binder: binder,
@@ -256,24 +253,6 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         transformView.updateWithModel()
     }
 
-//    var objectViewWidth = 80.0.cg
-//    private func updateCopiedObjectViews() {
-//        copiedObjectsView.updateWithModel()
-//        let padding = Layouter.smallPadding
-//        let bounds = Rect(x: 0,
-//                          y: 0,
-//                          width: objectViewWidth,
-//                          height: copiedObjectsView.bounds.height - padding * 2)
-//        copiedObjectsView.updateWithModel()
-//        copiedObjectsView.children.forEach { $0.bounds = bounds }
-//        updateCopiedObjectViewPositions()
-//    }
-//    private func updateCopiedObjectViewPositions() {
-//        let padding = Layouter.smallPadding
-//        _ = Layouter.leftAlignment(copiedObjectsView.children.map { .view($0) },
-//                                   minX: padding, y: padding)
-//    }
-
     var zoomingTransform: Transform {
         get { return model.transform }
         set {
@@ -283,16 +262,10 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         }
     }
     func convertZoomingLocalFromZoomingView(_ p: Point) -> Point {
-//        let fromView = objectsView.valuesView
-//        let objectsPosition = Point(x: (fromView.bounds.width / 2).rounded(),
-//                                    y: (fromView.bounds.height / 2).rounded())
-        return zoomingLocalView.convert(p, from: zoomingView)// - objectsPosition
+        return zoomingLocalView.convert(p, from: zoomingView)
     }
     func convertZoomingLocalToZoomingView(_ p: Point) -> Point {
-//        let toView = ZoomingView
-//        let objectsPosition = Point(x: (toView.bounds.width / 2).rounded(),
-//                                    y: (toView.bounds.height / 2).rounded())
-        return zoomingLocalView.convert(p, to: zoomingView)// + objectsPosition
+        return zoomingLocalView.convert(p, to: zoomingView)
     }
     func updateTransform() {
         var transform = zoomingTransform

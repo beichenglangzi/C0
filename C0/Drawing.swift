@@ -20,27 +20,19 @@
 import CoreGraphics
 
 struct Drawing: Codable, Equatable {
-    static let defaultLineWidth = 1.0.cg
+    var lines = [Line]()
     
-    var lines: [Line], draftLines: [Line], selectedLineIndexes: [Int]
-    var lineColor: Color, lineWidth: Real
-    
-    init(lines: [Line] = [], draftLines: [Line] = [], selectedLineIndexes: [Int] = [],
-         lineColor: Color = .strokeLine, lineWidth: Real = defaultLineWidth) {
-        self.lines = lines
-        self.draftLines = draftLines
-        self.selectedLineIndexes = selectedLineIndexes
-        self.lineColor = lineColor
-        self.lineWidth = lineWidth
-    }
+    static let lineWidth = 1.0.cg
 }
 extension Drawing {
+    var imageBounds: Rect {
+        return imageBounds(withLineWidth: Drawing.lineWidth)
+    }
     func imageBounds(withLineWidth lineWidth: Real) -> Rect {
         return Line.imageBounds(with: lines, lineWidth: lineWidth)
-            .union(Line.imageBounds(with: draftLines, lineWidth: lineWidth))
     }
     var isEmpty: Bool {
-        return lines.isEmpty && draftLines.isEmpty
+        return lines.isEmpty
     }
     
     func nearestLine(at p: Point) -> Line? {
@@ -54,61 +46,318 @@ extension Drawing {
         }
         return minLine
     }
-    func isNearestSelectedLineIndexes(at p: Point) -> Bool {
-        guard !selectedLineIndexes.isEmpty else {
-            return false
-        }
-        var minD² = Real.infinity, minIndex = 0
-        lines.enumerated().forEach {
-            let d² = $0.element.minDistance²(at: p)
-            if d² < minD² {
-                minD² = d²
-                minIndex = $0.offset
-            }
-        }
-        return selectedLineIndexes.contains(minIndex)
-    }
-    var selectedLines: [Line] {
-        return selectedLineIndexes.map { lines[$0] }
-    }
-    var editLines: [Line] {
-        return selectedLineIndexes.isEmpty ? lines : selectedLineIndexes.map { lines[$0] }
-    }
-    var uneditLines: [Line] {
-        guard  !selectedLineIndexes.isEmpty else {
-            return []
-        }
-        return (0..<lines.count)
-            .filter { !selectedLineIndexes.contains($0) }
-            .map { lines[$0] }
-    }
     
     func intersects(_ otherLines: [Line]) -> Bool {
         for otherLine in otherLines {
-            if lines.contains(where: { $0.equalPoints(otherLine) }) {
+            if lines.contains(where: { $0 == otherLine }) {
                 return true
             }
         }
         return false
     }
     
-    var imageBounds: Rect {
-        return imageBounds(withLineWidth: lineWidth)
+    enum Indication {
+        struct DrawingItem {
+            var lineIndexes: [Int]
+        }
+        struct LineItem {
+            var pointIndexes: [Int]
+            //isPressure
+        }
+        
+        case drawing(DrawingItem)
+        case line(LineItem)
+    }
+    func indication(at p: Point, reciprocalScale: Real) -> Indication? {
+        fatalError()
+    }
+    
+    struct LinePoint {
+        var line: Line, lineIndex: Int, pointIndex: Int
+        var isFirst: Bool {
+            return pointIndex == 0
+        }
+        var isLast: Bool {
+            return  pointIndex == line.points.count - 1
+        }
+    }
+    struct LineCap {
+        enum Orientation {
+            case first, last
+        }
+        
+        var line: Line, lineIndex: Int, orientation: Orientation
+        
+        init(line: Line, lineIndex: Int, orientation: Orientation) {
+            self.line = line
+            self.lineIndex = lineIndex
+            self.orientation = orientation
+        }
+        init?(line: Line, lineIndex i: Int, at p: Point) {
+            if p == line.firstPoint {
+                self = LineCap(line: line, lineIndex: i, orientation: .first)
+            } else if p == line.lastPoint {
+                self = LineCap(line: line, lineIndex: i, orientation: .last)
+            } else {
+                return nil
+            }
+        }
+        
+        var pointIndex: Int {
+            return orientation == .first ? 0 : line.points.count - 1
+        }
+        var linePoint: LinePoint {
+            return LinePoint(line: line, lineIndex: lineIndex, pointIndex: pointIndex)
+        }
+        var point: Point {
+            return orientation == .first ? line.firstPoint : line.lastPoint
+        }
+        var reversedPoint: Point {
+            return orientation == .first ? line.lastPoint : line.firstPoint
+        }
+    }
+    struct LineCapsItem {
+        var lineCaps: [LineCap]
+        
+        func bezierSortedLineCapItem(at p: Point) -> LineCap? {
+            var minLineCap: LineCap?, minD² = Real.infinity
+            func minNearest(with caps: [LineCap]) -> Bool {
+                var isMin = false
+                for cap in caps {
+                    let d² = (cap.orientation == .first ?
+                        cap.line.bezier(at: 0) :
+                        cap.line.bezier(at: cap.line.points.count - 3)).minDistance²(at: p)
+                    if d² < minD² {
+                        minLineCap = cap
+                        minD² = d²
+                        isMin = true
+                    }
+                }
+                return isMin
+            }
+            
+            _ = minNearest(with: lineCaps)
+            
+            return minLineCap
+        }
+    }
+    struct Nearest {
+        enum Result {
+            struct LineCapResult {
+                var bezierSortedLineCap: LineCap, lineCapsItem: LineCapsItem
+            }
+            
+            case linePoint(LinePoint), lineCapResult(LineCapResult)
+        }
+        
+        var result: Result, minDistance²: Real, point: Point
+    }
+    func nearest(at point: Point, isVertex: Bool) -> Nearest? {
+        var minD² = Real.infinity, minLinePoint: LinePoint?, minPoint = Point()
+        func nearestLinePoint(from lines: [Line]) -> Bool {
+            var isNearest = false
+            for (j, line) in lines.enumerated() {
+                for (i, mp) in line.points.enumerated() {
+                    guard !(isVertex && i != 0 && i != line.points.count - 1) else { continue }
+                    let d² = hypot²(point.x - mp.x, point.y - mp.y)
+                    if d² < minD² {
+                        minD² = d²
+                        minLinePoint = LinePoint(line: line, lineIndex: j, pointIndex: i)
+                        minPoint = mp
+                        isNearest = true
+                    }
+                }
+            }
+            return isNearest
+        }
+        
+        _ = nearestLinePoint(from: lines)
+        
+        guard let linePoint = minLinePoint else { return nil }
+        if linePoint.isFirst || linePoint.isLast {
+            func lineCaps(with lines: [Line]) -> [LineCap] {
+                return lines.enumerated().compactMap { (i, line) in
+                    LineCap(line: line, lineIndex: i, at: minPoint)
+                }
+            }
+            let lineCapsItem = LineCapsItem(lineCaps: lineCaps(with: lines))
+            let bslci = lineCapsItem.bezierSortedLineCapItem(at: minPoint)!
+            let result = Nearest.Result.LineCapResult(bezierSortedLineCap: bslci,
+                                                      lineCapsItem: lineCapsItem)
+            return Nearest(result: .lineCapResult(result), minDistance²: minD², point: minPoint)
+        } else {
+            return Nearest(result: .linePoint(linePoint), minDistance²: minD², point: minPoint)
+        }
+    }
+    
+    func nearestLinePoint(at p: Point) -> LinePoint? {
+        guard let nearest = self.nearest(at: p, isVertex: false) else {
+            return nil
+        }
+        switch nearest.result {
+        case .linePoint(let result): return result
+        case .lineCapResult(let result): return result.bezierSortedLineCap.linePoint
+        }
+    }
+    
+    func snappedPoint(_ point: Point, with lineCap: LineCap,
+                      snapDistance: Real, grid: Real?) -> Point {
+        let p: Point
+        if let grid = grid {
+            p = Point(x: point.x.interval(scale: grid), y: point.y.interval(scale: grid))
+        } else {
+            p = point
+        }
+        
+        var minD = Real.infinity, minP = p
+        func updateMin(with ap: Point) {
+            let d0 = p.distance(ap)
+            if d0 < snapDistance && d0 < minD {
+                minD = d0
+                minP = ap
+            }
+        }
+        func update() {
+            for (i, line) in lines.enumerated() {
+                if i == lineCap.lineIndex {
+                    updateMin(with: lineCap.reversedPoint)
+                } else {
+                    updateMin(with: line.firstPoint)
+                    updateMin(with: line.lastPoint)
+                }
+            }
+        }
+        
+        update()
+        
+        return minP
+    }
+    
+    func snappedPoint(_ sp: Point, editLine: Line, editingMaxPointIndex empi: Int,
+                      snapDistance: Real) -> Point {
+        let p: Point, isFirst = empi == 1 || empi == editLine.points.count - 1
+        if isFirst {
+            p = editLine.firstPoint
+        } else if empi == editLine.points.count - 2 || empi == 0 {
+            p = editLine.lastPoint
+        } else {
+            fatalError()
+        }
+        var snapLines = [(ap: Point, bp: Point)](), lastSnapLines = [(ap: Point, bp: Point)]()
+        func snap(with lines: [Line]) {
+            for line in lines {
+                if editLine.points.count == 3 {
+                    if line != editLine {
+                        if line.firstPoint == editLine.firstPoint {
+                            snapLines.append((line.points[1], editLine.firstPoint))
+                        } else if line.lastPoint == editLine.firstPoint {
+                            snapLines.append((line.points[line.points.count - 2],
+                                              editLine.firstPoint))
+                        }
+                        if line.firstPoint == editLine.lastPoint {
+                            lastSnapLines.append((line.points[1], editLine.lastPoint))
+                        } else if line.lastPoint == editLine.lastPoint {
+                            lastSnapLines.append((line.points[line.points.count - 2],
+                                                  editLine.lastPoint))
+                        }
+                    }
+                } else {
+                    if line.firstPoint == p && !(line == editLine && isFirst) {
+                        snapLines.append((line.points[1], p))
+                    } else if line.lastPoint == p && !(line == editLine && !isFirst) {
+                        snapLines.append((line.points[line.points.count - 2], p))
+                    }
+                }
+            }
+        }
+        
+        snap(with: lines)
+        
+        var minD = Real.infinity, minIntersectionPoint: Point?, minPoint = sp
+        if !snapLines.isEmpty && !lastSnapLines.isEmpty {
+            for sl in snapLines {
+                for lsl in lastSnapLines {
+                    if let ip = Point.intersectionLine(sl.ap, sl.bp, lsl.ap, lsl.bp) {
+                        let d = ip.distance(sp)
+                        if d < snapDistance && d < minD {
+                            minD = d
+                            minIntersectionPoint = ip
+                        }
+                    }
+                }
+            }
+        }
+        if let minPoint = minIntersectionPoint {
+            return minPoint
+        } else {
+            let ss = snapLines + lastSnapLines
+            for sl in ss {
+                let np = sp.nearestWithLine(ap: sl.ap, bp: sl.bp)
+                let d = np.distance(sp)
+                if d < snapDistance && d < minD {
+                    minD = d
+                    minPoint = np
+                }
+            }
+            return minPoint
+        }
     }
 }
 extension Drawing {
-    var view: View {
-        return viewWith(lineWidth: lineWidth, lineColor: lineColor)
-    }
     func viewWith(lineWidth: Real, lineColor: Color) -> View {
         let view = View()
         view.children = lines.compactMap { $0.view(lineWidth: lineWidth, fillColor: lineColor) }
         return view
     }
-    func draftViewWith(lineWidth: Real, lineColor: Color) -> View {
-        let view = View()
-        view.children = draftLines.compactMap { $0.view(lineWidth: lineWidth, fillColor: lineColor) }
-        return view
+}
+extension Drawing {
+    private static let editPointRadius = 0.5.cg, lineEditPointRadius = 1.5.cg
+    private static let pointEditPointRadius = 3.0.cg
+    func jointedPointViews() -> [View] {
+        var capPointDic = [Point: Bool]()
+        for line in lines {
+            let fp = line.firstPoint, lp = line.lastPoint
+            if capPointDic[fp] != nil {
+                capPointDic[fp] = true
+            } else {
+                capPointDic[fp] = false
+            }
+            if capPointDic[lp] != nil {
+                capPointDic[lp] = true
+            } else {
+                capPointDic[lp] = false
+            }
+        }
+        func jointedView(for p: Point) -> View {
+            let view = View()
+            view.fillColor = .red
+            view.radius = 3
+            view.position = p
+            return view
+        }
+        
+        return capPointDic.compactMap { $0.value ? jointedView(for: $0.key) : nil }
+    }
+}
+extension Drawing: KeyframeValue {
+    static func linear(_ f0: Drawing, _ f1: Drawing, t: Real) -> Drawing {
+        let lines = [Line].linear(f0.lines, f1.lines, t: t)
+        return Drawing(lines: lines)
+    }
+    static func firstMonospline(_ f1: Drawing, _ f2: Drawing, _ f3: Drawing,
+                                with ms: Monospline) -> Drawing {
+        let lines = [Line].firstMonospline(f1.lines, f2.lines, f3.lines, with: ms)
+        return Drawing(lines: lines)
+    }
+    static func monospline(_ f0: Drawing, _ f1: Drawing, _ f2: Drawing, _ f3: Drawing,
+                           with ms: Monospline) -> Drawing {
+        let lines = [Line].monospline(f0.lines, f1.lines, f2.lines, f3.lines, with: ms)
+        return Drawing(lines: lines)
+    }
+    static func lastMonospline(_ f0: Drawing, _ f1: Drawing, _ f2: Drawing,
+                               with ms: Monospline) -> Drawing {
+        let lines = [Line].lastMonospline(f0.lines, f1.lines, f2.lines, with: ms)
+        return Drawing(lines: lines)
     }
 }
 extension Drawing: Referenceable {
@@ -144,97 +393,6 @@ extension Drawing: AbstractViewable {
 }
 extension Drawing: ObjectViewable {}
 
-struct LinesTrack: Track, Codable {
-    var animation: Animation<Lines>
-    var animatable: Animatable {
-        return animation
-    }
-    
-    var cellTreeIndexes: [TreeIndex<Cell>]
-}
-extension LinesTrack {
-    func previousNextViewsWith(isHiddenPrevious: Bool, isHiddenNext: Bool,
-                               index: Int, reciprocalScale: Real) -> [View] {
-        var views = [View]()
-        func viewWith(lineColor: Color, at i: Int) -> View {
-            let drawing = animation.keyframes[i].value.drawing
-            let lineWidth = drawing.lineWidth * reciprocalScale
-            return drawing.viewWith(lineWidth: lineWidth, lineColor: .next)
-        }
-        if !isHiddenPrevious && index - 1 >= 0 {
-            views.append(viewWith(lineColor: .previous, at: index - 1))
-        }
-        if !isHiddenNext && index + 1 <= animation.keyframes.count - 1 {
-            views.append(viewWith(lineColor: .next, at: index + 1))
-        }
-        return views
-    }
-}
-
-struct Lines: Codable, Equatable {
-    var drawing = Drawing()
-    var geometries = [Geometry]()
-    
-    var defaultLabel: KeyframeTiming.Label {
-        return geometries.contains(where: { !$0.isEmpty }) ? .sub : .main
-    }
-}
-extension Lines: KeyframeValue {}
-extension Lines: Interpolatable {
-    static func linear(_ f0: Lines, _ f1: Lines,
-                       t: Real) -> Lines {
-        let drawing = f0.drawing
-        let geometries = [Geometry].linear(f0.geometries, f1.geometries, t: t)
-        return Lines(drawing: drawing, geometries: geometries)
-    }
-    static func firstMonospline(_ f1: Lines, _ f2: Lines,
-                                _ f3: Lines, with ms: Monospline) -> Lines {
-        let drawing = f1.drawing
-        let geometries = [Geometry].firstMonospline(f1.geometries,
-                                                    f2.geometries, f3.geometries, with: ms)
-        return Lines(drawing: drawing, geometries: geometries)
-    }
-    static func monospline(_ f0: Lines, _ f1: Lines,
-                           _ f2: Lines, _ f3: Lines,
-                           with ms: Monospline) -> Lines {
-        let drawing = f1.drawing
-        let geometries = [Geometry].monospline(f0.geometries, f1.geometries,
-                                               f2.geometries, f3.geometries, with: ms)
-        return Lines(drawing: drawing, geometries: geometries)
-    }
-    static func lastMonospline(_ f0: Lines, _ f1: Lines,
-                               _ f2: Lines, with ms: Monospline) -> Lines {
-        let drawing = f1.drawing
-        let geometries = [Geometry].lastMonospline(f0.geometries,
-                                                   f1.geometries, f2.geometries, with: ms)
-        return Lines(drawing: drawing, geometries: geometries)
-    }
-}
-extension Lines: Referenceable {
-    static let name = Text(english: "Lines Keyframe Value", japanese: "線キーフレーム値")
-}
-extension Lines: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect) -> View {
-        return drawing.thumbnailView(withFrame: frame)
-    }
-}
-extension Lines: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Lines>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return DrawingView(binder: binder, keyPath: keyPath.appending(path: \Lines.drawing))
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
-    }
-}
-extension Lines: ObjectViewable {}
-
-/**
- Issue: DraftArray、下書き化などのコマンドを排除
- */
 final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Drawing
     typealias Binder = T
@@ -248,83 +406,106 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     var defaultModel = Model()
     
-    let linesView: ArrayCountView<Line, Binder>
-    let draftLinesView: ArrayCountView<Line, Binder>
-    
-    let classNameView: TextFormView
-    let draftLinesNameView = TextFormView(text: Text(english: "Draft Lines:", japanese: "下書き線:"))
-    let changeToDraftView = ClosureView(name: Text(english: "Change to Draft", japanese: "下書き化"))
-    let exchangeWithDraftView = ClosureView(name: Text(english: "Exchange with Draft",
-                                                       japanese: "下書きと交換"))
+    var viewScale = 1.0.cg
     
     init(binder: T, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
-        classNameView = TextFormView(text: Model.name, font: .bold)
-        linesView = ArrayCountView(binder: binder,
-                                   keyPath: keyPath.appending(path: \Model.lines))
-        draftLinesView = ArrayCountView(binder: binder,
-                                        keyPath: keyPath.appending(path: \Model.draftLines))
-        
         super.init(isLocked: false)
-        changeToDraftView.model = { [unowned self] in self.changeToDraft($0) }
-        exchangeWithDraftView.model = { [unowned self] in self.exchangeWithDraft($0) }
-        
-        children = [classNameView,
-                    linesView,
-                    draftLinesNameView, draftLinesView,
-                    changeToDraftView, exchangeWithDraftView]
+        updateWithModel()
     }
     
     var minSize: Size {
-        let padding = Layouter.basicPadding, buttonH = Layouter.basicHeight
-        return Size(width: 170,
-                    height: buttonH * 4 + padding * 2)
-    }
-    override func updateLayout() {
-        let padding = Layouter.basicPadding
-        let classNameSize = classNameView.minSize
-        let classNameOrigin = Point(x: padding,
-                                    y: bounds.height - classNameSize.height - padding)
-        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
-        
-        let buttonH = Layouter.basicHeight
-        let px = padding, pw = bounds.width - padding * 2
-        var py = bounds.height - padding
-        py -= classNameView.frame.height
-        let lsms = linesView.minSize
-        py = bounds.height - padding
-        py -= lsms.height
-        linesView.frame = Rect(x: bounds.maxX - lsms.width - padding, y: py,
-                               width: lsms.width, height: lsms.height)
-        py -= lsms.height
-        draftLinesView.frame = Rect(x: bounds.maxX - lsms.width - padding, y: py,
-                                    width: lsms.width, height: lsms.height)
-        let dlnms = draftLinesNameView.minSize
-        draftLinesNameView.frame = Rect(origin: Point(x: draftLinesView.frame.minX - dlnms.width,
-                                                      y: py + padding),
-                                        size: dlnms)
-        py -= buttonH
-        changeToDraftView.frame = Rect(x: px, y: py, width: pw, height: buttonH)
-        py -= buttonH
-        exchangeWithDraftView.frame = Rect(x: px, y: py, width: pw, height: buttonH)
+        return model.imageBounds.size
     }
     func updateWithModel() {
-        linesView.updateWithModel()
-        draftLinesView.updateWithModel()
+        children = model.lines.enumerated().map { (i, line) in
+            let view = line.concreteViewWith(binder: binder,
+                                             keyPath: keyPath.appending(path: \Model.lines[i]))
+            view.fillColor = .black
+            return view
+        }
+    }
+    override var isEmpty: Bool {
+        return false
+    }
+    override func containsPath(_ p: Point) -> Bool {
+        return true
+    }
+    override func at(_ p: Point) -> View? {
+        guard let nearest = model.nearest(at: p, isVertex: false),
+            nearest.minDistance² < 100 else {
+            
+                return containsPath(p) ? self : nil
+        }
+        
+        switch nearest.result {
+        case .linePoint(let linePoint):
+            return children[linePoint.lineIndex].children[linePoint.pointIndex]
+        case .lineCapResult(let lineCapResult):
+            if let lineCap = lineCapResult.lineCapsItem.lineCaps.first {
+                return children[lineCap.lineIndex].children[lineCap.pointIndex]
+            } else {
+                return containsPath(p) ? self : nil
+            }
+        }
+//        nearest.result
+//        return children[nearest.lineIndex].children[nearest.pointIndex]
     }
 }
-extension DrawingView {
-    func changeToDraft(_ version: Version) {
-        capture(model, to: version)
-        model.draftLines = model.lines
-        model.lines = []
+extension DrawingView: Newable {
+    func new(for p: Point, _ version: Version) {
+        guard let nearestResult = model.nearest(at: p, isVertex: false)?.result else { return }
+        switch nearestResult {
+        case .linePoint(let linePoint):
+            let lines = [linePoint.line]// -> selection
+            let geometry = Geometry(lines: lines, scale: viewScale)
+            guard !geometry.isEmpty else { return }
+            //remove Lines
+            //insertCell
+        default: break
+        }
     }
-    func exchangeWithDraft(_ version: Version) {
-        capture(model, to: version)
-        let lines = model.lines
-        model.lines = model.draftLines
-        model.draftLines = lines
+}
+extension DrawingView: Strokable {
+    func makeViewStroker() -> ViewStroker {
+        return DrawingViewStroker(self)
+    }
+}
+
+final class DrawingViewStroker<T: BinderProtocol>: ViewStroker {
+    var view: View & Strokable {
+        return drawingView
+    }
+    
+    var drawingView: DrawingView<T>
+    
+    init(_ drawingView: DrawingView<T>) {
+        self.drawingView = drawingView
+    }
+    
+    func convertToCurrentLocal(_ point: Point) -> Point {
+        return point
+    }
+    
+    var viewScale: Real {
+        get { return drawingView.viewScale }
+        set { drawingView.viewScale = newValue }
+    }
+    
+    var lineView: LineView<T>?
+    func insert(_ line: Line, to version: Version) {
+        drawingView.binder[keyPath: drawingView.keyPath].lines.append(line)
+        let index = drawingView.model.lines.count - 1
+        let lineView = LineView(binder: drawingView.binder,
+                                keyPath: drawingView.keyPath.appending(path: \Drawing.lines[index]))
+        lineView.fillColor = .black
+        drawingView.append(child: lineView)
+        self.lineView = lineView
+    }
+    
+    func update(_ line: Line) {
+        lineView?.model = line
     }
 }

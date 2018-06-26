@@ -21,12 +21,12 @@ import struct Foundation.Date
 import class CoreGraphics.CGContext
 
 struct Player: Codable {
-    var time = Second(0.0), isEnableDelay = false, volume = 1.0.cg, isMute = false
+    var time = 0.0.cg, isEnableDelay = false, volume = 1.0.cg, isMute = false
     var playRange: ClosedRange<Real> = -0.5...2.0, isUsingRange = false
     var isPlaying = false
-    var playingTime = Second(0.0), playingFrameRate = FPS(0.0)
+    var playingTime = 0.0.cg, playingFrameRate = 0.0.cg
     
-    static func minuteSecondString(withSecond s: Int, frameRate: FPS) -> String {
+    static func minuteSecondString(withSecond s: Int, frameRate: Real) -> String {
         if s >= 60 {
             let minute = s / 60
             let second = s - minute * 60
@@ -77,20 +77,19 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
     var defaultModel = Player()
     
     private var screenTransform = AffineTransform.identity
-    private var audioPlayers = [SoundPlayer]()
     
-    private var playingFrameTime = FrameTime(0), playIntSecond = 0
+    private var playingFrameTime = 0, playIntSecond = 0
     private var playingDrawnCount = 0, delayTolerance = 0.5
     
     private var displayLink = DisplayLink()
-    private var oldPlayTime = Beat(0), oldTimestamp = 0.0
+    private var oldPlayTime = Rational(0), oldTimestamp = 0.0
     
-    var time = Second(0.0) {
+    var time = 0.0.cg {
         didSet {
             second = Int(time)
         }
     }
-    var maxTime = Second(1.0) {
+    var maxTime = 1.0.cg {
         didSet {
             timeView.option.maxModel = maxTime
         }
@@ -106,7 +105,7 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
         }
     }
     
-    var playingFrameRate = FPS(0) {
+    var playingFrameRate = 0.0.cg {
         didSet { updateWithFrameRate() }
     }
     
@@ -125,21 +124,13 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
                 let t = scene.timeline.editingTime
                 playIntSecond = t.integralPart
                 playingFrameRate = scene.timeline.frameRate
-                playingFrameTime = scene.timeline.frameTime(withBeatTime: scene.timeline.editingTime)
+                playingFrameTime = scene.timeline.frameTime(withTime: scene.timeline.editingTime)
                 playingDrawnCount = 0
-                
-//                let sound = Sound()//allsounds
-//                if let soundPlayer = sound.soundPlayer {
-//                    soundPlayer.currentTime = scene.timeline.secondTime(withBeatTime: t)
-//                    soundPlayer.play()
-//                }
 
                 drawView.displayLinkDraw()
             } else {
                 displayLink?.stop()
                 displayLink = nil
-                audioPlayers.forEach { $0.stop() }
-                audioPlayers = []
                 drawView.image = nil
             }
         }
@@ -150,14 +141,12 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
             guard isPause != oldValue else { return }
             if isPause {
                 displayLink?.stop()
-                audioPlayers.forEach { $0.pause() }
             } else {
                 playingDrawnCount = 0
                 oldTimestamp = Date.timeIntervalSinceReferenceDate
                 playingFrameRate = scene.timeline.frameRate
                 displayLink?.time = model.playingTime
                 displayLink?.start()
-                audioPlayers.forEach { $0.play() }
             }
         }
     }
@@ -189,7 +178,7 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
         })
         
         displayLink?.closure = { [unowned self] in
-            self.update(withTime: self.scene.timeline.basedBeatTime(withSecondTime: $0))
+            self.update(withTime: self.scene.timeline.basedTime(withTime: $0))
         }
     }
     
@@ -215,7 +204,6 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
         drawView.frame = Rect(x: padding, y: padding + height,
                               width: bounds.width - padding * 2,
                               height: bounds.height - height - padding * 2)
-//        screenTransform = AffineTransform(translation: drawView.bounds.centerPoint)
         
         let timeMinSize = timeStringView.minSize
         timeStringView.frame = Rect(origin: Point(x: padding, y: padding * 2), size: timeMinSize)
@@ -240,29 +228,29 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
             = playingFrameRate < scene.timeline.frameRate ? .warning : .locked
         if oldMinSize != playingFrameRateView.minSize { updateLayout() }
     }
-    var allowableDelayTime = Second(0.1)
+    var allowableDelayTime = 0.1.cg
     private func updatePlayTime() {
         playingFrameTime += 1
         
         if !model.isEnableDelay {
-            let playTime = scene.timeline.secondTime(withFrameTime: playingFrameTime)
+            let playTime: Real = scene.timeline.time(withFrameTime: playingFrameTime)
             let audioTime = model.playingTime
             if abs(playTime - audioTime) > allowableDelayTime {
-                playingFrameTime = scene.timeline.frameTime(withSecondTime: audioTime)
+                playingFrameTime = scene.timeline.frameTime(withTime: audioTime)
             }
         }
         
-        let newTime = scene.timeline.beatTime(withFrameTime: playingFrameTime)
+        let newTime: Rational = scene.timeline.time(withFrameTime: playingFrameTime)
         update(withTime: newTime)
     }
     private func updatePlayingFrameRate() {
         if isPlaying && !isPause {
             playingDrawnCount += 1
             let newTimestamp = Date.timeIntervalSinceReferenceDate
-            let deltaTime = Second(newTimestamp - oldTimestamp)
+            let deltaTime = Real(newTimestamp - oldTimestamp)
             if deltaTime >= 1 {
                 let newPlayingFrameRate = min(scene.timeline.frameRate,
-                                              FPS((Second(playingDrawnCount) / deltaTime)).rounded())
+                                              ((Real(playingDrawnCount) / deltaTime)).rounded())
                 if newPlayingFrameRate != playingFrameRate {
                     playingFrameRate = newPlayingFrameRate
                 }
@@ -273,7 +261,7 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
             playingFrameRate = 0
         }
     }
-    private func update(withTime newTime: Beat) {
+    private func update(withTime newTime: Rational) {
         drawView.displayLinkDraw()
         updatePlayingFrameRate()
     }

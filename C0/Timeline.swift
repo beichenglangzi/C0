@@ -20,105 +20,86 @@
 import struct Foundation.Data
 
 struct Timeline: Codable {
-    var frameRate: FPS
-    var duration = Beat(0)
-    var baseTimeInterval: Beat
-    var editingTime: Beat
-    
-    var tempoTrack: TempoTrack
-    var subtitleTrack: SubtitleTrack
-    
-    var allTracks: [AlgebraicTrack]
-    var editingLinesTrackIndex: Array<AlgebraicTrack>.Index
-    var editingTrackIndex: Array<AlgebraicTrack>.Index
-    var editingTrack: AlgebraicTrack {
-        return allTracks[editingTrackIndex]
-    }
-    
+    var frameRate: Real
+    var duration = Rational(0)
+    var baseTimeInterval: Rational
+    var editingTime: Rational
+    var allTracks: [Animation<Drawing>]
+    var editingLinesTrackIndex: Array<Animation<Drawing>>.Index
     var canvas: Canvas
     
-    var selectedTrackIndexes = [Array<AlgebraicTrack>.Index]()
+    var editingTrack: Animation<Drawing> {
+        get { return allTracks[editingLinesTrackIndex] }
+        set { allTracks[editingLinesTrackIndex] = newValue }
+    }
+    var editingDrawing: Drawing {
+        get { return editingTrack.editingKeyframe.value }
+        set { editingTrack.editingKeyframe.value = newValue }
+    }
     
-    init(frameRate: FPS = 60, sound: Sound = Sound(),
-         baseTimeInterval: Beat = Beat(1, 16),
-         editingTime: Beat = 0,
-         tempoTrack: TempoTrack = TempoTrack(),
-         subtitleTrack: SubtitleTrack = SubtitleTrack(),
+    init(frameRate: Real = 60,
+         baseTimeInterval: Rational = Rational(1, 16),
+         editingTime: Rational = 0,
          canvas: Canvas = Canvas()) {
         
         self.frameRate = frameRate
         self.baseTimeInterval = baseTimeInterval
         self.editingTime = editingTime
-        self.tempoTrack = tempoTrack
-        self.subtitleTrack = subtitleTrack
         editingLinesTrackIndex = 0
-        editingTrackIndex = 0
-        let animation = Animation<Lines>(keyframes: [Keyframe(value: Lines(drawing: Drawing(),
-                                                                           geometries: []),
-                                                              timing: KeyframeTiming(time: 0,
-                                                                                     label: .main,
-                                                                                     loop: .none, interpolation: .spline,
-                                                                                     easing: Easing()))],
-                                         beginTime: 0, duration: 1,
-                                         editingKeyframeIndex: 0, selectedKeyframeIndexes: [])
-        allTracks = [AlgebraicTrack.lines(LinesTrack(animation: animation,
-                                                     cellTreeIndexes: []))]
+        let keyframe = Keyframe(value: Drawing(), timing: Timing())
+        let animation = Animation(keyframes: [keyframe],
+                                  beginTime: 0, duration: 1,
+                                  editingKeyframeIndex: 0, selectedKeyframeIndexes: [])
+        allTracks = [animation]
         self.canvas = canvas
     }
 }
 extension Timeline {    
-    var maxDurationFromTracks: Beat {
-        return allTracks.reduce(Beat(0)) { max($0, $1.animatable.duration) }
+    var maxDurationFromTracks: Rational {
+        return allTracks.reduce(Rational(0)) { max($0, $1.duration) }
     }
     
-    func beatTime(withFrameTime frameTime: FrameTime) -> Beat {
-        return Beat(tempoTrack.realBeatTime(withSecondTime: Second(frameTime) / Second(frameRate)))
+    func time(withFrameTime frameTime: Int) -> Rational {
+        if let intFrameRate = Int(exactly: frameRate) {
+            return Rational(frameTime, intFrameRate)
+        } else {
+            return Rational(Real(frameTime) / frameRate)
+        }
     }
-    func basedBeatTime(withSecondTime secondTime: Second) -> Beat {
-        return basedBeatTime(withDoubleBeatTime: tempoTrack.realBeatTime(withSecondTime: secondTime))
+    func time(withFrameTime frameTime: Int) -> Real {
+        return Real(frameTime) / frameRate
     }
-    func secondTime(withBeatTime beatTime: Beat) -> Second {
-        return tempoTrack.secondTime(withBeatTime: beatTime)
+    func frameTime(withTime time: Rational) -> Int {
+        return Int(Real(time) * frameRate)
     }
-    
-    func frameTime(withBeatTime beatTime: Beat) -> FrameTime {
-        return FrameTime(secondTime(withBeatTime: beatTime) * Second(frameRate))
+    func frameTime(withTime time: Real) -> Int {
+        return Int(time * frameRate)
     }
-    func secondTime(withFrameTime frameTime: FrameTime) -> Second {
-        return Second(frameTime) / Second(frameRate)
-    }
-    func frameTime(withSecondTime secondTime: Second) -> FrameTime {
-        return FrameTime(secondTime * Second(frameRate))
-    }
-    func basedBeatTime(withDoubleBeatTime realBeatTime: RealBeat) -> Beat {
-        return Beat(Int(realBeatTime / RealBeat(baseTimeInterval))) * baseTimeInterval
-    }
-    func realBeatTime(withBeatTime beatTime: Beat) -> RealBeat {
-        return RealBeat(beatTime)
-    }
-    func beatTime(withBaseTime baseTime: BaseTime) -> Beat {
+    func time(withBaseTime baseTime: Rational) -> Rational {
         return baseTime * baseTimeInterval
     }
-    func baseTime(withBeatTime beatTime: Beat) -> BaseTime {
-        return beatTime / baseTimeInterval
+    func baseTime(withTime time: Rational) -> Rational {
+        return time / baseTimeInterval
     }
-    func basedBeatTime(withRealBaseTime realBaseTime: RealBaseTime) -> Beat {
-        return Beat(Int(realBaseTime)) * baseTimeInterval
+    func basedTime(withTime time: Real) -> Rational {
+        return Rational(Int(time / Real(baseTimeInterval))) * baseTimeInterval
     }
-    func realBaseTime(withBeatTime beatTime: Beat) -> RealBaseTime {
-        return RealBaseTime(beatTime / baseTimeInterval)
+    func basedTime(withRealBaseTime realBaseTime: Real) -> Rational {
+        return Rational(Int(realBaseTime)) * baseTimeInterval
     }
-    func clipDeltaTime(withTime time: Beat) -> Beat {
-        let ft = baseTime(withBeatTime: time)
-        let fft = ft + BaseTime(1, 2)
-        return fft - floor(fft) < BaseTime(1, 2) ?
-            beatTime(withBaseTime: ceil(ft)) - time :
-            beatTime(withBaseTime: floor(ft)) - time
+    func realBaseTime(withTime time: Rational) -> Real {
+        return Real(time / baseTimeInterval)
+    }
+    func clipDeltaTime(withTime time: Rational) -> Rational {
+        let ft = baseTime(withTime: time)
+        let fft = ft + Rational(1, 2)
+        return fft - floor(fft) < Rational(1, 2) ?
+            self.time(withBaseTime: ceil(ft)) - time :
+            self.time(withBaseTime: floor(ft)) - time
     }
     
-    var curretEditingKeyframeTime: Beat {
-        return editingTrack.animatable
-            .time(atKeyframeIndex: editingTrack.animatable.editingKeyframeIndex)
+    var curretEditingKeyframeTime: Rational {
+        return editingTrack.time(atKeyframeIndex: editingTrack.editingKeyframeIndex)
     }
     var curretEditingKeyframeTimeExpression: Expression {
         let time = curretEditingKeyframeTime
@@ -126,41 +107,14 @@ extension Timeline {
         return Expression.int(iap.integer) + Expression.rational(iap.properFraction)
     }
     
-    var secondTime: (second: Int, frame: Int) {
-        let second = secondTime(withBeatTime: editingTime)
-        let frameTime = FrameTime(second * Second(frameRate))
+    var time: (second: Int, frame: Int) {
+        let second = Real(editingTime)
+        let frameTime = Int(second * frameRate)
         return (Int(second), frameTime - Int(second * frameRate))
     }
-    func secondTime(with frameTime: FrameTime) -> (second: Int, frame: Int) {
+    func time(with frameTime: Int) -> (second: Int, frame: Int) {
         let second = Int(Real(frameTime) / frameRate)
         return (second, frameTime - second)
-    }
-    
-    var soundTuples: [(sound: Sound, startFrameTime: FrameTime)] {
-        return allTracks.reduce(into: [(sound: Sound, startFrameTime: FrameTime)]()) {
-            (values, track) in
-            
-            guard let track = track.soundTrack else { return }
-            values += track.animation.loopFrames.map { lf in
-                let keyframe = track.animation.keyframes[lf.index]
-                return (keyframe.value, frameTime(withBeatTime: keyframe.timing.time))
-            }
-        }
-    }
-    
-    var vtt: Data? {
-        var subtitleTuples = [(subtitle: Subtitle, time: Beat, duration: Beat)]()
-        subtitleTuples = allTracks.reduce(into: subtitleTuples) { (values, track) in
-            guard let track = track.subtitleTrack else { return }
-            let lfs = track.animation.loopFrames
-            values += lfs.enumerated().map { (li, lf) in
-                let subtitle = track.animation.keyframes[lf.index].value
-                let nextTime = li + 1 < lfs.count ?
-                    lfs[li + 1].time : track.animation.duration
-                return (subtitle, lf.time, nextTime - lf.time)
-            }
-        }
-        return Subtitle.vtt(subtitleTuples, timeClosure: { secondTime(withBeatTime: $0) })
     }
 }
 extension Timeline {
@@ -171,7 +125,7 @@ extension Timeline {
                                                        minModel: Rational(1, 100000),
                                                        maxModel: 100000,
                                                        modelInterval: 1, isInfinitesimal: true,
-                                                       unit: " b")
+                                                       unit: " s")
     static let tempoOption = RealOption(defaultModel: 120,
                                         minModel: 1, maxModel: 10000,
                                         modelInterval: 1, exp: 1,
@@ -186,6 +140,9 @@ extension Timeline: ThumbnailViewable {
     }
 }
 extension Timeline: AbstractViewable {
+    var defaultAbstractConstraintSize: Size {
+        return Size(width: 200, height: 70)
+    }
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Timeline>,
                                               type: AbstractType) -> ModelView {
@@ -199,12 +156,7 @@ extension Timeline: AbstractViewable {
 }
 extension Timeline: ObjectViewable {}
 
-/**
- Issue: 複数選択
- Issue: 滑らかなスクロール
- Issue: スクロールの可視性の改善
- */
-final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
+final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {//animationsView
     typealias Model = Timeline
     typealias Binder = T
     var binder: Binder {
@@ -221,17 +173,16 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
     let baseTimeIntervalView: DiscreteRationalView<Binder>
     let curretEditKeyframeTimeView: TextFormView
     
-    let tempoAnimationClipView = View()
-    let tempoAnimationView: AnimationView<BPM, Binder>
-    let soundWaveformView = SoundWaveformView()
-    let cutViewsView = View()
-    let sumKeyTimesClipView = View()
+    var linesTrackViews: [AnimationView<Drawing, Binder>] {
+        didSet {
+            linesTracksClipView.children = linesTrackViews
+        }
+    }
+    let linesTracksClipView = View()
     
+    var timeRulerView = View()
     var baseWidth = 6.0.cg {
         didSet {
-            
-//            tempoAnimationView.baseWidth = baseWidth
-            soundWaveformView.baseWidth = baseWidth
             updateWith(time: time, scrollPoint: Point(x: x(withTime: time), y: _scrollPoint.y))
         }
     }
@@ -249,9 +200,9 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
         view.lineColor = nil
         return view
     } ()
-    let beatsView = View(path: Path())
+    let intTimesView = View(path: Path())
     
-    var baseTimeIntervalBeginSecondTime: Second?
+    var baseTimeIntervalBeginSecondTime: Real?
     
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
@@ -269,21 +220,20 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
             .curretEditingKeyframeTimeExpression.displayString
         curretEditKeyframeTimeView = TextFormView(text: Text(editingTimeString))
         
-        tempoAnimationView
-            = AnimationView(binder: binder,
-                            keyPath: keyPath.appending(path: \Model.tempoTrack.animation),
-                            beginBaseTime: 0, baseTimeInterval: baseTimeInterval,
-                            origin: Point(), height: timeHeight,
-                            smallHeight: sumKeyTimesHeight)
+        linesTrackViews = binder[keyPath: keyPath].allTracks.enumerated().map { (i, _) in
+            return AnimationView(binder: binder,
+                                 keyPath: keyPath.appending(path: \Model.allTracks[i]))
+        }
+        linesTracksClipView.children = linesTrackViews
         
         super.init(isLocked: false)
         children = [timeView, curretEditKeyframeTimeView,
-                    beatsView, sumKeyTimesClipView,
-                    tempoAnimationClipView, baseTimeIntervalView,
-                    cutViewsView]
+                    intTimesView, linesTracksClipView]
         
-        baseTimeIntervalView.notifications.append({ [unowned self] in
-            switch $1 {
+        baseTimeIntervalView.notifications.append({ [unowned self] view, notification in
+            self.linesTrackViews.forEach { $0.baseTimeInterval = view.model }
+            
+            switch notification {
             case .didChange:
                 self.updateWith(time: self.time,
                                 scrollPoint: Point(x: self.x(withTime: self.time), y: 0),
@@ -292,11 +242,10 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
             case .didChangeFromPhase(let phase, _):
                 switch phase {
                 case .began:
-                    self.baseTimeIntervalBeginSecondTime
-                        = self.model.secondTime(withBeatTime: self.model.editingTime)
+                    self.baseTimeIntervalBeginSecondTime = Real(self.model.editingTime)
                 case .changed, .ended:
                     guard let beginSecondTime = self.baseTimeIntervalBeginSecondTime else { return }
-                    self.time = self.model.basedBeatTime(withSecondTime: beginSecondTime)
+                    self.time = self.model.basedTime(withTime: beginSecondTime)
                 }
             }
         })
@@ -309,35 +258,48 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
         let sp = Layouter.basicPadding
         let midX = bounds.midX
         let rightX = leftWidth
-        sumKeyTimesClipView.frame = Rect(x: rightX,
+        linesTracksClipView.frame = Rect(x: sp,
                                          y: sp,
-                                         width: bounds.width - rightX - sp,
-                                         height: sumKeyTimesHeight)
+                                         width: bounds.width - sp * 2,
+                                         height: bounds.height - sp * 2)
         timeView.frame = Rect(x: midX - baseWidth / 2, y: sp,
                               width: baseWidth, height: bounds.height - sp * 2)
-        beatsView.frame = Rect(x: rightX, y: 0,
+        intTimesView.frame = Rect(x: rightX, y: 0,
                                width: bounds.width - rightX, height: bounds.height)
-        let bx = sp + (sumKeyTimesHeight - Layouter.basicValueFrame.height) / 2
-        baseTimeIntervalView.frame = Rect(origin: Point(x: sp, y: bx),
-                                          size: Layouter.basicValueFrame.size)
+        let btims = baseTimeIntervalView.minSize
+        let by = sp + (sumKeyTimesHeight - btims.height) / 2
+        baseTimeIntervalView.frame = Rect(origin: Point(x: sp, y: by),
+                                          size: btims)
         
         _scrollPoint.x = x(withTime: model.editingTime)
-        _intervalScrollPoint.x = x(withTime: time(withLocalX: _scrollPoint.x))
+        _intervalScrollPoint.x = x(withTime: self.time(withLocalX: _scrollPoint.x))
+        
+        var y = linesTracksClipView.bounds.midY
+        linesTrackViews.forEach {
+            let minSize = $0.minSize
+            $0.frame = Rect(origin: Point(x: 0, y: y - minSize.height / 2), size: minSize)
+            y -= minSize.height
+        }
     }
     func updateWithModel() {
         _scrollPoint.x = x(withTime: model.editingTime)
-        _intervalScrollPoint.x = x(withTime: time(withLocalX: _scrollPoint.x))
+        _intervalScrollPoint.x = x(withTime: self.time(withLocalX: _scrollPoint.x))
         
         frameRateView.updateWithModel()
         baseTimeIntervalView.updateWithModel()
-        tempoAnimationView.updateWithModel()
+        
+        linesTrackViews = model.allTracks.enumerated().map { (i, _) in
+            return AnimationView(binder: binder,
+                                 keyPath: keyPath.appending(path: \Model.allTracks[i]))
+        }
+        updateLayout()
     }
     
     private var _scrollPoint = Point(), _intervalScrollPoint = Point()
     var scrollPoint: Point {
         get { return _scrollPoint }
         set {
-            let newTime = time(withLocalX: newValue.x)
+            let newTime = self.time(withLocalX: newValue.x)
             if newTime != time {
                 updateWith(time: newTime, scrollPoint: newValue)
             } else {
@@ -345,7 +307,7 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
             }
         }
     }
-    var time: Beat {
+    var time: Rational {
         get { return model.editingTime }
         set {
             if newValue != model.editingTime {
@@ -356,13 +318,13 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
     private func updateWithTime() {
         updateWith(time: time, scrollPoint: _scrollPoint)
     }
-    private func updateNoIntervalWith(time: Beat) {
+    private func updateNoIntervalWith(time: Rational) {
         if time != model.editingTime {
             updateWith(time: time, scrollPoint: Point(x: x(withTime: time), y: 0),
                        isIntervalScroll: false)
         }
     }
-    private func updateWith(time: Beat, scrollPoint: Point,
+    private func updateWith(time: Rational, scrollPoint: Point,
                             isIntervalScroll: Bool = true, alwaysUpdateCutIndex: Bool = false) {
         _scrollPoint = scrollPoint
         _intervalScrollPoint = isIntervalScroll ?
@@ -380,40 +342,35 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
         updateViewClosure?((isCut, isTransform, isKeyframe))
     }
     private func intervalScrollPoint(with scrollPoint: Point) -> Point {
-        return Point(x: x(withTime: time(withLocalX: scrollPoint.x)), y: 0)
+        return Point(x: x(withTime: self.time(withLocalX: scrollPoint.x)), y: 0)
     }
     
     private func updateWithScrollPosition() {
-        let minX = localDeltaX
-        soundWaveformView.frame.origin
-            = Point(x: minX, y: cutViewsView.frame.height - soundWaveformView.frame.height)
-//        tempoAnimationView.frame.origin = Point(x: minX, y: 0)
-        
-        updateBeats()
+        updateIntTimes()
         updateTimeRuler()
     }
     
     func updateTimeRuler() {
-//        let minTime = time(withLocalX: convertToLocalX(bounds.minX + leftWidth))
-//        let maxTime = time(withLocalX: convertToLocalX(bounds.maxX))
-//        let minSecond = Int((model.secondTime(withBeatTime: minTime)).rounded(.down))
-//        let maxSecond = Int((model.secondTime(withBeatTime: maxTime)).rounded(.up))
-//        guard minSecond < maxSecond else {
-//            timeRulerView.scaleStringViews = []
-//            return
-//        }
-//        timeRulerView.scrollPosition.x = localDeltaX
-//        timeRulerView.scaleStringViews = (minSecond...maxSecond).compactMap {
-//            guard !(maxSecond - minSecond > Int(bounds.width / 40) && $0 % 5 != 0) else {
-//                return nil
-//            }
-//            let timeView = TimelineView.timeView(withSecound: $0)
-//            timeView.fillColor = nil
-//            let secondX = x(withTime: model.basedBeatTime(withSecondTime: Second($0)))
-//            timeView.frame.origin = Point(x: secondX - timeView.frame.width / 2,
-//                                          y: Layouter.smallPadding)
-//            return timeView
-//        }
+        let minTime = self.time(withLocalX: convertToLocalX(bounds.minX + leftWidth))
+        let maxTime = self.time(withLocalX: convertToLocalX(bounds.maxX))
+        let minSecond = Int(Real(minTime).rounded(.down))
+        let maxSecond = Int(Real(maxTime).rounded(.up))
+        guard minSecond < maxSecond else {
+            timeRulerView.children = []
+            return
+        }
+        timeRulerView.position.x = localDeltaX
+        timeRulerView.children = (minSecond...maxSecond).compactMap {
+            guard !(maxSecond - minSecond > Int(bounds.width / 40) && $0 % 5 != 0) else {
+                return nil
+            }
+            let timeView = TimelineView.timeView(withSecound: $0)
+            timeView.fillColor = nil
+            let secondX = x(withTime: model.basedTime(withTime: Real($0)))
+            timeView.frame.origin = Point(x: secondX - timeView.frame.width / 2,
+                                          y: Layouter.smallPadding)
+            return timeView
+        }
     }
     static func timeView(withSecound i: Int) -> TextFormView {
         let minute = i / 60
@@ -424,51 +381,52 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
         return TextFormView(text: Text(string), font: .small)
     }
     
-    let beatsLineWidth = 1.0.cg, barLineWidth = 3.0.cg, beatsPerBar = 0
-    func updateBeats() {
-        guard baseTimeInterval < 1 else {
-            beatsView.path = Path()
+    let intTimesLineWidth = 1.0.cg, barLineWidth = 3.0.cg, intTimesPerBar = 0
+    func updateIntTimes() {
+        guard model.baseTimeInterval < 1 else {
+            intTimesView.path = Path()
             return
         }
         let minX = localDeltaX
-        let minTime = time(withLocalX: convertToLocalX(bounds.minX + leftWidth))
-        let maxTime = time(withLocalX: convertToLocalX(bounds.maxX))
+        let minTime = self.time(withLocalX: convertToLocalX(bounds.minX + leftWidth))
+        let maxTime = self.time(withLocalX: convertToLocalX(bounds.maxX))
         let intMinTime = floor(minTime).integralPart, intMaxTime = ceil(maxTime).integralPart
         guard intMinTime < intMaxTime else {
-            beatsView.path = Path()
+            intTimesView.path = Path()
             return
         }
         let padding = Layouter.basicPadding
         let rects: [Rect] = (intMinTime...intMaxTime).map {
-            let i0x = x(withDoubleBeatTime: RealBeat($0)) + minX
-            let w = beatsPerBar != 0 && $0 % beatsPerBar == 0 ? barLineWidth : beatsLineWidth
+            let i0x = x(withTime: Real($0)) + minX
+            let w = intTimesPerBar != 0 && $0 % intTimesPerBar == 0 ?
+                barLineWidth : intTimesLineWidth
             return Rect(x: i0x - w / 2, y: padding, width: w, height: bounds.height - padding * 2)
         }
         var path = Path()
         path.append(rects)
-        beatsView.path = path
+        intTimesView.path = path
     }
     
-    func time(withLocalX x: Real, isBased: Bool = true) -> Beat {
+    func time(withLocalX x: Real, isBased: Bool = true) -> Rational {
         return isBased ?
-            model.baseTimeInterval * Beat(Int((x / baseWidth).rounded())) :
-            model.basedBeatTime(withDoubleBeatTime:
-                RealBeat(x / baseWidth) * RealBeat(model.baseTimeInterval))
+            model.baseTimeInterval * Rational(Int((x / baseWidth).rounded())) :
+            model.basedTime(withTime:
+                Real(x / baseWidth) * Real(model.baseTimeInterval))
     }
-    func x(withTime time: Beat) -> Real {
-        return model.realBeatTime(withBeatTime: time / model.baseTimeInterval) * baseWidth
+    func x(withTime time: Rational) -> Real {
+        return Real(time / model.baseTimeInterval) * baseWidth
     }
-    func realBeatTime(withLocalX x: Real, isBased: Bool = true) -> RealBeat {
-        return RealBeat(isBased ? (x / baseWidth).rounded() : x / baseWidth)
-            * RealBeat(model.baseTimeInterval)
+    func realTime(withLocalX x: Real, isBased: Bool = true) -> Real {
+        return Real(isBased ? (x / baseWidth).rounded() : x / baseWidth)
+            * Real(model.baseTimeInterval)
     }
-    func x(withDoubleBeatTime realBeatTime: RealBeat) -> Real {
-        return Real(realBeatTime * RealBeat(model.baseTimeInterval.inversed!)) * baseWidth
+    func x(withTime time: Real) -> Real {
+        return Real(time * Real(model.baseTimeInterval.inversed!)) * baseWidth
     }
-    func realBaseTime(withLocalX x: Real) -> RealBaseTime {
-        return RealBaseTime(x / baseWidth)
+    func realBaseTime(withLocalX x: Real) -> Real {
+        return Real(x / baseWidth)
     }
-    func localX(withRealBaseTime realBaseTime: RealBaseTime) -> Real {
+    func localX(withRealBaseTime realBaseTime: Real) -> Real {
         return Real(realBaseTime) * baseWidth
     }
     var editX: Real {
@@ -490,21 +448,7 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
         return Point(x: convertFromLocalX(p.x), y: p.y)
     }
     
-    var baseTimeInterval = Beat(1, 16) {
-        didSet {
-            
-//            tempoAnimationView.baseTimeInterval = baseTimeInterval
-            soundWaveformView.baseTimeInterval = baseTimeInterval
-            
-            baseTimeIntervalView.model = baseTimeInterval
-            
-            model.baseTimeInterval = baseTimeInterval
-        }
-    }
-    
-    private var isScrollTrack = false
-    private weak var scrollCutView: TrackItemView<Binder>?
-    func scroll(for p: Point, time: Second, scrollDeltaPoint: Point,
+    func scroll(for p: Point, time: Real, scrollDeltaPoint: Point,
                 phase: Phase, momentumPhase: Phase?) {
         scrollTime(for: p, time: time, scrollDeltaPoint: scrollDeltaPoint,
                    phase: phase, momentumPhase: momentumPhase)
@@ -512,22 +456,22 @@ final class TimelineView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     private var indexScrollDeltaPosition = Point(), indexScrollBeginX = 0.0.cg
     private var indexScrollIndex = 0, indexScrollWidth = 14.0.cg
-    func indexScroll(for p: Point, time: Second, scrollDeltaPoint: Point,
+    func indexScroll(for p: Point, time: Real, scrollDeltaPoint: Point,
                      phase: Phase, momentumPhase: Phase?) {
         guard momentumPhase == nil else { return }
         switch phase {
         case .began:
             indexScrollDeltaPosition = Point()
-            indexScrollIndex = model.editingTrack.animatable.editingKeyframeIndex
+            indexScrollIndex = model.editingTrack.editingKeyframeIndex
         case .changed, .ended:
             indexScrollDeltaPosition += scrollDeltaPoint
             let di = Int(-indexScrollDeltaPosition.x / indexScrollWidth)
             let li = indexScrollIndex + di
-            model.editingTime = model.editingTrack.animatable.time(atLoopFrameIndex: li)
+            model.editingTime = model.editingTrack.time(atLoopFrameIndex: li)
         }
     }
     
-    func scrollTime(for p: Point, time: Second, scrollDeltaPoint: Point,
+    func scrollTime(for p: Point, time: Real, scrollDeltaPoint: Point,
                     phase: Phase, momentumPhase: Phase?) {
         let maxX = self.x(withTime: model.duration)
         let x = (scrollPoint.x - scrollDeltaPoint.x).clip(min: 0, max: maxX)

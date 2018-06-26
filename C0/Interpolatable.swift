@@ -20,15 +20,18 @@
 import CoreGraphics
 
 protocol Interpolatable {
-    static var defaultInterpolation: KeyframeTiming.Interpolation { get }
+    static var defaultInterpolation: Interpolation { get }
     static func step(_ f0: Self) -> Self
     static func linear(_ f0: Self, _ f1: Self, t: Real) -> Self
-    static func firstMonospline(_ f1: Self, _ f2: Self, _ f3: Self, with ms: Monospline) -> Self
-    static func monospline(_ f0: Self, _ f1: Self, _ f2: Self, _ f3: Self, with ms: Monospline) -> Self
-    static func lastMonospline(_ f0: Self, _ f1: Self, _ f2: Self, with ms: Monospline) -> Self
+    static func firstMonospline(_ f1: Self, _ f2: Self, _ f3: Self,
+                                with ms: Monospline) -> Self
+    static func monospline(_ f0: Self, _ f1: Self, _ f2: Self, _ f3: Self,
+                           with ms: Monospline) -> Self
+    static func lastMonospline(_ f0: Self, _ f1: Self, _ f2: Self,
+                               with ms: Monospline) -> Self
 }
 extension Interpolatable {
-    static var defaultInterpolation: KeyframeTiming.Interpolation {
+    static var defaultInterpolation: Interpolation {
         return .spline
     }
     static func step (_ f0: Self) -> Self {
@@ -49,7 +52,8 @@ extension Array: Interpolatable where Element: Interpolatable {
         }
     }
     static func firstMonospline(_ f1: [Element],
-                                _ f2: [Element], _ f3: [Element], with ms: Monospline) -> [Element] {
+                                _ f2: [Element], _ f3: [Element],
+                                with ms: Monospline) -> [Element] {
         guard !f1.isEmpty else {
             return f1
         }
@@ -63,7 +67,8 @@ extension Array: Interpolatable where Element: Interpolatable {
         }
     }
     static func monospline(_ f0: [Element], _ f1: [Element],
-                           _ f2: [Element], _ f3: [Element], with ms: Monospline) -> [Element] {
+                           _ f2: [Element], _ f3: [Element],
+                           with ms: Monospline) -> [Element] {
         guard !f1.isEmpty else {
             return f1
         }
@@ -78,7 +83,8 @@ extension Array: Interpolatable where Element: Interpolatable {
         }
     }
     static func lastMonospline(_ f0: [Element],
-                               _ f1: [Element], _ f2: [Element], with ms: Monospline) -> [Element] {
+                               _ f1: [Element], _ f2: [Element],
+                               with ms: Monospline) -> [Element] {
         guard !f1.isEmpty else {
             return f1
         }
@@ -237,3 +243,50 @@ struct Monospline {
         return fb - fa
     }
 }
+
+enum Interpolation: Int8, Codable {
+    case spline, bound, linear, step
+}
+extension Interpolation: Referenceable {
+    static let name = Text(english: "Interpolation", japanese: "補間")
+}
+extension Interpolation: DisplayableText {
+    var displayText: Text {
+        switch self {
+        case .spline: return Text(english: "Spline", japanese: "スプライン")
+        case .bound: return Text(english: "Bound", japanese: "バウンド")
+        case .linear: return Text(english: "Linear", japanese: "リニア")
+        case .step: return Text(english: "Step", japanese: "ステップ")
+        }
+    }
+    static var displayTexts: [Text] {
+        return [spline.displayText,
+                bound.displayText,
+                linear.displayText,
+                step.displayText]
+    }
+}
+extension Interpolation {
+    static var defaultOption: EnumOption<Interpolation> {
+        return EnumOption(defaultModel: Interpolation.spline,
+                          cationModels: [],
+                          indexClosure: { Int($0) },
+                          rawValueClosure: { Interpolation.RawValue($0) },
+                          names: Interpolation.displayTexts)
+    }
+}
+extension Interpolation: AbstractViewable {
+    func abstractViewWith
+        <T : BinderProtocol>(binder: T,
+                             keyPath: ReferenceWritableKeyPath<T, Interpolation>,
+                             type: AbstractType) -> ModelView {
+        switch type {
+        case .normal:
+            return EnumView(binder: binder, keyPath: keyPath,
+                            option: Interpolation.defaultOption)
+        case .mini:
+            return MiniView(binder: binder, keyPath: keyPath)
+        }
+    }
+}
+extension Interpolation: ObjectViewable {}

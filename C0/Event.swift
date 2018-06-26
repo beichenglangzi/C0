@@ -23,7 +23,7 @@ enum Phase: Int8, Codable {
 
 protocol EventValueProtocol {
     var rootLocation: Point { get }
-    var time: Second { get }
+    var time: Real { get }
     var phase: Phase { get }
 }
 protocol EventTypeProtocol {
@@ -83,7 +83,7 @@ struct InputEvent: Event {
         var name: Text
     }
     struct Value: EventValueProtocol {
-        let rootLocation: Point, time: Second, pressure: Real, phase: Phase
+        let rootLocation: Point, time: Real, pressure: Real, phase: Phase
     }
     
     var type: EventType, value: Value
@@ -98,7 +98,7 @@ struct DragEvent: Event {
         var name: Text
     }
     struct Value: EventValueProtocol {
-        var rootLocation: Point, time: Second, pressure: Real, phase: Phase
+        var rootLocation: Point, time: Real, pressure: Real, phase: Phase
     }
     
     var type: EventType, value: Value
@@ -113,7 +113,7 @@ struct ScrollEvent: Event {
         var name: Text
     }
     struct Value: EventValueProtocol {
-        var rootLocation: Point, time: Second, scrollDeltaPoint: Point
+        var rootLocation: Point, time: Real, scrollDeltaPoint: Point
         var phase: Phase, momentumPhase: Phase?
     }
     
@@ -127,7 +127,7 @@ struct PinchEvent: Event {
         var name: Text
     }
     struct Value: EventValueProtocol {
-        var rootLocation: Point, time: Second, magnification: Real, phase: Phase
+        var rootLocation: Point, time: Real, magnification: Real, phase: Phase
     }
     
     var type: EventType, value: Value
@@ -140,7 +140,7 @@ struct RotateEvent: Event {
         var name: Text
     }
     struct Value: EventValueProtocol {
-        var rootLocation: Point, time: Second, rotationQuantity: Real, phase: Phase
+        var rootLocation: Point, time: Real, rotationQuantity: Real, phase: Phase
     }
     
     var type: EventType, value: Value

@@ -30,7 +30,13 @@ struct Screen {
  Issue: リニアワークフロー、マクロ拡散光
  */
 class View {
-    private(set) weak var parent: View?
+    private(set) weak var parent: View? {
+        didSet {
+            if parent == nil {
+                
+            }
+        }
+    }
     private var _children = [View]()
     var children: [View] {
         get { return _children }
@@ -158,10 +164,8 @@ class View {
         didSet {
             guard transform != oldValue else { return }
             CATransaction.disableAnimation {
-//                caLayer.position = transform.translation
                 caLayer.transform
                     = CATransform3DMakeAffineTransform(transform.affineTransform)
-//                parent?.updateLayout()
             }
         }
     }
@@ -193,41 +197,25 @@ class View {
         get { return caLayer.isHidden }
         set { caLayer.isHidden = newValue }
     }
-    var effect = Effect() {
-        didSet {
-            guard effect != oldValue else { return }
-            
-            if effect.opacity != oldValue.opacity {
-                caLayer.opacity = Float(effect.opacity)
-            }
-            if effect.blurRadius != oldValue.blurRadius {
-                if effect.blurRadius > 0 {
-                    if let filter = CIFilter(name: "CIGaussianBlur") {
-                        filter.setValue(Float(effect.blurRadius), forKey: kCIInputRadiusKey)
-                        caLayer.filters = [filter]
-                    }
-                } else if caLayer.filters != nil {
-                    caLayer.filters = nil
-                }
-            }
-            if effect.blendType != oldValue.blendType {
-                switch effect.blendType {
-                case .normal: caLayer.compositingFilter = nil
-                case .addition: caLayer.compositingFilter = CIFilter(name: " CIAdditionCompositing")
-                case .subtract: caLayer.compositingFilter = CIFilter(name: "CISubtractBlendMode")
-                }
+    
+    var lineColor: Color? {
+        get { return lineColorComposition?.value }
+        set {
+            if let lineColor = newValue {
+                lineColorComposition = Composition(value: lineColor)
+            } else {
+                lineColorComposition = nil
             }
         }
     }
-    
-    var lineColor: Color? = .getSetBorder {
+    var lineColorComposition: Composition<Color>? = Composition(value: Color.getSetBorder) {
         didSet {
-            guard lineColor != oldValue else { return }
-            set(lineWidth: lineColor != nil ? lineWidth : 0)
+            guard lineColorComposition != oldValue else { return }
+            set(lineWidth: lineColorComposition != nil ? lineWidth : 0)
             if let caShapeLayer = caLayer as? CAShapeLayer {
-                caShapeLayer.strokeColor = lineColor?.cg
+                caShapeLayer.strokeColor = lineColorComposition?.cgColor
             } else {
-                caLayer.borderColor = lineColor?.cg
+                caLayer.borderColor = lineColorComposition?.cgColor
             }
         }
     }
@@ -245,12 +233,22 @@ class View {
     }
     
     var fillColor: Color? {
-        didSet {
-            guard fillColor != oldValue else { return }
-            if let caShapeLayer = caLayer as? CAShapeLayer {
-                caShapeLayer.fillColor = fillColor?.cg
+        get { return fillColorComposition?.value }
+        set {
+            if let fillColor = newValue {
+                fillColorComposition = Composition(value: fillColor)
             } else {
-                caLayer.backgroundColor = fillColor?.cg
+                fillColorComposition = nil
+            }
+        }
+    }
+    var fillColorComposition: Composition<Color>? {
+        didSet {
+            guard fillColorComposition != oldValue else { return }
+            if let caShapeLayer = caLayer as? CAShapeLayer {
+                caShapeLayer.fillColor = fillColorComposition?.cgColor
+            } else {
+                caLayer.backgroundColor = fillColorComposition?.cgColor
             }
         }
     }
@@ -269,7 +267,7 @@ class View {
             caGradientLayer.colors = nil
             caGradientLayer.locations = nil
         } else {
-            caGradientLayer.colors = gradient.values.map { $0.color.cg }
+            caGradientLayer.colors = gradient.values.map { $0.colorComposition.cgColor }
             caGradientLayer.locations = gradient.values.map { NSNumber(value: Double($0.location)) }
         }
         caGradientLayer.startPoint = gradient.startPoint
@@ -284,6 +282,7 @@ class View {
         }
         set {
             caLayer.contents = newValue?.cg
+            caLayer.contentsGravity = kCAGravityResizeAspect
             if newValue != nil {
                 caLayer.minificationFilter = kCAFilterTrilinear
                 caLayer.magnificationFilter = kCAFilterTrilinear
@@ -367,7 +366,7 @@ class View {
         self.gradient = gradient
         View.update(with: gradient, in: caGradientLayer)
     }
-    init(path: Path, isLocked: Bool = true) {
+    init(path: Path, isLocked: Bool = true, lineColor: Color? = nil) {
         self.isLocked = isLocked
         let caShapeLayer = CAShapeLayer()
         var actions = CALayer.disabledAnimationActions
@@ -398,12 +397,11 @@ class View {
             self.drawClosure?(ctx, self, ctx.boundingBoxOfClipPath)
         }
     }
-}
-extension View {
+    
     func contains(_ p: Point) -> Bool {
         return !isLocked && !isHidden && containsPath(p)
     }
-    private func containsPath(_ p: Point) -> Bool {
+    func containsPath(_ p: Point) -> Bool {
         if !bounds.isNull {
             return bounds.contains(p)
         } else {
@@ -526,14 +524,14 @@ extension View: Equatable {
 extension View {
     static var selection: View {
         let view = View()
-        view.fillColor = .select
-        view.lineColor = .selectBorder
+        view.fillColorComposition = .select
+        view.lineColorComposition = .selectBorder
         return view
     }
     static var deselection: View {
         let view = View()
-        view.fillColor = .deselect
-        view.lineColor = .deselectBorder
+        view.fillColorComposition = .deselect
+        view.lineColorComposition = .deselectBorder
         return view
     }
     static func knob(radius: Real = 5, lineWidth: Real = 1) -> View {
@@ -591,6 +589,7 @@ private final class C0DrawLayer: CALayer {
         if let backgroundColor = backgroundColor {
             ctx.setFillColor(backgroundColor)
             ctx.fill(ctx.boundingBoxOfClipPath)
+            ctx.setAllowsFontSubpixelQuantization(false)
         }
         drawClosure?(ctx)
     }
@@ -659,15 +658,14 @@ extension CGContext {
 }
 
 final class DisplayLink {
-    var closure: ((Second) -> ())?
+    var closure: ((Real) -> ())?
     
     var isRunning: Bool {
-        return false
-//        return CVDisplayLinkIsRunning(cv)
+        return CVDisplayLinkIsRunning(cv)
     }
     
-    var time = Second(0)
-    var frameRate = FPS(60) {
+    var time = 0.0.cg
+    var frameRate = 60.0.cg {
         didSet {
             distanceTime = TimeInterval(1 / frameRate)
         }
@@ -677,74 +675,64 @@ final class DisplayLink {
             oldTimestamp = beginTimestamp
         }
     }
-    private var distanceTime = TimeInterval(1 / FPS(60))
-//    private let cv: CVDisplayLink
-//    private let source: DispatchSourceUserDataAdd
+    private var distanceTime = TimeInterval(1 / 60.0.cg)
+    private let cv: CVDisplayLink
+    private let source: DispatchSourceUserDataAdd
     private var oldTimestamp = Date()
     
     init?(queue: DispatchQueue = DispatchQueue.main) {
-//        source = DispatchSource.makeUserDataAddSource(queue: queue)
-//        var acv: CVDisplayLink?
-//        var success = CVDisplayLinkCreateWithActiveCGDisplays(&acv)
-//        guard let cv = acv else {
-//            return nil
-//        }
-////        func callback(displayLink: CVDisplayLink,
-////                      inNow: UnsafePointer<CVTimeStamp>, inOutputTime: UnsafePointer<CVTimeStamp>,
-////                      flagsIn: CVOptionFlags, flagsOut: UnsafeMutablePointer<CVOptionFlags>,
-////                      displayLinkContext: UnsafeMutableRawPointer?) -> CVReturn {
-////            guard let displayLinkContext = displayLinkContext else { return kCVReturnSuccess }
-////            let unmanaged = Unmanaged<DispatchSourceUserDataAdd>.fromOpaque(displayLinkContext)
-////            unmanaged.takeUnretainedValue().add(data: 1)
-////            return kCVReturnSuccess
-////        }
-//        success = CVDisplayLinkSetOutputCallback(cv,
-//                                                 { (displayLink: CVDisplayLink,
-//                                                    inNow: UnsafePointer<CVTimeStamp>,
-//                                                    inOutputTime: UnsafePointer<CVTimeStamp>,
-//                                                    flagsIn: CVOptionFlags,
-//                                                    flagsOut: UnsafeMutablePointer<CVOptionFlags>,
-//                                                    displayLinkContext: UnsafeMutableRawPointer?)
-//                                                    -> CVReturn in
-//                                                        guard let displayLinkContext = displayLinkContext else { return kCVReturnSuccess }
-//                                                        let unmanaged = Unmanaged<DispatchSourceUserDataAdd>.fromOpaque(displayLinkContext)
-//                                                        unmanaged.takeUnretainedValue().add(data: 1)
-//                                                        return kCVReturnSuccess
-//                                                    },
-//                                                    Unmanaged.passUnretained(source).toOpaque())
-//        guard success == kCVReturnSuccess else {
-//            return nil
-//        }
-//        success = CVDisplayLinkSetCurrentCGDisplay(cv, CGMainDisplayID())
-//        guard success == kCVReturnSuccess else {
-//            return nil
-//        }
-//        self.cv = cv
-//
-//        source.setEventHandler { [weak self] in
-//            guard let link = self else { return }
-//            let currentTimestamp = Date()
-//            let d = currentTimestamp.timeIntervalSince(link.oldTimestamp)
-//            if d >= link.distanceTime {
-//                link.closure?(link.time)
-//                link.oldTimestamp = currentTimestamp
-//            }
-//        }
+        return nil//
+        source = DispatchSource.makeUserDataAddSource(queue: queue)
+        var aCV: CVDisplayLink?
+        var success = CVDisplayLinkCreateWithActiveCGDisplays(&aCV)
+        guard success == kCVReturnSuccess, let cv = aCV else {
+            return nil
+        }
+        func callback(displayLink: CVDisplayLink,
+                      inNow: UnsafePointer<CVTimeStamp>, inOutputTime: UnsafePointer<CVTimeStamp>,
+                      flagsIn: CVOptionFlags, flagsOut: UnsafeMutablePointer<CVOptionFlags>,
+                      displayLinkContext: UnsafeMutableRawPointer?) -> CVReturn {
+            guard let displayLinkContext = displayLinkContext else { return kCVReturnError }
+            let unmanaged = Unmanaged<DispatchSourceUserDataAdd>.fromOpaque(displayLinkContext)
+            unmanaged.takeUnretainedValue().add(data: 1)
+            return kCVReturnSuccess
+        }
+        success = CVDisplayLinkSetOutputCallback(cv,
+                                                 callback,
+                                                 Unmanaged.passUnretained(source).toOpaque())
+        guard success == kCVReturnSuccess else {
+            return nil
+        }
+        success = CVDisplayLinkSetCurrentCGDisplay(cv, CGMainDisplayID())
+        guard success == kCVReturnSuccess else {
+            return nil
+        }
+        self.cv = cv
+
+        source.setEventHandler { [weak self] in
+            guard let link = self else { return }
+            let currentTimestamp = Date()
+            let d = currentTimestamp.timeIntervalSince(link.oldTimestamp)
+            if d >= link.distanceTime {
+                link.closure?(link.time)
+                link.oldTimestamp = currentTimestamp
+            }
+        }
     }
     deinit {
-//        stop()
+        stop()
     }
     
     func start() {
-//        guard !isRunning else { return }
-//        oldTimestamp = Date()
-//        CVDisplayLinkStart(cv)
-//        source.resume()
+        guard !isRunning else { return }
+        oldTimestamp = Date()
+        CVDisplayLinkStart(cv)
+        source.resume()
     }
     func stop() {
-//        guard isRunning else { return }
-//        CVDisplayLinkStop(cv)
-//        source.cancel()
+        guard isRunning else { return }
+        CVDisplayLinkStop(cv)
+        source.cancel()
     }
 }
 

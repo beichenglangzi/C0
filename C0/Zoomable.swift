@@ -110,12 +110,13 @@ final class ZoomableSender: SubSender {
                     }
                 }
                 
+                zoomers = receivers.map { Zoomer(zoomableView: $0) }
+                receivers.forEach {
+                    $0.captureTransform(to: sender.indicatedVersionView.version)
+                }
                 if let views = zoomingView.children as? [View & Movable] {
                     sender.beganMovingOrigins = views.map { $0.movingOrigin }
-                    zoomers = receivers.map { Zoomer(zoomableView: $0) }
-                    receivers.forEach {
-                        $0.captureTransform(to: sender.indicatedVersionView.version)
-                    }
+
                 }
             }
             
@@ -188,12 +189,12 @@ final class ZoomableSender: SubSender {
         }
         
         var isEndSnap = true
-        var minZ = -5.0.cg, maxZ = 5.0.cg, zInterval = 1.0.cg
+        var minZ = -6.0.cg, maxZ = 6.0.cg, zInterval = 0.02.cg
         var correction = 3.0.cg
         
         private var beganZ = 0.0.cg, z = 0.0.cg
         
-        func zoom(for p: Point, time: Second, magnification: Real, _ phase: Phase) {
+        func zoom(for p: Point, time: Real, magnification: Real, _ phase: Phase) {
             switch phase {
             case .began:
                 beganZ = zoomableView.zoomingTransform.z
@@ -201,7 +202,7 @@ final class ZoomableSender: SubSender {
             case .changed:
                 zoom(at: p) {
                     z += magnification * correction
-                    let newZ = (beganZ + z).interval(scale: 0.02).clip(min: minZ, max: maxZ)
+                    let newZ = (beganZ + z).interval(scale: zInterval).clip(min: minZ, max: maxZ)
                     zoomableView.zoomingTransform.z = newZ
                 }
             case .ended:
@@ -209,6 +210,7 @@ final class ZoomableSender: SubSender {
                     zoomableView.zoomingTransform.translation
                         = zoomableView.zoomingTransform.translation.rounded()
                 }
+                //clipToScreen
             }
         }
     }
@@ -230,7 +232,7 @@ final class ZoomableSender: SubSender {
         var snapRotations: [Real] = [-.pi, 0.0, .pi]
         var correction = 1.0.cg / (4.2 * .pi)
         private var isBlockRotation = false, blockRotation = 0.0.cg, oldRotation = 0.0.cg
-        func rotate(for p: Point, time: Second, rotationQuantity: Real, _ phase: Phase) {
+        func rotate(for p: Point, time: Real, rotationQuantity: Real, _ phase: Phase) {
             let rotation = zoomableView.zoomingTransform.rotation
             switch phase {
             case .began:
@@ -266,7 +268,7 @@ final class ZoomableSender: SubSender {
             self.scrollableView = scrollableView
         }
         
-        func bindIndex(for p: Point, time: Second,
+        func bindIndex(for p: Point, time: Real,
                        scrollDeltaPoint: Point, _ phase: Phase) {
             
         }

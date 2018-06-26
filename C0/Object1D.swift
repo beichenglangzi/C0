@@ -73,7 +73,6 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: ModelView, B
                                       paddingSize: Size(width: 3, height: 1))
         
         super.init(isLocked: false)
-        lineColor = .getBorder
         isClipped = true
         children = [optionTextView]
     }
@@ -351,36 +350,6 @@ extension Slidable1DView: BasicSlidablePointMovable {
         notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }
 }
-extension Slidable1DView {
-    private static func opacityViewViews(with bounds: Rect,
-                                         checkerWidth: Real, padding: Real) -> [View] {
-        let frame = Rect(x: padding, y: bounds.height / 2 - checkerWidth,
-                         width: bounds.width - padding * 2, height: checkerWidth * 2)
-        
-        let values = [Gradient.Value(color: .subContent, location: 0),
-                      Gradient.Value(color: .content, location: 1)]
-        let backgroundView = View(gradient: Gradient(values: values,
-                                                     startPoint: Point(x: 0, y: 0),
-                                                     endPoint: Point(x: 1, y: 0)))
-        backgroundView.frame = frame
-        backgroundView.lineColor = nil
-        
-        let checkerboardView = View(path: Path.checkerboard(with: Size(square: checkerWidth),
-                                                            in: frame))
-        checkerboardView.lineColor = nil
-        checkerboardView.fillColor = .content
-        
-        return [backgroundView, checkerboardView]
-    }
-    func updateOpacityViews(withFrame frame: Rect) {
-        guard self.frame != frame else { return }
-        self.frame = frame
-        let checkerWidth = knobView.bounds.width / 2
-        backgroundViews = Slidable1DView.opacityViewViews(with: frame,
-                                                          checkerWidth: checkerWidth,
-                                                          padding: padding)
-    }
-}
 
 final class Circular1DView<T: Object1DOption, U: BinderProtocol>
 : ModelView, Slidable, BindableReceiver {
@@ -443,7 +412,7 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>
         self.width = width
         knobView = View.knob()
         
-        super.init(path: Path(), isLocked: false)
+        super.init(path: Path(), isLocked: false, lineColor: .getSetBorder)
         fillColor = nil
         lineWidth = 0.5
         append(child: knobView)
@@ -457,8 +426,16 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>
         let fp1 = cp + Point(x: mr, y: 0)
         let arc1 = PathLine.Arc(radius: mr, startAngle: 2 * .pi, endAngle: 0)
         var path = Path()
-        
         path.append(PathLine(firstPoint: fp0, elements: [.arc(arc0)]))
+        path.append(PathLine(firstPoint: fp1, elements: [.arc(arc1)]))
+        return path
+    }
+    func circularInternalPath(withBounds bounds: Rect) -> Path {
+        let cp = Point(x: bounds.midX, y: bounds.midY), r = bounds.width / 2
+        let mr = r - width
+        let fp1 = cp + Point(x: mr, y: 0)
+        let arc1 = PathLine.Arc(radius: mr, startAngle: 2 * .pi, endAngle: 0)
+        var path = Path()
         path.append(PathLine(firstPoint: fp1, elements: [.arc(arc1)]))
         return path
     }

@@ -303,7 +303,7 @@ extension StringView: KeyInputtable {
         let endClosure: () -> () = { [unowned self] in
             self.isinputting = false
         }
-        timer.run(after: 1, dispatchQueue: .main,
+        timer.run(afterTime: 1, dispatchQueue: .main,
                   beginClosure: beginClosure,
                   waitClosure: waitClosure,
                   endClosure: endClosure)

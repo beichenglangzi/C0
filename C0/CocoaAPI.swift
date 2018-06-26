@@ -37,7 +37,7 @@ struct Hash {//swift 4.2
 
 private struct C0Preference: Codable {
     var isFullScreen = false
-    var windowFrame = NSRect()//
+    var windowFrame = NSRect()
 }
 
 @objc(C0Application)
@@ -300,11 +300,14 @@ extension NSPasteboard {
             urls.forEach {
                 if let image = Image(url: $0) {
                     copiedObjects.append(Object(image))
+                } else {
+                    copiedObjects.append(Object($0))
                 }
-                copiedObjects.append(Object($0))
             }
         }
-        if let string = string(forType: .string) {
+        if !copiedObjects.isEmpty {
+            return copiedObjects
+        } else if let string = string(forType: .string) {
             copiedObjects.append(Object(string))
         } else if let types = types {
             for type in types {
@@ -417,25 +420,11 @@ final class C0View: NSView, NSTextInputClient {
 
         //test
         desktop.objects.values.append(Layout(Object(Scene())))
-        desktop.objects.values.append(Layout(Object(Timeline())))
-        desktop.objects.values.append(Layout(Object(Sound())))
-        desktop.objects.values.append(Layout(Object(Subtitle())))
-        desktop.objects.values.append(Layout(Object(Canvas())))
-        desktop.objects.values.append(Layout(Object(CellGroup())))
-        desktop.objects.values.append(Layout(Object(Cell())))
-        desktop.objects.values.append(Layout(Object(Material())))
-        desktop.objects.values.append(Layout(Object(Material.MaterialType.normal)))
-        desktop.objects.values.append(Layout(Object(BlendType.addition)))
-        desktop.objects.values.append(Layout(Object(Effect())))
+        desktop.objects.values.append(Layout(Object(Animation<Drawing>())))
+        desktop.objects.values.append(Layout(Object(Drafting<Drawing>())))
         desktop.objects.values.append(Layout(Object(Drawing())))
-        desktop.objects.values.append(Layout(Object(Line())))
         desktop.objects.values.append(Layout(Object(Color())))
-        desktop.objects.values.append(Layout(Object(Transform())))
-        desktop.objects.values.append(Layout(Object(SineWave())))
-        desktop.objects.values.append(Layout(Object(KeyframeTiming())))
-        desktop.objects.values.append(Layout(Object(KeyframeTiming.Label.main)))
-        desktop.objects.values.append(Layout(Object(KeyframeTiming.Loop.began)))
-        desktop.objects.values.append(Layout(Object(KeyframeTiming.Interpolation.linear)))
+        desktop.objects.values.append(Layout(Object(Timing())))
         desktop.objects.values.append(Layout(Object(Easing())))
         desktop.objects.values.append(Layout(Object(Size())))
         desktop.objects.values.append(Layout(Object(Point())))
@@ -457,7 +446,6 @@ final class C0View: NSView, NSTextInputClient {
     func setup() {
         acceptsTouchEvents = true
         wantsLayer = true
-        layerUsesCoreImageFilters = true
         guard let layer = layer else { return }
         
         desktopView.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }
@@ -618,6 +606,7 @@ final class C0View: NSView, NSTextInputClient {
     }
     
     override func cursorUpdate(with nsEvent: NSEvent) {
+        super.cursorUpdate(with: nsEvent)
         mouseMoved(with: nsEvent)
     }
     override func mouseMoved(with nsEvent: NSEvent) {

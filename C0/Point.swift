@@ -69,29 +69,46 @@ extension Point {
         }
         return false
     }
-    static func intersectionLineSegment(_ p1: Point, _ p2: Point,
-                                        _ p3: Point, _ p4: Point,
-                                        isSegmentP3P4: Bool = true) -> Point? {
-        let delta = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x)
+    static func intersectionLineSegment(_ p0: Point, _ p1: Point,
+                                        _ p2: Point, _ p3: Point,
+                                        isSegmentP2P3: Bool = true) -> Point? {
+        let delta = (p1.x - p0.x) * (p3.y - p2.y) - (p1.y - p0.y) * (p3.x - p2.x)
         if delta != 0 {
-            let u = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / delta
+            let u = ((p2.x - p0.x) * (p3.y - p2.y) - (p2.y - p0.y) * (p3.x - p2.x)) / delta
             if u >= 0 && u <= 1 {
-                let v = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / delta
-                if v >= 0 && v <= 1 || !isSegmentP3P4 {
-                    return Point(x: p1.x + u * (p2.x - p1.x), y: p1.y + u * (p2.y - p1.y))
+                let v = ((p2.x - p0.x) * (p1.y - p0.y) - (p2.y - p0.y) * (p1.x - p0.x)) / delta
+                if v >= 0 && v <= 1 || !isSegmentP2P3 {
+                    return Point(x: p0.x + u * (p1.x - p0.x), y: p0.y + u * (p1.y - p0.y))
                 }
             }
         }
         return nil
     }
-    static func intersectionLine(_ p1: Point, _ p2: Point,
-                                 _ p3: Point, _ p4: Point) -> Point? {
-        let d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x)
+    static func intersectionLineSegmentOver0(_ p0: Point, _ p1: Point,
+                                             _ p2: Point, _ p3: Point,
+                                             isDeltaMid: Bool = true) -> Point? {
+        let delta = (p1.x - p0.x) * (p3.y - p2.y) - (p1.y - p0.y) * (p3.x - p2.x)
+        if delta != 0 {
+            let u = ((p2.x - p0.x) * (p3.y - p2.y) - (p2.y - p0.y) * (p3.x - p2.x)) / delta
+            if u >= 0 {
+                let v = ((p2.x - p0.x) * (p1.y - p0.y) - (p2.y - p0.y) * (p1.x - p0.x)) / delta
+                if v >= 0 {
+                    return Point(x: p0.x + u * (p1.x - p0.x), y: p0.y + u * (p1.y - p0.y))
+                }
+            }
+        } else if isDeltaMid {
+            return p0.mid(p3)
+        }
+        return nil
+    }
+    static func intersectionLine(_ p0: Point, _ p1: Point,
+                                 _ p2: Point, _ p3: Point) -> Point? {
+        let d = (p1.x - p0.x) * (p3.y - p2.y) - (p1.y - p0.y) * (p3.x - p2.x)
         if d == 0 {
             return nil
         }
-        let u = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d
-        return Point(x: p1.x + u * (p2.x - p1.x), y: p1.y + u * (p2.y - p1.y))
+        let u = ((p2.x - p0.x) * (p3.y - p2.y) - (p2.y - p0.y) * (p3.x - p2.x)) / d
+        return Point(x: p0.x + u * (p1.x - p0.x), y: p0.y + u * (p1.y - p0.y))
     }
     func isApproximatelyEqual(other: Point, roundingError: Real = 0.0000000001) -> Bool {
         return x.isApproximatelyEqual(other: other.x, roundingError: roundingError)
@@ -131,16 +148,16 @@ extension Point {
                                     bounds: Rect) -> (p0: Point, p1: Point)? {
         let p0 = Point.intersectionLineSegment(Point(x: bounds.minX, y: bounds.minY),
                                                Point(x: bounds.minX, y: bounds.maxY),
-                                               ap, bp, isSegmentP3P4: false)
+                                               ap, bp, isSegmentP2P3: false)
         let p1 = Point.intersectionLineSegment(Point(x: bounds.maxX, y: bounds.minY),
                                                Point(x: bounds.maxX, y: bounds.maxY),
-                                               ap, bp, isSegmentP3P4: false)
+                                               ap, bp, isSegmentP2P3: false)
         let p2 = Point.intersectionLineSegment(Point(x: bounds.minX, y: bounds.minY),
                                                Point(x: bounds.maxX, y: bounds.minY),
-                                               ap, bp, isSegmentP3P4: false)
+                                               ap, bp, isSegmentP2P3: false)
         let p3 = Point.intersectionLineSegment(Point(x: bounds.minX, y: bounds.maxY),
                                                Point(x: bounds.maxX, y: bounds.maxY),
-                                               ap, bp, isSegmentP3P4: false)
+                                               ap, bp, isSegmentP2P3: false)
         if let p0 = p0 {
             if let p1 = p1, p0 != p1 {
                 return (p0, p1)
@@ -388,6 +405,15 @@ extension Point: Object2D {
     static let yDisplayText = Text("y")
 }
 
+extension Point: ConcreteViewable {
+    func concreteViewWith<T>
+        (binder: T,
+         keyPath: ReferenceWritableKeyPath<T, Point>) -> ModelView where T: BinderProtocol {
+        
+        return PointView(binder: binder, keyPath: keyPath)
+    }
+}
+
 struct PointOption: Object2DOption {
     typealias Model = Point
     typealias XOption = RealOption
@@ -398,3 +424,50 @@ struct PointOption: Object2DOption {
 }
 typealias SlidablePointView<Binder: BinderProtocol> = Slidable2DView<PointOption, Binder>
 typealias DiscretePointView<Binder: BinderProtocol> = Discrete2DView<PointOption, Binder>
+
+final class PointView<T: BinderProtocol>: ModelView, BindableReceiver {
+    typealias Model = Point
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var notifications = [((PointView<Binder>,
+                           BasicPhaseNotification<Model>) -> ())]()
+    var defaultModel = Model()
+    
+    init(binder: T, keyPath: BinderKeyPath, radius: Real = 5, lineWidth: Real = 1) {
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        super.init(isLocked: false)
+        self.radius = radius
+        self.lineWidth = lineWidth
+        fillColor = .knob
+        lineColor = .getSetBorder
+        
+        updateWithModel()
+    }
+    
+    var minSize: Size {
+        return Size(square: radius * 2)
+    }
+    func updateWithModel() {
+        position = model
+    }
+}
+extension PointView: BasicDiscretePointMovable {
+    func model(at p: Point, first fp: Point, old: Point) -> Point {
+        return model + convert(p, to: parent!) - convert(fp, to: parent!)
+    }
+    
+    var knobView: View {
+        return self
+    }
+    
+    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
+        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
+    }
+}

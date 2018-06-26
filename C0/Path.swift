@@ -30,6 +30,7 @@ struct PathLine {
     enum Element {
         case linear(Point)
         case bezier2(point: Point, control: Point)
+        case bezier3(point: Point, control0: Point, control1: Point)
         case arc(Arc)
     }
     
@@ -93,6 +94,8 @@ struct Path {
             switch $0 {
             case .linear(let p): mcg.addLine(to: p)
             case .bezier2(let p, let cp): mcg.addQuadCurve(to: p, control: cp)
+            case .bezier3(let p, let cp0, let cp1): mcg.addCurve(to: p,
+                                                                 control1: cp0, control2: cp1)
             case .arc(let arc):
                 let cp = Point(x: mcg.currentPoint.x - arc.radius * cos(arc.startAngle),
                                y: mcg.currentPoint.y - arc.radius * sin(arc.endAngle))
@@ -105,7 +108,6 @@ struct Path {
                                startAngle: arc.startAngle, endAngle: arc.endAngle,
                                clockwise: true)
                 }
-                
             }
         }
     }

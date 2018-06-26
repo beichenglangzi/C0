@@ -43,6 +43,20 @@ extension Bezier2 {
         return Bezier2(p0: p0.mid(p1), cp: p1, p1: p2)
     }
     
+//    init(leastSquaresFromPoints points: [Point], controlDeltaPoint: Point? = nil) {
+//        var points = points
+//        let p0 = points[0], p1 = points[points.count - 1]
+//
+//        let cp: Point
+//        if let controlDeltaPoint = controlDeltaPoint {
+//
+//        } else {
+//
+//        }
+//
+//        self.init(p0: p0, cp: cp, p1: p1)
+//    }
+    
     var isLineaer: Bool {
         return p0.mid(p1) == cp ||
             (p0.x - 2 * cp.x + p1.x == 0 && p0.y - 2 * cp.y + p1.y == 0)
@@ -238,7 +252,7 @@ extension Bezier2 {
             return []
         }
         if isLineaer {
-            if let p = Point.intersectionLineSegment(p0, p1, q0, q1, isSegmentP3P4: false) {
+            if let p = Point.intersectionLineSegment(p0, p1, q0, q1, isSegmentP2P3: false) {
                 return [p]
             } else {
                 return []
@@ -447,8 +461,10 @@ extension Bezier3 {
     }
     func difference(withT t: Real) -> Point {
         let tp = 1 - t
-        let dx = 3 * (t * t * (p1.x - cp1.x) + 2 * t * tp * (cp1.x - cp0.x) + tp * tp * (cp0.x - p0.x))
-        let dy = 3 * (t * t * (p1.y - cp1.y) + 2 * t * tp * (cp1.y - cp0.y) + tp * tp * (cp0.y - p0.y))
+        let dx = 3 * (t * t * (p1.x - cp1.x)
+            + 2 * t * tp * (cp1.x - cp0.x) + tp * tp * (cp0.x - p0.x))
+        let dy = 3 * (t * t * (p1.y - cp1.y)
+            + 2 * t * tp * (cp1.y - cp0.y) + tp * tp * (cp0.y - p0.y))
         return Point(x: dx, y: dy)
     }
     func tangential(withT t: Real) -> Real {

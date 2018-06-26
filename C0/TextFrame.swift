@@ -173,8 +173,8 @@ struct TextFrame {
     }
     private(set) var typographicBounds = Rect()
     var fitSize: Size {
-        return Size(width: (typographicBounds.width + paddingSize.width * 2).rounded(.up),
-                    height: (height + baselineDelta + paddingSize.height * 2).rounded(.up))
+        return Size(width: (typographicBounds.width + paddingSize.width * 2).rounded(),
+                    height: (height + baselineDelta + paddingSize.height * 2).rounded())
     }
     
     init(attributedString: NSMutableAttributedString, baseFont: Font,

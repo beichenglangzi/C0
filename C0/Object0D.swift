@@ -131,7 +131,7 @@ final class MiniView<T: Object0D, U: BinderProtocol>: ModelView, BindableGetterR
         let padding = Layouter.smallPadding
         return Rect(x: leftWidth + padding,
                     y: padding,
-                    width: size.width - leftWidth - padding * 3,
+                    width: size.width - leftWidth - padding * 2,
                     height: size.height - padding * 2)
     }
     override func updateLayout() {

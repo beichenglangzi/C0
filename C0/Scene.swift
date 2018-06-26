@@ -20,34 +20,10 @@
 import struct Foundation.URL
 import class Foundation.OperationQueue
 
-typealias BPM = Real
-typealias FPS = Real
-typealias FrameTime = Int
-typealias BaseTime = Rational
-typealias Beat = Rational
-typealias RealBeat = Real
-typealias RealBaseTime = Real
-typealias Second = Real
-
 /**
  Issue: シーンカラーを削減
  */
 extension Color {
-    static let strokeLine = Color(white: 0)
-    
-    static let draft = Color(red: 0, green: 0.5, blue: 1, alpha: 0.15)
-    static let subDraft = Color(red: 0, green: 0.5, blue: 1, alpha: 0.1)
-    static let timelineDraft = Color(red: 1, green: 1, blue: 0.2)
-    
-    static let previous = Color(red: 1, green: 0, blue: 0, alpha: 0.1)
-    static let previousSkin = previous.with(alpha: 1)
-    static let subPrevious = Color(red: 1, green: 0.2, blue: 0.2, alpha: 0.025)
-    static let subPreviousSkin = subPrevious.with(alpha: 0.08)
-    static let next = Color(red: 0.2, green: 0.8, blue: 0, alpha: 0.1)
-    static let nextSkin = next.with(alpha: 1)
-    static let subNext = Color(red: 0.4, green: 1, blue: 0, alpha: 0.025)
-    static let subNextSkin = subNext.with(alpha: 0.08)
-    
     static let snap = Color(red: 0.5, green: 0, blue: 1)
     static let controlEditPointIn = Color(red: 1, green: 1, blue: 0)
     static let controlPointIn = knob
@@ -57,79 +33,42 @@ extension Color {
     static let controlPointUnionIn = Color(red: 0, green: 1, blue: 0.2)
     static let controlPointPathIn = Color(red: 0, green: 1, blue: 1)
     static let controlPointOut = getSetBorder
-    static let editControlPointIn = Color(red: 1, green: 0, blue: 0, alpha: 0.8)
-    static let editControlPointOut = Color(red: 1, green: 0.5, blue: 0.5, alpha: 0.3)
-    static let contolLineIn = Color(red: 1, green: 0.5, blue: 0.5, alpha: 0.3)
-    static let contolLineOut = Color(red: 1, green: 0, blue: 0, alpha: 0.3)
-    
-    static let editMaterial = Color(red: 1, green: 0.5, blue: 0, alpha: 0.5)
-    static let editMaterialColorOnly = Color(red: 1, green: 0.75, blue: 0, alpha: 0.5)
-    
-    static let camera = Color(red: 0.7, green: 0.6, blue: 0)
-    static let cameraBorder = Color(red: 1, green: 0, blue: 0, alpha: 0.5)
-    static let cutBorder = Color(red: 0.3, green: 0.46, blue: 0.7, alpha: 0.5)
-    static let cutSubBorder = background.multiply(alpha: 0.5)
-    
-    static let subtitleBorder = Color(white: 0)
-    static let subtitleFill = white
+    static let editControlPointIn = Color(red: 1, green: 0, blue: 0)
+    static let editControlPointOut = Color(red: 1, green: 0.5, blue: 0.5)
+    static let contolLineIn = Color(red: 1, green: 0.5, blue: 0.5)
+    static let contolLineOut = Color(red: 1, green: 0, blue: 0)
 }
 
-struct CellgroupIndex: Codable {
-    var index: Int, cellIndexes: [Int]
-}
-struct MaterialMap: Codable {
-    var material: Material
-    var cellNodeIndexes: [CellgroupIndex]
-}
 struct ColorMap: Codable {
     var color: Color
-    var cellNodeIndexes: [CellgroupIndex]
 }
 
-/**
- Issue: 複数のサウンド
- Issue: 変更通知
- */
 struct Scene: Codable {
-    var name: Text
-    var renderingVerticalResolution: Int
     var timeline: Timeline
-    var isHiddenSubtitles: Bool
-    var isHiddenPrevious: Bool, isHiddenNext: Bool
     var canvas: Canvas
-    var materials: [MaterialMap]
     var colors: [ColorMap]
     var player: Player
-    var version = Version()
+    var renderingVerticalResolution: Int
     
-    init(name: Text = Text(english: "Untitled", japanese: "名称未設定"),
-         renderingVerticalResolution: Int = 1080,
-         timeline: Timeline = Timeline(),
-         isHiddenSubtitles: Bool = false,
-         isHiddenPrevious: Bool = true, isHiddenNext: Bool = true,
-         materials: [MaterialMap] = [],
+    init(timeline: Timeline = Timeline(),
          colors: [ColorMap] = [],
          canvas: Canvas = Canvas(),
-         player: Player = Player()) {
+         player: Player = Player(),
+         renderingVerticalResolution: Int = 1080) {
 
-        self.name = name
-        self.renderingVerticalResolution = renderingVerticalResolution
         self.timeline = timeline
-        self.isHiddenSubtitles = isHiddenSubtitles
-        self.isHiddenPrevious = isHiddenPrevious
-        self.isHiddenNext = isHiddenNext
         self.canvas = canvas
-        self.materials = materials
         self.colors = colors
         self.player = player
+        self.renderingVerticalResolution = renderingVerticalResolution
     }
 }
 extension Scene {
-    var duration: Beat {
+    var duration: Rational {
         return timeline.duration
     }
     
-    func canvas(atTime time: Beat) -> Canvas {
+    func canvas(atTime time: Rational) -> Canvas {
         fatalError()
     }
 }
@@ -153,10 +92,13 @@ extension Scene: Referenceable {
 }
 extension Scene: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect) -> View {
-        return name.thumbnailView(withFrame: frame)
+        return timeline.duration.thumbnailView(withFrame: frame)
     }
 }
 extension Scene: AbstractViewable {
+    var defaultAbstractConstraintSize: Size {
+        return canvas.defaultAbstractConstraintSize + timeline.defaultAbstractConstraintSize
+    }
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Scene>,
                                               type: AbstractType) -> ModelView {
@@ -170,15 +112,6 @@ extension Scene: AbstractViewable {
 }
 extension Scene: ObjectViewable {}
 
-struct SceneLayout {
-    static let versionWidth = 120.0.cg, propertyWidth = 200.0.cg
-    static let canvasSize = Size(width: 650, height: 400), timelineHeight = 140.0.cg
-}
-
-/**
- Issue: セルをキャンバス外にペースト
- Issue: Display P3サポート
- */
 final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Scene
     typealias Binder = T
@@ -194,30 +127,25 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
         return Model()
     }
     
-    let versionView: VersionView<Binder>
     let sizeView: DiscreteSizeView<Binder>
     let renderingVerticalResolutionView: DiscreteIntView<Binder>
-    let isHiddenSubtitlesView: BoolView<Binder>
-    let isHiddenPreviousView: BoolView<Binder>
-    let isHiddenNextView: BoolView<Binder>
     let timelineView: TimelineView<Binder>
     let canvasView: CanvasView<Binder>
     let playerView: ScenePlayerView<Binder>
-    
-    let exportSubtitlesView = ClosureView(name: Text(english: "Export Subtitles",
-                                                     japanese: "字幕を書き出す"))
     let exportImageView = ClosureView(name: Text(english: "Export Image", japanese: "画像を書き出す"))
     let exportMovieView = ClosureView(name: Text(english: "Export Movie", japanese: "動画を書き出す"))
     
-    let classNameView = TextFormView(text: Scene.name, font: .bold)
     var encodingQueue = OperationQueue()
     var encoderViews = [View]()
     private let encoderWidth = 200.0.cg
+    var timelineHeight = 70.0.cg
+    
+    var previousColor = Color(red: 1, green: 0, blue: 0)
+    var nextColor = Color(red: 0.2, green: 0.8, blue: 0)
     
     init(binder: Binder, keyPath: BinderKeyPath, frame: Rect = Rect()) {
         self.binder = binder
         self.keyPath = keyPath
-        versionView = VersionView(binder: binder, keyPath: keyPath.appending(path: \Model.version))
         
         let defaultSize = binder[keyPath: keyPath].canvas.frame.size
         let sizeWidthOption = RealOption(defaultModel: defaultSize.width,
@@ -227,7 +155,7 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
                                          minModel: 1, maxModel: 100000, modelInterval: 1, exp: 1,
                                          numberOfDigits: 0, unit: "")
         sizeView = DiscreteSizeView(binder: binder,
-                                    keyPath: keyPath.appending(path: \Scene.canvas.frame.size),
+                                    keyPath: keyPath.appending(path: \Scene.canvas.centeringSize),
                                     option: SizeOption(xOption: sizeWidthOption,
                                                        yOption: sizeHeightOption))
         
@@ -235,15 +163,6 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
             = DiscreteIntView(binder: binder,
                               keyPath: keyPath.appending(path: \Scene.renderingVerticalResolution),
                               option: Scene.renderingVerticalResolutionOption)
-        isHiddenSubtitlesView = BoolView(binder: binder,
-                                         keyPath: keyPath.appending(path: \Scene.isHiddenSubtitles),
-                                         option: Scene.isHiddenSubtitlesOption)
-        isHiddenPreviousView = BoolView(binder: binder,
-                                        keyPath: keyPath.appending(path: \Scene.isHiddenPrevious),
-                                        option: Scene.isHiddenPreviousOption)
-        isHiddenNextView = BoolView(binder: binder,
-                                    keyPath: keyPath.appending(path: \Scene.isHiddenNext),
-                                    option: Scene.isHiddenNextOption)
         timelineView = TimelineView(binder: binder,
                                     keyPath: keyPath.appending(path: \Model.timeline))
         canvasView = CanvasView(binder: binder,
@@ -253,16 +172,22 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
                                      sceneKeyPath: keyPath)
         
         super.init(isLocked: false)
+        sizeView.notifications.append { [unowned self] (view, notification) in
+            self.canvasView.updateCanvasSize()
+        }
+        timelineView.notifications.append { [unowned self] (view, notification) in
+            let drawingView = DrawingView(binder: self.binder,
+                                          keyPath: self.keyPath.appending(path: \Model.timeline.editingDrawing))
+            self.canvasView.contentsViews = [drawingView]
+        }
+        children = [timelineView, canvasView]
         
-        children = [classNameView, versionView,
-                    sizeView, renderingVerticalResolutionView,
-                    exportSubtitlesView, exportImageView, exportMovieView,
-                    isHiddenSubtitlesView, isHiddenPreviousView, isHiddenNextView,
-                    timelineView, canvasView, playerView]
-        
-        exportSubtitlesView.model = { [unowned self] _ in self.exportSubtitles() }
         exportImageView.model = { [unowned self] _ in self.exportImage() }
         exportMovieView.model = { [unowned self] _ in self.exportMovie() }
+        
+        let drawingView = DrawingView(binder: self.binder,
+                                      keyPath: self.keyPath.appending(path: \Model.timeline.editingDrawing))
+        self.canvasView.contentsViews = [drawingView]
         
         updateWithModel()
         updateLayout()
@@ -273,9 +198,8 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     var minSize: Size {
         let padding = Layouter.basicPadding, buttonH = Layouter.basicHeight
-//        let h = buttonH + padding * 2
-        let cs = SceneLayout.canvasSize, th = SceneLayout.timelineHeight
-        let inWidth = cs.width + padding + SceneLayout.propertyWidth
+        let cs = canvasView.minSize, th = timelineHeight
+        let inWidth = cs.width
         let width = inWidth + padding * 2
         let height = th + cs.height + buttonH + padding * 2
         return Size(width: width, height: height)
@@ -283,34 +207,24 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
     override func updateLayout() {
         let padding = Layouter.basicPadding, buttonH = Layouter.basicHeight
         let h = buttonH + padding * 2
-        let cs = SceneLayout.canvasSize, th = SceneLayout.timelineHeight
-//        let pw = SceneLayout.propertyWidth
-        let y = bounds.height - buttonH - padding
+        let th = timelineHeight
+        let y = bounds.height - padding
+        let cs = Size(width: bounds.width - padding * 2,
+                      height: bounds.height - th - padding * 2)
         
-        let classNameSize = classNameView.minSize
-        let classNameOrigin = Point(x: padding,
-                                    y: bounds.height - classNameSize.height - padding)
-        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
-        
-        var topX = bounds.width - padding
-        let topY = bounds.height - buttonH - padding
-        let esw = exportSubtitlesView.minSize.width
-        topX -= esw
-        exportSubtitlesView.frame = Rect(x: topX, y: y, width: esw, height: buttonH)
-        let eiw = exportImageView.minSize.width
-        topX -= eiw
-        exportImageView.frame = Rect(x: topX, y: y, width: eiw, height: buttonH)
-        let emw = exportMovieView.minSize.width
-        topX -= emw
-        exportMovieView.frame = Rect(x: topX, y: y, width: emw, height: buttonH)
-        let ihnw = isHiddenNextView.minSize.width
-        topX -= ihnw + padding
-        isHiddenNextView.frame = Rect(x: topX, y: topY, width: ihnw, height: buttonH)
-        let ihpw = isHiddenPreviousView.minSize.width
-        topX -= ihpw
-        isHiddenPreviousView.frame = Rect(x: topX, y: topY, width: ihpw, height: buttonH)
-        topX = classNameView.frame.maxX + padding
-        versionView.frame = Rect(x: topX, y: y, width: SceneLayout.versionWidth, height: buttonH)
+//        var topX = bounds.width - padding
+//        let eiw = exportImageView.minSize.width
+//        topX -= eiw
+//        exportImageView.frame = Rect(x: topX, y: y, width: eiw, height: buttonH)
+//        let emw = exportMovieView.minSize.width
+//        topX -= emw
+//        exportMovieView.frame = Rect(x: topX, y: y, width: emw, height: buttonH)
+//        let rvrms = renderingVerticalResolutionView.minSize
+//        topX -= rvrms.width
+//        renderingVerticalResolutionView.frame = Rect(origin: Point(x: topX, y: y), size: rvrms)
+//        let sms = sizeView.minSize
+//        topX -= sms.width
+//        sizeView.frame = Rect(x: topX, y: y, width: sms.width, height: sms.height)
         
         var ty = y
         ty -= th
@@ -320,19 +234,9 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
         ty -= h
         playerView.frame = Rect(x: canvasView.frame.maxX, y: padding,
                                 width: bounds.width - canvasView.frame.maxX - padding, height: 100)
-        
-        let px = padding * 2 + cs.width, propertyMaxY = y
-        var py = propertyMaxY
-//        let sh = Layouter.smallHeight
-        let sms = sizeView.minSize
-        py -= sms.height
-        sizeView.frame = Rect(x: px, y: py, width: sms.width, height: sms.height)
-        //renderingVerticalResolutionView
-        let ss = isHiddenSubtitlesView.minSize
-        py -= ss.height
-        isHiddenSubtitlesView.frame = Rect(x: px, y: py, width: ss.width, height: ss.height)
     }
-    
+}
+extension SceneView {
     private func updateEncoderPositions() {
         _ = encoderViews.reduce(Point(x: frame.origin.x, y: frame.maxY)) {
             $1.frame.origin = $0
@@ -388,21 +292,5 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
                                             size: size, fileType: fileType)
             self.beganEncode(SceneImageEncoderView(encoder: encoder), to: file)
         }
-    }
-    
-    func exportSubtitles() {
-        let message = Text(english: "Export Subtitles", japanese: "字幕として書き出す")
-        exportSubtitles(message: message)
-    }
-    func exportSubtitles(message: Text?, fileType: Subtitle.FileType = .vtt) {
-        URL.file(message: message, fileTypes: [fileType]) { [unowned self] file in
-            let encoder = SceneSubtitlesEncoder(timeline: self.model.timeline, fileType: fileType)
-            self.beganEncode(SceneSubtitlesEncoderView(encoder: encoder), to: file)
-        }
-    }
-}
-extension SceneView: Undoable {
-    var version: Version {
-        return versionView.model
     }
 }

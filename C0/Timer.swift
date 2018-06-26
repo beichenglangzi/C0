@@ -21,7 +21,7 @@ import Dispatch
 
 final class RunTimer {
     private var workItem: DispatchWorkItem?
-    func run(after: Second,
+    func run(afterTime: Real,
              dispatchQueue: DispatchQueue,
              beginClosure: () -> (),
              waitClosure: () -> (),
@@ -36,7 +36,7 @@ final class RunTimer {
         workItem.notify(queue: .main) { [weak self] in
             self?.workItem = nil
         }
-        dispatchQueue.asyncAfter(deadline: DispatchTime.now() + Double(after),
+        dispatchQueue.asyncAfter(deadline: DispatchTime.now() + Double(afterTime),
                                  execute: workItem)
         self.workItem = workItem
     }

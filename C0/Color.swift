@@ -19,9 +19,6 @@
 
 import CoreGraphics
 
-/**
- Issue: Lab色空間ベースのカラーピッカー及びカラー補間
- */
 struct Color: Codable {
     var hue: Real {
         didSet { rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb }
@@ -39,54 +36,47 @@ struct Color: Codable {
             self.lightness = newValue.y
         }
     }
-    var alpha: Real
     var rgbColorSpace: RGBColorSpace
     private(set) var rgb: RGB
     
     init(hue: Real = 0, saturation: Real = 0, lightness: Real = 0,
-         alpha: Real = 1, rgbColorSpace: RGBColorSpace = .sRGB) {
+         rgbColorSpace: RGBColorSpace = .sRGB) {
         
         self.hue = hue
         self.saturation = saturation
         self.lightness = lightness
         rgb = Color.hsvWithHSL(h: hue, s: saturation, l: lightness).rgb
-        self.alpha = alpha
         self.rgbColorSpace = rgbColorSpace
     }
     init(hue: Real, saturation: Real, lightnessFromMaxSaturation: Real,
-         alpha: Real = 1, rgbColorSpace: RGBColorSpace = .sRGB) {
+         rgbColorSpace: RGBColorSpace = .sRGB) {
         
         let hsv = HSV(h: Color.hsvHue(withHSLHue: hue),
                       s: saturation,
                       v: lightnessFromMaxSaturation)
-        self.init(hsv: hsv, rgb: hsv.rgb, alpha: alpha,
-                  rgbColorSpace: rgbColorSpace)
+        self.init(hsv: hsv, rgb: hsv.rgb, rgbColorSpace: rgbColorSpace)
     }
     init(hue: Real, saturation: Real, brightness: Real,
-         alpha: Real = 1, rgbColorSpace: RGBColorSpace = .sRGB) {
+         rgbColorSpace: RGBColorSpace = .sRGB) {
         
         let hsv = HSV(h: hue, s: saturation, v: brightness)
-        self.init(hsv: hsv, rgb: hsv.rgb, alpha: alpha,
-                  rgbColorSpace: rgbColorSpace)
+        self.init(hsv: hsv, rgb: hsv.rgb, rgbColorSpace: rgbColorSpace)
     }
     init(red: Real, green: Real, blue: Real,
-         alpha: Real = 1, rgbColorSpace: RGBColorSpace = .sRGB) {
+         rgbColorSpace: RGBColorSpace = .sRGB) {
         
         let rgb = RGB(r: red, g: green, b: blue)
-        self.init(hsv: rgb.hsv, rgb: rgb, alpha: alpha, rgbColorSpace: rgbColorSpace)
+        self.init(hsv: rgb.hsv, rgb: rgb, rgbColorSpace: rgbColorSpace)
     }
-    init(rgb: RGB, alpha: Real = 1, rgbColorSpace: RGBColorSpace = .sRGB) {
-        self.init(hsv: rgb.hsv, rgb: rgb, alpha: alpha,
-                  rgbColorSpace: rgbColorSpace)
+    init(rgb: RGB, rgbColorSpace: RGBColorSpace = .sRGB) {
+        self.init(hsv: rgb.hsv, rgb: rgb, rgbColorSpace: rgbColorSpace)
     }
-    init(white: Real, alpha: Real = 1, rgbColorSpace: RGBColorSpace = .sRGB) {
-        self.init(hue: 0, saturation: 0, lightness: white, alpha: alpha,
-                  rgbColorSpace: rgbColorSpace)
+    init(white: Real, rgbColorSpace: RGBColorSpace = .sRGB) {
+        self.init(hue: 0, saturation: 0, lightness: white, rgbColorSpace: rgbColorSpace)
     }
-    init(hsv: HSV, rgb: RGB, alpha: Real, rgbColorSpace: RGBColorSpace = .sRGB) {
+    init(hsv: HSV, rgb: RGB, rgbColorSpace: RGBColorSpace = .sRGB) {
         (hue, saturation, lightness) = Color.hsl(with: hsv)
         self.rgb = rgb
-        self.alpha = alpha
         self.rgbColorSpace = rgbColorSpace
     }
 }
@@ -119,17 +109,12 @@ extension Color {
     static let locked = Color(white: 0.5)
     static let subLocked = Color(white: 0.65)
     static let editing = Color(white: 0.88)
-    static let translucentEdit = Color(white: 0, alpha: 0.1)
     static let mainFocus = Color(red: 0.1, green: 0.6, blue: 0.9)
     static let zoomingFocus = Color(red: 0.1, green: 0.3, blue: 0.5)
     static let versioniongFocus = Color(red: 0.05, green: 0.1, blue: 0.3)
     static let indicated = Color(red: 0.1, green: 0.6, blue: 0.9)
     static let noBorderIndicated = Color(red: 0.85, green: 0.9, blue: 0.94)
     static let subIndicated = Color(red: 0.6, green: 0.95, blue: 1)
-    static let select = Color(red: 0, green: 0.7, blue: 1, alpha: 0.3)
-    static let selectBorder = Color(red: 0, green: 0.5, blue: 1, alpha: 0.5)
-    static let deselect = Color(red: 0.9, green: 0.3, blue: 0, alpha: 0.3)
-    static let deselectBorder = Color(red: 1, green: 0, blue: 0, alpha: 0.5)
     static let selected = Color(red: 0.1, green: 0.7, blue: 1)
     static let subSelected = Color(red: 0.8, green: 0.95, blue: 1)
     static let warning = rgbRed
@@ -204,25 +189,21 @@ extension Color {
     }
     
     func with(hue: Real) -> Color {
-        return Color(hue: hue, saturation: saturation, lightness:  lightness, alpha: alpha)
+        return Color(hue: hue, saturation: saturation, lightness:  lightness)
     }
     func with(saturation: Real) -> Color {
-        return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
+        return Color(hue: hue, saturation: saturation, lightness: lightness)
     }
     func with(lightness: Real) -> Color {
-        return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
+        return Color(hue: hue, saturation: saturation, lightness: lightness)
     }
     func with(saturation: Real, lightness: Real) -> Color {
-        return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
+        return Color(hue: hue, saturation: saturation, lightness: lightness)
     }
     func with(alpha: Real) -> Color {
-        return Color(hue: hue, saturation: saturation, lightness: lightness, alpha: alpha)
+        return Color(hue: hue, saturation: saturation, lightness: lightness)
     }
     
-    func multiply(alpha: Real) -> Color {
-        return Color(hue: hue, saturation: saturation, lightness: lightness,
-                     alpha: self.alpha * alpha)
-    }
     func multiply(white: Real) -> Color {
         return Color.linear(self, Color.white, t: white)
     }
@@ -271,15 +252,15 @@ extension Color: Equatable {
         return lhs.hue == rhs.hue
             && lhs.saturation == lhs.saturation
             && lhs.lightness == rhs.lightness
-            && lhs.alpha == rhs.alpha
             && lhs.rgbColorSpace == rhs.rgbColorSpace
     }
 }
 extension Color: Hashable {
     var hashValue: Int {
-        return Hash.uniformityHashValue(with: [hue.hashValue, saturation.hashValue,
+        return Hash.uniformityHashValue(with: [hue.hashValue,
+                                               saturation.hashValue,
                                                lightness.hashValue,
-                                               alpha.hashValue, rgbColorSpace.hashValue])
+                                               rgbColorSpace.hashValue])
     }
 }
 extension Color: Referenceable {
@@ -288,8 +269,7 @@ extension Color: Referenceable {
 extension Color: Interpolatable {
     static func linear(_ f0: Color, _ f1: Color, t: Real) -> Color {
         let rgb = RGB.linear(f0.rgb, f1.rgb, t: t)
-        let alpha = Real.linear(f0.alpha, f1.alpha, t: t)
-        let color = Color(rgb: rgb, alpha: alpha)
+        let color = Color(rgb: rgb)
         return color.saturation > 0 ?
             color :
             color.with(hue: Real.linear(f0.hue,
@@ -299,8 +279,7 @@ extension Color: Interpolatable {
     static func firstMonospline(_ f1: Color, _ f2: Color, _ f3: Color,
                                 with ms: Monospline) -> Color {
         let rgb = RGB.firstMonospline(f1.rgb, f2.rgb, f3.rgb, with: ms)
-        let alpha = Real.firstMonospline(f1.alpha, f2.alpha, f3.alpha, with: ms)
-        let color = Color(rgb: rgb, alpha: alpha)
+        let color = Color(rgb: rgb)
         return color.saturation > 0 ?
             color :
             color.with(hue: Real.firstMonospline(f1.hue,
@@ -311,8 +290,7 @@ extension Color: Interpolatable {
     static func monospline(_ f0: Color, _ f1: Color, _ f2: Color, _ f3: Color,
                            with ms: Monospline) -> Color {
         let rgb = RGB.monospline(f0.rgb, f1.rgb, f2.rgb, f3.rgb, with: ms)
-        let alpha = Real.monospline(f0.alpha, f1.alpha, f2.alpha, f3.alpha, with: ms)
-        let color = Color(rgb: rgb, alpha: alpha)
+        let color = Color(rgb: rgb)
         return color.saturation > 0 ?
             color :
             color.with(hue: Real.monospline(f0.hue,
@@ -324,8 +302,7 @@ extension Color: Interpolatable {
     static func lastMonospline(_ f0: Color, _ f1: Color, _ f2: Color,
                                with ms: Monospline) -> Color {
         let rgb = RGB.lastMonospline(f0.rgb, f1.rgb, f2.rgb, with: ms)
-        let alpha = Real.lastMonospline(f0.alpha, f1.alpha, f2.alpha, with: ms)
-        let color = Color(rgb: rgb, alpha: alpha)
+        let color = Color(rgb: rgb)
         return color.saturation > 0 ?
             color :
             color.with(hue: Real.lastMonospline(f0.hue,
@@ -341,7 +318,7 @@ extension Color: ThumbnailViewable {
 }
 extension Color: AbstractViewable {
     var defaultAbstractConstraintSize: Size {
-        return Size(square: 150)
+        return Size(width: 130, height: 130 + Layouter.basicHeight / 2 + Layouter.basicPadding)
     }
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Color>,
@@ -495,13 +472,11 @@ extension Color {
             self.init(red: Real(components[0]),
                       green: Real(components[1]),
                       blue: Real(components[2]),
-                      alpha: Real(components[3]),
                       rgbColorSpace: .sRGB)
         case String(CGColorSpace.displayP3):
             self.init(red: Real(components[0]),
                       green: Real(components[1]),
                       blue: Real(components[2]),
-                      alpha: Real(components[3]),
                       rgbColorSpace: .displayP3)
         default:
             self.init()
@@ -516,11 +491,11 @@ extension Color {
                 return self
         }
         return Color(red: Real(cps[0]), green: Real(cps[1]), blue: Real(cps[2]),
-                     alpha: Real(cps[3]), rgbColorSpace: rgbColorSpace)
+                     rgbColorSpace: rgbColorSpace)
     }
     
     var cg: CGColor {
-        return CGColor.with(rgb: rgb, alpha: alpha, colorSpace: CGColorSpace.with(rgbColorSpace))
+        return CGColor.with(rgb: rgb, alpha: 1, colorSpace: CGColorSpace.with(rgbColorSpace))
     }
 }
 
@@ -555,14 +530,14 @@ struct HueCircle {
         }
     }
     private(set) var radius: Real
-    
+
     init(lineWidth: Real = 2, bounds: Rect = Rect(), rgbColorSpace: RGBColorSpace = .sRGB) {
         self.lineWidth = lineWidth
         self.bounds = bounds
         self.radius = min(bounds.width, bounds.height) / 2
         self.rgbColorSpace = rgbColorSpace
     }
-    
+
     func draw(in ctx: CGContext) {
         let outR = radius
         let inR = outR - lineWidth, deltaAngle = 1 / outR
@@ -596,12 +571,12 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
         didSet { updateWithModel() }
     }
     var notifications = [((ColorView<Binder>, BasicNotification) -> ())]()
-    
+
     var defaultModel = Model()
-    
+
     let hueView: CircularRealView<Binder>
     let slView: SlidablePointView<Binder>
-    
+
     var hueLineWidth: Real {
         didSet {
             hueCircle.lineWidth = hueLineWidth
@@ -615,49 +590,59 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
     var slRatio = 0.82.cg {
         didSet { updateLayout() }
     }
+    var formHeight = 10.0.cg
     let hueDrawView = View(drawClosure: { _, _, _ in })
     let slColorGradientView: View
     let slBlackWhiteGradientView: View
-    
+    let colorFormView: View
+
     init(binder: Binder, keyPath: BinderKeyPath,
          hLineWidth: Real = 2.5, hWidth: Real = 16,
          slPadding: Real? = nil, slRatio: Real = 0.82) {
-        
+
         self.binder = binder
         self.keyPath = keyPath
-        
+
         let valueOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1)
         hueView = CircularRealView(binder: binder, keyPath: keyPath.appending(path: \Color.hue),
                                    option: valueOption, startAngle: 0, width: hWidth)
         let slOption = PointOption(xOption: valueOption, yOption: valueOption)
         slView = SlidablePointView(binder: binder, keyPath: keyPath.appending(path: \Color.sl),
                                    option: slOption)
-        
+        slView.fillColor = .background
+
         if let slPadding = slPadding {
             slView.padding = slPadding
         }
         hueView.width = hWidth
         self.hueLineWidth = hLineWidth
         self.slRatio = slRatio
-        
+
         let hue = binder[keyPath: keyPath].hue
         let y = Color.y(withHSLHue: hue)
-        let slcValues = [Gradient.Value(color: Color(hue: hue, saturation: 0,
-                                                     lightnessFromMaxSaturation: y),
-                                        location: 0),
-                         Gradient.Value(color: Color(hue: hue, saturation: 1,
-                                                     lightnessFromMaxSaturation: 1),
-                                        location: 1)]
+        let slc0 = Composition(value: Color(hue: hue, saturation: 0,
+                                            lightnessFromMaxSaturation: y))
+        let slc1 = Composition(value: Color(hue: hue, saturation: 1,
+                                            lightnessFromMaxSaturation: 1))
+        let slcValues = [Gradient.Value(colorComposition: slc0, location: 0),
+                         Gradient.Value(colorComposition: slc1, location: 1)]
         slColorGradientView = View(gradient: Gradient(values: slcValues,
                                                       startPoint: Point(x: 0, y: 0),
                                                       endPoint: Point(x: 1, y: 0)))
-        let slgValues = [Gradient.Value(color: Color(white: 0, alpha: 1), location: 0),
-                         Gradient.Value(color: Color(white: 0, alpha: 0), location: y),
-                         Gradient.Value(color: Color(white: 1, alpha: 0), location: y),
-                         Gradient.Value(color: Color(white: 1, alpha: 1), location: 1)]
+        let slgc0 = Composition(value: Color(white: 0), opacity: 1)
+        let slgc1 = Composition(value: Color(white: 0), opacity: 0)
+        let slgc2 = Composition(value: Color(white: 1), opacity: 0)
+        let slgc3 = Composition(value: Color(white: 1), opacity: 1)
+        let slgValues = [Gradient.Value(colorComposition: slgc0, location: 0),
+                         Gradient.Value(colorComposition: slgc1, location: y),
+                         Gradient.Value(colorComposition: slgc2, location: y),
+                         Gradient.Value(colorComposition: slgc3, location: 1)]
         slBlackWhiteGradientView = View(gradient: Gradient(values: slgValues,
                                                            startPoint: Point(x: 0, y: 0),
                                                            endPoint: Point(x: 0, y: 1)))
+        colorFormView = View()
+        colorFormView.lineColor = .formBorder
+        colorFormView.fillColor = binder[keyPath: keyPath]
         
         super.init(isLocked: false)
         hueDrawView.fillColor = nil
@@ -667,38 +652,47 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
         hueDrawView.drawClosure = { [unowned self] ctx, _, _ in self.hueCircle.draw(in: ctx) }
         hueView.backgroundViews = [hueDrawView]
         slView.children = [slColorGradientView, slBlackWhiteGradientView, slView.knobView]
-        children = [hueView, slView]
-        
+        children = [colorFormView, hueView, slView]
+
         hueView.notifications.append { [unowned self] (_, _) in self.updateGradient() }
         slView.notifications.append { [unowned self] (_, _) in self.updateGradient() }
     }
     
     var minSize: Size {
-        return Size(square: hueView.width * 2
-            + Layouter.smallPadding * 2
-            + ((Layouter.defaultMinWidth + slView.padding * 2) * sqrt(2)).rounded(.up))
+        let slMinWidth = Layouter.defaultMinWidth
+        let slWidth = (slMinWidth + slView.padding * 2) * sqrt(2)
+        let w = hueView.width * 2 + Layouter.smallPadding * 2 + slWidth.rounded(.up)
+        return Size(width: w, height: w + Layouter.basicHeight / 2 + Layouter.basicPadding)
     }
     override func updateLayout() {
+        let formPadding = Layouter.basicPadding
         let padding = Layouter.smallPadding
-        let r = floor(min(bounds.width, bounds.height) / 2) - padding
+        let size = Size(width: bounds.width, height: bounds.height - formHeight - formPadding)
+        let cp = Point(x: size.width / 2, y: size.height / 2)
+        let r = min(size.width, size.height) / 2 - padding
         let hueSize = Size(width: r * 2, height: r * 2)
-        let hueBounds = Rect(origin: Point(), size: hueSize)
-        hueView.path = hueView.circularPath(withBounds: hueBounds)
-        hueView.position = Point(x: padding, y: padding)
+        let hueFrame = Rect(origin: Point(x: -hueSize.width / 2,
+                                          y: -hueSize.height / 2),
+                            size: hueSize)
+        hueView.path = hueView.circularPath(withBounds: hueFrame)
+        hueView.position = cp
+        colorFormView.frame = Rect(x: formPadding,
+                                   y: bounds.height - formHeight - formPadding,
+                                   width: size.width - formPadding * 2,
+                                   height: formHeight)
+        
         let sr = r - hueView.width
-        let b2 = floor(sr * slRatio)
-        let a2 = floor(sqrt(sr * sr - b2 * b2))
-        let slFrame = Rect(x: bounds.width / 2 - a2,
-                           y: bounds.height / 2 - b2,
-                           width: a2 * 2,
-                           height: b2 * 2)
+        let b2 = (sr * slRatio).rounded(.down)
+        let a2 = (sqrt(sr * sr - b2 * b2)).rounded(.down)
+        let slFrame = Rect(x: cp.x - a2, y: cp.y - b2,
+                           width: a2 * 2, height: b2 * 2)
         slView.frame = slFrame
         let slInFrame = Rect(origin: Point(), size: slFrame.size).inset(by: slView.padding)
         slColorGradientView.frame = slInFrame
         slBlackWhiteGradientView.frame = slInFrame
-        
-        let hueDrawPadding = ceil((hueView.width - hueLineWidth) / 2)
-        let hueDrawFrame = Rect(origin: Point(), size: hueSize).inset(by: hueDrawPadding)
+
+        let hueDrawPadding = ((hueView.width - hueLineWidth) / 2).rounded()
+        let hueDrawFrame = hueFrame.inset(by: hueDrawPadding).integral
         hueDrawView.frame = hueDrawFrame
         hueCircle = HueCircle(lineWidth: hueLineWidth,
                               bounds: Rect(origin: Point(), size: hueDrawFrame.size),
@@ -714,18 +708,21 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     private func updateGradient() {
         let y = Color.y(withHSLHue: model.hue)
-        slColorGradientView.gradient?.colors = [Color(hue: model.hue, saturation: 0,
-                                                      lightnessFromMaxSaturation: y),
-                                                Color(hue: model.hue, saturation: 1,
-                                                      lightnessFromMaxSaturation: 1)]
+        let cs = [Composition(value: Color(hue: model.hue, saturation: 0,
+                                           lightnessFromMaxSaturation: y)),
+                  Composition(value: Color(hue: model.hue, saturation: 1,
+                                           lightnessFromMaxSaturation: 1))]
+        slColorGradientView.gradient?.colorCompositions = cs
         slBlackWhiteGradientView.gradient?.locations = [0, y, y, 1]
+        
+        colorFormView.fillColor = model
     }
     private func updateWithColorSpace() {
-        let colors = [Color(white: 0, alpha: 1, rgbColorSpace: model.rgbColorSpace),
-                      Color(white: 0, alpha: 0, rgbColorSpace: model.rgbColorSpace),
-                      Color(white: 1, alpha: 0, rgbColorSpace: model.rgbColorSpace),
-                      Color(white: 1, alpha: 1, rgbColorSpace: model.rgbColorSpace)]
-        slBlackWhiteGradientView.gradient?.colors = colors
+        let cs = [Composition(value: Color(white: 0), opacity: 1),
+                  Composition(value: Color(white: 0), opacity: 0),
+                  Composition(value: Color(white: 1), opacity: 0),
+                  Composition(value: Color(white: 1), opacity: 1)]
+        slBlackWhiteGradientView.gradient?.colorCompositions = cs
         hueCircle = HueCircle(lineWidth: hueLineWidth,
                               bounds: hueDrawView.bounds,
                               rgbColorSpace: model.rgbColorSpace)
