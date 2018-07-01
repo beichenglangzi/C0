@@ -20,12 +20,22 @@
 protocol Runnable {
     func run(for p: Point, _ version: Version)
 }
+protocol Newable {
+    func new(for p: Point, _ version: Version)
+}
 
 struct RunnableActionList: SubActionList {
-    let runAction = Action(name: Text(english: "Run", japanese: "実行"),
-                           quasimode: Quasimode([.input(.click)]))
+//    let runAction = Action(name: Text(english: "Run", japanese: "実行"),
+//                           quasimode: Quasimode([.input(.click)]))
+    let newAction = Action(name: Text(english: "New", japanese: "新規"),
+                           quasimode: Quasimode(modifier: [.input(.command)],
+                                                [.input(.d)]))
+    let exportAction = Action(name: Text(english: "Export", japanese: "書き出す"),
+                              quasimode: Quasimode(modifier: [.input(.command)],
+                                                   [.input(.e)]))
+    
     var actions: [Action] {
-        return [runAction]
+        return [newAction, exportAction]
     }
 }
 extension RunnableActionList: SubSendable {
@@ -36,6 +46,7 @@ extension RunnableActionList: SubSendable {
 
 final class RunnableSender: SubSender {
     typealias Receiver = View & Runnable
+    typealias NewableReceiver = View & Newable
     
     typealias ActionList = RunnableActionList
     var actionList: ActionList
@@ -46,14 +57,23 @@ final class RunnableSender: SubSender {
     
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
-        case actionList.runAction:
+//        case actionList.runAction:
+//            guard actionMap.phase == .began else { break }
+//            if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
+//                let receiver = sender.mainIndicatedView as? Receiver {
+//
+//                sender.stopAllEvents()
+//                let p = receiver.convertFromRoot(eventValue.rootLocation)
+//                receiver.run(for: p, sender.indicatedVersionView.version)
+//            }
+        case actionList.newAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
-                let receiver = sender.mainIndicatedView as? Receiver {
+                let receiver = sender.mainIndicatedView as? NewableReceiver {
                 
-                sender.stopAllEvents()
                 let p = receiver.convertFromRoot(eventValue.rootLocation)
-                receiver.run(for: p, sender.indicatedVersionView.version)
+                sender.stopEditableEvents()
+                receiver.new(for: p, sender.indicatedVersionView.version)
             }
         default: break
         }

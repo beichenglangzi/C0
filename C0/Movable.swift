@@ -22,6 +22,11 @@ protocol ViewPointMover: class {
     func movePoint(for p: Point, first fp: Point, pressure: Real,
                    time: Real, _ phase: Phase)
 }
+protocol ViewXSlider: class {
+    var slidableView: View & XSlidable { get }
+    func slide(for p: Point, delta: Real, pressure: Real,
+               time: Real, _ phase: Phase)
+}
 protocol ViewVertexMover: class {
     var vertexMovableView: View & VertexMovable { get }
     func moveVertex(for p: Point, first fp: Point, pressure: Real,
@@ -43,6 +48,10 @@ protocol ViewTransformer: class {
 protocol PointMovable {
     func captureWillMovePoint(at p: Point, to version: Version)
     func makeViewPointMover() -> ViewPointMover
+}
+protocol XSlidable {
+    func captureWillXSlider(at p: Point, to version: Version)
+    func makeViewXSlider() -> ViewXSlider
 }
 protocol VertexMovable: PointMovable {
     func makeViewVertexMover() -> ViewVertexMover
@@ -67,26 +76,16 @@ protocol Transformable: Movable {
 }
 
 struct MovableActionList: SubActionList {
-    let moveEditPointAction = Action(name: Text(english: "Move Edit Point", japanese: "編集点を移動"),
+    let moveEditPointAction = Action(name: Text(english: "Move", japanese: "移動"),
                                      quasimode: Quasimode([.drag(.drag)]))
-    let moveAction = Action(name: Text(english: "Move", japanese: "移動"),
-                            quasimode: Quasimode(modifier: [.input(.option)],
-                                                 [.drag(.drag)]))
-    let moveVertexAction = Action(name: Text(english: "Move Vertex", japanese: "頂点を移動"),
-                                  quasimode: Quasimode(modifier: [.input(.shift),
-                                                                  .input(.option)],
+    let moveVertexAction = Action(name: Text(english: "Pull", japanese: "引動"),
+                                  quasimode: Quasimode(modifier: [.input(.shift)],
                                                        [.drag(.drag)]))
-    let transformAction = Action(name: Text(english: "Transform", japanese: "変形"),
-                                 quasimode: Quasimode(modifier: [.input(.control)],
-                                                      [.drag(.drag)]))
-    let warpAction = Action(name: Text(english: "Warp", japanese: "歪曲"),
-                            quasimode: Quasimode(modifier: [.input(.shift),
-                                                            .input(.control)],
-                                                 [.drag(.drag)]))
+    let slideAction = Action(name: Text(english: "Slide", japanese: "スライド"),
+                             quasimode: Quasimode([.scroll(.scroll)]))
     
     var actions: [Action] {
-        return [moveEditPointAction,
-                moveAction, moveVertexAction, transformAction, warpAction]
+        return [moveEditPointAction, moveVertexAction, slideAction]
     }
 }
 extension MovableActionList: SubSendable {
@@ -101,6 +100,8 @@ final class MovableSender: SubSender {
     typealias VertexMovableReceiver = View & VertexMovable
     typealias MovableReceiver = View & Movable
     typealias TransfomableReceiver = View & Transformable
+    typealias XSlidableReceiver = View & XSlidable
+//    typealias YSlidableReceiver = View & YSlidable
     
     typealias ActionList = MovableActionList
     var actionList: ActionList
@@ -115,26 +116,93 @@ final class MovableSender: SubSender {
     private var layoutableViews = [(oldP: Point, reciever: MovableReceiver)]()
     private var viewPointMover: ViewPointMover?, viewVertexMover: ViewVertexMover?
     private var viewMover: ViewMover?, viewTransformer: ViewTransformer?
+    private var viewXSliders = [ViewXSlider]()
     
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
         case actionList.moveEditPointAction:
             if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
-                if actionMap.phase == .began,
-                    let receiver = sender.mainIndicatedView as? PointMovableReceiver {
+                if actionMap.phase == .began {
                     
-                    fp = receiver.convertFromRoot(eventValue.rootLocation)
-                    viewPointMover = receiver.makeViewPointMover()
-                    receiver.captureWillMovePoint(at: fp, to: sender.indicatedVersionView.version)
+                    if let receiver = sender.mainIndicatedView as? PointMovableReceiver {
+                        fp = receiver.convertFromRoot(eventValue.rootLocation)
+                        viewPointMover = receiver.makeViewPointMover()
+                        receiver.captureWillMovePoint(at: fp, to: sender.indicatedVersionView.version)
+                    } else {
+                        layoutableViews = sender.indictedViews.compactMap {
+                            if let receiver = $0 as? MovableReceiver {
+                                return (receiver.movingOrigin, receiver)
+                            } else {
+                                return nil
+                            }
+                        }
+                        if !layoutableViews.isEmpty {
+                            guard let parent = layoutableViews.first?.reciever.parent else { return }
+                            fp = parent.convertFromRoot(eventValue.rootLocation)
+                            if let views = parent.children as? [View & Movable] {
+                                sender.beganMovingOrigins = views.map { $0.movingOrigin }
+                            }
+                            //                    viewMover = receiver.makeViewMover()
+                            //                    receiver.captureWillMoveObject(at: fp, to: sender.indicatedVersionView.version)
+                        }
+                    }
                 }
-                guard let viewPointMover = viewPointMover else { return }
-                let p = viewPointMover.pointMovableView.convertFromRoot(eventValue.rootLocation)
-                viewPointMover.movePoint(for: p, first: fp, pressure: eventValue.pressure,
-                                         time: eventValue.time, actionMap.phase)
-                if actionMap.phase == .ended {
-                    self.viewPointMover = nil
+                if !layoutableViews.isEmpty {
+                    guard let parent = layoutableViews.first?.reciever.parent else { return }
+                    
+                    layoutableViews.forEach { (oldP, receiver) in
+                        let p = parent.convertFromRoot(eventValue.rootLocation)
+                        receiver.movingOrigin = (oldP + p - fp).rounded()
+                    }
+                    //                viewMover.move(for: p, first: fp, pressure: eventValue.pressure,
+                    //                               time: eventValue.time, actionMap.phase)
+                    
+                    if let views = parent.children as? [View & Movable] {
+                        sender.updateLayout(withMovedViews: layoutableViews.map { $0.reciever },
+                                            from: views)
+                    }
+                    
+                    if actionMap.phase == .ended {
+                        self.layoutableViews = []
+                        sender.beganMovingOrigins = []
+                    }
+                } else {
+                    guard let viewPointMover = viewPointMover else { return }
+                    let p = viewPointMover.pointMovableView.convertFromRoot(eventValue.rootLocation)
+                    viewPointMover.movePoint(for: p, first: fp, pressure: eventValue.pressure,
+                                             time: eventValue.time, actionMap.phase)
+                    if actionMap.phase == .ended {
+                        self.viewPointMover = nil
+                    }
                 }
             }
+            
+//            if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
+//                if actionMap.phase == .began {
+//
+//
+//                }
+//                guard !layoutableViews.isEmpty else { return }
+//                guard let parent = layoutableViews.first?.reciever.parent else { return }
+//
+//                layoutableViews.forEach { (oldP, receiver) in
+//                    let p = parent.convertFromRoot(eventValue.rootLocation)
+//                    receiver.movingOrigin = (oldP + p - fp).rounded()
+//                }
+//                //                viewMover.move(for: p, first: fp, pressure: eventValue.pressure,
+//                //                               time: eventValue.time, actionMap.phase)
+//
+//                if let views = parent.children as? [View & Movable] {
+//                    sender.updateLayout(withMovedViews: layoutableViews.map { $0.reciever },
+//                                        from: views)
+//                }
+//
+//                if actionMap.phase == .ended {
+//                    self.layoutableViews = []
+//                    sender.beganMovingOrigins = []
+//                }
+//            }
+            
         case actionList.moveVertexAction:
             if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
                 if actionMap.phase == .began,
@@ -152,98 +220,116 @@ final class MovableSender: SubSender {
                     self.viewVertexMover = nil
                 }
             }
-        case actionList.moveAction:
-            if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
-                if actionMap.phase == .began {
-                    
-                    layoutableViews = sender.indictedViews.compactMap {
-                        if let receiver = $0.withSelfAndAllParents(with: MovableReceiver.self) {
-                            return (receiver.movingOrigin, receiver)
-                        } else {
-                            return nil
-                        }
-                    }
-                    guard let parent = layoutableViews.first?.reciever.parent else { return }
-                    fp = parent.convertFromRoot(eventValue.rootLocation)
-                    if let views = parent.children as? [View & Movable] {
-                        sender.beganMovingOrigins = views.map { $0.movingOrigin }
-                    }
-//                    viewMover = receiver.makeViewMover()
+        case actionList.slideAction:
+            guard let eventValue = actionMap.eventValuesWith(ScrollEvent.self).first else { return }
+            if actionMap.phase == .began,
+                let receiver = sender.mainIndicatedView as? XSlidableReceiver {
+                if abs(eventValue.scrollDeltaPoint.x) > abs(eventValue.scrollDeltaPoint.y) {
+                    viewXSliders = [receiver.makeViewXSlider()]
+                }
+                fp = receiver.convertFromRoot(eventValue.rootLocation)
+                receiver.captureWillXSlider(at: fp, to: sender.indicatedVersionView.version)
+            }
+            guard let scroller = viewXSliders.first else { return }
+            let p = scroller.slidableView.convertFromRoot(eventValue.rootLocation)
+            scroller.slide(for: p, delta: eventValue.scrollDeltaPoint.x, pressure: 1,
+                           time: eventValue.time,
+                           eventValue.phase)
+            if actionMap.phase == .ended {
+                self.viewXSliders = []
+            }
+//        case actionList.moveAction:
+//            if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
+//                if actionMap.phase == .began {
+//
+//                    layoutableViews = sender.indictedViews.compactMap {
+//                        if let receiver = $0.withSelfAndAllParents(with: MovableReceiver.self) {
+//                            return (receiver.movingOrigin, receiver)
+//                        } else {
+//                            return nil
+//                        }
+//                    }
+//                    guard let parent = layoutableViews.first?.reciever.parent else { return }
+//                    fp = parent.convertFromRoot(eventValue.rootLocation)
+//                    if let views = parent.children as? [View & Movable] {
+//                        sender.beganMovingOrigins = views.map { $0.movingOrigin }
+//                    }
+////                    viewMover = receiver.makeViewMover()
+////                    receiver.captureWillMoveObject(at: fp, to: sender.indicatedVersionView.version)
+//                }
+//                guard !layoutableViews.isEmpty else { return }
+//                guard let parent = layoutableViews.first?.reciever.parent else { return }
+//
+//                layoutableViews.forEach { (oldP, receiver) in
+//                    let p = parent.convertFromRoot(eventValue.rootLocation)
+//                    receiver.movingOrigin = (oldP + p - fp).rounded()
+//                }
+////                viewMover.move(for: p, first: fp, pressure: eventValue.pressure,
+////                               time: eventValue.time, actionMap.phase)
+//
+//                if let views = parent.children as? [View & Movable] {
+//                    sender.updateLayout(withMovedViews: layoutableViews.map { $0.reciever },
+//                                        from: views)
+//                }
+//
+//                if actionMap.phase == .ended {
+//                    self.layoutableViews = []
+//                    sender.beganMovingOrigins = []
+//                }
+//            }
+//        case actionList.transformAction:
+//            if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
+//                if actionMap.phase == .began,
+//                    let receiver = sender.mainIndicatedView.withSelfAndAllParents(with: TransfomableReceiver.self) {
+//
+//                    fp = receiver.convertFromRoot(eventValue.rootLocation)
+//                    transformer = Transformer(transformableView: receiver)
+//                    transformer?.anchorPoint = receiver.anchorPoint(from: fp)
 //                    receiver.captureWillMoveObject(at: fp, to: sender.indicatedVersionView.version)
-                }
-                guard !layoutableViews.isEmpty else { return }
-                guard let parent = layoutableViews.first?.reciever.parent else { return }
-                
-                layoutableViews.forEach { (oldP, receiver) in
-                    let p = parent.convertFromRoot(eventValue.rootLocation)
-                    receiver.movingOrigin = (oldP + p - fp).rounded()
-                }
-//                viewMover.move(for: p, first: fp, pressure: eventValue.pressure,
-//                               time: eventValue.time, actionMap.phase)
-                
-                if let views = parent.children as? [View & Movable] {
-                    sender.updateLayout(withMovedViews: layoutableViews.map { $0.reciever },
-                                        from: views)
-                }
-                
-                if actionMap.phase == .ended {
-                    self.layoutableViews = []
-                    sender.beganMovingOrigins = []
-                }
-            }
-        case actionList.transformAction:
-            if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
-                if actionMap.phase == .began,
-                    let receiver = sender.mainIndicatedView.withSelfAndAllParents(with: TransfomableReceiver.self) {
-                    
-                    fp = receiver.convertFromRoot(eventValue.rootLocation)
-                    transformer = Transformer(transformableView: receiver)
-                    transformer?.anchorPoint = receiver.anchorPoint(from: fp)
-                    receiver.captureWillMoveObject(at: fp, to: sender.indicatedVersionView.version)
-                    if let views = receiver.parent?.children as? [View & Movable] {
-                        sender.beganMovingOrigins = views.map { $0.movingOrigin }
-                    }
-                }
-                guard let viewTransformer = transformer else { return }
-                let p = viewTransformer.transformableView.convertFromRoot(eventValue.rootLocation)
-                viewTransformer.transform(for: p, pressure: eventValue.pressure,
-                                          time: eventValue.time, actionMap.phase)
-                
-                if let views = viewTransformer.transformableView.parent?.children as? [View & Movable] {
-                    sender.updateLayout(withMovedViews: [viewTransformer.transformableView],
-                                 from: views)
-                }
-                if actionMap.phase == .ended {
-                    self.viewTransformer = nil
-                    sender.beganMovingOrigins = []
-                }
-            }
-        case actionList.transformAction, actionList.warpAction:
-            if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
-                if actionMap.phase == .began,
-                    let receiver = sender.mainIndicatedView.withSelfAndAllParents(with: TransfomableReceiver.self) {
-                    
-                    fp = receiver.convertFromRoot(eventValue.rootLocation)
-                    warper = Warper(warpableView: receiver)
-                    warper?.anchorPoint = receiver.anchorPoint(from: fp)
-                    receiver.captureWillMoveObject(at: fp, to: sender.indicatedVersionView.version)
-                    if let views = receiver.parent?.children as? [View & Movable] {
-                        sender.beganMovingOrigins = views.map { $0.movingOrigin }
-                    }
-                }
-                guard let viewTransformer = warper else { return }
-                let p = viewTransformer.warpableView.convertFromRoot(eventValue.rootLocation)
-                viewTransformer.warp(for: p, pressure: eventValue.pressure,
-                                     time: eventValue.time, actionMap.phase)
-                
-                if let views = viewTransformer.warpableView.parent?.children as? [View & Movable] {
-                    sender.updateLayout(withMovedViews: [viewTransformer.warpableView], from: views)
-                }
-                if actionMap.phase == .ended {
-                    self.viewTransformer = nil
-                    sender.beganMovingOrigins = []
-                }
-            }
+//                    if let views = receiver.parent?.children as? [View & Movable] {
+//                        sender.beganMovingOrigins = views.map { $0.movingOrigin }
+//                    }
+//                }
+//                guard let viewTransformer = transformer else { return }
+//                let p = viewTransformer.transformableView.convertFromRoot(eventValue.rootLocation)
+//                viewTransformer.transform(for: p, pressure: eventValue.pressure,
+//                                          time: eventValue.time, actionMap.phase)
+//
+//                if let views = viewTransformer.transformableView.parent?.children as? [View & Movable] {
+//                    sender.updateLayout(withMovedViews: [viewTransformer.transformableView],
+//                                 from: views)
+//                }
+//                if actionMap.phase == .ended {
+//                    self.viewTransformer = nil
+//                    sender.beganMovingOrigins = []
+//                }
+//            }
+//        case actionList.transformAction, actionList.warpAction:
+//            if let eventValue = actionMap.eventValuesWith(DragEvent.self).first {
+//                if actionMap.phase == .began,
+//                    let receiver = sender.mainIndicatedView.withSelfAndAllParents(with: TransfomableReceiver.self) {
+//
+//                    fp = receiver.convertFromRoot(eventValue.rootLocation)
+//                    warper = Warper(warpableView: receiver)
+//                    warper?.anchorPoint = receiver.anchorPoint(from: fp)
+//                    receiver.captureWillMoveObject(at: fp, to: sender.indicatedVersionView.version)
+//                    if let views = receiver.parent?.children as? [View & Movable] {
+//                        sender.beganMovingOrigins = views.map { $0.movingOrigin }
+//                    }
+//                }
+//                guard let viewTransformer = warper else { return }
+//                let p = viewTransformer.warpableView.convertFromRoot(eventValue.rootLocation)
+//                viewTransformer.warp(for: p, pressure: eventValue.pressure,
+//                                     time: eventValue.time, actionMap.phase)
+//
+//                if let views = viewTransformer.warpableView.parent?.children as? [View & Movable] {
+//                    sender.updateLayout(withMovedViews: [viewTransformer.warpableView], from: views)
+//                }
+//                if actionMap.phase == .ended {
+//                    self.viewTransformer = nil
+//                    sender.beganMovingOrigins = []
+//                }
+//            }
         default: break
         }
     }
@@ -339,6 +425,54 @@ final class BasicSlidableViewPointMover<T: View & BasicSlidablePointMovable>: Vi
     }
 }
 
+protocol BasicXSlidable: BindableReceiver, XSlidable {
+    var xKnobView: View { get }
+    var xKnobFillColor: Color { get }
+    func xModel(delta: Real, old: Model) -> Model
+    func didChangeFromXSlide(_ phase: Phase, beganModel: Model)
+    
+}
+extension BasicXSlidable {
+    func captureWillXSlider(at p: Point, to version: Version) {
+        capture(model, to: version)
+    }
+    var xKnobFillColor: Color {
+        return .knob
+    }
+}
+extension BasicXSlidable where Self: View {
+    func makeViewXSlider() -> ViewXSlider {
+        return BasicXSlider(view: self)
+    }
+}
+final class BasicXSlider<T: View & BasicXSlidable>: ViewXSlider {
+    var view: T
+    var slidableView: View & XSlidable {
+        return view
+    }
+    
+    init(view: T) {
+        self.view = view
+        beganModel = view.model
+    }
+    
+    private var beganModel: T.Model, allDelta = 0.0.cg
+    
+    func slide(for p: Point, delta: Real, pressure: Real, time: Real, _ phase: Phase) {
+        switch phase {
+        case .began:
+            allDelta = 0
+            view.xKnobView.fillColor = .scroll
+        case .changed: break
+        case .ended: view.xKnobView.fillColor = view.xKnobFillColor
+        }
+        allDelta += delta
+        view.binder[keyPath: view.keyPath] = view.xModel(delta: allDelta, old: beganModel)
+        view.updateWithModel()
+        view.didChangeFromXSlide(phase, beganModel: beganModel)
+    }
+}
+
 //extension CanvasView: VertexMovable {
 //    func captureWillMovePoint(at p: Point, to version: Version) {
 //
@@ -423,8 +557,8 @@ final class AnimationViewPointMover<Value: KeyframeValue, Binder: BinderProtocol
         switch phase {
         case .began:
             editingKeyframeIndex = keyframeIndex
-            let preTime = model.keyframes[keyframeIndex - 1].timing.time
-            let time = model.keyframes[keyframeIndex].timing.time
+            let preTime = model.keyframes[keyframeIndex - 1].time
+            let time = model.keyframes[keyframeIndex].time
             clipDeltaTime = animationView.clipDeltaTime(withTime: time + animationView.beginBaseTime)
             minDeltaTime = preTime - time
             oldAnimation = model
@@ -432,7 +566,7 @@ final class AnimationViewPointMover<Value: KeyframeValue, Binder: BinderProtocol
         case .changed, .ended:
             var nks = oldAnimation.keyframes
             (keyframeIndex..<nks.count).forEach {
-                nks[$0].timing.time += deltaTime
+                nks[$0].time += deltaTime
             }
             model.keyframes = nks
             model.duration = oldAnimation.duration + deltaTime
@@ -443,7 +577,7 @@ final class AnimationViewPointMover<Value: KeyframeValue, Binder: BinderProtocol
         switch phase {
         case .began:
             editingKeyframeIndex = model.keyframes.count
-            let preTime = model.keyframes[model.keyframes.count - 1].timing.time
+            let preTime = model.keyframes[model.keyframes.count - 1].time
             let time = model.duration
             clipDeltaTime = animationView.clipDeltaTime(withTime: time + animationView.beginBaseTime)
             minDeltaTime = preTime - time

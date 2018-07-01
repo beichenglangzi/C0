@@ -180,5 +180,11 @@ struct IntOption: Object1DOption {
     func clippedModel(_ model: Model) -> Model {
         return model.clip(min: minModel, max: maxModel)
     }
+    func realValue(with model: Int) -> Real {
+        return Real(model)
+    }
+    func model(with realValue: Real) -> Int {
+        return Model(realValue)
+    }
 }
 typealias DiscreteIntView<Binder: BinderProtocol> = Discrete1DView<IntOption, Binder>

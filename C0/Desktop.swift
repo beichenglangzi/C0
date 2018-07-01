@@ -193,44 +193,44 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         let padding = Layouter.basicPadding
         let ihamvw = isHiddenActionListView.minSize.width
         let tw = transformView.minSize.width
-        let headerY = bounds.height - topViewsHeight - padding
-        versionView.frame = Rect(x: padding, y: headerY,
+        let headerY = bounds.height - topViewsHeight - padding * 3
+        versionView.frame = Rect(x: padding, y: headerY + padding,
                                  width: versionWidth, height: topViewsHeight)
         let conms = copiedObjectsNameView.minSize
         copiedObjectsNameView.frame = Rect(origin: Point(x: versionView.frame.maxX + padding,
-                                                         y: headerY + padding),
+                                                         y: headerY + padding * 2),
                                            size: conms)
         let conw = copiedObjectsNameView.frame.width
         let d = bounds.width - versionWidth - ihamvw
         let cw = max(d - conw - tw - padding * 3,
                      0)
         copiedObjectsView.frame = Rect(x: copiedObjectsNameView.frame.maxX, y: headerY,
-                                       width: cw, height: topViewsHeight)
+                                       width: cw, height: topViewsHeight + padding * 2)
 
         transformView.frame = Rect(x: copiedObjectsView.frame.maxX, y: headerY,
-                                   width: tw, height: topViewsHeight)
+                                   width: tw, height: topViewsHeight + padding * 2)
 
-        isHiddenActionListView.frame = Rect(x: transformView.frame.maxX, y: headerY,
+        isHiddenActionListView.frame = Rect(x: transformView.frame.maxX, y: headerY + padding,
                                             width: ihamvw, height: topViewsHeight)
 
+        let objectsHeight = bounds.height - topViewsHeight - padding * 4
         if model.isHiddenActionList {
             objectsView.frame = Rect(x: padding,
                                      y: padding,
                                      width: bounds.width - padding * 2,
-                                     height: bounds.height - topViewsHeight - padding * 2)
+                                     height: objectsHeight)
         } else if let actionListView = actionListView {
             let actionWidth = actionListView.width
             let ow = max(bounds.width - actionWidth - padding * 2, 0)
-            let h = bounds.height - padding * 2 - topViewsHeight
             objectsView.frame = Rect(x: padding,
                                      y: padding,
                                      width: ow,
-                                     height: bounds.height - topViewsHeight - padding * 2)
+                                     height: objectsHeight)
 
             actionListView.frame = Rect(x: padding + ow,
                                         y: padding,
                                         width: actionWidth,
-                                        height: h)
+                                        height: objectsHeight)
         }
         updateTransform()
     }

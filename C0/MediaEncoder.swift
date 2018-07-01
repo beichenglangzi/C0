@@ -177,8 +177,8 @@ final class SceneVideoEncoder: MediaEncoder {
 typealias SceneVideoEncoderView = MediaEncoderView<SceneVideoEncoder>
 
 final class SceneImageEncoder: MediaEncoder {
-    private var canvas: Canvas, size: Size, fileType: Image.FileType
-    init(canvas: Canvas, size: Size, fileType: Image.FileType) {
+    private var canvas: Parper, size: Size, fileType: Image.FileType
+    init(canvas: Parper, size: Size, fileType: Image.FileType) {
         self.canvas = canvas
         self.size = size
         self.fileType = fileType

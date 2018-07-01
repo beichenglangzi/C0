@@ -36,6 +36,13 @@ struct Color: Codable {
             self.lightness = newValue.y
         }
     }
+    var ls: Point {
+        get { return Point(x: lightness, y: saturation) }
+        set {
+            self.lightness = newValue.x
+            self.saturation = newValue.y
+        }
+    }
     var rgbColorSpace: RGBColorSpace
     private(set) var rgb: RGB
     
@@ -106,6 +113,7 @@ extension Color {
     static let subContent = Color(white: 0.88)
     static let font = Color(white: 0.05)
     static let knob = white
+    static let scroll = Color(white: 0.77)
     static let locked = Color(white: 0.5)
     static let subLocked = Color(white: 0.65)
     static let editing = Color(white: 0.88)
@@ -250,7 +258,7 @@ extension Color {
 extension Color: Equatable {
     static func ==(lhs: Color, rhs: Color) -> Bool {
         return lhs.hue == rhs.hue
-            && lhs.saturation == lhs.saturation
+            && lhs.saturation == rhs.saturation
             && lhs.lightness == rhs.lightness
             && lhs.rgbColorSpace == rhs.rgbColorSpace
     }
@@ -317,9 +325,6 @@ extension Color: ThumbnailViewable {
     }
 }
 extension Color: AbstractViewable {
-    var defaultAbstractConstraintSize: Size {
-        return Size(width: 130, height: 130 + Layouter.basicHeight / 2 + Layouter.basicPadding)
-    }
     func abstractViewWith<T : BinderProtocol>(binder: T,
                                               keyPath: ReferenceWritableKeyPath<T, Color>,
                                               type: AbstractType) -> ModelView {
@@ -530,14 +535,14 @@ struct HueCircle {
         }
     }
     private(set) var radius: Real
-
+    
     init(lineWidth: Real = 2, bounds: Rect = Rect(), rgbColorSpace: RGBColorSpace = .sRGB) {
         self.lineWidth = lineWidth
         self.bounds = bounds
         self.radius = min(bounds.width, bounds.height) / 2
         self.rgbColorSpace = rgbColorSpace
     }
-
+    
     func draw(in ctx: CGContext) {
         let outR = radius
         let inR = outR - lineWidth, deltaAngle = 1 / outR
@@ -571,12 +576,12 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
         didSet { updateWithModel() }
     }
     var notifications = [((ColorView<Binder>, BasicNotification) -> ())]()
-
+    
     var defaultModel = Model()
-
+    
     let hueView: CircularRealView<Binder>
     let slView: SlidablePointView<Binder>
-
+    
     var hueLineWidth: Real {
         didSet {
             hueCircle.lineWidth = hueLineWidth
@@ -595,29 +600,29 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
     let slColorGradientView: View
     let slBlackWhiteGradientView: View
     let colorFormView: View
-
+    
     init(binder: Binder, keyPath: BinderKeyPath,
          hLineWidth: Real = 2.5, hWidth: Real = 16,
          slPadding: Real? = nil, slRatio: Real = 0.82) {
-
+        
         self.binder = binder
         self.keyPath = keyPath
-
+        
         let valueOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1)
         hueView = CircularRealView(binder: binder, keyPath: keyPath.appending(path: \Color.hue),
                                    option: valueOption, startAngle: 0, width: hWidth)
         let slOption = PointOption(xOption: valueOption, yOption: valueOption)
-        slView = SlidablePointView(binder: binder, keyPath: keyPath.appending(path: \Color.sl),
+        slView = SlidablePointView(binder: binder, keyPath: keyPath.appending(path: \Color.ls),
                                    option: slOption)
         slView.fillColor = .background
-
+        
         if let slPadding = slPadding {
             slView.padding = slPadding
         }
         hueView.width = hWidth
         self.hueLineWidth = hLineWidth
         self.slRatio = slRatio
-
+        
         let hue = binder[keyPath: keyPath].hue
         let y = Color.y(withHSLHue: hue)
         let slc0 = Composition(value: Color(hue: hue, saturation: 0,
@@ -628,7 +633,7 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
                          Gradient.Value(colorComposition: slc1, location: 1)]
         slColorGradientView = View(gradient: Gradient(values: slcValues,
                                                       startPoint: Point(x: 0, y: 0),
-                                                      endPoint: Point(x: 1, y: 0)))
+                                                      endPoint: Point(x: 0, y: 1)))
         let slgc0 = Composition(value: Color(white: 0), opacity: 1)
         let slgc1 = Composition(value: Color(white: 0), opacity: 0)
         let slgc2 = Composition(value: Color(white: 1), opacity: 0)
@@ -639,8 +644,8 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
                          Gradient.Value(colorComposition: slgc3, location: 1)]
         slBlackWhiteGradientView = View(gradient: Gradient(values: slgValues,
                                                            startPoint: Point(x: 0, y: 0),
-                                                           endPoint: Point(x: 0, y: 1)))
-        colorFormView = View()
+                                                           endPoint: Point(x: 1, y: 0)))
+        colorFormView = View(path: Path())
         colorFormView.lineColor = .formBorder
         colorFormView.fillColor = binder[keyPath: keyPath]
         
@@ -653,44 +658,37 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
         hueView.backgroundViews = [hueDrawView]
         slView.children = [slColorGradientView, slBlackWhiteGradientView, slView.knobView]
         children = [colorFormView, hueView, slView]
-
+        
         hueView.notifications.append { [unowned self] (_, _) in self.updateGradient() }
         slView.notifications.append { [unowned self] (_, _) in self.updateGradient() }
     }
     
     var minSize: Size {
-        let slMinWidth = Layouter.defaultMinWidth
-        let slWidth = (slMinWidth + slView.padding * 2) * sqrt(2)
-        let w = hueView.width * 2 + Layouter.smallPadding * 2 + slWidth.rounded(.up)
-        return Size(width: w, height: w + Layouter.basicHeight / 2 + Layouter.basicPadding)
+        return Size(width: 70, height: 100)
     }
     override func updateLayout() {
-        let formPadding = Layouter.basicPadding
-        let padding = Layouter.smallPadding
-        let size = Size(width: bounds.width, height: bounds.height - formHeight - formPadding)
-        let cp = Point(x: size.width / 2, y: size.height / 2)
-        let r = min(size.width, size.height) / 2 - padding
+        let padding = Layouter.basicPadding
+        let huePadding = Layouter.smallPadding
+        let r = bounds.width / 2 - huePadding
+        let cp = Point(x: bounds.midX, y: bounds.height - huePadding - r)
         let hueSize = Size(width: r * 2, height: r * 2)
         let hueFrame = Rect(origin: Point(x: -hueSize.width / 2,
                                           y: -hueSize.height / 2),
                             size: hueSize)
         hueView.path = hueView.circularPath(withBounds: hueFrame)
         hueView.position = cp
-        colorFormView.frame = Rect(x: formPadding,
-                                   y: bounds.height - formHeight - formPadding,
-                                   width: size.width - formPadding * 2,
-                                   height: formHeight)
+        colorFormView.path = hueView.circularInternalPath(withBounds: hueFrame)
+        colorFormView.position = cp
         
-        let sr = r - hueView.width
-        let b2 = (sr * slRatio).rounded(.down)
-        let a2 = (sqrt(sr * sr - b2 * b2)).rounded(.down)
-        let slFrame = Rect(x: cp.x - a2, y: cp.y - b2,
-                           width: a2 * 2, height: b2 * 2)
+        let slFrame = Rect(x: padding,
+                           y: padding,
+                           width: bounds.width - padding * 2,
+                           height: bounds.height - r * 2 - huePadding * 2 - padding)
         slView.frame = slFrame
         let slInFrame = Rect(origin: Point(), size: slFrame.size).inset(by: slView.padding)
         slColorGradientView.frame = slInFrame
         slBlackWhiteGradientView.frame = slInFrame
-
+        
         let hueDrawPadding = ((hueView.width - hueLineWidth) / 2).rounded()
         let hueDrawFrame = hueFrame.inset(by: hueDrawPadding).integral
         hueDrawView.frame = hueDrawFrame

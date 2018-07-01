@@ -22,7 +22,7 @@ import CoreGraphics
 typealias KeyframeIndex = KeyframeTimeCollection.Index
 
 struct LoopFrame: Codable, Hashable {
-    var index: KeyframeIndex, time: Rational, loopCount: Int, loopingCount: Int
+    var index: KeyframeIndex, time: Rational, isLooping: Bool
 }
 typealias LoopFrameIndex = Array<LoopFrame>.Index
 struct LoopFrameIndexInfo {
@@ -64,12 +64,14 @@ protocol Animatable {
 
 struct Animation<Value: KeyframeValue>: Codable {
     private var _keyframes: [Keyframe<Value>]
+    var loopTimes = [Rational]()
     private var _duration: Rational
     var keyframes: [Keyframe<Value>] {
         get { return _keyframes }
         set {
             _keyframes = newValue
-            loopFrames = Animation.loopFrames(with: keyframes, duration: duration)
+            loopFrames = Animation.loopFrames(with: keyframes, loopTimes: loopTimes,
+                                              duration: duration)
         }
     }
     var beginTime: Rational
@@ -77,61 +79,81 @@ struct Animation<Value: KeyframeValue>: Codable {
         get { return _duration }
         set {
             _duration = newValue
-            loopFrames = Animation.loopFrames(with: keyframes, duration: duration)
+            loopFrames = Animation.loopFrames(with: keyframes, loopTimes: loopTimes,
+                                              duration: duration)
         }
     }
     mutating func set(_ keyframes: [Keyframe<Value>], duration: Rational) {
         _keyframes = keyframes
         _duration = duration
-        loopFrames = Animation.loopFrames(with: keyframes, duration: duration)
+        loopFrames = Animation.loopFrames(with: keyframes, loopTimes: loopTimes,
+                                          duration: duration)
     }
     
     private(set) var loopFrames: [LoopFrame]
     
-    private static func loopFrames(with keyframes: [Keyframe<Value>],
+    private static func loopFrames(with keyframes: [Keyframe<Value>], loopTimes: [Rational],
                                    duration: Rational) -> [LoopFrame] {
-        var loopFrames = [LoopFrame](), previousIndexes = [KeyframeIndex]()
-        func appendLoopFrameWith(time: Rational, nextTime: Rational,
-                                 previousIndex: KeyframeIndex, currentIndex: KeyframeIndex,
-                                 loopCount: Int) {
-            var t = time
-            while t <= nextTime {
-                for i in previousIndex..<currentIndex {
-                    let nk = loopFrames[i]
-                    loopFrames.append(LoopFrame(index: nk.index, time: t,
-                                                loopCount: loopCount,
-                                                loopingCount: loopCount))
-                    t += loopFrames[i + 1].time - nk.time
-                    if t > nextTime {
-                        if currentIndex == keyframes.count - 1 {
-                            loopFrames.append(LoopFrame(index: loopFrames[i + 1].index,
-                                                        time: t, loopCount: loopCount,
-                                                        loopingCount: loopCount))
-                        }
-                        return
-                    }
-                }
+        guard !keyframes.isEmpty else {
+            return []
+        }
+        guard var startLoopTime = loopTimes.first else {
+            return keyframes.enumerated().map {
+                LoopFrame(index: $0.offset, time: $0.element.time, isLooping: false)
             }
         }
-        for (i, keyframe) in keyframes.enumerated() {
-            if keyframe.timing.loop == .ended, let previousIndex = previousIndexes.last {
-                let loopCount = previousIndexes.count
-                previousIndexes.removeLast()
-                let time = keyframe.time
-                let nextTime = i + 1 >= keyframes.count ? duration : keyframes[i + 1].time
-                appendLoopFrameWith(time: time, nextTime: nextTime,
-                                    previousIndex: previousIndex, currentIndex: i,
-                                    loopCount: loopCount)
+        var loopFrames = [LoopFrame](), oldKeyframeIndex = 0
+        var isLoop = false
+        for loopTime in loopTimes {
+            isLoop = !isLoop
+            guard !isLoop else {
+                startLoopTime = loopTime
+                continue
+            }
+            
+            func keyframeIndex(atTime time: Rational) -> Int {
+                for (i, keyframe) in keyframes.enumerated().reversed() {
+                    if keyframe.time <= time {
+                        return i
+                    }
+                }
+                return 0
+            }
+            
+            let aStartKeyframeIndex = keyframeIndex(atTime: startLoopTime)
+            let startKeyframeTime = keyframes[aStartKeyframeIndex].time
+            let endKeyframeIndex = keyframeIndex(atTime: loopTime)
+            guard aStartKeyframeIndex < endKeyframeIndex else { continue }
+            
+            for i in oldKeyframeIndex...endKeyframeIndex {
+                loopFrames.append(LoopFrame(index: i, time: keyframes[i].time, isLooping: false))
+            }
+            
+            let endTime = endKeyframeIndex < keyframes.count ?
+                keyframes[endKeyframeIndex + 1].time : duration
+            let startDuration = keyframes[aStartKeyframeIndex + 1].time - startLoopTime
+            let endDuration = endTime - keyframes[endKeyframeIndex].time
+            var time = loopTime + startDuration
+            
+            let startKeyframeIndex: Int
+            if startLoopTime == startKeyframeTime {
+                guard aStartKeyframeIndex + 1 < endKeyframeIndex else { continue }
+                startKeyframeIndex = aStartKeyframeIndex + 1
             } else {
-                let loopCount = keyframe.timing.loop == .began ?
-                    previousIndexes.count + 1 : previousIndexes.count
-                loopFrames.append(LoopFrame(index: i, time: keyframe.timing.time,
-                                            loopCount: loopCount,
-                                            loopingCount: max(0, loopCount - 1)))
+                startKeyframeIndex = aStartKeyframeIndex
             }
-            if keyframe.timing.loop == .began {
-                previousIndexes.append(loopFrames.count - 1)
+            while time <= endTime {
+                for i in startKeyframeIndex...endKeyframeIndex {
+                    loopFrames.append(LoopFrame(index: i, time: time, isLooping: true))
+                    time += i == endKeyframeIndex ?
+                        endDuration + startDuration :
+                        keyframes[i + 1].time - keyframes[i].time
+                }
             }
+            oldKeyframeIndex = endKeyframeIndex + 1
+        }
+        for i in oldKeyframeIndex..<keyframes.count {
+            loopFrames.append(LoopFrame(index: i, time: keyframes[i].time, isLooping: false))
         }
         return loopFrames
     }
@@ -159,7 +181,8 @@ struct Animation<Value: KeyframeValue>: Codable {
         _keyframes = keyframes
         self.beginTime = beginTime
         _duration = duration
-        loopFrames = Animation.loopFrames(with: keyframes, duration: duration)
+        loopFrames = Animation.loopFrames(with: keyframes, loopTimes: loopTimes,
+                                          duration: duration)
         self.editingKeyframeIndex = editingKeyframeIndex
         self.selectedKeyframeIndexes = selectedKeyframeIndexes
     }
@@ -245,26 +268,24 @@ extension Animation: Animatable {
     
     func interpolation(atLoopFrameIndex li: LoopFrameIndex) -> Interpolated {
         let lf1 = loopFrames[li], lf2 = loopFrames[li + 1]
-        let k1 = keyframes[lf1.index], k2 = keyframes[lf2.index]
-        if lf2.time - lf1.time == 0 {
+        guard lf2.time - lf1.time != 0 else {
             return .step(lf1)
-        } else {
-            let isUseIndex0 = li - 1 >= 0 && loopFrames[li - 1].time != lf1.time
-            let isUseIndex3 = li + 2 < loopFrames.count && loopFrames[li + 2].time != lf2.time
-            if isUseIndex0 {
-                if isUseIndex3 {
-                    let lf0 = loopFrames[li - 1], lf3 = loopFrames[li + 2]
-                    return .monospline(lf0, lf1, lf2, lf3)
-                } else {
-                    let lf0 = loopFrames[li - 1]
-                    return .endMonospline(lf0, lf1, lf2)
-                }
-            } else if isUseIndex3 {
-                let lf3 = loopFrames[li + 2]
-                return .firstMonospline(lf1, lf2, lf3)
+        }
+        let isUseIndex0 = li - 1 >= 0 && loopFrames[li - 1].time != lf1.time
+        let isUseIndex3 = li + 2 < loopFrames.count && loopFrames[li + 2].time != lf2.time
+        if isUseIndex0 {
+            if isUseIndex3 {
+                let lf0 = loopFrames[li - 1], lf3 = loopFrames[li + 2]
+                return .monospline(lf0, lf1, lf2, lf3)
             } else {
-                return .linear(lf1, lf2)
+                let lf0 = loopFrames[li - 1]
+                return .endMonospline(lf0, lf1, lf2)
             }
+        } else if isUseIndex3 {
+            let lf3 = loopFrames[li + 2]
+            return .firstMonospline(lf1, lf2, lf3)
+        } else {
+            return .linear(lf1, lf2)
         }
     }
     
@@ -426,36 +447,12 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
                      width: 0, height: height)
         updateLayout()
     }
-
-    private static func knobLinePathView(from p: Point, lineColor: Color,
-                                         baseWidth: Real, lineHeight: Real,
-                                         lineWidth: Real = 4, linearLineWidth: Real = 2,
-                                         with interpolation: Interpolation) -> View {
-        var path = Path()
-        switch interpolation {
-        case .spline:
-            break
-        case .bound:
-            path.append(Rect(x: p.x - linearLineWidth / 2, y: p.y - lineHeight / 2,
-                             width: linearLineWidth, height: lineHeight / 2))
-        case .linear:
-            path.append(Rect(x: p.x - linearLineWidth / 2, y: p.y - lineHeight / 2,
-                             width: linearLineWidth, height: lineHeight))
-        case .step:
-            path.append(Rect(x: p.x - lineWidth / 2, y: p.y - lineHeight / 2,
-                             width: lineWidth, height: lineHeight))
-        }
-        let view = View(path: path)
-        view.fillColor = lineColor
-        return view
-    }
+    
     private static func knobView(from p: Point,
                                  fillColor: Color, lineColor: Color,
                                  baseWidth: Real,
-                                 knobHalfHeight: Real, subKnobHalfHeight: Real,
-                                 with label: Timing.Label) -> View {
-        let kh = label == .main ? knobHalfHeight : subKnobHalfHeight
-        let knobView = View.discreteKnob(Size(width: baseWidth, height: kh * 2))
+                                 knobHalfHeight: Real, subKnobHalfHeight: Real) -> View {
+        let knobView = View.discreteKnob(Size(width: baseWidth, height: knobHalfHeight * 2))
         knobView.position = p
         knobView.fillColor = fillColor
         knobView.lineColor = lineColor
@@ -466,24 +463,8 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
                                             lineWidth: Real, maxLineWidth: Real,
                                             position: Point, width: Real) -> View {
         var path = Path()
-        if keyframe.timing.easing.isLinear {
-            path.append(Rect(x: position.x, y: position.y - lineWidth / 2,
-                             width: width, height: lineWidth))
-        } else {
-            let b = keyframe.timing.easing.bezier, bw = width
-            let bx = position.x, count = Int(width / 5.0)
-            let d = 1 / Real(count)
-            let points: [Point] = (0...count).map { i in
-                let dx = d * Real(i)
-                let dp = b.difference(withT: dx)
-                let dy = max(0.5, min(maxLineWidth, (dp.x == dp.y ?
-                    .pi / 2 : 1.8 * atan2(dp.y, dp.x)) / (.pi / 2)))
-                return Point(x: dx * bw + bx, y: dy)
-            }
-            let ps0 = points.map { Point(x: $0.x, y: position.y + $0.y) }
-            let ps1 = points.reversed().map { Point(x: $0.x, y: position.y - $0.y) }
-            path.append(PathLine(points: ps0 + ps1))
-        }
+        path.append(Rect(x: position.x, y: position.y - lineWidth / 2,
+                         width: width, height: lineWidth))
         let view = View(path: path)
         view.fillColor = lineColor
         return view
@@ -517,37 +498,9 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
                                                             baseWidth: baseWidth,
                                                             lineWidth: lineWidth,
                                                             maxLineWidth: maxLineWidth,
-                                                            position: position, width: width)
+                                                            position: position,
+                                                            width: width)
             keyLineViews.append(keyLine)
-            
-            let knobLine = AnimationView.knobLinePathView(from: position,
-                                                          lineColor: keyLineColor,
-                                                          baseWidth: baseWidth,
-                                                          lineHeight: height - 2,
-                                                          with: keyframe.timing.interpolation)
-            keyLineViews.append(knobLine)
-            
-            if li.loopCount > 0 {
-                var path = Path()
-                if i > 0 && model.loopFrames[i - 1].loopCount < li.loopCount {
-                    path.append(PathLine(points: [Point(x: x, y: midY + height / 2 - 4),
-                                                  Point(x: x + 3, y: midY + height / 2 - 1),
-                                                  Point(x: x, y: midY + height / 2 - 1)]))
-                }
-                path.append(Rect(x: x, y: midY + height / 2 - 2, width: width, height: 1))
-                if li.loopingCount > 0 {
-                    if i > 0 && model.loopFrames[i - 1].loopingCount < li.loopingCount {
-                        path.append(PathLine(points: [Point(x: x, y: 1),
-                                                      Point(x: x + 3, y: 1),
-                                                      Point(x: x, y: 4)]))
-                    }
-                    path.append(Rect(x: x, y: 1, width: width, height: 1))
-                }
-                
-                let layer = View(path: path)
-                layer.fillColor = keyLineColor
-                keyLineViews.append(layer)
-            }
             
             if i > 0 {
                 let fillColor = Color.knob
@@ -557,9 +510,8 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
                                                   fillColor: fillColor,
                                                   lineColor: lineColor,
                                                   baseWidth: baseWidth,
-                                                  knobHalfHeight: khh,
-                                                  subKnobHalfHeight: skhh,
-                                                  with: keyframe.timing.label)
+                                                  knobHalfHeight: li.isLooping ? khh / 2 : khh,
+                                                  subKnobHalfHeight: skhh)
                 knobViews.append(knob)
             }
 
@@ -588,8 +540,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
                                                   lineColor: durationLineColor,
                                                   baseWidth: baseWidth,
                                                   knobHalfHeight: khh,
-                                                  subKnobHalfHeight: skhh,
-                                                  with: .main)
+                                                  subKnobHalfHeight: skhh)
         knobViews.append(durationKnob)
         
         self.knobViews = knobViews
@@ -607,7 +558,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
         knobViews.last?.lineColor = isInteger ? .getSetBorder : .warning
     }
     func updateWithModel() {
-        
+        updateLayout()
     }
     private func updateWithHeight() {
         frame.size.height = height
@@ -672,39 +623,18 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
 }
 extension AnimationView: Newable {
     func new(for p: Point, _ version: Version) {
-        _ = splitKeyframe(withTime: time(withX: p.x), version)
+        splitKeyframe(withTime: time(withX: p.x), version)
     }
-    func splitKeyframe(withTime time: Rational, _ version: Version) -> Bool {
-        guard time < model.duration else {
-            return false
-        }
+    func splitKeyframe(withTime time: Rational, _ version: Version) {
+        guard time < model.duration else { return }
+        guard !model.keyframes.isEmpty else { return }
         let ii = Keyframe.indexInfo(atTime: time, with: model.keyframes)
-        guard ii.interTime > 0 else {
-            return false
-        }
+        guard ii.interTime > 0 else { return }
         let keyframe = model.keyframes[ii.index]
-        let newEaing = ii.duration != 0 ?
-            keyframe.timing.easing.split(with: Real(ii.interTime / ii.duration)) :
-            (b0: keyframe.timing.easing, b1: Easing())
         var splitKeyframe0 = keyframe, splitKeyframe1 = keyframe
-        splitKeyframe0.timing.easing = newEaing.b0
-        splitKeyframe1.timing.time = time
-        splitKeyframe1.timing.label = keyframe.value.defaultLabel
-        splitKeyframe1.timing.easing = newEaing.b1
+        splitKeyframe1.time = time
         pushReplace(splitKeyframe0, at: ii.index, version)
         pushInsert(splitKeyframe1, at: ii.index + 1, version)
-        let indexes = model.selectedKeyframeIndexes
-        for (i, index) in indexes.enumerated() {
-            if index >= ii.index {
-                var movedIndexes = indexes.map { $0 > ii.index ? $0 + 1 : $0 }
-                if index == ii.index {
-                    movedIndexes.insert(index + 1, at: i + 1)
-                }
-//                pushSelectedKeyframeIndexes(movedIndexes, to: version)
-                break
-            }
-        }
-        return true
     }
     
     func pushInsert(_ keyframe: Keyframe<Value>,

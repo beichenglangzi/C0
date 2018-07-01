@@ -66,7 +66,7 @@ struct Composition<T: Equatable>: Equatable {
     var opacity = 1.0.cg
     var blendType = BlendType.normal
     
-    init(value: T, opacity: Real = 1.0.cg, blendType: BlendType = .normal) {
+    init(value: T, opacity: Real = 1, blendType: BlendType = .normal) {
         self.value = value
         self.opacity = opacity
         self.blendType = blendType

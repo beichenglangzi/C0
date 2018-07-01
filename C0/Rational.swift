@@ -334,5 +334,11 @@ struct RationalOption: Object1DOption {
     func clippedModel(_ model: Model) -> Model {
         return model.clip(min: minModel, max: maxModel)
     }
+    func realValue(with model: Rational) -> Real {
+        return Real(model)
+    }
+    func model(with realValue: Real) -> Rational {
+        return Model(realValue)
+    }
 }
 typealias DiscreteRationalView<Binder: BinderProtocol> = Discrete1DView<RationalOption, Binder>

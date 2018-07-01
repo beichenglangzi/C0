@@ -416,25 +416,10 @@ final class C0View: NSView, NSTextInputClient {
         fatalError()
     }
     required init?(coder: NSCoder) {
-        var desktop = Desktop()
-
-        //test
-        desktop.objects.values.append(Layout(Object(Scene())))
-        desktop.objects.values.append(Layout(Object(Animation<Drawing>())))
-        desktop.objects.values.append(Layout(Object(Drafting<Drawing>())))
-        desktop.objects.values.append(Layout(Object(Drawing())))
-        desktop.objects.values.append(Layout(Object(Color())))
-        desktop.objects.values.append(Layout(Object(Timing())))
-        desktop.objects.values.append(Layout(Object(Easing())))
-        desktop.objects.values.append(Layout(Object(Size())))
-        desktop.objects.values.append(Layout(Object(Point())))
-        desktop.objects.values.append(Layout(Object(Real())))
-        desktop.objects.values.append(Layout(Object(Rational())))
-        desktop.objects.values.append(Layout(Object(Int())))
-        desktop.objects.values.append(Layout(Object(Bool())))
-        
+        let desktop = Desktop()
         desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
+        desktopView.objectsView.valuesView.newableValue = Scene()
         sender = Sender(rootView: desktopView)
         
         dragManager = DragManager(sender: sender, clickType: .click, dragType: .drag)
@@ -697,13 +682,16 @@ final class C0View: NSView, NSTextInputClient {
     private let dragManager: DragManager
     
     override func mouseDown(with nsEvent: NSEvent) {
-        dragManager.mouseDown(with: nsEvent, self)
+        sender.sendPointing(dragEventValueWith(pointing: nsEvent))
+        sender.send(DragEvent(type: .drag, value: dragEventValueWith(nsEvent, .began)))
     }
     override func mouseDragged(with nsEvent: NSEvent) {
-        dragManager.mouseDragged(with: nsEvent, self)
+        sender.sendPointing(dragEventValueWith(pointing: nsEvent))
+        sender.send(DragEvent(type: .drag, value: dragEventValueWith(nsEvent, .changed)))
     }
     override func mouseUp(with nsEvent: NSEvent) {
-        dragManager.mouseUp(with: nsEvent, self)
+        sender.send(DragEvent(type: .drag, value: dragEventValueWith(nsEvent, .ended)))
+        sender.sendPointing(dragEventValueWith(pointing: nsEvent))
     }
     
     private var beginTouchesNormalizedPosition = Point()

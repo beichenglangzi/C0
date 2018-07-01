@@ -60,7 +60,6 @@ struct Layout<Value: LayoutValue>: Codable, LayoutProtocol {
     var constraintSize: Size
     
     init(_ value: Value, transform: Transform = Transform()) {
-        
         self.value = value
         self.transform = transform
         self.constraintSize = value.defaultAbstractConstraintSize
@@ -122,7 +121,7 @@ enum Layouter {
                                       width: basicValueWidth, height: basicHeight)
     static let smallValueFrame = Rect(x: 0, y: smallPadding,
                                       width: smallValueWidth, height: smallHeight)
-    static let propertyWidth = 140.0.cg
+    static let propertyWidth = 150.0.cg
     
     enum Item {
         case view(View & LayoutMinSize), xPadding(Real), yPadding(Real)
@@ -227,6 +226,7 @@ enum Layouter {
 
 final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
 : ModelView, BindableReceiver, Layoutable, Transformable {
+    
     typealias Model = Layout<Value>
     typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
     var binder: Binder {
@@ -243,6 +243,8 @@ final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
     
     let valueView: View & LayoutMinSize
     
+    let knobView = View.discreteKnob()
+    
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
@@ -253,15 +255,26 @@ final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
                               type: .normal)
         
         super.init(isLocked: false)
-        children = [valueView]
+        children = [valueView, knobView]
         updateWithModel()
     }
     
     var minSize: Size {
+        let knobHeight = bounds.width * bounds.height < 10000 ?
+            Layouter.basicHeight / 2 : Layouter.basicHeight
         return valueView.minSize + Layouter.basicPadding * 2
+            + Size(width: 0, height: knobHeight)
     }
     override func updateLayout() {
-        valueView.frame = bounds.inset(by: Layouter.basicPadding)
+        let padding = Layouter.basicPadding
+        let knobHeight = bounds.width * bounds.height < 10000 ?
+            Layouter.basicHeight / 2 : Layouter.basicHeight
+        var b = bounds
+        b.size.height -= knobHeight
+        b = b.inset(by: padding)
+        valueView.frame = b
+        knobView.frame = Rect(x: padding, y: b.maxY + padding,
+                              width: b.width, height: knobHeight - padding)
     }
     func updateWithModel() {
         self.transform = model.transform
@@ -327,28 +340,5 @@ final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
     
     func captureWillMoveObject(at p: Point, to version: Version) {
         oldFrame = frame
-    }
-}
-extension LayoutView: InternalZoomable {
-    func captureTransform(to version: Version) {
-        version.registerUndo(withTarget: self) { [zoomingTransform] in
-            $0.zoomingTransform = zoomingTransform
-        }
-    }
-    var zoomingView: View {
-        return parent ?? self
-    }
-    var zoomingTransform: Transform {
-        get { return model.transform }
-        set {
-            binder[keyPath: keyPath].transform = newValue
-            transform = newValue
-        }
-    }
-    func convertZoomingLocalFromZoomingView(_ p: Point) -> Point {
-        return convert(p, from: zoomingView)
-    }
-    func convertZoomingLocalToZoomingView(_ p: Point) -> Point {
-        return convert(p, to: zoomingView)
     }
 }

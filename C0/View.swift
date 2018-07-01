@@ -27,7 +27,6 @@ struct Screen {
 
 /**
  Issue: CoreGraphicsとQuartzCoreを廃止し、MetalでGPUレンダリング
- Issue: リニアワークフロー、マクロ拡散光
  */
 class View {
     private(set) weak var parent: View? {
@@ -563,6 +562,7 @@ private final class C0DrawLayer: CALayer {
         self.borderWidth = borderColor == nil ? 0 : 0.5
         self.backgroundColor = backgroundColor?.cg
         self.borderColor = borderColor?.cg
+        self.magnificationFilter = kCAFilterNearest
     }
     override init(layer: Any) {
         super.init(layer: layer)
@@ -589,7 +589,6 @@ private final class C0DrawLayer: CALayer {
         if let backgroundColor = backgroundColor {
             ctx.setFillColor(backgroundColor)
             ctx.fill(ctx.boundingBoxOfClipPath)
-            ctx.setAllowsFontSubpixelQuantization(false)
         }
         drawClosure?(ctx)
     }

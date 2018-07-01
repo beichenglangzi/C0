@@ -71,7 +71,9 @@ final class EnumView<T: EnumType, U: BinderProtocol>: ModelView, BindableReceive
         
         let className = isUninheritance ? Model.uninheritanceName : Model.name
         classNameView = TextFormView(text: className, font: .bold)
-        nameViews = option.names.map { TextFormView(text: $0) }
+        nameViews = option.names.map {
+            TextFormView(text: $0, paddingSize: Size(width: 4, height: 1))
+        }
         knobView = View.discreteKnob(Size(square: 8), lineWidth: 1)
         
         super.init(isLocked: false)
@@ -112,7 +114,7 @@ final class EnumView<T: EnumType, U: BinderProtocol>: ModelView, BindableReceive
     }
     private func updateKnobLayout() {
         let index = option.index(with: model)
-        knobView.frame = nameViews[index].frame.inset(by: -1)
+        knobView.frame = nameViews[index].frame
     }
     func updateWithModel() {
         updateKnobLayout()

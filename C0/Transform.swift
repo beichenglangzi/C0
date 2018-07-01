@@ -143,6 +143,10 @@ struct Transform: Codable, Initializable {
                                                         scale: scale, rotation: rotation)
         }
     }
+    var degreesRotation: Real {
+        get { return rotation * 180 / .pi }
+        set { rotation = newValue * .pi / 180 }
+    }
     private(set) var affineTransform: AffineTransform
     
     init() {
@@ -268,13 +272,11 @@ extension Transform: ObjectViewable {}
 struct TransformOption {
     var defaultModel = Transform()
     var translationValueOption = RealOption(defaultModel: 0, minModel: -1000000, maxModel: 1000000,
-                                            modelInterval: 0.01, numberOfDigits: 2)
+                                            modelInterval: 0.01, numberOfDigits: 1)
     var zOption = RealOption(defaultModel: 0, minModel: -20, maxModel: 20,
                              modelInterval: 0.01, numberOfDigits: 2)
-    var rotationOption = RealOption(defaultModel: 0, minModel: -10000, maxModel: 10000,
-                                    transformedModel: { $0 * .pi / 180 },
-                                    reverseTransformedModel: { $0 * 180 / .pi },
-                                    modelInterval: 0.5, numberOfDigits: 1, unit: "°")
+    var degreesRotationOption = RealOption(defaultModel: 0, minModel: -10000, maxModel: 10000,
+                                           modelInterval: 0.5, numberOfDigits: 1, unit: "°")
     
     var translationOption: PointOption {
         return PointOption(xOption: translationValueOption, yOption: translationValueOption)
@@ -297,7 +299,7 @@ final class TransformView<T: BinderProtocol>: ModelView, BindableReceiver {
         didSet {
             translationView.option = option.translationOption
             zView.option = option.zOption
-            rotationView.option = option.rotationOption
+            degreesRotationView.option = option.degreesRotationOption
             updateLayout()
         }
     }
@@ -307,11 +309,10 @@ final class TransformView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     let translationView: DiscretePointView<Binder>
     let zView: DiscreteRealView<Binder>
-    let rotationView: DiscreteRealView<Binder>
+    let degreesRotationView: DiscreteRealView<Binder>
 
-    let classNameView = TextFormView(text: Transform.name, font: .bold)
-    let classZNameView = TextFormView(text: "z:")
-    let classRotationNameView = TextFormView(text: "θ:")
+    let zNameView = TextFormView(text: "z:")
+    let degreesRotationNameView = TextFormView(text: "θ:")
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption) {
         self.binder = binder
@@ -323,46 +324,37 @@ final class TransformView<T: BinderProtocol>: ModelView, BindableReceiver {
                                             option: option.translationOption)
         zView = DiscreteRealView(binder: binder, keyPath: keyPath.appending(path: \Model.z),
                                  option: option.zOption)
-        rotationView = DiscreteRealView(binder: binder,
-                                        keyPath: keyPath.appending(path: \Model.rotation),
-                                        option: option.rotationOption)
+        degreesRotationView
+            = DiscreteRealView(binder: binder,
+                               keyPath: keyPath.appending(path: \Model.degreesRotation),
+                               option: option.degreesRotationOption)
         
         super.init(isLocked: false)
-        children = [classNameView,
-                    translationView,
-                    classZNameView, zView,
-                    classRotationNameView, rotationView]
+        children = [translationView,
+                    zNameView, zView,
+                    degreesRotationNameView, degreesRotationView]
     }
     
     var minSize: Size {
         let padding = Layouter.basicPadding
-        let classNameSize = classNameView.minSize
-        let tds = translationView.minSize
-        let w = classNameSize.width + tds.width + padding * 3
-        let h = Layouter.basicHeight + tds.height + padding * 3
+        let tms = translationView.minSize
+        let znms = zNameView.minSize, zms = zView.minSize
+        let rnms = degreesRotationNameView.minSize, rms = degreesRotationView.minSize
+        let w = tms.width + znms.width + zms.width + rnms.width + rms.width + padding * 4
+        let h = Layouter.basicHeight + padding * 2
         return Size(width: w, height: h)
     }
     override func updateLayout() {
         let padding = Layouter.basicPadding
-        let classNameSize = classNameView.minSize
-        let classNameOrigin = Point(x: padding,
-                                    y: bounds.height - classNameSize.height - padding * 2)
-        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
-        
-        let tds = translationView.minSize
-        var y = bounds.height - padding - tds.height
-        translationView.frame = Rect(x: classNameView.frame.maxX + padding,
-                                     y: y,
-                                     width: tds.width, height: tds.height)
-        y -= Layouter.basicHeight + Layouter.basicPadding
-        _ = Layouter.leftAlignment([.view(classZNameView), .view(zView), .xPadding(padding),
-                                    .view(classRotationNameView), .view(rotationView)],
-                                   y: y, height: Layouter.basicHeight)
+        _ = Layouter.leftAlignment([.view(translationView), .xPadding(padding),
+                                    .view(zNameView), .view(zView), .xPadding(padding),
+                                    .view(degreesRotationNameView), .view(degreesRotationView)],
+                                   y: padding, height: Layouter.basicHeight)
     }
     func updateWithModel() {
         translationView.updateWithModel()
         zView.updateWithModel()
-        rotationView.updateWithModel()
+        degreesRotationView.updateWithModel()
     }
 }
 
@@ -380,9 +372,9 @@ final class BasicTransformView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     var option: ModelOption {
         didSet {
-//            translationView.option = option.translationOption
+            translationView.option = option.translationOption
             zView.option = option.zOption
-            rotationView.option = option.rotationOption
+            degreesRotationView.option = option.degreesRotationOption
             updateLayout()
         }
     }
@@ -390,50 +382,71 @@ final class BasicTransformView<T: BinderProtocol>: ModelView, BindableReceiver {
         return option.defaultModel
     }
     
-//    let translationView: DiscretePointView<Binder>
+    let translationView: AssignablePointView<Binder>
     let zView: AssignableRealView<Binder>
-    let rotationView: AssignableRealView<Binder>
+    let degreesRotationView: AssignableRealView<Binder>
     
-    let classZNameView = TextFormView(text: "z:")
-    let classRotationNameView = TextFormView(text: "θ:")
+    let zNameView = TextFormView(text: "z:")
+    let degreesRotationNameView = TextFormView(text: "θ:")
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption) {
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
         
-//        translationView = DiscretePointView(binder: binder,
-//                                            keyPath: keyPath.appending(path: \Model.translation),
-//                                            option: option.translationOption)
+        translationView = AssignablePointView(binder: binder,
+                                              keyPath: keyPath.appending(path: \Model.translation),
+                                              option: option.translationOption)
         zView = AssignableRealView(binder: binder, keyPath: keyPath.appending(path: \Model.z),
                                    option: option.zOption)
-        rotationView = AssignableRealView(binder: binder,
-                                          keyPath: keyPath.appending(path: \Model.rotation),
-                                          option: option.rotationOption)
+        degreesRotationView
+            = AssignableRealView(binder: binder,
+                                 keyPath: keyPath.appending(path: \Model.degreesRotation),
+                                 option: option.degreesRotationOption)
         
         super.init(isLocked: false)
-        children = [//translationView,
-                    classZNameView, zView,
-                    classRotationNameView, rotationView]
+        children = [translationView,
+                    zNameView, zView,
+                    degreesRotationNameView, degreesRotationView]
     }
     
     var minSize: Size {
         let padding = Layouter.basicPadding
-        let w = Layouter.propertyWidth + padding * 2
-        let h = Layouter.basicHeight + padding * 2
-        return Size(width: w, height: h)
+        let width = Layouter.basicValueWidth
+        let height = Layouter.basicTextHeight
+        let translationSize = translationView.minSize
+        let zNameSize = zNameView.minSize, rotationNameSize = degreesRotationNameView.minSize
+        var w = 0.0.cg
+        w += translationSize.width
+        w += padding
+        w += zNameSize.width + width
+        w += padding
+        w += rotationNameSize.width + width
+        let h = height
+        return Size(width: w + padding * 2, height: h + padding * 2)
     }
     override func updateLayout() {
         let padding = Layouter.basicPadding
-        
-        _ = Layouter.leftAlignment([//.view(translationView), .xPadding(padding),
-                                    .view(classZNameView), .view(zView), .xPadding(padding),
-                                    .view(classRotationNameView), .view(rotationView)],
-                                   y: 0, height: Layouter.basicHeight)
+        let width = Layouter.basicValueWidth
+        let height = Layouter.basicTextHeight
+        let translationSize = translationView.minSize
+        let zNameSize = zNameView.minSize, rotationNameSize = degreesRotationNameView.minSize
+        var x = padding
+        let y = padding
+        translationView.frame = Rect(origin: Point(x: x, y: y), size: translationSize)
+        x += translationSize.width + padding
+        zNameView.frame = Rect(origin: Point(x: x, y: y + padding), size: zNameSize)
+        x += zNameSize.width
+        zView.frame = Rect(x: x, y: y + padding, width: width, height: height)
+        x += width + padding
+        degreesRotationNameView.frame = Rect(origin: Point(x: x, y: y + padding), size: rotationNameSize)
+        x += rotationNameSize.width
+        degreesRotationView.frame = Rect(x: x, y: y + padding, width: width, height: height)
     }
+    
     func updateWithModel() {
-//        translationView.updateWithModel()
+        translationView.updateWithModel()
         zView.updateWithModel()
-        rotationView.updateWithModel()
+        degreesRotationView.updateWithModel()
     }
 }

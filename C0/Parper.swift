@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-struct Canvas: Codable {
+struct Parper: Codable {
     var frame: Rect
     var centeringSize: Size {
         get { return frame.size }
@@ -36,25 +36,25 @@ struct Canvas: Codable {
         self.transform = transform
     }
 }
-extension Canvas {
+extension Parper {
     func view() -> View {
         return View()
     }
 }
-extension Canvas: Referenceable {
-    static let name = Text(english: "Canvas", japanese: "キャンバス")
+extension Parper: Referenceable {
+    static let name = Text(english: "Parper", japanese: "ペーパー")
 }
-extension Canvas: ThumbnailViewable {
+extension Parper: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect) -> View {
         return View(frame: frame)
     }
 }
-extension Canvas: AbstractViewable {
+extension Parper: AbstractViewable {
     var defaultAbstractConstraintSize: Size {
-        return Size(width: 200, height: 200)
+        return Size(width: 600, height: 400)
     }
     func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Canvas>,
+                                              keyPath: ReferenceWritableKeyPath<T, Parper>,
                                               type: AbstractType) -> ModelView {
         switch type {
         case .normal:
@@ -64,10 +64,10 @@ extension Canvas: AbstractViewable {
         }
     }
 }
-extension Canvas: ObjectViewable {}
+extension Parper: ObjectViewable {}
 
 final class CanvasView<T: BinderProtocol>: ModelView, BindableReceiver {
-    typealias Model = Canvas
+    typealias Model = Parper
     typealias Binder = T
     var binder: Binder {
         didSet { updateWithModel() }
@@ -115,7 +115,7 @@ final class CanvasView<T: BinderProtocol>: ModelView, BindableReceiver {
         updateCanvasSize()
     }
     func updateCanvasSize() {
-        canvasBorderView.frame = model.frame
+        canvasBorderView.frame = bounds.inset(by: 50)
     }
     
     var zoomingTransform: Transform {
@@ -144,10 +144,5 @@ final class CanvasView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     var zoomingLocalView: View {
         return rootView
-    }
-}
-extension CanvasView: InternalZoomable {
-    func captureTransform(to version: Version) {
-        transformView.push(model.transform, to: version)
     }
 }

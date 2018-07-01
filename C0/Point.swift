@@ -273,6 +273,21 @@ extension Point: AppliableAffineTransform {
     }
 }
 extension Point {
+    static let snapColor = Color(red: 0.5, green: 0, blue: 1)
+    static let controlEditPointInColor = Color(red: 1, green: 1, blue: 0)
+    static let controlPointInColor = Color.knob
+    static let controlPointCapInColor = Color.knob
+    static let controlPointJointInColor = Color(red: 1, green: 0, blue: 0)
+    static let controlPointOtherJointInColor = Color(red: 1, green: 0.5, blue: 1)
+    static let controlPointUnionInColor = Color(red: 0, green: 1, blue: 0.2)
+    static let controlPointPathInColor = Color(red: 0, green: 1, blue: 1)
+    static let controlPointOutColor = Color.getSetBorder
+    static let editControlPointInColor = Color(red: 1, green: 0, blue: 0)
+    static let editControlPointOutColor = Color(red: 1, green: 0.5, blue: 0.5)
+    static let contolLineInColor = Color(red: 1, green: 0.5, blue: 0.5)
+    static let contolLineOutColor = Color(red: 1, green: 0, blue: 0)
+}
+extension Point {
     func view(radius r: Real, lineWidth: Real = 1,
               fillColor: Color = .knob, lineColor: Color = .getSetBorder) -> View {
         let view = View.knob()
@@ -422,8 +437,9 @@ struct PointOption: Object2DOption {
     var xOption: XOption
     var yOption: YOption
 }
-typealias SlidablePointView<Binder: BinderProtocol> = Slidable2DView<PointOption, Binder>
+typealias AssignablePointView<Binder: BinderProtocol> = AssignableObject2DView<PointOption, Binder>
 typealias DiscretePointView<Binder: BinderProtocol> = Discrete2DView<PointOption, Binder>
+typealias SlidablePointView<Binder: BinderProtocol> = Slidable2DView<PointOption, Binder>
 
 final class PointView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Point

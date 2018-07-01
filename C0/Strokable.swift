@@ -32,11 +32,10 @@ protocol ViewStroker: class {
 
 struct StrokableActionList: SubActionList {
     let strokeAction = Action(name: Text(english: "Stroke", japanese: "ストローク"),
-                              quasimode: Quasimode(modifier: [.input(.shift)],
+                              quasimode: Quasimode(modifier: [.input(.option)],
                                                    [.drag(.drag)]))
-    let lassoEraseAction = Action(name: Text(english: "Lasso Erase", japanese: "囲み消し"),
-                                  quasimode: Quasimode(modifier: [.input(.shift), .input(.control),
-                                                                  .input(.option)],
+    let lassoEraseAction = Action(name: Text(english: "Lasso Erase", japanese: "囲み消す"),
+                                  quasimode: Quasimode(modifier: [.input(.shift), .input(.option)],
                                                        [.drag(.drag)]))
     var actions: [Action] {
         return [strokeAction, lassoEraseAction]

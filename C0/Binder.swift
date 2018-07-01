@@ -167,9 +167,7 @@ extension BindableReceiver {
     func clippedModel(_ model: Model) -> Model {
         return model
     }
-    func reset(for p: Point, _ version: Version) {
-        push(defaultModel, to: version)
-    }
+    func reset(for p: Point, _ version: Version) {}
     func copiedObjects(at p: Point) -> [Object] {
         return [Object(model)]
     }

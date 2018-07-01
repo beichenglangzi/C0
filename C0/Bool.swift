@@ -116,8 +116,8 @@ final class BoolView<Binder: BinderProtocol>: ModelView, BindableReceiver {
         let font = Font.default
         optionStringView = TextFormView(text: option.name.isEmpty ? "" : option.name + ":",
                                         font: font)
-        optionTrueNameView = TextFormView(text: option.info.trueName, font: font)
-        optionFalseNameView = TextFormView(text: option.info.falseName, font: font)
+        optionTrueNameView = TextFormView(text: option.info.trueName, font: font, paddingSize: Size(width: 4, height: 1))
+        optionFalseNameView = TextFormView(text: option.info.falseName, font: font, paddingSize: Size(width: 4, height: 1))
         optionTrueNameView.fillColor = nil
         optionFalseNameView.fillColor = nil
         knobView = View.discreteKnob()
@@ -160,9 +160,7 @@ final class BoolView<Binder: BinderProtocol>: ModelView, BindableReceiver {
         updateKnobLayout()
     }
     private func updateKnobLayout() {
-        knobView.frame = model ?
-            optionTrueNameView.frame.inset(by: -1) :
-            optionFalseNameView.frame.inset(by: -1)
+        knobView.frame = model ? optionTrueNameView.frame : optionFalseNameView.frame
     }
     func updateWithModel() {
         updateKnobLayout()

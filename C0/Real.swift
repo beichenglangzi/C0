@@ -43,8 +43,11 @@ extension Real {
         let a = self - other
         return a + (a > .pi ? -2 * (.pi) : (a < -.pi ? 2 * (.pi) : 0))
     }
-    var clipRotation: Real {
+    var clippedRotation: Real {
         return self < -.pi ? self + 2 * (.pi) : (self > .pi ? self - 2 * (.pi) : self)
+    }
+    var clippedDegreesRotation: Real {
+        return self < -180 ? self + 360 : (self > 180 ? self - 360 : self)
     }
     func isApproximatelyEqual(other: Real, roundingError: Real = 0.0000000001) -> Bool {
         return abs(self - other) < roundingError
@@ -336,6 +339,12 @@ struct RealOption: Object1DOption {
     }
     func clippedModel(_ model: Model) -> Model {
         return model.clip(min: minModel, max: maxModel)
+    }
+    func realValue(with model: Model) -> Real {
+        return model
+    }
+    func model(with realValue: Real) -> Model {
+        return realValue
     }
 }
 extension RealOption {

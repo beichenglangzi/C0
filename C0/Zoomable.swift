@@ -24,38 +24,16 @@ protocol Zoomable: class {
     func convertZoomingLocalFromZoomingView(_ p: Point) -> Point
     func convertZoomingLocalToZoomingView(_ p: Point) -> Point
 }
-protocol InternalZoomable: Zoomable {}
-
-protocol Scrollable {
-    func captureBindIndex(to version: Version)
-    var bindIndex: Int { get set }
-    var bindIndexRange: Range<Int> { get }
-    func updateBindIndexRatio(_ ratio: Real)
-}
-protocol Bindable {
-    func bind(for p: Point, _ verison: Version)
-}
 
 struct ZoomableActionList: SubActionList {
     let zoomAction = Action(name: Text(english: "Zoom", japanese: "ズーム"),
                             quasimode: Quasimode([.pinch(.pinch)]),
                             isEditable: false)
-    let internalZoomAction = Action(name: Text(english: "Internal Zoom", japanese: "内部ズーム"),
-                                    quasimode: Quasimode(modifier: [.input(.shift)],
-                                                         [.pinch(.pinch)]),
-                                    isEditable: false)
     let rotateAction = Action(name: Text(english: "Rotate", japanese: "回転"),
                               quasimode: Quasimode([.rotate(.rotate)]),
                               isEditable: false)
-    let bindIndexAction = Action(name: Text(english: "Bind Index", japanese: "インデックスバインド"),
-                                 quasimode: Quasimode([.scroll(.scroll)]),
-                                 isEditable: false)
-    let bindAction = Action(name: Text(english: "Bind", japanese: "バインド"),
-                            quasimode: Quasimode([.input(.subClick)]),
-                            isEditable: false)
     var actions: [Action] {
-        return [zoomAction, internalZoomAction,
-                rotateAction, bindIndexAction, bindAction]
+        return [zoomAction, rotateAction]
     }
 }
 extension ZoomableActionList: SubSendable {
@@ -68,9 +46,6 @@ final class ZoomableSender: SubSender {
     typealias ActionList = ZoomableActionList
     
     typealias ZoomableReceiver = View & Zoomable
-    typealias InternalZoomableReceiver = View & InternalZoomable
-    typealias ScrollableReceiver = View & Scrollable
-    typealias BindableReceiver = View & Bindable
     
     var actionList: ActionList
     
@@ -78,7 +53,7 @@ final class ZoomableSender: SubSender {
         self.actionList = actionList
     }
     
-    var zoomers = [Zoomer](), rotater: Rotater?, scroller: Scroller?
+    var zoomers = [Zoomer](), rotaters = [Rotater]()
     
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
@@ -96,81 +71,21 @@ final class ZoomableSender: SubSender {
             if actionMap.phase == .ended {
                 self.zoomers = []
             }
-        case actionList.internalZoomAction:
-            guard let eventValue = actionMap.eventValuesWith(PinchEvent.self).first else { return }
-            guard let zoomingView = sender.mainIndicatedView
-                .withSelfAndAllParents(with: InternalZoomableReceiver.self)?
-                .zoomingView else { return }
-            if actionMap.phase == .began {
-                let receivers: [ZoomableReceiver] = sender.indictedViews.compactMap {
-                    if let receiver = $0.withSelfAndAllParents(with: InternalZoomableReceiver.self) {
-                        return receiver.zoomingView == zoomingView ? receiver : nil
-                    } else {
-                        return nil
-                    }
-                }
-                
-                zoomers = receivers.map { Zoomer(zoomableView: $0) }
-                receivers.forEach {
-                    $0.captureTransform(to: sender.indicatedVersionView.version)
-                }
-                if let views = zoomingView.children as? [View & Movable] {
-                    sender.beganMovingOrigins = views.map { $0.movingOrigin }
-
-                }
-            }
-            
-            zoomers.forEach {
-                let p = $0.zoomableView.zoomingView.convertFromRoot(eventValue.rootLocation)
-                $0.zoom(for: p, time: eventValue.time,
-                        magnification: eventValue.magnification, actionMap.phase)
-            }
-            
-            if let views = zoomingView.children as? [View & Movable] {
-                sender.updateLayout(withMovedViews: zoomers.map { $0.zoomableView }, from: views)
-            }
-            if actionMap.phase == .ended {
-                self.zoomers = []
-                sender.beganMovingOrigins = []
-            }
         case actionList.rotateAction:
             guard let eventValue = actionMap.eventValuesWith(RotateEvent.self).first else { return }
             if actionMap.phase == .began {
                 let receiver = sender.indicatedZoomableView
-                rotater = Rotater(zoomableView: receiver)
+                rotaters = [Rotater(zoomableView: receiver)]
                 receiver.captureTransform(to: sender.indicatedVersionView.version)
             }
-            guard let rotater = rotater else { return }
+            guard let rotater = rotaters.first else { return }
             let p = rotater.zoomableView.convertFromRoot(eventValue.rootLocation)
             rotater.rotate(for: p, time: eventValue.time,
                            rotationQuantity: eventValue.rotationQuantity, actionMap.phase)
             if actionMap.phase == .ended {
-                self.rotater = nil
+                self.rotaters = []
             }
-        case actionList.bindIndexAction:
-            guard let eventValue = actionMap.eventValuesWith(ScrollEvent.self).first else { return }
-            if actionMap.phase == .began,
-                let receiver = sender.mainIndicatedView as? ScrollableReceiver {
-                
-                scroller = Scroller(scrollableView: receiver)
-                receiver.captureBindIndex(to: sender.indicatedVersionView.version)
-            }
-            guard let scroller = scroller else { return }
-            let p = scroller.scrollableView.convertFromRoot(eventValue.rootLocation)
-            scroller.bindIndex(for: p, time: eventValue.time,
-                               scrollDeltaPoint: eventValue.scrollDeltaPoint,
-                               eventValue.phase)
-            if actionMap.phase == .ended {
-                self.scroller = nil
-            }
-        case actionList.bindAction:
-            guard actionMap.phase == .began else { break }
-            guard let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
-                let receiver = sender.mainIndicatedView as? BindableReceiver else { return }
-                
-            let p = receiver.convertFromRoot(eventValue.rootLocation)
-            receiver.bind(for: p, sender.indicatedVersionView.version)
-        default: return
+        default: break
         }
     }
     
@@ -181,18 +96,18 @@ final class ZoomableSender: SubSender {
             self.zoomableView = zoomableView
         }
         
+        var isEndSnap = true
+        var minZ = -20.0.cg, maxZ = 20.0.cg, zInterval = 0.02.cg
+        var correction = 3.0.cg
+        
+        private var beganZ = 0.0.cg, z = 0.0.cg
+        
         func zoom(at p: Point, closure: () -> ()) {
             let point = zoomableView.convertZoomingLocalFromZoomingView(p)
             closure()
             let newPoint = zoomableView.convertZoomingLocalToZoomingView(point)
             zoomableView.zoomingTransform.translation -= (newPoint - p)
         }
-        
-        var isEndSnap = true
-        var minZ = -6.0.cg, maxZ = 6.0.cg, zInterval = 0.02.cg
-        var correction = 3.0.cg
-        
-        private var beganZ = 0.0.cg, z = 0.0.cg
         
         func zoom(for p: Point, time: Real, magnification: Real, _ phase: Phase) {
             switch phase {
@@ -210,7 +125,6 @@ final class ZoomableSender: SubSender {
                     zoomableView.zoomingTransform.translation
                         = zoomableView.zoomingTransform.translation.rounded()
                 }
-                //clipToScreen
             }
         }
     }
@@ -222,55 +136,37 @@ final class ZoomableSender: SubSender {
             self.zoomableView = zoomableView
         }
         
-        func zoom(at p: Point, closure: () -> ()) {
+        var isEndSnap = true
+        var rotationInterval = 2.0.cg
+        var correction = (1.0.cg / (3.2 * .pi)) * 180 / .pi
+        
+        private var beganRotation = 0.0.cg, rotation = 0.0.cg
+        
+        func rotate(at p: Point, closure: () -> ()) {
             let point = zoomableView.convertZoomingLocalFromZoomingView(p)
             closure()
             let newPoint = zoomableView.convertZoomingLocalToZoomingView(point)
             zoomableView.zoomingTransform.translation -= (newPoint - p)
         }
         
-        var snapRotations: [Real] = [-.pi, 0.0, .pi]
-        var correction = 1.0.cg / (4.2 * .pi)
-        private var isBlockRotation = false, blockRotation = 0.0.cg, oldRotation = 0.0.cg
         func rotate(for p: Point, time: Real, rotationQuantity: Real, _ phase: Phase) {
-            let rotation = zoomableView.zoomingTransform.rotation
             switch phase {
             case .began:
-                oldRotation = rotation
-                isBlockRotation = false
+                beganRotation = zoomableView.zoomingTransform.degreesRotation
+                rotation = 0.0
             case .changed:
-                guard !isBlockRotation else { return }
-                zoom(at: p) {
-                    let oldRotation = rotation
-                    let newRotation = rotation + rotationQuantity * correction
-                    for br in snapRotations {
-                        if br.isOver(old: oldRotation, new: newRotation) {
-                            isBlockRotation = true
-                            blockRotation = br
-                            break
-                        }
-                    }
-                    zoomableView.zoomingTransform.rotation = newRotation.clipRotation
+                rotate(at: p) {
+                    rotation += rotationQuantity * correction
+                    let newRotation = (rotation + beganRotation).interval(scale: rotationInterval)
+                        .clippedDegreesRotation
+                    zoomableView.zoomingTransform.degreesRotation = newRotation
                 }
             case .ended:
-                guard isBlockRotation else { return }
-                zoom(at: p) {
-                    zoomableView.zoomingTransform.rotation = blockRotation
+                if isEndSnap {
+                    zoomableView.zoomingTransform.translation
+                        = zoomableView.zoomingTransform.translation.rounded()
                 }
             }
-        }
-    }
-    
-    final class Scroller {
-        var scrollableView: View & Scrollable
-        
-        init(scrollableView: View & Scrollable) {
-            self.scrollableView = scrollableView
-        }
-        
-        func bindIndex(for p: Point, time: Real,
-                       scrollDeltaPoint: Point, _ phase: Phase) {
-            
         }
     }
 }

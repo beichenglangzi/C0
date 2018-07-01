@@ -21,44 +21,28 @@ protocol CopiedObjectsViewer: class {
     var copiedObjects: [Object] { get }
     func push(_ copiedObjects: [Object], to version: Version)
 }
-
 protocol Copiable {
     func copiedObjects(at p: Point) -> [Object]
 }
 protocol Assignable: Copiable {
-    func reset(for p: Point, _ version: Version)
-    func paste(_ objects: [Any], for p: Point, _ version: Version)// throws
+    func paste(_ objects: [Any], for p: Point, _ version: Version)
 }
 protocol CollectionAssignable: Assignable {
     func remove(for p: Point, _ version: Version)
-    func add(_ objects: [Any], for p: Point, _ version: Version)
-}
-protocol Newable {
-    func new(for p: Point, _ version: Version)
 }
 
 struct AssignableActionList: SubActionList {
     let cutAction = Action(name: Text(english: "Cut", japanese: "カット"),
                            quasimode: Quasimode(modifier: [.input(.command)],
                                                 [.input(.x)]))
-    let resetAction = Action(name: Text(english: "Reset", japanese: "リセット"),
-                             quasimode: Quasimode(modifier: [.input(.shift),
-                                                             .input(.command)],
-                                                  [.input(.x)]))
     let copyAction = Action(name: Text(english: "Copy", japanese: "コピー"),
                             quasimode: Quasimode(modifier: [.input(.command)],
                                                  [.input(.c)]))
     let pasteAction = Action(name: Text(english: "Paste", japanese: "ペースト"),
                              quasimode: Quasimode(modifier: [.input(.command)],
                                                   [.input(.v)]))
-    let addAction = Action(name: Text(english: "Add", japanese: "追加"),
-                           quasimode: Quasimode(modifier: [.input(.command)],
-                                                [.input(.d)]))
-    let newAction = Action(name: Text(english: "New", japanese: "新規"),
-                           quasimode: Quasimode(modifier: [.input(.command)],
-                                                [.input(.e)]))
     var actions: [Action] {
-        return [cutAction, resetAction, copyAction, pasteAction, addAction, newAction]
+        return [cutAction, copyAction, pasteAction]
     }
 }
 extension AssignableActionList: SubSendable {
@@ -72,7 +56,6 @@ final class AssignableSender: SubSender {
     typealias Receiver = View & Assignable
     typealias CollectionReceiver = View & CollectionAssignable
     typealias CopiableReceiver = View & Copiable
-    typealias NewableReceiver = View & Newable
     
     typealias ActionList = AssignableActionList
     var actionList: ActionList
@@ -83,15 +66,6 @@ final class AssignableSender: SubSender {
     
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
-        case actionList.resetAction:
-            guard actionMap.phase == .began else { break }
-            if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
-                let receiver = sender.mainIndicatedView as? Receiver {
-                
-                let p = receiver.convertFromRoot(eventValue.rootLocation)
-                sender.stopEditableEvents()
-                receiver.reset(for: p, sender.indicatedVersionView.version)
-            }
         case actionList.cutAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
@@ -129,25 +103,6 @@ final class AssignableSender: SubSender {
                 let p = receiver.convertFromRoot(eventValue.rootLocation)
                 sender.stopEditableEvents()
                 receiver.paste(viewer.copiedObjects, for: p, sender.indicatedVersionView.version)
-            }
-        case actionList.addAction:
-            guard actionMap.phase == .began else { break }
-            if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
-                let receiver = sender.mainIndicatedView as? CollectionReceiver,
-                let viewer = receiver.withSelfAndAllParents(with: CopiedObjectViewer.self) {
-                
-                let p = receiver.convertFromRoot(eventValue.rootLocation)
-                sender.stopEditableEvents()
-                receiver.add(viewer.copiedObjects, for: p, sender.indicatedVersionView.version)
-            }
-        case actionList.newAction:
-            guard actionMap.phase == .began else { break }
-            if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
-                let receiver = sender.mainIndicatedView as? NewableReceiver {
-                
-                let p = receiver.convertFromRoot(eventValue.rootLocation)
-                sender.stopEditableEvents()
-                receiver.new(for: p, sender.indicatedVersionView.version)
             }
         default: break
         }

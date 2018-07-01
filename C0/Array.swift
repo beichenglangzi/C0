@@ -85,6 +85,8 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
     private(set) var rootView: View
     private(set) var modelViews: [View]
     
+    var newableValue: Object.Value?
+    
     init(binder: Binder, keyPath: BinderKeyPath,
          xyOrientation: Orientation.XY? = nil, abstractType: AbstractType = .normal) {
         self.binder = binder
@@ -194,8 +196,8 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
         push(model, to: version)
     }
 }
-extension ArrayView: CollectionAssignable {
-    func add(_ objects: [Any], for p: Point, _ version: Version) {
+extension ArrayView: Newable, CollectionAssignable {
+    func paste(_ objects: [Any], for p: Point, _ version: Version) {
         let p = rootView.convert(p, from: self)
         let model: [ModelElement] = objects.compactMap {
             let element = ModelElement(anyValue: $0)
@@ -216,6 +218,12 @@ extension ArrayView: CollectionAssignable {
             .index(where: { $0.contains($0.convert(p, from: self)) }) else { return }//no convert
 //        let child = rootView.children[index]
         remove(at: index, version)
+    }
+    
+    func new(for p: Point, _ version: Version) {
+        if let newableValue = newableValue {
+            paste([Object(newableValue)], for: p, version)
+        }
     }
 }
 extension ArrayView {

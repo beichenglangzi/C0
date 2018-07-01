@@ -170,9 +170,6 @@ protocol KeyInputtable {
     func insert(_ string: String, for p: Point, _ version: Version)
 }
 
-/**
- Issue: モードレス文字入力
- */
 final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = String
     typealias ModelOption = StringOption
@@ -309,3 +306,4 @@ extension StringView: KeyInputtable {
                   endClosure: endClosure)
     }
 }
+//encode

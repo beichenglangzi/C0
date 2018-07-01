@@ -165,25 +165,25 @@ protocol Indicatable: IndicatableResponder {
 
 struct SelectableActionList: SubActionList {
     let indicateAction = Action(name: Text(english: "Indicate", japanese: "指し示す"),
-                                quasimode: Quasimode([.drag(.pointing)]))
+                                quasimode: Quasimode([.drag(.pointing)]),
+                                isEditable: false)
     let selectAction = Action(name: Text(english: "Select", japanese: "選択"),
                               quasimode: Quasimode(modifier: [.input(.command)],
                                                    [.drag(.drag)]))
-    let deselectAction = Action(name: Text(english: "Deselect", japanese: "選択解除"),
+    let deselectAction = Action(name: Text(english: "Deselect", japanese: "選択を解除"),
                                 quasimode: Quasimode(modifier: [.input(.shift),
                                                                 .input(.command)],
                                                      [.drag(.drag)]))
     let selectAllAction = Action(name: Text(english: "Select All", japanese: "すべて選択"),
                                  quasimode: Quasimode(modifier: [.input(.command)],
                                                       [.input(.a)]))
-    let deselectAllAction = Action(name: Text(english: "Deselect All", japanese: "すべて選択解除"),
+    let deselectAllAction = Action(name: Text(english: "Deselect All", japanese: "すべての選択を解除"),
                                    quasimode: Quasimode(modifier: [.input(.shift),
                                                                    .input(.command)],
                                                         [.input(.a)]))
     var actions: [Action] {
         return [indicateAction,
-                selectAction, deselectAction,
-                selectAllAction, deselectAllAction]
+                selectAction, deselectAction]
     }
 }
 extension SelectableActionList: SubSendable {

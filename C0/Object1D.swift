@@ -31,6 +31,8 @@ protocol Object1DOption: GetterOption {
     func model(withDelta delta: Real, oldModel: Model) -> Model
     func model(withRatio ratio: Real) -> Model
     func clippedModel(_ model: Model) -> Model
+    func realValue(with model: Model) -> Real
+    func model(with realValue: Real) -> Model
 }
 
 final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: ModelView, BindableReceiver {
@@ -104,9 +106,6 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: ModelView, B
 
 protocol Discrete {}
 
-/**
- Issue: スクロールによる値の変更
- */
 final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
 : ModelView, Discrete, BindableReceiver {
 
@@ -144,10 +143,10 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
     var interval = 1.5.cg
     private var knobLineFrame = Rect()
     let labelPaddingX: Real, knobPadding = 3.0.cg
-    let knobView = View.discreteKnob(Size(width: 6, height: 5), lineWidth: 1)
+    let knobView = View.discreteKnob(Size(square: 5), lineWidth: 1)
     let linePathView: View = {
         let linePathView = View()
-        linePathView.lineColor = .content
+        linePathView.fillColor = .content
         return linePathView
     } ()
     let optionStringView: TextFormView
@@ -165,6 +164,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
         
         super.init(isLocked: false)
         isClipped = true
+        knobView.fillColor = .scroll
         children = [optionStringView, linePathView, knobView]
         updateWithModel()
     }
@@ -174,7 +174,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
                     height: Layouter.basicHeight)
     }
     override func updateLayout() {
-        let paddingX = 5.0.cg
+        let paddingX = knobView.bounds.width / 2
         knobLineFrame = Rect(x: paddingX, y: 2,
                              width: bounds.width - paddingX * 2, height: 1)
         linePathView.frame = knobLineFrame
@@ -193,7 +193,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
         case .horizontal(let horizontal):
             let tt = horizontal == .leftToRight ? t : 1 - t
             let x = knobLineFrame.width * tt + knobLineFrame.minX
-            knobView.position = Point(x: x.rounded(), y: knobPadding)
+            knobView.position = Point(x: x.interval(scale: 0.5), y: knobPadding)
         case .vertical(let vertical):
             let tt = vertical == .bottomToTop ? t : 1 - t
             let y = knobLineFrame.height * tt + knobLineFrame.minY
@@ -224,11 +224,30 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
         return option.clippedModel(model)
     }
 }
-extension Discrete1DView: BasicDiscretePointMovable {
-    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
+extension Discrete1DView: BasicXSlidable {
+    var xKnobView: View {
+        return knobView
+    }
+    func xModel(delta: Real, old oldModel: T.Model) -> T.Model {
+        return option.model(withDelta: delta / interval, oldModel: oldModel)
+    }
+    func didChangeFromXSlide(_ phase: Phase, beganModel: Model) {
         notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }
 }
+//extension Discrete1DView: Scrollable {
+//    func captureValue(to version: Version) {
+//        
+//    }
+//    
+//    var value: Real {
+//        get { return option.realValue(with: model) }
+//        set { model = option.model(with: newValue) }
+//    }
+//    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
+//        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
+//    }
+//}
 
 protocol Slidable {}
 

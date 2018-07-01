@@ -146,20 +146,20 @@ final class ActionListFormView: View {
     let undoableActionListView = SubActionListFormView(UndoableActionList())
     let assignableActionListView = SubActionListFormView(AssignableActionList())
     let runnableActionListView = SubActionListFormView(RunnableActionList())
-    let strokableActionListView = SubActionListFormView(StrokableActionList())
     let movableActionListView = SubActionListFormView(MovableActionList())
+    let strokableActionListView = SubActionListFormView(StrokableActionList())
     let subActionListViews: [View & LayoutMinSize]
     
     let classNameView = TextFormView(text: ActionList.name, font: .bold)
-    var width = 200.0.cg
+    var width = 210.0.cg
     
     init(actionList: ActionList = ActionList()) {
         self.actionList = actionList
         
         subActionListViews = [selectableActionListView, zoomableActionListView,
                               undoableActionListView, assignableActionListView,
-                              runnableActionListView, strokableActionListView,
-                              movableActionListView]
+                              runnableActionListView, movableActionListView,
+                              strokableActionListView]
         
         super.init()
         lineColor = nil
