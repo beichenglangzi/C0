@@ -55,26 +55,9 @@ enum BasicPhaseNotification<Model>: NotificationProtocol {
     }
 }
 
-protocol ConcreteViewable {
-    func concreteViewWith
-        <T: BinderProtocol>(binder: T,
-                            keyPath: ReferenceWritableKeyPath<T, Self>) -> ModelView
-}
-
-enum AbstractType {
-    case normal, mini
-}
-protocol AbstractConstraint {
-    var defaultAbstractConstraintSize: Size { get }
-}
-extension AbstractConstraint {
-    var defaultAbstractConstraintSize: Size {
-        return Size()
-    }
-}
-protocol AbstractViewable: AbstractConstraint {
-    func abstractViewWith<T: BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Self>,
-                                             type: AbstractType) -> ModelView
+protocol StandardViewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Self>) -> ModelView
 }
 
 protocol ThumbnailViewable {
@@ -96,7 +79,7 @@ extension ThumbnailViewable where Self: DisplayableText {
         return displayText.thumbnailView(withFrame: frame)
     }
 }
-protocol MiniViewable {
+protocol MiniViewable: Referenceable, ThumbnailViewable {
     func miniViewWith<T: BinderProtocol>(binder: T,
                                          keyPath: ReferenceWritableKeyPath<T, Self>) -> ModelView
 }
@@ -104,6 +87,25 @@ extension MiniViewable where Self: Object0D {
     func miniViewWith<T: BinderProtocol>(binder: T,
                                          keyPath: ReferenceWritableKeyPath<T, Self>) -> ModelView {
         return MiniView(binder: binder, keyPath: keyPath)
+    }
+}
+
+enum ViewableType {
+    case standard, mini
+}
+protocol Viewable: StandardViewable, MiniViewable {
+    func viewWith<T: BinderProtocol>(binder: T,
+                                     keyPath: ReferenceWritableKeyPath<T, Self>,
+                                     type: ViewableType) -> ModelView
+}
+extension Viewable {
+    func viewWith<T: BinderProtocol>(binder: T,
+                                     keyPath: ReferenceWritableKeyPath<T, Self>,
+                                     type: ViewableType) -> ModelView {
+        switch type {
+        case .standard: return standardViewWith(binder: binder, keyPath: keyPath)
+        default: return miniViewWith(binder: binder, keyPath: keyPath)
+        }
     }
 }
 
@@ -127,7 +129,6 @@ protocol BindableReceiver: Modeler, Assignable, IndicatableResponder, LayoutMinS
     associatedtype Binder: BinderProtocol
     associatedtype Notification: NotificationProtocol
     var model: Model { get set }
-    var defaultModel: Model { get }
     func clippedModel(_ model: Model) -> Model
     var binder: Binder { get set }
     var keyPath: ReferenceWritableKeyPath<Binder, Model> { get set }
@@ -169,7 +170,13 @@ extension BindableReceiver {
     }
     func reset(for p: Point, _ version: Version) {}
     func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
+        if let valueChain = model as? ValueChain,
+            let value = valueChain.rootChainValue as? Object.Value {
+            
+            return [Object(value)]
+        } else {
+            return [Object(model)]
+        }
     }
     func paste(_ values: [Any], for p: Point, _ version: Version) {
         for value in values {

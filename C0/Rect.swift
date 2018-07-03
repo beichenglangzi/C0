@@ -171,6 +171,42 @@ extension Rect: AppliableAffineTransform {
         return lhs.applying(rhs)
     }
 }
+extension Rect: AnyInitializable {
+    init?(anyValue: Any) {
+        switch anyValue {
+        case let value as Rect: self = value
+        case let value as String:
+            if let value = Rect(jsonString: value) {
+                self = value
+            } else {
+                return nil
+            }
+        case let valueChain as ValueChain:
+            if let value = Rect(anyValue: valueChain.rootChainValue) {
+                self = value
+            } else {
+                return nil
+            }
+        default: return nil
+        }
+    }
+}
+extension Rect: Referenceable {
+    static let name = Text(english: "Rect", japanese: "矩形")
+}
+extension Rect: ThumbnailViewable {
+    func thumbnailView(withFrame frame: Rect) -> View {
+        return (jsonString ?? "").thumbnailView(withFrame: frame)
+    }
+}
+extension Rect: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Rect>) -> ModelView {
+        
+        return RectView(binder: binder, keyPath: keyPath)
+    }
+}
+extension Rect: ObjectViewable {}
 extension Array where Element == Rect {
     static func checkerboard(with size: Size, in frame: Rect) -> [Rect] {
         let xCount = Int(frame.width / size.width)
@@ -328,5 +364,30 @@ struct RotatedRect: Codable, Equatable {
     }
     var midXMidYPoint: Point {
         return Point(x: size.width / 2, y: size.height / 2) * affineTransform
+    }
+}
+
+final class RectView<T: BinderProtocol>: ModelView, BindableReceiver {
+    typealias Model = Rect
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var notifications = [((RectView<Binder>, BasicNotification) -> ())]()
+    
+    init(binder: Binder, keyPath: BinderKeyPath) {
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        super.init(isLocked: false)
+    }
+    
+    func updateWithModel() {
+    }
+    var minSize: Size {
+        return model.size
     }
 }

@@ -113,7 +113,7 @@ final class SubActionListFormView<T: SubActionList>: View, LayoutMinSize {
         self.subActionList = subActionList
         
         super.init()
-        lineColor = nil
+        lineColor = .formBorder
         children = subActionList.actions.map { ActionFormView(action: $0) }
     }
     
@@ -162,7 +162,7 @@ final class ActionListFormView: View {
                               strokableActionListView]
         
         super.init()
-        lineColor = nil
+        lineColor = .formBorder
         children = [classNameView] + subActionListViews
     }
     

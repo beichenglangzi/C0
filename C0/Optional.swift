@@ -22,24 +22,21 @@ extension Optional: Referenceable {
         return Text(english: "Optional", japanese: "オプショナル")
     }
 }
-extension Optional: AbstractConstraint where Wrapped: AbstractConstraint {}
 extension Optional: AnyInitializable where Wrapped: ObjectDecodable {}
-extension Optional: ObjectDecodable where Wrapped: ObjectDecodable {}
-extension Optional: ThumbnailViewable where Wrapped: ThumbnailViewable {}
-extension Optional: AbstractViewable where Wrapped: Object.Value & AbstractViewable {
-    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Optional>,
-                             type: AbstractType) -> ModelView where T : BinderProtocol {
-        switch type {
-        case .normal:
-            return OptionalView(binder: binder, keyPath: keyPath)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Optional: StandardViewable where Wrapped: Object.Value & Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Optional>) -> ModelView {
+        
+        return OptionalView(binder: binder, keyPath: keyPath)
     }
 }
-extension Optional: ObjectViewable where Wrapped: Object.Value & AbstractViewable {}
+extension Optional: MiniViewable where Wrapped: Object.Value & Viewable {}
+extension Optional: Viewable where Wrapped: Object.Value & Viewable {}
+extension Optional: ObjectDecodable where Wrapped: ObjectDecodable {}
+extension Optional: ThumbnailViewable where Wrapped: ThumbnailViewable {}
+extension Optional: ObjectViewable where Wrapped: Object.Value & Viewable {}
 
-final class OptionalView<Wrapped: Object.Value & AbstractViewable, U: BinderProtocol>
+final class OptionalView<Wrapped: Object.Value & Viewable, U: BinderProtocol>
 : ModelView, BindableReceiver {
     
     typealias Model = Optional<Wrapped>
@@ -52,29 +49,25 @@ final class OptionalView<Wrapped: Object.Value & AbstractViewable, U: BinderProt
     }
     var notifications = [((OptionalView<Wrapped, Binder>, BasicNotification) -> ())]()
     
-    var defaultModel: Optional<Wrapped> {
-        return .none
-    }
-    
-    var type: AbstractType {
+    var viewableType: ViewableType {
         didSet { updateLayout() }
     }
     var wrappedView: ModelView?
     var noneNameView: TextFormView
     
-    init(binder: Binder, keyPath: BinderKeyPath, type: AbstractType = .normal) {
+    init(binder: Binder, keyPath: BinderKeyPath, viewableType: ViewableType = .standard) {
         self.binder = binder
         self.keyPath = keyPath
         
-        self.type = type
+        self.viewableType = viewableType
         let name = Wrapped.name + ": " + Text(english: "None", japanese: "なし")
         noneNameView = TextFormView(text: name)
         
         super.init(isLocked: false)
         if let wrapped = binder[keyPath: keyPath] {
-            let wrappedView = wrapped.abstractViewWith(binder: binder,
-                                                       keyPath: keyPath.appending(path: \Model.!),
-                                                       type: type)
+            let wrappedView = wrapped.viewWith(binder: binder,
+                                               keyPath: keyPath.appending(path: \Model.!),
+                                               type: viewableType)
             self.wrappedView = wrappedView
             children = [wrappedView]
         } else {
@@ -107,9 +100,9 @@ final class OptionalView<Wrapped: Object.Value & AbstractViewable, U: BinderProt
         if let wrapped = binder[keyPath: keyPath] {
             if children.first != wrappedView {
                 let wrappedView
-                    = wrapped.abstractViewWith(binder: binder,
-                                               keyPath: keyPath.appending(path: \Model.!),
-                                               type: type)
+                    = wrapped.viewWith(binder: binder,
+                                       keyPath: keyPath.appending(path: \Model.!),
+                                       type: viewableType)
                 self.wrappedView = wrappedView
                 children = [wrappedView]
                 updateLayout()

@@ -98,24 +98,16 @@ extension Version: Codable {
     }
     func encode(to encoder: Encoder) throws {}
 }
-extension Version: AbstractViewable {
-    var defaultAbstractConstraintSize: Size {
-        return Size(width: 120, height: 0)
-    }
-    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Version>,
-                             type: AbstractType) -> ModelView where T: BinderProtocol {
-        switch type {
-        case .normal:
-            return VersionView(binder: binder, keyPath: keyPath)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Version: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Version>) -> ModelView {
+        
+        return VersionView(binder: binder, keyPath: keyPath)
     }
 }
 extension Version: ObjectViewable {}
 
 /**
- Issue: バージョン管理
  Issue: ブランチ機能
  */
 final class VersionView<T: BinderProtocol>: ModelView, BindableReceiver {
@@ -128,10 +120,6 @@ final class VersionView<T: BinderProtocol>: ModelView, BindableReceiver {
         didSet { updateWithModel() }
     }
     var notifications = [((VersionView<Binder>, BasicNotification) -> ())]()
-    
-    var defaultModel: Model {
-        return Model()
-    }
     
     let indexView: IntGetterView<Binder>
     let undoedDiffCountView: IntGetterView<Binder>

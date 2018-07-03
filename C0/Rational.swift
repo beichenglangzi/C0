@@ -180,22 +180,16 @@ extension Rational: ThumbnailViewable {
         return description.thumbnailView(withFrame: frame)
     }
 }
-extension Rational: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Rational>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return DiscreteRationalView(binder: binder, keyPath: keyPath,
-                                        option: RationalOption(defaultModel: 0,
-                                                               minModel: .min,
-                                                               maxModel: .max,
-                                                               modelInterval: Rational(1, 10),
-                                                               descriptionQ: 10,
-                                                               isInfinitesimal: false))
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Rational: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Rational>) -> ModelView {
+        
+        return DiscreteRationalView(binder: binder, keyPath: keyPath,
+                                    option: RationalOption(minModel: .min,
+                                                           maxModel: .max,
+                                                           modelInterval: Rational(1, 10),
+                                                           descriptionQ: 10,
+                                                           isInfinitesimal: false))
     }
 }
 extension Rational: ObjectViewable {}
@@ -257,7 +251,6 @@ func ceil(_ x: Rational) -> Rational {
 struct RationalOption: Object1DOption {
     typealias Model = Rational
     
-    var defaultModel: Model
     var minModel: Model
     var maxModel: Model
     var transformedModel: ((Model) -> (Model))
@@ -267,13 +260,12 @@ struct RationalOption: Object1DOption {
     var isInfinitesimal: Bool
     var unit: String
     
-    init(defaultModel: Model, minModel: Model, maxModel: Model,
+    init(minModel: Model, maxModel: Model,
          transformedModel: @escaping ((Model) -> (Model)) = { $0 },
          reverseTransformedModel: @escaping ((Model) -> (Model)) = { $0 },
          modelInterval: Model = 0, descriptionQ: Int? = nil, isInfinitesimal: Bool,
          unit: String = "") {
         
-        self.defaultModel = defaultModel
         self.minModel = minModel
         self.maxModel = maxModel
         self.transformedModel = transformedModel
@@ -300,13 +292,6 @@ struct RationalOption: Object1DOption {
     }
     func ratio(with model: Model) -> Real {
         return Real((model - minModel) / (maxModel - minModel))
-    }
-    func ratioFromDefaultModel(with model: Model) -> Real {
-        if model < defaultModel {
-            return Real((model - minModel) / (defaultModel - minModel)) * 0.5
-        } else {
-            return Real((model - defaultModel) / (maxModel - defaultModel)) * 0.5 + 0.5
-        }
     }
     
     private func model(withDelta delta: Real) -> Model {
@@ -342,3 +327,27 @@ struct RationalOption: Object1DOption {
     }
 }
 typealias DiscreteRationalView<Binder: BinderProtocol> = Discrete1DView<RationalOption, Binder>
+
+struct IntervalRationalOption: IntervalObject1DOption {
+    var intervalModel: Rational
+    
+    func model(with model: Rational, applyingIntervalRatio: Real) -> Rational {
+        return model + intervalModel * Rational(applyingIntervalRatio)
+    }
+    func differenceIntervalRatio(with model: Rational, other otherModel: Rational) -> Real {
+        return Real((model - otherModel) / intervalModel)
+    }
+    
+    func int(with model: Rational, rounded: FloatingPointRoundingRule) -> Int {
+        switch rounded {
+        case .up: return ceil(model).integralPart
+        case .down: return floor(model).integralPart
+        default: return model.integralPart
+        }
+    }
+    func model(with int: Int) -> Rational {
+        return Rational(int)
+    }
+}
+typealias IntervalRationalView<Binder: BinderProtocol>
+    = SlidableInterval1DView<RationalOption, IntervalRationalOption, Binder>

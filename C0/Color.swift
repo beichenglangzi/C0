@@ -324,16 +324,11 @@ extension Color: ThumbnailViewable {
         return View(frame: frame, fillColor: self)
     }
 }
-extension Color: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Color>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return ColorView(binder: binder, keyPath: keyPath)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Color: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Color>) -> ModelView {
+        
+        return ColorView(binder: binder, keyPath: keyPath)
     }
 }
 extension Color: ObjectViewable {}
@@ -577,10 +572,8 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     var notifications = [((ColorView<Binder>, BasicNotification) -> ())]()
     
-    var defaultModel = Model()
-    
     let hueView: CircularRealView<Binder>
-    let slView: SlidablePointView<Binder>
+    let slView: MovablePointView<Binder>
     
     var hueLineWidth: Real {
         didSet {
@@ -608,11 +601,11 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
         self.binder = binder
         self.keyPath = keyPath
         
-        let valueOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1)
+        let valueOption = RealOption(minModel: 0, maxModel: 1)
         hueView = CircularRealView(binder: binder, keyPath: keyPath.appending(path: \Color.hue),
                                    option: valueOption, startAngle: 0, width: hWidth)
         let slOption = PointOption(xOption: valueOption, yOption: valueOption)
-        slView = SlidablePointView(binder: binder, keyPath: keyPath.appending(path: \Color.ls),
+        slView = MovablePointView(binder: binder, keyPath: keyPath.appending(path: \Color.ls),
                                    option: slOption)
         slView.fillColor = .background
         

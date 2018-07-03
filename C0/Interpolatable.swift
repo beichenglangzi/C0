@@ -268,25 +268,17 @@ extension Interpolation: DisplayableText {
 }
 extension Interpolation {
     static var defaultOption: EnumOption<Interpolation> {
-        return EnumOption(defaultModel: Interpolation.spline,
-                          cationModels: [],
+        return EnumOption(cationModels: [],
                           indexClosure: { Int($0) },
                           rawValueClosure: { Interpolation.RawValue($0) },
                           names: Interpolation.displayTexts)
     }
 }
-extension Interpolation: AbstractViewable {
-    func abstractViewWith
-        <T : BinderProtocol>(binder: T,
-                             keyPath: ReferenceWritableKeyPath<T, Interpolation>,
-                             type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return EnumView(binder: binder, keyPath: keyPath,
-                            option: Interpolation.defaultOption)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Interpolation: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Interpolation>) -> ModelView {
+        
+        return EnumView(binder: binder, keyPath: keyPath, option: Interpolation.defaultOption)
     }
 }
 extension Interpolation: ObjectViewable {}

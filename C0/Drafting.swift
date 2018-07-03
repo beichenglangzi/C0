@@ -17,9 +17,9 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-struct Drafting<Value: Object.Value & Equatable & Initializable>: Codable, Equatable {
+struct Drafting<Value: KeyframeValue>: Codable, Equatable {
     var value = Value()
-    var draftValue: Value? = nil
+    var draftValue = Value()
 }
 extension Drafting {
     func viewWith(lineWidth: Real, lineColor: Color) -> View {
@@ -31,6 +31,32 @@ extension Drafting {
         let view = View()
 //        view.children = draftLines.compactMap { $0.view(lineWidth: lineWidth, fillColor: lineColor) }
         return view
+    }
+//    func formView
+}
+extension Drafting: KeyframeValue {
+    static func linear(_ f0: Drafting<Value>, _ f1: Drafting<Value>, t: Real) -> Drafting<Value> {
+        return Drafting(value: Value.linear(f0.value, f1.value, t: t),
+                        draftValue: Value.linear(f0.draftValue, f1.draftValue, t: t))
+    }
+    static func firstMonospline(_ f1: Drafting<Value>, _ f2: Drafting<Value>,
+                                _ f3: Drafting<Value>, with ms: Monospline) -> Drafting<Value> {
+        return Drafting(value: Value.firstMonospline(f1.value, f2.value, f3.value, with: ms),
+                        draftValue: Value.firstMonospline(f1.draftValue, f2.draftValue,
+                                                          f3.draftValue, with: ms))
+    }
+    static func monospline(_ f0: Drafting<Value>, _ f1: Drafting<Value>,
+                           _ f2: Drafting<Value>, _ f3: Drafting<Value>,
+                           with ms: Monospline) -> Drafting<Value> {
+        return Drafting(value: Value.monospline(f0.value, f1.value, f2.value, f3.value, with: ms),
+                        draftValue: Value.monospline(f0.draftValue, f1.draftValue,
+                                                     f2.draftValue, f3.draftValue, with: ms))
+    }
+    static func lastMonospline(_ f0: Drafting<Value>, _ f1: Drafting<Value>,
+                               _ f2: Drafting<Value>, with ms: Monospline) -> Drafting<Value> {
+        return Drafting(value: Value.lastMonospline(f0.value, f1.value, f2.value, with: ms),
+                        draftValue: Value.lastMonospline(f0.draftValue, f1.draftValue,
+                                                          f2.draftValue, with: ms))
     }
 }
 extension Drafting: Referenceable {
@@ -45,16 +71,11 @@ extension Drafting: ThumbnailViewable {
         return thumbnailView
     }
 }
-extension Drafting: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Drafting>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return DraftingView(binder: binder, keyPath: keyPath)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Drafting: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Drafting>) -> ModelView {
+        
+        return DraftingView(binder: binder, keyPath: keyPath)
     }
 }
 extension Drafting: ObjectViewable {}
@@ -63,8 +84,7 @@ struct DraftingOption {
     let draftColor = Color(red: 0, green: 0.5, blue: 1)
 }
 
-final class DraftingView<Value: Object.Value & Equatable & Initializable, U: BinderProtocol>
-: ModelView, BindableReceiver {
+final class DraftingView<Value: KeyframeValue, U: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Drafting<Value>
     typealias Binder = U
     var binder: Binder {
@@ -75,20 +95,16 @@ final class DraftingView<Value: Object.Value & Equatable & Initializable, U: Bin
     }
     var notifications = [((DraftingView<Value, Binder>, BasicNotification) -> ())]()
 
-    var defaultModel = Model()
-
 //    let linesView: ArrayCountView<Line, Binder>
 //    let draftLinesView: ArrayCountView<Line, Binder>
-//
+
 //    let classNameView: TextFormView
-//    let draftLinesNameView = TextFormView(text: Text(english: "Draft Lines",
-//                                                     japanese: "下書き線") + ":")
-//    let changeToDraftView = ClosureView(name: Text(english: "Change to Draft", japanese: "下書き化"))
+//    let draftValueNameView = TextFormView(text: Text(english: "Draft", japanese: "ドラフト") + ":")
 
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
-//
+
 //        classNameView = TextFormView(text: Model.name, font: .bold)
 //        linesView = ArrayCountView(binder: binder,
 //                                   keyPath: keyPath.appending(path: \Model.lineValue))
@@ -97,13 +113,13 @@ final class DraftingView<Value: Object.Value & Equatable & Initializable, U: Bin
 //
         super.init(isLocked: false)
 //        changeToDraftView.model = { [unowned self] in self.changeToDraft($0) }
-//
+
 //        children = [classNameView,
 //                    linesView,
 //                    draftLinesNameView, draftLinesView,
 //                    changeToDraftView]
     }
-//
+
     var minSize: Size {
         let padding = Layouter.basicPadding, buttonH = Layouter.basicHeight
         return Size(width: 170,
@@ -140,6 +156,9 @@ final class DraftingView<Value: Object.Value & Equatable & Initializable, U: Bin
 //        draftLinesView.updateWithModel()
     }
 }
+//extension DraftingView: CollectionAssignable {
+//
+//}
 //extension DraftingView {
 //    func changeToDraft(_ version: Version) {
 //        capture(model, to: version)
@@ -147,3 +166,7 @@ final class DraftingView<Value: Object.Value & Equatable & Initializable, U: Bin
 //        model.value = nil
 //    }
 //}
+
+final class CompactDraftingView {
+    
+}

@@ -22,12 +22,9 @@ import CoreGraphics
 typealias Object1D = Object.Value
 
 protocol Object1DOption: GetterOption {
-    var defaultModel: Model { get }
     var minModel: Model { get }
     var maxModel: Model { get }
-    var transformedModel: ((Model) -> (Model)) { get }
     func ratio(with model: Model) -> Real
-    func ratioFromDefaultModel(with model: Model) -> Real
     func model(withDelta delta: Real, oldModel: Model) -> Model
     func model(withRatio ratio: Real) -> Model
     func clippedModel(_ model: Model) -> Model
@@ -50,7 +47,7 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: ModelView, B
     var model: Model {
         get { return binder[keyPath: keyPath] }
         set {
-            binder[keyPath: keyPath] = option.transformedModel(newValue)
+            binder[keyPath: keyPath] = newValue
             notifications.forEach { $0(self, ._didChange) }
             updateWithModel()
         }
@@ -58,9 +55,6 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: ModelView, B
     
     var option: ModelOption {
         didSet { updateWithModel() }
-    }
-    var defaultModel: Model {
-        return option.defaultModel
     }
     
     let optionTextView: TextFormView
@@ -133,9 +127,6 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
     var option: ModelOption {
         didSet { updateWithModel() }
     }
-    var defaultModel: Model {
-        return option.defaultModel
-    }
     
     var xyOrientation: Orientation.XY {
         didSet { updateLayout() }
@@ -188,7 +179,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
         optionStringView.frame = Rect(origin: Point(x: x, y: y), size: optionStringMinSize)
     }
     private func updateknobLayout() {
-        let t = option.ratioFromDefaultModel(with: model)
+        let t = option.ratio(with: model)
         switch xyOrientation {
         case .horizontal(let horizontal):
             let tt = horizontal == .leftToRight ? t : 1 - t
@@ -235,25 +226,8 @@ extension Discrete1DView: BasicXSlidable {
         notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }
 }
-//extension Discrete1DView: Scrollable {
-//    func captureValue(to version: Version) {
-//        
-//    }
-//    
-//    var value: Real {
-//        get { return option.realValue(with: model) }
-//        set { model = option.model(with: newValue) }
-//    }
-//    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
-//        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
-//    }
-//}
 
-protocol Slidable {}
-
-final class Slidable1DView<T: Object1DOption, U: BinderProtocol>
-: ModelView, Slidable, BindableReceiver {
-
+final class Movable1DView<T: Object1DOption, U: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = T.Model
     typealias ModelOption = T
     typealias Binder = U
@@ -263,23 +237,19 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((Slidable1DView<ModelOption, Binder>,
+    var notifications = [((Movable1DView<ModelOption, Binder>,
                            BasicPhaseNotification<Model>) -> ())]()
     
     var model: Model {
         get { return binder[keyPath: keyPath] }
         set {
-            binder[keyPath: keyPath] = option.transformedModel(newValue)
+            binder[keyPath: keyPath] = newValue
             notifications.forEach { $0(self, .didChange) }
             updateWithModel()
         }
     }
-    
     var option: ModelOption {
         didSet { updateWithModel() }
-    }
-    var defaultModel: Model {
-        return option.defaultModel
     }
     
     var xyOrientation: Orientation.XY {
@@ -359,20 +329,18 @@ final class Slidable1DView<T: Object1DOption, U: BinderProtocol>
         return option.clippedModel(model)
     }
 }
-extension Slidable1DView: Runnable {
+extension Movable1DView: Runnable {
     func run(for p: Point, _ version: Version) {
         push(option.clippedModel(model(at: p)), to: version)
     }
 }
-extension Slidable1DView: BasicSlidablePointMovable {
+extension Movable1DView: BasicPointMovable {
     func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
         notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }
 }
 
-final class Circular1DView<T: Object1DOption, U: BinderProtocol>
-: ModelView, Slidable, BindableReceiver {
-
+final class Circular1DView<T: Object1DOption, U: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = T.Model
     typealias ModelOption = T
     typealias Binder = U
@@ -388,17 +356,13 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>
     var model: Model {
         get { return binder[keyPath: keyPath] }
         set {
-            binder[keyPath: keyPath] = option.transformedModel(newValue)
+            binder[keyPath: keyPath] = newValue
             notifications.forEach { $0(self, .didChange) }
             updateWithModel()
         }
     }
-    
     var option: ModelOption {
         didSet { updateWithModel() }
-    }
-    var defaultModel: Model {
-        return option.defaultModel
     }
     
     var circularOrientation: Orientation.Circular {
@@ -467,7 +431,7 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>
     }
     private func updateKnobLayout() {
         let pathBounds = path.boundingBoxOfPath
-        let t = option.ratioFromDefaultModel(with: model)
+        let t = option.ratio(with: model)
         let theta = circularOrientation == .clockwise ?
             startAngle - t * (2 * .pi) : startAngle + t * (2 * .pi)
         let cp = Point(x: pathBounds.midX, y: pathBounds.midY)
@@ -500,8 +464,102 @@ extension Circular1DView: Runnable {
         push(model(at: p), to: version)
     }
 }
-extension Circular1DView: BasicSlidablePointMovable {
+extension Circular1DView: BasicPointMovable {
     func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
         notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
+    }
+}
+
+protocol IntervalObject1DOption {
+    associatedtype Model: Object1D
+    var intervalModel: Model { get }
+    func model(with model: Model, applyingIntervalRatio: Real) -> Model
+    func differenceIntervalRatio(with model: Model, other otherModel: Model) -> Real
+    func int(with model: Model, rounded: FloatingPointRoundingRule) -> Int
+    func model(with int: Int) -> Model
+}
+
+final class SlidableInterval1DView<T: Object1DOption, U: IntervalObject1DOption, V: BinderProtocol>
+: ModelView, BindableReceiver where U.Model == T.Model {
+
+    typealias Model = T.Model
+    typealias ModelOption = T
+    typealias IntervalModelOption = U
+    typealias Binder = V
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var notifications = [((SlidableInterval1DView<ModelOption, IntervalModelOption, Binder>,
+                           BasicPhaseNotification<Model>) -> ())]()
+    
+    var model: Model {
+        get { return binder[keyPath: keyPath] }
+        set {
+            binder[keyPath: keyPath] = newValue
+            notifications.forEach { $0(self, .didChange) }
+            updateWithModel()
+        }
+    }
+    var option: ModelOption {
+        didSet { updateWithModel() }
+    }
+    var intervalOption: IntervalModelOption
+    
+    var lineIntervalWidth = 50.0.cg
+    var intervalLineWidth = 1.0.cg
+    
+    let linesView: View
+    
+    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
+         intervalOption: IntervalModelOption) {
+        
+        self.binder = binder
+        self.keyPath = keyPath
+        self.option = option
+        self.intervalOption = intervalOption
+        
+        linesView = View(path: Path())
+        
+        super.init(isLocked: false)
+        
+        updateWithModel()
+    }
+    
+    func model(withX x: Real) -> Model {
+        return intervalOption.model(with: model,
+                                    applyingIntervalRatio: (x - bounds.midX) / lineIntervalWidth)
+    }
+    func x(with model: Model) -> Real {
+        return intervalOption.differenceIntervalRatio(with: model, other: self.model)
+            * lineIntervalWidth + bounds.midX
+    }
+    
+    var minSize: Size {
+        return Size(width: 10, height: 10)
+    }
+    override func updateLayout() {
+        updateLines()
+    }
+    func updateLines() {
+        let minModel = model(withX: bounds.minX)
+        let maxModel = model(withX: bounds.maxX)
+        let minInt = intervalOption.int(with: minModel, rounded: .down)
+        let maxInt = intervalOption.int(with: maxModel, rounded: .up)
+        guard minInt < maxInt else {
+            linesView.path = Path()
+            return
+        }
+        let padding = Layouter.basicPadding
+        let rects: [Rect] = (minInt...maxInt).map {
+            let i0x = x(with: intervalOption.model(with: $0))
+            let w = intervalLineWidth
+            return Rect(x: i0x - w / 2, y: padding, width: w, height: bounds.height - padding * 2)
+        }
+        var path = Path()
+        path.append(rects)
+        linesView.path = path
     }
 }

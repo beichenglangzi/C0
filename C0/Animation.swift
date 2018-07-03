@@ -41,7 +41,7 @@ enum Interpolated {
     case linear(LoopFrame, LoopFrame)
     case monospline(LoopFrame, LoopFrame, LoopFrame, LoopFrame)
     case firstMonospline(LoopFrame, LoopFrame, LoopFrame)
-    case endMonospline(LoopFrame, LoopFrame, LoopFrame)
+    case lastMonospline(LoopFrame, LoopFrame, LoopFrame)
 }
 
 protocol Animatable {
@@ -279,7 +279,7 @@ extension Animation: Animatable {
                 return .monospline(lf0, lf1, lf2, lf3)
             } else {
                 let lf0 = loopFrames[li - 1]
-                return .endMonospline(lf0, lf1, lf2)
+                return .lastMonospline(lf0, lf1, lf2)
             }
         } else if isUseIndex3 {
             let lf3 = loopFrames[li + 2]
@@ -355,16 +355,11 @@ extension Animation: ThumbnailViewable {
         return text.thumbnailView(withFrame: frame)
     }
 }
-extension Animation: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Animation>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return AnimationView(binder: binder, keyPath: keyPath)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Animation: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Animation>) -> ModelView {
+        
+        return AnimationView(binder: binder, keyPath: keyPath)
     }
 }
 extension Animation: ObjectViewable {}
@@ -388,8 +383,6 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
         }
     }
     var notifications = [((AnimationView<Value, Binder>, Notification) -> ())]()
-    
-    var defaultModel = Model()
     
     var keyframesView: ArrayView<Keyframe<Value>, Binder>
     
@@ -440,7 +433,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
         self.smallHeight = smallHeight
         keyframesView = ArrayView(binder: binder,
                                   keyPath: keyPath.appending(path: \Model.keyframes),
-                                  abstractType: .normal)
+                                  viewableType: .standard)
         
         super.init(isLocked: false)
         frame = Rect(x: origin.x, y: origin.y,

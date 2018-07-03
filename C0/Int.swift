@@ -57,20 +57,14 @@ extension Int: ThumbnailViewable {
         return String(self).thumbnailView(withFrame: frame)
     }
 }
-extension Int: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Int>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return DiscreteIntView(binder: binder, keyPath: keyPath,
-                                   option: IntOption(defaultModel: 0,
-                                                     minModel: Int(Int32.min),
-                                                     maxModel: Int(Int32.max),
-                                                     modelInterval: 1))
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Int: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Int>) -> ModelView {
+        
+        return DiscreteIntView(binder: binder, keyPath: keyPath,
+                               option: IntOption(minModel: Int(Int32.min),
+                                                 maxModel: Int(Int32.max),
+                                                 modelInterval: 1))
     }
 }
 extension Int: ObjectViewable {}
@@ -122,7 +116,6 @@ typealias IntGetterView<Binder: BinderProtocol> = GetterView<IntGetterOption, Bi
 struct IntOption: Object1DOption {
     typealias Model = Int
     
-    var defaultModel: Model
     var minModel: Model
     var maxModel: Model
     var transformedModel: ((Model) -> (Model))
@@ -131,12 +124,11 @@ struct IntOption: Object1DOption {
     var exp: Real
     var unit: String
     
-    init(defaultModel: Model, minModel: Model, maxModel: Model,
+    init(minModel: Model, maxModel: Model,
          transformedModel: @escaping ((Model) -> (Model)) = { $0 },
          reverseTransformedModel: @escaping ((Model) -> (Model)) = { $0 },
          modelInterval: Model = 0, exp: Real = 1, unit: String = "") {
         
-        self.defaultModel = defaultModel
         self.minModel = minModel
         self.maxModel = maxModel
         self.transformedModel = transformedModel
@@ -154,13 +146,6 @@ struct IntOption: Object1DOption {
     }
     func ratio(with model: Model) -> Real {
         return Real(model - minModel) / Real(maxModel - minModel)
-    }
-    func ratioFromDefaultModel(with model: Model) -> Real {
-        if model < defaultModel {
-            return (Real(model - minModel) / Real(defaultModel - minModel)) * 0.5
-        } else {
-            return (Real(model - defaultModel) / Real(maxModel - defaultModel)) * 0.5 + 0.5
-        }
     }
     
     private func model(withDelta delta: Real) -> Model {

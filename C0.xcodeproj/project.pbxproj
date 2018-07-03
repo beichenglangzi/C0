@@ -29,7 +29,6 @@
 		234A96E01EDE880F00A841C6 /* Text.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96DF1EDE880F00A841C6 /* Text.swift */; };
 		234A96E21EDE883600A841C6 /* Scene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96E11EDE883600A841C6 /* Scene.swift */; };
 		234A96E41EDE886100A841C6 /* MediaEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96E31EDE886100A841C6 /* MediaEncoder.swift */; };
-		234A96E81EDE88B200A841C6 /* Parper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96E71EDE88B200A841C6 /* Parper.swift */; };
 		234A96EC1EDE890900A841C6 /* Membrane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96EB1EDE890900A841C6 /* Membrane.swift */; };
 		234A96EE1EDE892C00A841C6 /* Line.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96ED1EDE892C00A841C6 /* Line.swift */; };
 		234A96F01EDE894F00A841C6 /* Color.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234A96EF1EDE894F00A841C6 /* Color.swift */; };
@@ -103,7 +102,6 @@
 		234A96DF1EDE880F00A841C6 /* Text.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Text.swift; sourceTree = "<group>"; };
 		234A96E11EDE883600A841C6 /* Scene.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Scene.swift; sourceTree = "<group>"; };
 		234A96E31EDE886100A841C6 /* MediaEncoder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MediaEncoder.swift; sourceTree = "<group>"; };
-		234A96E71EDE88B200A841C6 /* Parper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Parper.swift; sourceTree = "<group>"; };
 		234A96EB1EDE890900A841C6 /* Membrane.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Membrane.swift; sourceTree = "<group>"; };
 		234A96ED1EDE892C00A841C6 /* Line.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Line.swift; sourceTree = "<group>"; };
 		234A96EF1EDE894F00A841C6 /* Color.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Color.swift; sourceTree = "<group>"; };
@@ -193,7 +191,6 @@
 				234A96E31EDE886100A841C6 /* MediaEncoder.swift */,
 				23BBFA8C1FB2D65200E05B5B /* Player.swift */,
 				234A96E11EDE883600A841C6 /* Scene.swift */,
-				234A96E71EDE88B200A841C6 /* Parper.swift */,
 				23FCBD6F20DB654A00D2F206 /* Drafting.swift */,
 				23B58F022001249E008574FF /* Drawing.swift */,
 				234A96EB1EDE890900A841C6 /* Membrane.swift */,
@@ -370,7 +367,6 @@
 				2343B28B209EB8D6007326D9 /* Int.swift in Sources */,
 				239059E12077BC7800BE4A2E /* Point.swift in Sources */,
 				23AB146220B814DA00C2BDF4 /* Range.swift in Sources */,
-				234A96E81EDE88B200A841C6 /* Parper.swift in Sources */,
 				234A96F41EDE899200A841C6 /* View.swift in Sources */,
 				23E895CE20AEDEE900DD18D2 /* Strokable.swift in Sources */,
 				23B9DA2E1FF7A927004BAA40 /* Transform.swift in Sources */,

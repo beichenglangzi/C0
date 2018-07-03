@@ -18,6 +18,7 @@
  */
 
 import struct Foundation.Locale
+import class Foundation.OperationQueue
 
 protocol SubSender {
     func send(_ actionMap: ActionMap, from sender: Sender)
@@ -58,6 +59,11 @@ final class Sender {
     var oldMainIndicatedViewColor: Color?
     var indicatedVersionView: UndoableView
     var indicatedZoomableView: ZoomableView
+    
+    var backgroundQueue = OperationQueue()
+    deinit {
+        backgroundQueue.cancelAllOperations()
+    }
     
     let actionList = ActionList()
     let subSenders: [SubSender]

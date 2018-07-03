@@ -34,7 +34,7 @@ enum Orientation {
     case xy(XY), circular(Circular)
 }
 
-typealias LayoutValue = Codable & ThumbnailViewable & Referenceable & AbstractViewable
+typealias LayoutValue = Codable & ThumbnailViewable & Referenceable & Viewable
 
 protocol Layoutable {
     var frame: Rect { get set }
@@ -52,22 +52,14 @@ enum ConstraintType {
 
 protocol LayoutProtocol {
     var transform: Transform { get set }
-    var constraintSize: Size { get set }
 }
 struct Layout<Value: LayoutValue>: Codable, LayoutProtocol {
     var value: Value
     var transform: Transform
-    var constraintSize: Size
     
     init(_ value: Value, transform: Transform = Transform()) {
         self.value = value
         self.transform = transform
-        self.constraintSize = value.defaultAbstractConstraintSize
-    }
-    init(_ value: Value, transform: Transform = Transform(), constraintSize: Size) {
-        self.value = value
-        self.transform = transform
-        self.constraintSize = constraintSize
     }
 }
 extension Layout: ValueChain {
@@ -76,9 +68,9 @@ extension Layout: ValueChain {
 extension Layout: AnyInitializable {
     init?(anyValue: Any) {
         if let value = (anyValue as? ValueChain)?.value(Value.self) {
-            self = Layout(value, constraintSize: value.defaultAbstractConstraintSize)
+            self = Layout(value)
         } else if let value = anyValue as? Value {
-            self = Layout(value, constraintSize: value.defaultAbstractConstraintSize)
+            self = Layout(value)
         } else {
             return nil
         }
@@ -94,16 +86,11 @@ extension Layout: ThumbnailViewable {
         return value.thumbnailView(withFrame: frame)
     }
 }
-extension Layout: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Layout<Value>>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return LayoutView(binder: binder, keyPath: keyPath)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Layout: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Layout<Value>>) -> ModelView {
+        
+        return LayoutView(binder: binder, keyPath: keyPath)
     }
 }
 extension Layout: ObjectViewable {}
@@ -237,22 +224,29 @@ final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
     }
     var notifications = [((LayoutView<Value, Binder>, BasicPhaseNotification<Model>) -> ())]()
     
-    var defaultModel: Layout<Value> {
-        return Layout(model.value)
+    var valueView: View & LayoutMinSize
+    
+    var viewableType: ViewableType {
+        didSet {
+            valueView = binder[keyPath: keyPath].value
+                .viewWith(binder: binder,
+                          keyPath: keyPath.appending(path: \Model.value),
+                          type: viewableType)
+            updateLayout()
+        }
     }
-    
-    let valueView: View & LayoutMinSize
-    
     let knobView = View.discreteKnob()
     
-    init(binder: Binder, keyPath: BinderKeyPath) {
+    init(binder: Binder, keyPath: BinderKeyPath, viewableType: ViewableType = .standard) {
         self.binder = binder
         self.keyPath = keyPath
         
+        self.viewableType = viewableType
+        
         valueView = binder[keyPath: keyPath].value
-            .abstractViewWith(binder: binder,
+            .viewWith(binder: binder,
                               keyPath: keyPath.appending(path: \Model.value),
-                              type: .normal)
+                              type: viewableType)
         
         super.init(isLocked: false)
         children = [valueView, knobView]
@@ -277,11 +271,8 @@ final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
                               width: b.width, height: knobHeight - padding)
     }
     func updateWithModel() {
-        self.transform = model.transform
-        let minSize = self.minSize
-        let width = max(model.constraintSize.width, minSize.width)
-        let height = max(model.constraintSize.height, minSize.height)
-        bounds = Rect(origin: Point(), size: Size(width: width, height: height))
+        transform = model.transform
+        bounds = Rect(origin: Point(), size: minSize)
     }
     
     var movingOrigin: Point {

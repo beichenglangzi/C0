@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-typealias SelectionValue = Object.Value & AbstractViewable
+typealias SelectionValue = Object.Value & Viewable
 
 protocol Selectable: class {
     func captureSelections(to version: Version)
@@ -31,7 +31,10 @@ extension Selectable {
     }
 }
 
-struct Selecting<Value: SelectionValue>: ValueChain, Codable {
+protocol SelectingProtocol {
+    var isSelected: Bool { get set }
+}
+struct Selecting<Value: SelectionValue>: ValueChain, Codable, SelectingProtocol {
     var value: Value
     var isSelected = false
     
@@ -65,21 +68,16 @@ extension Selection: ThumbnailViewable {
         return View()
     }
 }
-extension Selection: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Selection<Value>>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return SelectionView(binder: binder, keyPath: keyPath, abstractType: type)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Selection: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Selection<Value>>) -> ModelView {
+        
+        return SelectionView(binder: binder, keyPath: keyPath)
     }
 }
 extension Selection: ObjectViewable {}
 
-final class SelectionView<Value: Object.Value & AbstractViewable, T: BinderProtocol>
+final class SelectionView<Value: Object.Value & Viewable, T: BinderProtocol>
 : ModelView, BindableReceiver, Selectable {
     
     typealias Model = Selection<Value>
@@ -92,19 +90,15 @@ final class SelectionView<Value: Object.Value & AbstractViewable, T: BinderProto
     }
     var notifications = [((SelectionView<Value, Binder>, BasicPhaseNotification<Model>) -> ())]()
     
-    var defaultModel: Selection<Value> {
-        return Selection()
-    }
-    
     let valuesView: ArrayView<Value, Binder>
     
-    init(binder: Binder, keyPath: BinderKeyPath, abstractType: AbstractType = .normal) {
+    init(binder: Binder, keyPath: BinderKeyPath, viewableType: ViewableType = .standard) {
         self.binder = binder
         self.keyPath = keyPath
         
         valuesView = ArrayView(binder: binder,
                                keyPath: keyPath.appending(path: \Model.values),
-                               abstractType: abstractType)
+                               viewableType: viewableType)
         
         super.init(isLocked: false)
         children = [valuesView]

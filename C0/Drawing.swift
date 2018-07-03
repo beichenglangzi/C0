@@ -379,16 +379,11 @@ extension Drawing: ThumbnailViewable {
         //        drawDraft(lineWidth: 0.5 / centering.scale, lineColor: Color.draft, in: ctx)
     }
 }
-extension Drawing: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Drawing>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return DrawingView(binder: binder, keyPath: keyPath)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Drawing: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Drawing>) -> ModelView {
+        
+        return DrawingView(binder: binder, keyPath: keyPath)
     }
 }
 extension Drawing: ObjectViewable {}
@@ -403,8 +398,6 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
         didSet { updateWithModel() }
     }
     var notifications = [((DrawingView<Binder>, BasicNotification) -> ())]()
-    
-    var defaultModel = Model()
     
     var viewScale = 1.0.cg
     

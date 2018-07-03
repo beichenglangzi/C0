@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-typealias AbstractElement = Object.Value & AbstractViewable & AnyInitializable
+typealias AbstractElement = Object.Value & Viewable & AnyInitializable
 typealias ObjectElement = Object.Value
 
 struct ArrayIndex<T>: Codable, Hashable {
@@ -35,26 +35,21 @@ extension Array: Referenceable where Element: Referenceable {
         return "[" + Element.name + "]"
     }
 }
-
-extension Array: AbstractConstraint where Element: AbstractConstraint {}
 extension Array: AnyInitializable where Element: AbstractElement {}
+extension Array: StandardViewable where Element: AbstractElement {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Array<Element>>) -> ModelView {
+        
+        return ArrayView(binder: binder, keyPath: keyPath)
+    }
+}
 extension Array: ThumbnailViewable where Element: AbstractElement {
     func thumbnailView(withFrame frame: Rect) -> View {
         return count.thumbnailView(withFrame: frame)
     }
 }
-extension Array: AbstractViewable where Element: AbstractElement {
-    func abstractViewWith<T>(binder: T,
-                             keyPath: ReferenceWritableKeyPath<T, Array<Element>>,
-                             type: AbstractType) -> ModelView where T: BinderProtocol {
-        switch type {
-        case .normal:
-            return ArrayView(binder: binder, keyPath: keyPath)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
-    }
-}
+extension Array: MiniViewable where Element: AbstractElement {}
+extension Array: Viewable where Element: AbstractElement {}
 extension Array: ObjectDecodable where Element: AbstractElement {}
 extension Array: ObjectViewable where Element: AbstractElement {}
 
@@ -76,9 +71,7 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
     }
     var notifications = [((ArrayView<ModelElement, Binder>, BasicNotification) -> ())]()
     
-    var defaultModel = Model()
-    
-    var abstractType: AbstractType {
+    var viewableType: ViewableType {
         didSet { updateChildren() }
     }
     
@@ -88,18 +81,18 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
     var newableValue: Object.Value?
     
     init(binder: Binder, keyPath: BinderKeyPath,
-         xyOrientation: Orientation.XY? = nil, abstractType: AbstractType = .normal) {
+         xyOrientation: Orientation.XY? = nil, viewableType: ViewableType = .standard) {
         self.binder = binder
         self.keyPath = keyPath
         
         self.xyOrientation = xyOrientation
-        self.abstractType = abstractType
+        self.viewableType = viewableType
         
         rootView = View(isLocked: false)
         rootView.lineWidth = 0
         modelViews = ArrayView.modelViewsWith(model: binder[keyPath: keyPath],
                                               binder: binder, keyPath: keyPath,
-                                              type: abstractType)
+                                              type: viewableType)
         
         super.init(isLocked: false)
         isClipped = true
@@ -142,7 +135,7 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
                 $0.frame = Rect(x: x,
                                 y: padding,
                                 width: ms.width,
-                                height: abstractType == .mini ? bounds.height : ms.height)
+                                height: viewableType == .mini ? bounds.height : ms.height)
                 x += ms.width
             }
         case .vertical:
@@ -151,7 +144,7 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
                 let ms = $0.minSize
                 $0.frame = Rect(x: padding,
                                 y: y,
-                                width:abstractType == .mini ? bounds.width - padding * 2 : ms.width,
+                                width:viewableType == .mini ? bounds.width - padding * 2 : ms.width,
                                 height: ms.width)
                 y += ms.height
             }
@@ -161,7 +154,7 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
     func updateChildren() {
         modelViews = ArrayView.modelViewsWith(model: model,
                                               binder: binder, keyPath: keyPath,
-                                              type: abstractType)
+                                              type: viewableType)
         if let views = modelViews as? [LayoutView<Object, Binder>] {
             views.forEach { $0.updateWithModel() }
         }
@@ -169,11 +162,11 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
         updateLayout()
     }
     static func modelViewsWith(model: Model, binder: Binder, keyPath: BinderKeyPath,
-                               type: AbstractType) -> [View] {
+                               type: ViewableType) -> [View] {
         return model.enumerated().map { (i, element) in
-            return element.abstractViewWith(binder: binder,
-                                            keyPath: keyPath.appending(path: \Model[i]),
-                                            type: type)
+            element.viewWith(binder: binder,
+                             keyPath: keyPath.appending(path: \Model[i]),
+                             type: type)
         }
     }
     func updateWithModel() {
@@ -232,7 +225,7 @@ extension ArrayView {
     }
 }
 
-typealias ArrayCountElement = Equatable & Object.Value & AbstractViewable
+typealias ArrayCountElement = Equatable & Object.Value & Viewable
 
 final class ArrayCountView<T: ArrayCountElement, U: BinderProtocol>: ModelView, BindableReceiver {
     typealias ModelElement = T
@@ -245,8 +238,6 @@ final class ArrayCountView<T: ArrayCountElement, U: BinderProtocol>: ModelView, 
         didSet { updateWithModel() }
     }
     var notifications = [((ArrayCountView<ModelElement, Binder>, BasicNotification) -> ())]()
-    
-    var defaultModel = Model()
     
     let countView: IntGetterView<Binder>
     

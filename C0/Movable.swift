@@ -223,7 +223,9 @@ final class MovableSender: SubSender {
         case actionList.slideAction:
             guard let eventValue = actionMap.eventValuesWith(ScrollEvent.self).first else { return }
             if actionMap.phase == .began,
-                let receiver = sender.mainIndicatedView as? XSlidableReceiver {
+                let receiver = sender.mainIndicatedView
+                    .withSelfAndAllParents(with: XSlidableReceiver.self) {
+                
                 if abs(eventValue.scrollDeltaPoint.x) > abs(eventValue.scrollDeltaPoint.y) {
                     viewXSliders = [receiver.makeViewXSlider()]
                 }
@@ -380,13 +382,13 @@ final class BasicDiscreteViewPointMover<T: View & BasicDiscretePointMovable>: Vi
     }
 }
 
-protocol BasicSlidablePointMovable: BindableReceiver, PointMovable {
+protocol BasicPointMovable: BindableReceiver, PointMovable {
     var knobView: View { get }
     var knobFillColor: Color { get }
     func model(at p: Point) -> Model
     func didChangeFromMovePoint(_ phase: Phase, beganModel: Model)
 }
-extension BasicSlidablePointMovable {
+extension BasicPointMovable {
     func captureWillMovePoint(at p: Point, to version: Version) {
         capture(model, to: version)
     }
@@ -394,12 +396,12 @@ extension BasicSlidablePointMovable {
         return .knob
     }
 }
-extension BasicSlidablePointMovable where Self: View {
+extension BasicPointMovable where Self: View {
     func makeViewPointMover() -> ViewPointMover {
-        return BasicSlidableViewPointMover(view: self)
+        return BasicViewPointMover(view: self)
     }
 }
-final class BasicSlidableViewPointMover<T: View & BasicSlidablePointMovable>: ViewPointMover {
+final class BasicViewPointMover<T: View & BasicPointMovable>: ViewPointMover {
     var view: T
     var pointMovableView: View & PointMovable {
         return view
@@ -437,7 +439,7 @@ extension BasicXSlidable {
         capture(model, to: version)
     }
     var xKnobFillColor: Color {
-        return .knob
+        return .scroll
     }
 }
 extension BasicXSlidable where Self: View {

@@ -41,16 +41,17 @@ extension Player: Referenceable {
 }
 extension Player {
     static let playingFrameRateOption = RealGetterOption(numberOfDigits: 0, unit: " fps")
-    static let timeOption = RealOption(defaultModel: 0, minModel: 0, maxModel: 1)
+    static let timeOption = RealOption(minModel: 0, maxModel: 1)
 }
 extension Player: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect) -> View {
         return "\(time) b".thumbnailView(withFrame: frame)
     }
 }
-extension Player: AbstractViewable {
-    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Player>,
-                             type: AbstractType) -> ModelView where T : BinderProtocol {
+extension Player: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Player>) -> ModelView {
+        
         return MiniView(binder: binder, keyPath: keyPath)
     }
 }
@@ -74,8 +75,6 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
         return binder[keyPath: sceneKeyPath]
     }
     
-    var defaultModel = Player()
-    
     private var screenTransform = AffineTransform.identity
     
     private var playingFrameTime = 0, playIntSecond = 0
@@ -94,12 +93,13 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
             timeView.option.maxModel = maxTime
         }
     }
+    let frameRate = 60.0.cg
     private(set) var second = 0 {
         didSet {
             guard second != oldValue else { return }
             let oldSize = timeStringView.minSize
             let string = Player.minuteSecondString(withSecond: second,
-                                                   frameRate: scene.timeline.frameRate)
+                                                   frameRate: frameRate)
             timeStringView.text = Text(string)
             if oldSize != timeStringView.minSize { updateLayout() }
         }
@@ -111,20 +111,20 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     let timeStringView = TextFormView(text: "00:00", color: .locked)
     let playingFrameRateView: RealGetterView<Binder>
-    let timeView: SlidableRealView<Binder>
+    let timeView: MovableRealView<Binder>
     let drawView = View(drawClosure: { _, _, _ in })
     
     var isPlaying = false {
         didSet {
             guard isPlaying != oldValue else { return }
             if isPlaying {
-                oldPlayTime = scene.timeline.editingTime
+                oldPlayTime = scene.editingTime
                 playingDrawnCount = 0
                 oldTimestamp = Date.timeIntervalSinceReferenceDate
-                let t = scene.timeline.editingTime
+                let t = scene.editingTime
                 playIntSecond = t.integralPart
-                playingFrameRate = scene.timeline.frameRate
-                playingFrameTime = scene.timeline.frameTime(withTime: scene.timeline.editingTime)
+                playingFrameRate = frameRate
+                playingFrameTime = scene.frameTime(withTime: scene.editingTime)
                 playingDrawnCount = 0
 
                 drawView.displayLinkDraw()
@@ -144,7 +144,7 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
             } else {
                 playingDrawnCount = 0
                 oldTimestamp = Date.timeIntervalSinceReferenceDate
-                playingFrameRate = scene.timeline.frameRate
+                playingFrameRate = frameRate
                 displayLink?.time = model.playingTime
                 displayLink?.start()
             }
@@ -160,7 +160,7 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
                              keyPath: keyPath.appending(path: \Model.playingFrameRate),
                              option: Model.playingFrameRateOption)
         
-        timeView = SlidableRealView(binder: binder, keyPath: keyPath.appending(path: \Model.time),
+        timeView = MovableRealView(binder: binder, keyPath: keyPath.appending(path: \Model.time),
                                     option: Model.timeOption)
         
         super.init(isLocked: false)
@@ -178,7 +178,7 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
         })
         
         displayLink?.closure = { [unowned self] in
-            self.update(withTime: self.scene.timeline.basedTime(withTime: $0))
+            self.update(withTime: self.scene.basedTime(withTime: $0))
         }
     }
     
@@ -219,13 +219,13 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
     func updateWithModel() {
         playingFrameRateView.updateWithModel()
         timeView.updateWithModel()
-        displayLink?.frameRate = scene.timeline.frameRate
+        displayLink?.frameRate = frameRate
     }
     private func updateWithFrameRate() {
         let oldMinSize = playingFrameRateView.minSize
         playingFrameRateView.updateWithModel()
         playingFrameRateView.optionStringView.textMaterial.color
-            = playingFrameRate < scene.timeline.frameRate ? .warning : .locked
+            = playingFrameRate < frameRate ? .warning : .locked
         if oldMinSize != playingFrameRateView.minSize { updateLayout() }
     }
     var allowableDelayTime = 0.1.cg
@@ -233,14 +233,14 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
         playingFrameTime += 1
         
         if !model.isEnableDelay {
-            let playTime: Real = scene.timeline.time(withFrameTime: playingFrameTime)
+            let playTime: Real = scene.time(withFrameTime: playingFrameTime)
             let audioTime = model.playingTime
             if abs(playTime - audioTime) > allowableDelayTime {
-                playingFrameTime = scene.timeline.frameTime(withTime: audioTime)
+                playingFrameTime = scene.frameTime(withTime: audioTime)
             }
         }
         
-        let newTime: Rational = scene.timeline.time(withFrameTime: playingFrameTime)
+        let newTime: Rational = scene.time(withFrameTime: playingFrameTime)
         update(withTime: newTime)
     }
     private func updatePlayingFrameRate() {
@@ -249,7 +249,7 @@ final class ScenePlayerView<T: BinderProtocol>: ModelView, BindableReceiver {
             let newTimestamp = Date.timeIntervalSinceReferenceDate
             let deltaTime = Real(newTimestamp - oldTimestamp)
             if deltaTime >= 1 {
-                let newPlayingFrameRate = min(scene.timeline.frameRate,
+                let newPlayingFrameRate = min(frameRate,
                                               ((Real(playingDrawnCount) / deltaTime)).rounded())
                 if newPlayingFrameRate != playingFrameRate {
                     playingFrameRate = newPlayingFrameRate

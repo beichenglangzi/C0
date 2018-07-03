@@ -51,17 +51,17 @@ extension ObjectDecodable {
         return String(describing: type(of: self))
     }
 }
-
 protocol ObjectViewable
-: Codable, Referenceable, ThumbnailViewable, ObjectDecodable, AbstractConstraint, AnyInitializable {
+: Codable, Referenceable, ThumbnailViewable, ObjectDecodable, AnyInitializable {
 
-    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
-                           type: AbstractType) -> ModelView where T: BinderProtocol
+    func objectViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Object>, type: ViewableType) -> ModelView
 }
-extension ObjectViewable where Self: Codable & Referenceable & AbstractViewable {
-    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
-                           type: AbstractType) -> ModelView where T: BinderProtocol {
-        return ObjectView(binder: binder, keyPath: keyPath, value: self, type: type)
+extension ObjectViewable where Self: Codable & Referenceable & Viewable {
+    func objectViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Object>, type: ViewableType) -> ModelView {
+        
+        return ObjectView(binder: binder, keyPath: keyPath, value: self, viewableType: type)
     }
 }
 
@@ -71,18 +71,18 @@ struct Object {
     static func contains(_ typeName: String) -> Bool {
         return types[typeName] != nil
     }
-    static func append<T: Value & AbstractViewable>(_ type: T.Type) {
+    static func append<T: Value & Viewable>(_ type: T.Type) {
         types[type.objectTypeName] = type
         appendInArray(type)
         appendInArray(Layout<T>.self)
         appendInLayout(type)
         appendInLayout(Array<T>.self)
     }
-    static func appendInArray<T: Value & AbstractViewable>(_ type: T.Type) {
+    static func appendInArray<T: Value & Viewable>(_ type: T.Type) {
         let arrayType = Array<T>.self
         types[arrayType.objectTypeName] = arrayType
     }
-    static func appendInLayout<T: Value & AbstractViewable>(_ type: T.Type) {
+    static func appendInLayout<T: Value & Viewable>(_ type: T.Type) {
         let layoutType = Layout<T>.self
         types[layoutType.objectTypeName] = layoutType
     }
@@ -103,24 +103,19 @@ struct Object {
     }
     static func appendTypes() {
         append(Scene.self)
-        append(Timeline.self)
-        append(Parper.self)
-        append(BlendType.self)
+        append(Drafting<Drawing>.self)
         append(Drawing.self)
         append(Line.self)
         append(Color.self)
         append(Transform.self)
         append(Image.self)
         append(URL.self)
-        append(Interpolation.self)
-        append(Drafting<Drawing>.self)
         append(Size.self)
         append(Point.self)
         append(Real.self)
         append(Rational.self)
         append(Int.self)
         append(Bool.self)
-        append(Text.self)
         append(String.self)
         append(Object.self)
     }
@@ -168,32 +163,38 @@ extension Object: Codable {
         try value.encode(forKey: .value, in: &container)
     }
 }
+extension Object: ObjectViewable {
+    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
+                           type: ViewableType) -> ModelView where T: BinderProtocol {
+        return value.objectViewWith(binder: binder, keyPath: keyPath, type: type)
+    }
+}
+extension Object: StandardViewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Object>) -> ModelView {
+        
+        return value.objectViewWith(binder: binder, keyPath: keyPath, type: .standard)
+    }
+}
 extension Object: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect) -> View {
         return value.thumbnailView(withFrame: frame)
     }
 }
-extension Object: ObjectViewable {
-    func objectViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
-                           type: AbstractType) -> ModelView where T: BinderProtocol {
-        return value.objectViewWith(binder: binder, keyPath: keyPath, type: type)
+extension Object: MiniViewable {
+    func miniViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Object>) -> ModelView {
+        
+        return value.objectViewWith(binder: binder, keyPath: keyPath, type: .mini)
     }
 }
-extension Object: AbstractViewable {
-    var defaultAbstractConstraintSize: Size {
-        return value.defaultAbstractConstraintSize
-    }
-    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Object>,
-                             type: AbstractType) -> ModelView where T: BinderProtocol {
-        return value.objectViewWith(binder: binder, keyPath: keyPath, type: type)
-    }
-}
+extension Object: Viewable {}
 
 protocol ObjectProtocol {
     var object: Object { get }
 }
 
-final class ObjectView<Value: Object.Value & AbstractViewable, T: BinderProtocol>
+final class ObjectView<Value: Object.Value & Viewable, T: BinderProtocol>
 : ModelView, BindableReceiver {
     
     typealias Model = Object
@@ -215,27 +216,22 @@ final class ObjectView<Value: Object.Value & AbstractViewable, T: BinderProtocol
         binder[keyPath: keyPath].value = value
     }
     
-    var defaultModel: Model {
-        return model
-    }
-    
-    var type: AbstractType {
+    var viewableType: ViewableType {
         didSet { updateWithModel() }
     }
     
-    init(binder: Binder, keyPath: BinderKeyPath, value: Value, type: AbstractType) {
+    init(binder: Binder, keyPath: BinderKeyPath, value: Value, viewableType: ViewableType) {
         self.binder = binder
         self.keyPath = keyPath
-        self.type = type
+        self.viewableType = viewableType
         
         valueBinder = BasicBinder(rootModel: value)
-        valueView = value.abstractViewWith(binder: valueBinder,
-                                           keyPath: \BasicBinder<Value>.rootModel,
-                                           type: type)
+        valueView = value.viewWith(binder: valueBinder, keyPath: \BasicBinder<Value>.rootModel,
+                                   type: viewableType)
         
         super.init(isLocked: false)
         lineColor = nil
-        valueBinder.notification = { [unowned self] binder, _ in self.set(binder.rootModel) }
+        valueBinder.notification = { [unowned self] (binder, _) in self.set(binder.rootModel) }
         children = [valueView]
     }
     
@@ -248,10 +244,8 @@ final class ObjectView<Value: Object.Value & AbstractViewable, T: BinderProtocol
     func updateWithModel() {
         guard let value = value else { return }
         valueBinder = BasicBinder(rootModel: value)
-        
-        valueView = value.abstractViewWith(binder: valueBinder,
-                                           keyPath: \BasicBinder<Value>.rootModel,
-                                           type: type)
+        valueView = value.viewWith(binder: valueBinder, keyPath: \BasicBinder<Value>.rootModel,
+                                   type: viewableType)
         
         children = [valueView]
     }

@@ -255,10 +255,10 @@ struct Membrane: Codable, Equatable {
 //        return view
 //    }
 //}
-//extension Membrane: AbstractViewable {
-//    func abstractViewWith<T : BinderProtocol>(binder: T,
-//                                              keyPath: ReferenceWritableKeyPath<T, Membrane>,
-//                                              type: AbstractType) -> ModelView {
+//extension Membrane: Viewable {
+//    func standardViewWith<T: BinderProtocol>
+//        (binder: T, keyPath: ReferenceWritableKeyPath<T, Membrane>) -> ModelView {
+//        
 //        return MiniView(binder: binder, keyPath: keyPath)
 //    }
 //}

@@ -49,15 +49,11 @@ extension Bool: ThumbnailViewable {
         return text.thumbnailView(withFrame: frame)
     }
 }
-extension Bool: AbstractViewable {
-    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Bool>,
-                             type: AbstractType) -> ModelView where T: BinderProtocol {
-        switch type {
-        case .normal:
-            return BoolView(binder: binder, keyPath: keyPath, option: BoolOption())
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Bool: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Bool>) -> ModelView {
+        
+        return BoolView(binder: binder, keyPath: keyPath, option: BoolOption())
     }
 }
 extension Bool: ObjectViewable {}
@@ -73,7 +69,6 @@ struct BoolOption {
                                  falseName: Text(english: "Unlocked", japanese: "ロックなし"))
     }
     
-    var defaultModel = false
     var cationModel: Bool?
     var name = Text()
     var info = Info()
@@ -98,9 +93,6 @@ final class BoolView<Binder: BinderProtocol>: ModelView, BindableReceiver {
             optionFalseNameView.text = option.info.falseName
             updateWithModel()
         }
-    }
-    var defaultModel: Bool {
-        return option.defaultModel
     }
     
     let optionStringView: TextFormView
@@ -188,7 +180,7 @@ extension BoolView: Runnable {
         push(model, to: version)
     }
 }
-extension BoolView: BasicSlidablePointMovable {
+extension BoolView: BasicPointMovable {
     func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
         notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }

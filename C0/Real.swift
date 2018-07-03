@@ -187,19 +187,14 @@ extension Real: ThumbnailViewable {
         return String(self).thumbnailView(withFrame: frame)
     }
 }
-extension Real: AbstractViewable {
-    func abstractViewWith<T: BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Real>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return DiscreteRealView(binder: binder, keyPath: keyPath,
-                                    option: RealOption(defaultModel: 0,
-                                                       minModel: -.greatestFiniteMagnitude,
-                                                       maxModel: .greatestFiniteMagnitude,
-                                                       modelInterval: 0.1))
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Real: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Real>) -> ModelView {
+        
+        return DiscreteRealView(binder: binder, keyPath: keyPath,
+                                option: RealOption(minModel: -.greatestFiniteMagnitude,
+                                                   maxModel: .greatestFiniteMagnitude,
+                                                   modelInterval: 0.1))
     }
 }
 extension Real: ObjectViewable {}
@@ -261,7 +256,6 @@ typealias RealGetterView<Binder: BinderProtocol> = GetterView<RealGetterOption, 
 struct RealOption: Object1DOption {
     typealias Model = Real
     
-    var defaultModel: Model
     var minModel: Model
     var maxModel: Model
     var transformedModel: ((Model) -> (Model))
@@ -271,12 +265,11 @@ struct RealOption: Object1DOption {
     var numberOfDigits: Int
     var unit: String
     
-    init(defaultModel: Model, minModel: Model, maxModel: Model,
+    init(minModel: Model, maxModel: Model,
          transformedModel: @escaping ((Model) -> (Model)) = { $0 },
          reverseTransformedModel: @escaping ((Model) -> (Model)) = { $0 },
          modelInterval: Model = 0, exp: Real = 1, numberOfDigits: Int = 1, unit: String = "") {
         
-        self.defaultModel = defaultModel
         self.minModel = minModel
         self.maxModel = maxModel
         self.transformedModel = transformedModel
@@ -303,15 +296,6 @@ struct RealOption: Object1DOption {
     }
     func ratio(with model: Model) -> Real {
         return (model - minModel) / (maxModel - minModel)
-    }
-    func ratioFromDefaultModel(with model: Model) -> Real {
-        if defaultModel == minModel || defaultModel == maxModel {
-            return model / (maxModel - minModel)
-        } else if model < defaultModel {
-            return ((model - minModel) / (defaultModel - minModel)) * 0.5
-        } else {
-            return ((model - defaultModel) / (maxModel - defaultModel)) * 0.5 + 0.5
-        }
     }
     
     private func model(withDelta delta: Real) -> Model {
@@ -348,9 +332,9 @@ struct RealOption: Object1DOption {
     }
 }
 extension RealOption {
-    static let opacity = RealOption(defaultModel: 1, minModel: 0, maxModel: 1)
+    static let opacity = RealOption(minModel: 0, maxModel: 1)
 }
 typealias AssignableRealView<Binder: BinderProtocol> = Assignable1DView<RealOption, Binder>
 typealias DiscreteRealView<Binder: BinderProtocol> = Discrete1DView<RealOption, Binder>
-typealias SlidableRealView<Binder: BinderProtocol> = Slidable1DView<RealOption, Binder>
+typealias MovableRealView<Binder: BinderProtocol> = Movable1DView<RealOption, Binder>
 typealias CircularRealView<Binder: BinderProtocol> = Circular1DView<RealOption, Binder>

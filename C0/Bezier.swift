@@ -43,20 +43,6 @@ extension Bezier2 {
         return Bezier2(p0: p0.mid(p1), cp: p1, p1: p2)
     }
     
-//    init(leastSquaresFromPoints points: [Point], controlDeltaPoint: Point? = nil) {
-//        var points = points
-//        let p0 = points[0], p1 = points[points.count - 1]
-//
-//        let cp: Point
-//        if let controlDeltaPoint = controlDeltaPoint {
-//
-//        } else {
-//
-//        }
-//
-//        self.init(p0: p0, cp: cp, p1: p1)
-//    }
-    
     var isLineaer: Bool {
         return p0.mid(p1) == cp ||
             (p0.x - 2 * cp.x + p1.x == 0 && p0.y - 2 * cp.y + p1.y == 0)
@@ -343,6 +329,9 @@ extension Bezier2 {
             return max(b.b0.maxDistance²(at: p), b.b1.maxDistance²(at: p))
         }
     }
+}
+extension Bezier2: Referenceable {
+    static let name = Text(english: "Quadratic Bezier", japanese: "二次ベジェ曲線")
 }
 
 struct Bezier3: Codable, Hashable {

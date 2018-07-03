@@ -61,20 +61,11 @@ extension String: ThumbnailViewable {
         return view
     }
 }
-extension String: AbstractViewable {
-    var defaultAbstractConstraintSize: Size {
-        return Size(width: 400, height: Layouter.basicTextHeight)
-    }
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, String>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return StringView(binder: binder, keyPath: keyPath, option: StringOption(),
-                              lineBreakWidth: 400)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension String: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, String>) -> ModelView {
+        
+        return StringView(binder: binder, keyPath: keyPath, lineBreakWidth: 400)
     }
 }
 extension String: ObjectViewable {}
@@ -94,10 +85,6 @@ extension String: Interpolatable {
                                _ f2: String, with ms: Monospline) -> String {
         return f1
     }
-}
-
-struct StringOption {
-    var defaultModel = ""
 }
 
 protocol Namable {
@@ -142,7 +129,7 @@ final class StringGetterView<T: BinderProtocol>: ModelView, BindableGetterReceiv
                               lineBreakWidth: 0,
                               paddingSize: paddingSize)
         
-        super.init(drawClosure: { ctx, view, _ in view.draw(in: ctx) }, isLocked: false)
+        super.init(drawClosure: { (ctx, view, _) in view.draw(in: ctx) }, isLocked: false)
         lineColor = .getBorder
     }
     
@@ -170,9 +157,10 @@ protocol KeyInputtable {
     func insert(_ string: String, for p: Point, _ version: Version)
 }
 
+//BoundsView<String>
+
 final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = String
-    typealias ModelOption = StringOption
     typealias Binder = T
     var binder: Binder {
         didSet { updateWithModel() }
@@ -193,13 +181,6 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
         }
     }
 
-    var option: ModelOption {
-        didSet { updateWithModel() }
-    }
-    var defaultModel: Model {
-        return option.defaultModel
-    }
-
     var textMaterial: TextMaterial {
         didSet { updateWithModel() }
     }
@@ -213,13 +194,12 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
         didSet { displayLinkDraw() }
     }
 
-    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption = ModelOption(),
+    init(binder: Binder, keyPath: BinderKeyPath,
          textMaterial: TextMaterial = TextMaterial(),
          lineBreakWidth: Real? = .infinity, paddingSize: Size = Size(square: 1)) {
 
         self.binder = binder
         self.keyPath = keyPath
-        self.option = option
 
         self.textMaterial = textMaterial
         self.lineBreakWidth = lineBreakWidth

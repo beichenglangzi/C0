@@ -20,7 +20,6 @@
 typealias EnumType = RawRepresentable & Equatable & Object.Value
 
 struct EnumOption<Model: EnumType> {
-    var defaultModel: Model
     var cationModels: [Model]
     let indexClosure: ((Model.RawValue) -> (Int))
     let rawValueClosure: ((Int) -> (Model.RawValue?))
@@ -29,11 +28,11 @@ struct EnumOption<Model: EnumType> {
     func index(with model: Model) -> Int {
         return indexClosure(model.rawValue)
     }
-    func model(at index: Int) -> Model {
+    func model(at index: Int) -> Model? {
         if let rawValue = rawValueClosure(index) {
-            return Model(rawValue: rawValue) ?? defaultModel
+            return Model(rawValue: rawValue)
         } else {
-            return defaultModel
+            return nil
         }
     }
 }
@@ -53,9 +52,6 @@ final class EnumView<T: EnumType, U: BinderProtocol>: ModelView, BindableReceive
     
     var option: ModelOption {
         didSet { updateWithModel() }
-    }
-    var defaultModel: Model {
-        return option.defaultModel
     }
     
     let classNameView: TextFormView
@@ -143,7 +139,7 @@ final class EnumView<T: EnumType, U: BinderProtocol>: ModelView, BindableReceive
                 minD = d
             }
         }
-        return option.model(at: minI)
+        return option.model(at: minI) ?? model
     }
 }
 extension EnumView: Runnable {
@@ -151,7 +147,7 @@ extension EnumView: Runnable {
         push(model(at: p), to: version)
     }
 }
-extension EnumView: BasicSlidablePointMovable {
+extension EnumView: BasicPointMovable {
     func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
         notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }

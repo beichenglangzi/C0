@@ -23,10 +23,11 @@ protocol Runnable {
 protocol Newable {
     func new(for p: Point, _ version: Version)
 }
+protocol Exportable {
+    func export(withZ z: Real)
+}
 
 struct RunnableActionList: SubActionList {
-//    let runAction = Action(name: Text(english: "Run", japanese: "実行"),
-//                           quasimode: Quasimode([.input(.click)]))
     let newAction = Action(name: Text(english: "New", japanese: "新規"),
                            quasimode: Quasimode(modifier: [.input(.command)],
                                                 [.input(.d)]))
@@ -45,8 +46,8 @@ extension RunnableActionList: SubSendable {
 }
 
 final class RunnableSender: SubSender {
-    typealias Receiver = View & Runnable
     typealias NewableReceiver = View & Newable
+    typealias ExportableReceiver = View & Exportable
     
     typealias ActionList = RunnableActionList
     var actionList: ActionList
@@ -57,15 +58,6 @@ final class RunnableSender: SubSender {
     
     func send(_ actionMap: ActionMap, from sender: Sender) {
         switch actionMap.action {
-//        case actionList.runAction:
-//            guard actionMap.phase == .began else { break }
-//            if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
-//                let receiver = sender.mainIndicatedView as? Receiver {
-//
-//                sender.stopAllEvents()
-//                let p = receiver.convertFromRoot(eventValue.rootLocation)
-//                receiver.run(for: p, sender.indicatedVersionView.version)
-//            }
         case actionList.newAction:
             guard actionMap.phase == .began else { break }
             if let eventValue = actionMap.eventValuesWith(InputEvent.self).first,
@@ -74,6 +66,13 @@ final class RunnableSender: SubSender {
                 let p = receiver.convertFromRoot(eventValue.rootLocation)
                 sender.stopEditableEvents()
                 receiver.new(for: p, sender.indicatedVersionView.version)
+            }
+        case actionList.exportAction:
+            guard actionMap.phase == .began else { break }
+            if let receiver = sender.mainIndicatedView
+                    .withSelfAndAllParents(with: ExportableReceiver.self) {
+                
+                receiver.export(withZ: sender.indicatedZoomableView.zoomingTransform.z)
             }
         default: break
         }

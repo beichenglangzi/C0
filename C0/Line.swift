@@ -483,15 +483,13 @@ extension Line {
         }
     }
 }
-extension Line: ConcreteViewable {
+extension Line {
     func concreteViewWith<T>
         (binder: T,
          keyPath: ReferenceWritableKeyPath<T, Line>) -> ModelView where T: BinderProtocol {
         
         return LineView(binder: binder, keyPath: keyPath)
     }
-}
-extension Line {
     func view(lineWidth size: Real, fillColor: Color) -> View {
         let path = self.path(lineWidth: size)
         let view = View(path: path)
@@ -653,10 +651,10 @@ extension Line: ThumbnailViewable {
 //        draw(size: 0.5 / c.scale, in: ctx)
     }
 }
-extension Line: AbstractViewable {
-    func abstractViewWith<T: BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Line>,
-                                              type: AbstractType) -> ModelView {
+extension Line: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Line>) -> ModelView {
+        
         return MiniView(binder: binder, keyPath: keyPath)
     }
 }
@@ -757,8 +755,6 @@ final class LineView<T: BinderProtocol>: ModelView, BindableReceiver {
         didSet { updateWithModel() }
     }
     var notifications = [((LineView<Binder>, BasicNotification) -> ())]()
-    
-    var defaultModel = Model()
     
     var width = 1.0.cg
     

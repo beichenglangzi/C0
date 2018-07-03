@@ -109,6 +109,7 @@ final class MiniView<T: Object0D, U: BinderProtocol>: ModelView, BindableGetterR
         classNameView = TextFormView(text: Model.name, font: .smallBold)
         
         thumbnailView = MiniView.thumbnailViewWith(model: binder[keyPath: keyPath], frame: Rect())
+        thumbnailView.lineColor = .formBorder
         
         super.init(isLocked: false)
         children = [classNameView, thumbnailView]

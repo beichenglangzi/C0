@@ -116,19 +116,11 @@ extension Image: ThumbnailViewable {
         return view
     }
 }
-extension Image: AbstractViewable {
-    var defaultAbstractConstraintSize: Size {
-        return size
-    }
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Image>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return ImageView(binder: binder, keyPath: keyPath)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Image: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Image>) -> ModelView {
+        
+        return ImageView(binder: binder, keyPath: keyPath)
     }
 }
 extension Image: ObjectViewable {}
@@ -182,8 +174,6 @@ final class ImageView<T: BinderProtocol>: ModelView, BindableReceiver {
         didSet { updateWithModel() }
     }
     var notifications = [((ImageView<Binder>, BasicNotification) -> ())]()
-    
-    var defaultModel = Model()
     
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder

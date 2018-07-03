@@ -121,17 +121,11 @@ extension Text: ThumbnailViewable {
         return view
     }
 }
-extension Text: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Text>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return TextGetterView(binder: binder, keyPath: keyPath,
-                                  textMaterial: TextMaterial(font: .default))
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Text: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Text>) -> ModelView {
+        
+        return TextGetterView(binder: binder, keyPath: keyPath)
     }
 }
 extension Text: ObjectViewable {}

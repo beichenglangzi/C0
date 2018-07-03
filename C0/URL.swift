@@ -49,10 +49,10 @@ extension URL: ThumbnailViewable {
         return lastPathComponent.thumbnailView(withFrame: frame)
     }
 }
-extension URL: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, URL>,
-                                              type: AbstractType) -> ModelView {
+extension URL: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, URL>) -> ModelView {
+        
         return MiniView(binder: binder, keyPath: keyPath)
     }
 }

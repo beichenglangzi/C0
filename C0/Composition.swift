@@ -41,22 +41,17 @@ extension BlendType: DisplayableText {
 }
 extension BlendType {
     static var defaultOption: EnumOption<BlendType> {
-        return EnumOption(defaultModel: BlendType.normal, cationModels: [],
+        return EnumOption(cationModels: [],
                           indexClosure: { Int($0) },
                           rawValueClosure: { BlendType.RawValue($0) },
                           names: BlendType.displayTexts)
     }
 }
-extension BlendType: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, BlendType>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return EnumView(binder: binder, keyPath: keyPath, option: BlendType.defaultOption)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension BlendType: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, BlendType>) -> ModelView {
+        
+        return EnumView(binder: binder, keyPath: keyPath, option: BlendType.defaultOption)
     }
 }
 extension BlendType: ObjectViewable {}

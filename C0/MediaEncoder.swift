@@ -64,7 +64,7 @@ final class SceneVideoEncoder: MediaEncoder {
         self.videoType = videoType
         self.codec = codec
         
-        let scale = size.width / scene.canvas.frame.size.width
+        let scale = size.width / scene.bounds.size.width
         self.screenTransform = Transform(translation: Point(x: size.width / 2, y: size.height / 2),
                                          scale: Point(x: scale, y: scale),
                                          rotation: 0)
@@ -86,6 +86,21 @@ final class SceneVideoEncoder: MediaEncoder {
         if fileManager.fileExists(atPath: url.path) {
             try fileManager.removeItem(at: url)
         }
+        
+//        let progressKind = Progress.FileOperationKind.receiving
+//        let progressUserInfo: [ProgressUserInfoKey: Any] = [.fileOperationKindKey: progressKind,
+//                                                            .fileURLKey: url]
+//        let progress = Progress(parent: nil, userInfo: progressUserInfo)
+//        progress.isCancellable = true
+//        progress.kind = .file
+//        progress.totalUnitCount = 100
+//        progress.cancellationHandler = {
+//            //cancel
+//        }
+//        progress.publish()
+//
+//        //test
+//        progress.completedUnitCount = 1
         
         let writer = try AVAssetWriter(outputURL: url, fileType: videoType.av)
         
@@ -110,8 +125,8 @@ final class SceneVideoEncoder: MediaEncoder {
         }
         writer.startSession(atSourceTime: kCMTimeZero)
         
-        let allFrameCount = scene.timeline.frameTime(withTime: scene.timeline.duration)
-        let timeScale = Int32(scene.timeline.frameRate)
+        let allFrameCount = scene.frameTime(withTime: scene.animation.duration)
+        let timeScale = Int32(scene.frameRate)
         
         var append = false, stop = false
         for i in 0..<allFrameCount {
@@ -144,7 +159,7 @@ final class SceneVideoEncoder: MediaEncoder {
                                        bytesPerRow: CVPixelBufferGetBytesPerRow(pb),
                                        space: colorSpace,
                                        bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) {
-                    scene.timeline.editingTime = scene.timeline.time(withFrameTime: i)
+                    scene.editingTime = scene.time(withFrameTime: i)
                     drawView.render(in: ctx)
                 }
                 CVPixelBufferUnlockBaseAddress(pb,
@@ -177,17 +192,17 @@ final class SceneVideoEncoder: MediaEncoder {
 typealias SceneVideoEncoderView = MediaEncoderView<SceneVideoEncoder>
 
 final class SceneImageEncoder: MediaEncoder {
-    private var canvas: Parper, size: Size, fileType: Image.FileType
-    init(canvas: Parper, size: Size, fileType: Image.FileType) {
-        self.canvas = canvas
+    private var view: View, size: Size, fileType: Image.FileType
+    init(size: Size, fileType: Image.FileType) {
         self.size = size
         self.fileType = fileType
+        self.view = View()
     }
     
     func write(to url: URL,
                progressClosure: @escaping (Real, inout Bool) -> (),
                completionClosure: @escaping (Error?) -> ()) throws {
-        let image = canvas.view().renderImage(with: size)
+        let image = view.renderImage(with: size)
         try image?.write(fileType, to: url)
         completionClosure(nil)
     }

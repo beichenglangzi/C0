@@ -22,7 +22,7 @@ import CoreGraphics
 protocol KeyframeProtocol {
     var time: Rational { get set }
 }
-protocol KeyframeValue: Equatable, Interpolatable, Initializable, Object.Value, AbstractViewable {}
+protocol KeyframeValue: Equatable, Interpolatable, Initializable, Object.Value, Viewable {}
 struct Keyframe<Value: KeyframeValue>: Codable, Equatable, KeyframeProtocol {
     var value = Value()
     var time = Rational(0)
@@ -57,16 +57,11 @@ extension Keyframe: ThumbnailViewable {
         return Text("\(time.description) s").thumbnailView(withFrame: frame)
     }
 }
-extension Keyframe: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Keyframe>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return KeyframeView(binder: binder, keyPath: keyPath)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Keyframe: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Keyframe>) -> ModelView {
+        
+        return KeyframeView(binder: binder, keyPath: keyPath)
     }
 }
 extension Keyframe: ObjectViewable {}
@@ -101,8 +96,6 @@ final class KeyframeView<Value: KeyframeValue, T: BinderProtocol>: ModelView, Bi
     }
     var notifications = [((KeyframeView<Value, Binder>, BasicNotification) -> ())]()
     
-    var defaultModel = Model()
-    
     var keyValueView: View & LayoutMinSize
     var timeView: DiscreteRationalView<Binder>
     
@@ -110,13 +103,12 @@ final class KeyframeView<Value: KeyframeValue, T: BinderProtocol>: ModelView, Bi
         self.binder = binder
         self.keyPath = keyPath
         let keyValueKeyPath = keyPath.appending(path: \Model.value)
-        keyValueView = binder[keyPath: keyPath].value.abstractViewWith(binder: binder,
-                                                                       keyPath: keyValueKeyPath,
-                                                                       type: .mini)
+        keyValueView = binder[keyPath: keyPath].value.viewWith(binder: binder,
+                                                               keyPath: keyValueKeyPath,
+                                                               type: .mini)
         timeView = DiscreteRationalView(binder: binder,
                                         keyPath: keyPath.appending(path: \Model.time),
-                                        option: RationalOption(defaultModel: 0,
-                                                               minModel: 0, maxModel: .max,
+                                        option: RationalOption(minModel: 0, maxModel: .max,
                                                                isInfinitesimal: false))
         
         super.init(isLocked: false)

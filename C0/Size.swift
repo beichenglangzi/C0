@@ -113,21 +113,16 @@ extension Size: ThumbnailViewable {
         return (jsonString ?? "").thumbnailView(withFrame: frame)
     }
 }
-extension Size: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Size>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            let valueOption = PointOption.XOption(defaultModel: 0,
-                                                  minModel: -.greatestFiniteMagnitude,
-                                                  maxModel: .greatestFiniteMagnitude,
-                                                  modelInterval: 0.1)
-            return DiscreteSizeView(binder: binder, keyPath: keyPath,
-                                    option: SizeOption(xOption: valueOption,
-                                                       yOption: valueOption))
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Size: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Size>) -> ModelView {
+        
+        let valueOption = PointOption.XOption(minModel: -.greatestFiniteMagnitude,
+                                              maxModel: .greatestFiniteMagnitude,
+                                              modelInterval: 0.1)
+        return DiscreteSizeView(binder: binder, keyPath: keyPath,
+                                option: SizeOption(xOption: valueOption,
+                                                   yOption: valueOption))
     }
 }
 extension Size: ObjectViewable {}
@@ -160,5 +155,5 @@ struct SizeOption: Object2DOption {
     var xOption: XOption
     var yOption: YOption
 }
-typealias SlidableSizeView<Binder: BinderProtocol> = Slidable2DView<SizeOption, Binder>
+typealias MovableSizeView<Binder: BinderProtocol> = Movable2DView<SizeOption, Binder>
 typealias DiscreteSizeView<Binder: BinderProtocol> = Discrete2DView<SizeOption, Binder>

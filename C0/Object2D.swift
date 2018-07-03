@@ -37,19 +37,14 @@ protocol Object2DOption {
     var xOption: XOption { get }
     var yOption: YOption { get }
     
-    var defaultModel: Model { get }
     var minModel: Model { get }
     var maxModel: Model { get }
     func ratio2D(with model: Model) -> Ratio2D
-    func ratio2DFromDefaultModel(with model: Model) -> Ratio2D
     func model(withDelta delta: Ratio2D, oldModel: Model) -> Model
     func model(withRatio ratio2D: Ratio2D) -> Model
     func clippedModel(_ model: Model) -> Model
 }
 extension Object2DOption {
-    var defaultModel: Model {
-        return Model(xModel: xOption.defaultModel, yModel: yOption.defaultModel)
-    }
     var minModel: Model {
         return Model(xModel: xOption.minModel, yModel: yOption.minModel)
     }
@@ -59,10 +54,6 @@ extension Object2DOption {
     func ratio2D(with model: Model) -> Ratio2D {
         return Ratio2D(x: xOption.ratio(with: model.xModel),
                        y: yOption.ratio(with: model.yModel))
-    }
-    func ratio2DFromDefaultModel(with model: Model) -> Ratio2D {
-        return Ratio2D(x: xOption.ratioFromDefaultModel(with: model.xModel),
-                       y: yOption.ratioFromDefaultModel(with: model.yModel))
     }
     func model(withDelta delta: Ratio2D, oldModel: Model) -> Model {
         return Model(xModel: xOption.model(withDelta: delta.x, oldModel: oldModel.xModel),
@@ -95,9 +86,6 @@ final class AssignableObject2DView<T: Object2DOption, U: BinderProtocol>
     
     var option: ModelOption {
         didSet { updateWithModel() }
-    }
-    var defaultModel: Model {
-        return option.defaultModel
     }
     
     let xView: Assignable1DView<ModelOption.XOption, Binder>
@@ -179,9 +167,6 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
     var option: ModelOption {
         didSet { updateWithModel() }
     }
-    var defaultModel: Model {
-        return option.defaultModel
-    }
     
     let xView: Assignable1DView<ModelOption.XOption, Binder>
     let yView: Assignable1DView<ModelOption.YOption, Binder>
@@ -258,7 +243,7 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
     }
     private func updateKnobLayout() {
         let b = knobBounds
-        let ratio2D = option.ratio2DFromDefaultModel(with: model)
+        let ratio2D = option.ratio2D(with: model)
         let x = (b.width * ratio2D.x + b.minX).interval(scale: 0.5)
         let y = (b.height * ratio2D.y + b.minY).interval(scale: 0.5)
         knobView.position = Point(x: x, y: y)
@@ -272,13 +257,13 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
         yView.updateWithModel()
     }
     
-    func model(at p: Point, first fp: Point, old oldModel: Model) -> Model {
-        func t(withDelta delta: Real) -> Real {
-            guard abs(delta) > minDelta else {
-                return 0
-            }
-            return (delta > 0 ? delta - minDelta : delta + minDelta) / interval
+    func t(withDelta delta: Real) -> Real {
+        guard abs(delta) > minDelta else {
+            return 0
         }
+        return (delta > 0 ? delta - minDelta : delta + minDelta) / interval
+    }
+    func model(at p: Point, first fp: Point, old oldModel: Model) -> Model {
         let xt =  t(withDelta: p.x - fp.x), yt = t(withDelta: p.y - fp.y)
         let ratio2D = Ratio2D(x: xt, y: yt)
         return option.model(withDelta: ratio2D, oldModel: oldModel)
@@ -288,15 +273,20 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
         return option.clippedModel(model)
     }
 }
-extension Discrete2DView: BasicDiscretePointMovable {
-    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
+extension Discrete2DView: BasicXSlidable {
+    var xKnobView: View {
+        return knobView
+    }
+    func xModel(delta: Real, old oldModel: T.Model) -> T.Model {
+        let ratio2D = Ratio2D(x: t(withDelta: delta), y: 0)
+        return option.model(withDelta: ratio2D, oldModel: oldModel)
+    }
+    func didChangeFromXSlide(_ phase: Phase, beganModel: Model) {
         notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }
 }
 
-final class Slidable2DView<T: Object2DOption, U: BinderProtocol>
-: ModelView, Slidable, BindableReceiver {
-
+final class Movable2DView<T: Object2DOption, U: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = T.Model
     typealias ModelOption = T
     typealias Binder = U
@@ -306,14 +296,11 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((Slidable2DView<ModelOption, Binder>,
+    var notifications = [((Movable2DView<ModelOption, Binder>,
                            BasicPhaseNotification<Model>) -> ())]()
     
     var option: ModelOption {
         didSet { updateWithModel() }
-    }
-    var defaultModel: Model {
-        return option.defaultModel
     }
     
     var padding = 5.0.cg {
@@ -368,12 +355,12 @@ final class Slidable2DView<T: Object2DOption, U: BinderProtocol>
         return option.clippedModel(model)
     }
 }
-extension Slidable2DView: Runnable {
+extension Movable2DView: Runnable {
     func run(for p: Point, _ version: Version) {
         push(option.clippedModel(model(at: p)), to: version)
     }
 }
-extension Slidable2DView: BasicSlidablePointMovable {
+extension Movable2DView: BasicPointMovable {
     func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
         notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }

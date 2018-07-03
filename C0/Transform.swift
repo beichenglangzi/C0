@@ -255,27 +255,21 @@ extension Transform: ThumbnailViewable {
         return View()
     }
 }
-extension Transform: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T,
-                                              keyPath: ReferenceWritableKeyPath<T, Transform>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            return TransformView(binder: binder, keyPath: keyPath, option: TransformOption())
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Transform: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Transform>) -> ModelView {
+        
+        return TransformView(binder: binder, keyPath: keyPath, option: TransformOption())
     }
 }
 extension Transform: ObjectViewable {}
 
 struct TransformOption {
-    var defaultModel = Transform()
-    var translationValueOption = RealOption(defaultModel: 0, minModel: -1000000, maxModel: 1000000,
+    var translationValueOption = RealOption(minModel: -1000000, maxModel: 1000000,
                                             modelInterval: 0.01, numberOfDigits: 1)
-    var zOption = RealOption(defaultModel: 0, minModel: -20, maxModel: 20,
+    var zOption = RealOption(minModel: -20, maxModel: 20,
                              modelInterval: 0.01, numberOfDigits: 2)
-    var degreesRotationOption = RealOption(defaultModel: 0, minModel: -10000, maxModel: 10000,
+    var degreesRotationOption = RealOption(minModel: -10000, maxModel: 10000,
                                            modelInterval: 0.5, numberOfDigits: 1, unit: "°")
     
     var translationOption: PointOption {
@@ -302,9 +296,6 @@ final class TransformView<T: BinderProtocol>: ModelView, BindableReceiver {
             degreesRotationView.option = option.degreesRotationOption
             updateLayout()
         }
-    }
-    var defaultModel: Model {
-        return option.defaultModel
     }
     
     let translationView: DiscretePointView<Binder>
@@ -377,9 +368,6 @@ final class BasicTransformView<T: BinderProtocol>: ModelView, BindableReceiver {
             degreesRotationView.option = option.degreesRotationOption
             updateLayout()
         }
-    }
-    var defaultModel: Model {
-        return option.defaultModel
     }
     
     let translationView: AssignablePointView<Binder>

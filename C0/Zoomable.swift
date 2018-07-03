@@ -33,7 +33,7 @@ struct ZoomableActionList: SubActionList {
                               quasimode: Quasimode([.rotate(.rotate)]),
                               isEditable: false)
     var actions: [Action] {
-        return [zoomAction, rotateAction]
+        return [zoomAction]
     }
 }
 extension ZoomableActionList: SubSendable {
@@ -71,20 +71,20 @@ final class ZoomableSender: SubSender {
             if actionMap.phase == .ended {
                 self.zoomers = []
             }
-        case actionList.rotateAction:
-            guard let eventValue = actionMap.eventValuesWith(RotateEvent.self).first else { return }
-            if actionMap.phase == .began {
-                let receiver = sender.indicatedZoomableView
-                rotaters = [Rotater(zoomableView: receiver)]
-                receiver.captureTransform(to: sender.indicatedVersionView.version)
-            }
-            guard let rotater = rotaters.first else { return }
-            let p = rotater.zoomableView.convertFromRoot(eventValue.rootLocation)
-            rotater.rotate(for: p, time: eventValue.time,
-                           rotationQuantity: eventValue.rotationQuantity, actionMap.phase)
-            if actionMap.phase == .ended {
-                self.rotaters = []
-            }
+//        case actionList.rotateAction:
+//            guard let eventValue = actionMap.eventValuesWith(RotateEvent.self).first else { return }
+//            if actionMap.phase == .began {
+//                let receiver = sender.indicatedZoomableView
+//                rotaters = [Rotater(zoomableView: receiver)]
+//                receiver.captureTransform(to: sender.indicatedVersionView.version)
+//            }
+//            guard let rotater = rotaters.first else { return }
+//            let p = rotater.zoomableView.convertFromRoot(eventValue.rootLocation)
+//            rotater.rotate(for: p, time: eventValue.time,
+//                           rotationQuantity: eventValue.rotationQuantity, actionMap.phase)
+//            if actionMap.phase == .ended {
+//                self.rotaters = []
+//            }
         default: break
         }
     }

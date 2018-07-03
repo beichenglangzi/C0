@@ -555,14 +555,13 @@ extension View {
 private final class C0DrawLayer: CALayer {
     init(backgroundColor: Color? = .background, borderColor: Color? = .getSetBorder) {
         super.init()
-        self.needsDisplayOnBoundsChange = true
-        self.drawsAsynchronously = true
-        self.anchorPoint = Point()
-        self.isOpaque = backgroundColor != nil
-        self.borderWidth = borderColor == nil ? 0 : 0.5
+        needsDisplayOnBoundsChange = true
+        drawsAsynchronously = true
+        anchorPoint = Point()
+        isOpaque = backgroundColor != nil
+        borderWidth = borderColor == nil ? 0 : 0.5
         self.backgroundColor = backgroundColor?.cg
         self.borderColor = borderColor?.cg
-        self.magnificationFilter = kCAFilterNearest
     }
     override init(layer: Any) {
         super.init(layer: layer)

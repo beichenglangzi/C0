@@ -50,20 +50,16 @@ extension Desktop: Referenceable {
     static let name = Text(english: "Desktop", japanese: "デスクトップ")
 }
 extension Desktop {
-    static let isHiddenActionListOption = BoolOption(defaultModel: false, cationModel: nil,
+    static let isHiddenActionListOption = BoolOption(cationModel: nil,
                                                      name: ActionList.name,
                                                      info: .hidden)
     static let copiedObjectsInferenceName = Text(english: "Copied", japanese: "コピー済み")
 }
-extension Desktop: AbstractViewable {
-    func abstractViewWith<T>(binder: T, keyPath: ReferenceWritableKeyPath<T, Desktop>,
-                             type: AbstractType) -> ModelView where T: BinderProtocol {
-        switch type {
-        case .normal:
-            return DesktopView(binder: binder, keyPath: keyPath)
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Desktop: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Desktop>) -> ModelView {
+        
+        return DesktopView(binder: binder, keyPath: keyPath)
     }
 }
 extension Desktop: ObjectViewable {}
@@ -125,11 +121,7 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         didSet { updateWithModel() }
     }
     var notifications = [((DesktopView<Binder>, BasicNotification) -> ())]()
-
-    var defaultModel: Model {
-        return Model()
-    }
-
+    
     let versionView: VersionView<Binder>
     let copiedObjectsNameView = TextFormView(text: Desktop.copiedObjectsInferenceName + ":")
     let copiedObjectsView: SelectionView<Object, Binder>
@@ -151,7 +143,7 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
                                   keyPath: keyPath.appending(path: \Model.version))
         copiedObjectsView = SelectionView(binder: binder,
                                           keyPath: keyPath.appending(path: \Model.copiedObjects),
-                                          abstractType: .mini)
+                                          viewableType: .mini)
         copiedObjectsView.valuesView.xyOrientation = .horizontal(.leftToRight)
         transformView = BasicTransformView(binder: binder,
                                            keyPath: keyPath.appending(path: \Model.transform),

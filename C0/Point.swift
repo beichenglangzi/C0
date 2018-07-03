@@ -352,21 +352,16 @@ extension Point: ThumbnailViewable {
         return (jsonString ?? "").thumbnailView(withFrame: frame)
     }
 }
-extension Point: AbstractViewable {
-    func abstractViewWith<T : BinderProtocol>(binder: T, keyPath: ReferenceWritableKeyPath<T, Point>,
-                                              type: AbstractType) -> ModelView {
-        switch type {
-        case .normal:
-            let valueOption = PointOption.XOption(defaultModel: 0,
-                                                  minModel: -.greatestFiniteMagnitude,
-                                                  maxModel: .greatestFiniteMagnitude,
-                                                  modelInterval: 0.1)
-            return DiscretePointView(binder: binder, keyPath: keyPath,
-                                     option: PointOption(xOption: valueOption,
-                                                         yOption: valueOption))
-        case .mini:
-            return MiniView(binder: binder, keyPath: keyPath)
-        }
+extension Point: Viewable {
+    func standardViewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Point>) -> ModelView {
+        
+        let valueOption = PointOption.XOption(minModel: -.greatestFiniteMagnitude,
+                                              maxModel: .greatestFiniteMagnitude,
+                                              modelInterval: 0.1)
+        return DiscretePointView(binder: binder, keyPath: keyPath,
+                                 option: PointOption(xOption: valueOption,
+                                                     yOption: valueOption))
     }
 }
 extension Point: ObjectViewable {}
@@ -420,7 +415,7 @@ extension Point: Object2D {
     static let yDisplayText = Text("y")
 }
 
-extension Point: ConcreteViewable {
+extension Point {
     func concreteViewWith<T>
         (binder: T,
          keyPath: ReferenceWritableKeyPath<T, Point>) -> ModelView where T: BinderProtocol {
@@ -439,7 +434,7 @@ struct PointOption: Object2DOption {
 }
 typealias AssignablePointView<Binder: BinderProtocol> = AssignableObject2DView<PointOption, Binder>
 typealias DiscretePointView<Binder: BinderProtocol> = Discrete2DView<PointOption, Binder>
-typealias SlidablePointView<Binder: BinderProtocol> = Slidable2DView<PointOption, Binder>
+typealias MovablePointView<Binder: BinderProtocol> = Movable2DView<PointOption, Binder>
 
 final class PointView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Point
@@ -452,7 +447,6 @@ final class PointView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     var notifications = [((PointView<Binder>,
                            BasicPhaseNotification<Model>) -> ())]()
-    var defaultModel = Model()
     
     init(binder: T, keyPath: BinderKeyPath, radius: Real = 5, lineWidth: Real = 1) {
         self.binder = binder
