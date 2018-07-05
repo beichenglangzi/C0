@@ -420,7 +420,7 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
     }
     
     init(binder: Binder, keyPath: BinderKeyPath,
-         beginBaseTime: Rational = 0, baseTimeInterval: Rational = Rational(1, 16),
+         beginBaseTime: Rational = 0, baseTimeInterval: Rational = Rational(1, 60),
          origin: Point = Point(),
          height: Real = Layouter.basicHeight, smallHeight: Real = 8.0) {
         
@@ -436,8 +436,6 @@ final class AnimationView<Value: KeyframeValue, T: BinderProtocol>: ModelView, B
                                   viewableType: .standard)
         
         super.init(isLocked: false)
-        frame = Rect(x: origin.x, y: origin.y,
-                     width: 0, height: height)
         updateLayout()
     }
     

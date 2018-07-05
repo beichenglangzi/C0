@@ -103,7 +103,7 @@ struct Object {
     }
     static func appendTypes() {
         append(Scene.self)
-        append(Drafting<Drawing>.self)
+        append(Drafting.self)
         append(Drawing.self)
         append(Line.self)
         append(Color.self)

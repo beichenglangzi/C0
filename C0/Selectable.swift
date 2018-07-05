@@ -101,16 +101,17 @@ final class SelectionView<Value: Object.Value & Viewable, T: BinderProtocol>
                                viewableType: viewableType)
         
         super.init(isLocked: false)
+        lineColor = nil
         children = [valuesView]
     }
-    
+    var indicatedLineColor: Color? {
+        return nil
+    }
     var minSize: Size {
-        let minSize = valuesView.minSize, padding = Layouter.basicPadding
-        return Size(width: minSize.width + padding, height: minSize.height + padding)
+        return valuesView.minSize
     }
     override func updateLayout() {
-        valuesView.bounds = bounds.inset(by: Layouter.basicPadding)
-            * valuesView.transform.affineTransform.inverted()
+        valuesView.bounds = bounds * valuesView.transform.affineTransform.inverted()
     }
     func updateWithModel() {
         valuesView.updateWithModel()

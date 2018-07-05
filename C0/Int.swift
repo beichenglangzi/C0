@@ -49,8 +49,7 @@ extension Int: Interpolatable {
     }
 }
 extension Int: Referenceable {
-    static let name = Text(english: "Integer (\(MemoryLayout<Int>.size * 8)bit)",
-                           japanese: "整数 (\(MemoryLayout<Int>.size * 8)bit)")
+    static let name = Text(english: "Integer", japanese: "整数")
 }
 extension Int: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect) -> View {
@@ -149,12 +148,19 @@ struct IntOption: Object1DOption {
     }
     
     private func model(withDelta delta: Real) -> Model {
-        let d = delta * Real(modelInterval)
-        if exp == 1 {
-            return Int(d).interval(scale: modelInterval)
-        } else {
-            return Int(d >= 0 ? (d ** exp) : -(abs(d) ** exp)).interval(scale: modelInterval)
-        }
+        return modelInterval == 0 ?
+            Int(delta) :
+            (Int(delta) * modelInterval).interval(scale: modelInterval)
+    }
+    private func delta(with model: Model, oldModel: Model) -> Real {
+        return modelInterval == 0 ?
+            realValue(with: model) :
+            realValue(with: (model - oldModel) / modelInterval)
+    }
+    func clippedDelta(withDelta delta: Real, oldModel: Model) -> Real {
+        let minDelta = self.delta(with: minModel, oldModel: oldModel)
+        let maxDelta = self.delta(with: maxModel, oldModel: oldModel)
+        return delta.clip(min: minDelta, max: maxDelta)
     }
     func model(withDelta delta: Real, oldModel: Model) -> Model {
         return oldModel.interval(scale: modelInterval) + model(withDelta: delta)

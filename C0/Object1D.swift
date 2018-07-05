@@ -27,6 +27,7 @@ protocol Object1DOption: GetterOption {
     func ratio(with model: Model) -> Real
     func model(withDelta delta: Real, oldModel: Model) -> Model
     func model(withRatio ratio: Real) -> Model
+    func clippedDelta(withDelta delta: Real, oldModel: Model) -> Real
     func clippedModel(_ model: Model) -> Model
     func realValue(with model: Model) -> Real
     func model(with realValue: Real) -> Model
@@ -59,7 +60,10 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: ModelView, B
     
     let optionTextView: TextFormView
     
-    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption) {
+    var name: Text
+    let nameView: TextFormView
+    
+    init(binder: Binder, keyPath: BinderKeyPath, name: Text = Text(), option: ModelOption) {
         self.binder = binder
         self.keyPath = keyPath
         self.option = option
@@ -68,15 +72,23 @@ final class Assignable1DView<T: Object1DOption, U: BinderProtocol>: ModelView, B
                                       alignment: .right,
                                       paddingSize: Size(width: 3, height: 1))
         
+        self.name = name
+        nameView = TextFormView(text: name.isEmpty ? "" : name + ":")
+        
         super.init(isLocked: false)
         isClipped = true
-        children = [optionTextView]
+        children = [optionTextView, nameView]
     }
     
     var minSize: Size {
         return optionTextView.minSize
     }
     override func updateLayout() {
+        let padding = Layouter.basicPadding
+        if !name.isEmpty {
+            let minStringSize = nameView.minSize
+            nameView.frame = Rect(origin: Point(x: padding, y: 0), size: minStringSize)
+        }
         updateTextPosition()
     }
     private func updateTextPosition() {
@@ -131,18 +143,21 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
     var xyOrientation: Orientation.XY {
         didSet { updateLayout() }
     }
-    var interval = 1.5.cg
+    var xInterval = 1.5.cg
     private var knobLineFrame = Rect()
     let labelPaddingX: Real, knobPadding = 3.0.cg
     let knobView = View.discreteKnob(Size(square: 5), lineWidth: 1)
-    let linePathView: View = {
-        let linePathView = View()
-        linePathView.fillColor = .content
-        return linePathView
+    let knobLineView: View = {
+        let view = View()
+        view.fillColor = .content
+        return view
     } ()
     let optionStringView: TextFormView
     
-    init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
+    var name: Text
+    let nameView: TextFormView
+    
+    init(binder: Binder, keyPath: BinderKeyPath, name: Text = Text(), option: ModelOption,
          xyOrientation: Orientation.XY = .horizontal(.leftToRight)) {
         
         self.binder = binder
@@ -153,24 +168,34 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
         labelPaddingX = Layouter.basicPadding
         optionStringView = TextFormView(font: .default, alignment: .right)
         
+        self.name = name
+        nameView = TextFormView(text: name.isEmpty ? "" : name + ":")
+        
         super.init(isLocked: false)
         isClipped = true
         knobView.fillColor = .scroll
-        children = [optionStringView, linePathView, knobView]
+        children = [optionStringView, knobLineView, knobView, nameView]
         updateWithModel()
     }
     
     var minSize: Size {
-        return Size(width: max(80, optionStringView.minSize.width),
+        return Size(width: max(Layouter.basicValueWidth, optionStringView.minSize.width),
                     height: Layouter.basicHeight)
     }
     override func updateLayout() {
-        let paddingX = knobView.bounds.width / 2
+        let padding = Layouter.basicPadding
+        let paddingX = knobView.bounds.width / 2 + padding
         knobLineFrame = Rect(x: paddingX, y: 2,
                              width: bounds.width - paddingX * 2, height: 1)
-        linePathView.frame = knobLineFrame
+        knobLineView.frame = knobLineFrame
         updateTextPosition()
         updateknobLayout()
+        
+        if !name.isEmpty {
+            let minNameSize = nameView.minSize
+            let y = ((bounds.height - minNameSize.height) / 2).rounded()
+            nameView.frame = Rect(origin: Point(x: padding, y: y), size: minNameSize)
+        }
     }
     private func updateTextPosition() {
         let optionStringMinSize = optionStringView.minSize
@@ -208,7 +233,7 @@ final class Discrete1DView<T: Object1DOption, U: BinderProtocol>
         case .vertical(let vertical):
             delta = vertical == .bottomToTop ? p.y - fp.y : fp.y - p.y
         }
-        return option.model(withDelta: delta / interval, oldModel: oldModel)
+        return option.model(withDelta: delta / xInterval, oldModel: oldModel)
     }
     
     func clippedModel(_ model: Model) -> Model {
@@ -219,8 +244,11 @@ extension Discrete1DView: BasicXSlidable {
     var xKnobView: View {
         return knobView
     }
+    func xClippedDelta(withDelta delta: Real, oldModel: T.Model) -> Real {
+        return option.clippedDelta(withDelta: delta, oldModel: oldModel)
+    }
     func xModel(delta: Real, old oldModel: T.Model) -> T.Model {
-        return option.model(withDelta: delta / interval, oldModel: oldModel)
+        return option.model(withDelta: delta, oldModel: oldModel)
     }
     func didChangeFromXSlide(_ phase: Phase, beganModel: Model) {
         notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
@@ -472,6 +500,7 @@ extension Circular1DView: BasicPointMovable {
 
 protocol IntervalObject1DOption {
     associatedtype Model: Object1D
+    var zeroModel: Model { get }
     var intervalModel: Model { get }
     func model(with model: Model, applyingIntervalRatio: Real) -> Model
     func differenceIntervalRatio(with model: Model, other otherModel: Model) -> Real
@@ -508,10 +537,21 @@ final class SlidableInterval1DView<T: Object1DOption, U: IntervalObject1DOption,
     }
     var intervalOption: IntervalModelOption
     
-    var lineIntervalWidth = 50.0.cg
+    var xInterval = 1.5.cg
+    var lineIntervalWidth = 120.0.cg
     var intervalLineWidth = 1.0.cg
+    var centerLineWidth = 6.0.cg
     
     let linesView: View
+    let knobView: View
+    let knobLineView: View = {
+        let view = View()
+        view.fillColor = .content
+        return view
+    } ()
+    let knobPadding = 3.0.cg
+    let rootView: View
+    let centerView: View
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
          intervalOption: IntervalModelOption) {
@@ -522,9 +562,21 @@ final class SlidableInterval1DView<T: Object1DOption, U: IntervalObject1DOption,
         self.intervalOption = intervalOption
         
         linesView = View(path: Path())
+        linesView.fillColor = .content
+        
+        rootView = View(isLocked: false)
+        rootView.lineWidth = 0
+        
+        centerView = View()
+        centerView.lineWidth = 0
+        centerView.fillColor = .editing
+        
+        knobView = View.discreteKnob(Size(square: centerLineWidth), lineWidth: 1)
+        knobView.fillColor = .scroll
         
         super.init(isLocked: false)
-        
+        isClipped = true
+        children = [centerView, linesView, rootView, knobLineView, knobView]
         updateWithModel()
     }
     
@@ -541,7 +593,32 @@ final class SlidableInterval1DView<T: Object1DOption, U: IntervalObject1DOption,
         return Size(width: 10, height: 10)
     }
     override func updateLayout() {
+        centerView.frame = Rect(x: bounds.midX - centerLineWidth / 2, y: 0,
+                                width: centerLineWidth, height: bounds.height)
+        rootView.position.y = Layouter.basicPadding * 2
+        
+        knobView.position = Point(x: bounds.midX, y: knobPadding)
+        
+        updateRootPosition()
         updateLines()
+        updateknobLayout()
+    }
+    func updateWithModel() {
+        updateRootPosition()
+        updateLines()
+        updateknobLayout()
+    }
+    private func updateknobLayout() {
+        let paddingX = knobView.bounds.width / 2 + Layouter.basicPadding
+        let size = Size(width: bounds.width / 2 - paddingX, height: 1)
+        let t = option.ratio(with: model)
+        let x = -size.width * t + bounds.midX
+        knobLineView.frame = Rect(origin: Point(x: x, y: 2), size: size)
+    }
+    func updateRootPosition() {
+        rootView.transform.translation.x
+            = intervalOption.differenceIntervalRatio(with: intervalOption.zeroModel, other: model)
+            * lineIntervalWidth + bounds.midX
     }
     func updateLines() {
         let minModel = model(withX: bounds.minX)
@@ -552,14 +629,31 @@ final class SlidableInterval1DView<T: Object1DOption, U: IntervalObject1DOption,
             linesView.path = Path()
             return
         }
-        let padding = Layouter.basicPadding
         let rects: [Rect] = (minInt...maxInt).map {
             let i0x = x(with: intervalOption.model(with: $0))
             let w = intervalLineWidth
-            return Rect(x: i0x - w / 2, y: padding, width: w, height: bounds.height - padding * 2)
+            return Rect(x: i0x - w / 2, y: 0, width: w, height: bounds.height)
         }
         var path = Path()
         path.append(rects)
         linesView.path = path
+    }
+}
+extension SlidableInterval1DView: BasicXSlidable {
+    var horizontalOrientation: Orientation.Horizontal {
+        return .rightToLeft
+    }
+    var xKnobView: View {
+        return knobView
+    }
+    func xClippedDelta(withDelta delta: Real, oldModel: T.Model) -> Real {
+        return option.clippedDelta(withDelta: delta, oldModel: oldModel)
+    }
+    func xModel(delta: Real, old oldModel: T.Model) -> T.Model {
+        return option.model(withDelta: delta, oldModel: oldModel)
+    }
+    func didChangeFromXSlide(_ phase: Phase, beganModel: Model) {
+        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
+        updateLines()
     }
 }

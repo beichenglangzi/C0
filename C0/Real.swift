@@ -179,8 +179,7 @@ extension Real: AnyInitializable {
 }
 extension Real: KeyframeValue {}
 extension Real: Referenceable {
-    static let name = Text(english: "Real Number (\(MemoryLayout<Real>.size * 8)bit)",
-                           japanese: "実数 (\(MemoryLayout<Real>.size * 8)bit)")
+    static let name = Text(english: "Real Number", japanese: "実数")
 }
 extension Real: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect) -> View {
@@ -192,8 +191,8 @@ extension Real: Viewable {
         (binder: T, keyPath: ReferenceWritableKeyPath<T, Real>) -> ModelView {
         
         return DiscreteRealView(binder: binder, keyPath: keyPath,
-                                option: RealOption(minModel: -.greatestFiniteMagnitude,
-                                                   maxModel: .greatestFiniteMagnitude,
+                                option: RealOption(minModel: Real(-Float.greatestFiniteMagnitude),
+                                                   maxModel: Real(Float.greatestFiniteMagnitude),
                                                    modelInterval: 0.1))
     }
 }
@@ -261,7 +260,7 @@ struct RealOption: Object1DOption {
     var transformedModel: ((Model) -> (Model))
     var reverseTransformedModel: ((Model) -> (Model))
     var modelInterval: Model
-    var exp: Real
+    var ratioEXP: Real
     var numberOfDigits: Int
     var unit: String
     
@@ -275,7 +274,7 @@ struct RealOption: Object1DOption {
         self.transformedModel = transformedModel
         self.reverseTransformedModel = reverseTransformedModel
         self.modelInterval = modelInterval
-        self.exp = exp
+        self.ratioEXP = exp
         self.numberOfDigits = numberOfDigits
         self.unit = unit
     }
@@ -299,12 +298,19 @@ struct RealOption: Object1DOption {
     }
     
     private func model(withDelta delta: Real) -> Model {
-        let d = delta * modelInterval
-        if exp == 1 {
-            return d.interval(scale: modelInterval)
-        } else {
-            return (d >= 0 ? (d ** exp) : -(abs(d) ** exp)).interval(scale: modelInterval)
-        }
+        return modelInterval == 0 ?
+            delta :
+            (delta * modelInterval).interval(scale: modelInterval)
+    }
+    private func delta(with model: Model, oldModel: Model) -> Real {
+        return modelInterval == 0 ?
+            realValue(with: model) :
+            realValue(with: (model - oldModel) / modelInterval)
+    }
+    func clippedDelta(withDelta delta: Real, oldModel: Model) -> Real {
+        let minDelta = self.delta(with: minModel, oldModel: oldModel)
+        let maxDelta = self.delta(with: maxModel, oldModel: oldModel)
+        return delta.clip(min: minDelta, max: maxDelta)
     }
     func model(withDelta delta: Real, oldModel: Model) -> Model {
         let v = oldModel.interval(scale: modelInterval) + model(withDelta: delta)
@@ -318,7 +324,7 @@ struct RealOption: Object1DOption {
         return m - t > modelInterval / 2 ? t + modelInterval : t
     }
     func model(withRatio ratio: Real) -> Model {
-        let m = (maxModel - minModel) * (ratio ** exp) + minModel
+        let m = (maxModel - minModel) * (ratio ** ratioEXP) + minModel
         return intervalModel(with: m).clip(min: minModel, max: maxModel)
     }
     func clippedModel(_ model: Model) -> Model {

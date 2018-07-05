@@ -145,23 +145,23 @@ final class VersionView<T: BinderProtocol>: ModelView, BindableReceiver {
         updateWithModel()
     }
     
+    var baselinePadding = Layouter.basicPadding
     var minSize: Size {
         let cnms = classNameView.minSize
         let ims = indexView.minSize
         if model.undoedIndex < model.index {
             return Size(width: cnms.width + ims.width,
-                        height: Layouter.basicHeight)
+                        height: Layouter.basicTextHeight + baselinePadding * 2)
         } else {
             let udcms = undoedDiffCountView.minSize
             return Size(width: cnms.width + ims.width + udcms.width,
-                        height: Layouter.basicHeight)
+                        height: Layouter.basicTextHeight + baselinePadding * 2)
         }
     }
     override func updateLayout() {
         let padding = Layouter.basicPadding
         let classNameSize = classNameView.minSize
-        let classNameOrigin = Point(x: padding,
-                                    y: bounds.height - classNameSize.height - padding)
+        let classNameOrigin = Point(x: padding, y: baselinePadding)
         classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
         let items: [Layouter.Item] = model.undoedIndex < model.index ?
             [.view(indexView), .xPadding(padding), .view(undoedDiffCountView)] :

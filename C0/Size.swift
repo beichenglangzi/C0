@@ -117,8 +117,8 @@ extension Size: Viewable {
     func standardViewWith<T: BinderProtocol>
         (binder: T, keyPath: ReferenceWritableKeyPath<T, Size>) -> ModelView {
         
-        let valueOption = PointOption.XOption(minModel: -.greatestFiniteMagnitude,
-                                              maxModel: .greatestFiniteMagnitude,
+        let valueOption = PointOption.XOption(minModel: Real(-Float.greatestFiniteMagnitude),
+                                              maxModel: Real(Float.greatestFiniteMagnitude),
                                               modelInterval: 0.1)
         return DiscreteSizeView(binder: binder, keyPath: keyPath,
                                 option: SizeOption(xOption: valueOption,

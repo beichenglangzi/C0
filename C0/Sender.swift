@@ -37,26 +37,12 @@ final class Sender {
     var mainIndicatedView: View {
         didSet {
             guard mainIndicatedView != oldValue else { return }
-            
-            if let oldResponder = oldValue as? IndicatedReciver {
-                oldResponder.lineColor = oldMainIndicatedViewColor
-            }
-            if let responder = mainIndicatedView as? IndicatedReciver {
-                oldMainIndicatedViewColor = responder.lineColor
-                responder.lineColor = responder.indicatedLineColor
-            }
             if let view = mainIndicatedView.withSelfAndAllParents(with: UndoableView.self) {
                 self.indicatedVersionView = view
             }
         }
     }
-    var indictedViews: [View] {
-        didSet {
-//            guard indictedViews != oldValue else { return }
-////            oldValue.forEach { $0.lineColor =  }
-        }
-    }
-    var oldMainIndicatedViewColor: Color?
+    var indictedViews: [View]
     var indicatedVersionView: UndoableView
     var indicatedZoomableView: ZoomableView
     
@@ -88,7 +74,6 @@ final class Sender {
         subSenders = actionList.subActionLists.map { $0.makeSubSender() }
         
         mainIndicatedView = rootView
-        oldMainIndicatedViewColor = mainIndicatedView.lineColor
         indicatedZoomableView = rootView
         indicatedVersionView = rootView
         indictedViews = [mainIndicatedView]

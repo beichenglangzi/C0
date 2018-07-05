@@ -103,7 +103,7 @@ enum Layouter {
     static let basicTextSmallHeight = Font.small.ceilHeight(withPadding: 1)
     static let basicHeight = basicTextHeight + basicPadding * 2
     static let smallHeight = Font.small.ceilHeight(withPadding: 1) + smallPadding * 2
-    static let basicValueWidth = 56.cg, smallValueWidth = 40.0.cg
+    static let basicValueWidth = 80.cg, smallValueWidth = 40.0.cg
     static let basicValueFrame = Rect(x: 0, y: basicPadding,
                                       width: basicValueWidth, height: basicHeight)
     static let smallValueFrame = Rect(x: 0, y: smallPadding,
@@ -253,15 +253,16 @@ final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
         updateWithModel()
     }
     
+    let smallHeight = 100.0.cg
     var minSize: Size {
-        let knobHeight = bounds.width * bounds.height < 10000 ?
+        let knobHeight = bounds.height < smallHeight ?
             Layouter.basicHeight / 2 : Layouter.basicHeight
         return valueView.minSize + Layouter.basicPadding * 2
             + Size(width: 0, height: knobHeight)
     }
     override func updateLayout() {
         let padding = Layouter.basicPadding
-        let knobHeight = bounds.width * bounds.height < 10000 ?
+        let knobHeight = bounds.height < smallHeight ?
             Layouter.basicHeight / 2 : Layouter.basicHeight
         var b = bounds
         b.size.height -= knobHeight
@@ -272,7 +273,8 @@ final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
     }
     func updateWithModel() {
         transform = model.transform
-        bounds = Rect(origin: Point(), size: minSize)
+        let minSize = self.minSize
+        bounds = Rect(origin: Point(x: 0, y: -minSize.height), size: minSize)
     }
     
     var movingOrigin: Point {

@@ -106,7 +106,7 @@ final class MiniView<T: Object0D, U: BinderProtocol>: ModelView, BindableGetterR
         self.binder = binder
         self.keyPath = keyPath
         
-        classNameView = TextFormView(text: Model.name, font: .smallBold)
+        classNameView = TextFormView(text: Model.name, font: .bold)
         
         thumbnailView = MiniView.thumbnailViewWith(model: binder[keyPath: keyPath], frame: Rect())
         thumbnailView.lineColor = .formBorder
@@ -119,30 +119,30 @@ final class MiniView<T: Object0D, U: BinderProtocol>: ModelView, BindableGetterR
         return 80
     }
     static var defaultThumbnailWidth: Real {
-        return 40
+        return 60
     }
     var minSize: Size {
         let padding = Layouter.smallPadding, minClassNameSize = classNameView.minSize
         let width = max(MiniView.defaultMinWidth,
-                        minClassNameSize.width + MiniView.defaultThumbnailWidth)
+                        minClassNameSize.width + padding + MiniView.defaultThumbnailWidth)
         return Size(width: width, height: minClassNameSize.height + padding * 2)
     }
     static func thumbnailFrame(withSize size: Size,
                                leftWidth: Real) -> Rect {
         let padding = Layouter.smallPadding
-        return Rect(x: leftWidth + padding,
+        return Rect(x: leftWidth,
                     y: padding,
-                    width: size.width - leftWidth - padding * 2,
+                    width: size.width - leftWidth - padding,
                     height: size.height - padding * 2)
     }
     override func updateLayout() {
-        let padding = Layouter.smallPadding
+        let padding = Layouter.basicPadding
         let classNameSize = classNameView.minSize
         let classNameOrigin = Point(x: padding,
                                     y: bounds.height - classNameSize.height - padding)
         classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
         thumbnailView.frame = MiniView.thumbnailFrame(withSize: bounds.size,
-                                                      leftWidth: classNameView.frame.width)
+                                                      leftWidth: classNameView.frame.maxX + padding)
     }
     func updateWithModel() {
         let thumbnailFrame = MiniView.thumbnailFrame(withSize: bounds.size,

@@ -64,10 +64,15 @@ protocol Movable: class, Layoutable {
     var isInteger: Bool { get }
     func captureWillMoveObject(at p: Point, to version: Version)
     var movingOrigin: Point { get set }
+    var knobView: View { get }
+    var knobFillColor: Color { get }
 }
 extension Movable {
     var isInteger: Bool {
         return false
+    }
+    var knobFillColor: Color {
+        return .knob
     }
 }
 protocol Transformable: Movable {
@@ -142,6 +147,9 @@ final class MovableSender: SubSender {
                             if let views = parent.children as? [View & Movable] {
                                 sender.beganMovingOrigins = views.map { $0.movingOrigin }
                             }
+                            layoutableViews.forEach {
+                                $0.reciever.knobView.fillColor = .editing
+                            }
                             //                    viewMover = receiver.makeViewMover()
                             //                    receiver.captureWillMoveObject(at: fp, to: sender.indicatedVersionView.version)
                         }
@@ -163,6 +171,9 @@ final class MovableSender: SubSender {
                     }
                     
                     if actionMap.phase == .ended {
+                        layoutableViews.forEach {
+                            $0.reciever.knobView.fillColor = $0.reciever.knobFillColor
+                        }
                         self.layoutableViews = []
                         sender.beganMovingOrigins = []
                     }
@@ -428,13 +439,19 @@ final class BasicViewPointMover<T: View & BasicPointMovable>: ViewPointMover {
 }
 
 protocol BasicXSlidable: BindableReceiver, XSlidable {
+    var horizontalOrientation: Orientation.Horizontal { get }
+    var xInterval: Real { get }
     var xKnobView: View { get }
     var xKnobFillColor: Color { get }
     func xModel(delta: Real, old: Model) -> Model
+    func xClippedDelta(withDelta delta: Real, oldModel: Model) -> Real
     func didChangeFromXSlide(_ phase: Phase, beganModel: Model)
     
 }
 extension BasicXSlidable {
+    var horizontalOrientation: Orientation.Horizontal {
+        return .leftToRight
+    }
     func captureWillXSlider(at p: Point, to version: Version) {
         capture(model, to: version)
     }
@@ -464,12 +481,21 @@ final class BasicXSlider<T: View & BasicXSlidable>: ViewXSlider {
         switch phase {
         case .began:
             allDelta = 0
-            view.xKnobView.fillColor = .scroll
+            view.xKnobView.fillColor = .scrollEditing
         case .changed: break
         case .ended: view.xKnobView.fillColor = view.xKnobFillColor
         }
-        allDelta += delta
+        switch view.horizontalOrientation {
+        case .leftToRight:
+            allDelta = view.xClippedDelta(withDelta: allDelta + delta / view.xInterval,
+                                          oldModel: beganModel)
+        case .rightToLeft:
+            allDelta = view.xClippedDelta(withDelta: allDelta - delta / view.xInterval,
+                                          oldModel: beganModel)
+        }
+        
         view.binder[keyPath: view.keyPath] = view.xModel(delta: allDelta, old: beganModel)
+        
         view.updateWithModel()
         view.didChangeFromXSlide(phase, beganModel: beganModel)
     }

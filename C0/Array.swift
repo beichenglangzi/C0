@@ -132,10 +132,11 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
             var x = padding
             views.forEach {
                 let ms = $0.minSize
+                let h = viewableType == .mini ? bounds.height - padding * 2 : ms.height
                 $0.frame = Rect(x: x,
                                 y: padding,
                                 width: ms.width,
-                                height: viewableType == .mini ? bounds.height : ms.height)
+                                height: h)
                 x += ms.width
             }
         case .vertical:
@@ -211,6 +212,21 @@ extension ArrayView: Newable, CollectionAssignable {
             .index(where: { $0.contains($0.convert(p, from: self)) }) else { return }//no convert
 //        let child = rootView.children[index]
         remove(at: index, version)
+    }
+    func copiedObjects(at p: Point) -> [Object] {
+        guard let index = rootView.children
+            .index(where: { $0.contains($0.convert(p, from: self)) }) else {
+                return []
+        }
+        let child = model[index]
+        
+        if let valueChain = child as? ValueChain,
+            let value = valueChain.rootChainValue as? Object.Value {
+            
+            return [Object(value)]
+        } else {
+            return [Object(child)]
+        }
     }
     
     func new(for p: Point, _ version: Version) {

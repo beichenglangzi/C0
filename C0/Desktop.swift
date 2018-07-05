@@ -182,12 +182,15 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         return Size(width: w, height: Layouter.basicHeight) + Layouter.basicPadding * 2
     }
     override func updateLayout() {
+        versionView.baselinePadding = Layouter.basicPadding * 2
+        isHiddenActionListView.baselinePadding = Layouter.basicPadding * 2
+        
         let padding = Layouter.basicPadding
         let ihamvw = isHiddenActionListView.minSize.width
         let tw = transformView.minSize.width
         let headerY = bounds.height - topViewsHeight - padding * 3
-        versionView.frame = Rect(x: padding, y: headerY + padding,
-                                 width: versionWidth, height: topViewsHeight)
+        versionView.frame = Rect(x: padding, y: headerY,
+                                 width: versionWidth, height: topViewsHeight + padding * 2)
         let conms = copiedObjectsNameView.minSize
         copiedObjectsNameView.frame = Rect(origin: Point(x: versionView.frame.maxX + padding,
                                                          y: headerY + padding * 2),
@@ -202,8 +205,8 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         transformView.frame = Rect(x: copiedObjectsView.frame.maxX, y: headerY,
                                    width: tw, height: topViewsHeight + padding * 2)
 
-        isHiddenActionListView.frame = Rect(x: transformView.frame.maxX, y: headerY + padding,
-                                            width: ihamvw, height: topViewsHeight)
+        isHiddenActionListView.frame = Rect(x: transformView.frame.maxX, y: headerY,
+                                            width: ihamvw, height: topViewsHeight + padding * 2)
 
         let objectsHeight = bounds.height - topViewsHeight - padding * 4
         if model.isHiddenActionList {
@@ -261,7 +264,7 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     func updateTransform() {
         var transform = zoomingTransform
-        let objectsPosition = Point(x: (objectsView.bounds.width / 2).rounded(),
+        let objectsPosition = Point(x: (bounds.width - Layouter.basicPadding * 2).rounded(),
                                     y: (objectsView.bounds.height / 2).rounded())
         transform.translation += objectsPosition
         zoomingLocalView.transform = transform

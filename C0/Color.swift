@@ -117,6 +117,7 @@ extension Color {
     static let locked = Color(white: 0.5)
     static let subLocked = Color(white: 0.65)
     static let editing = Color(white: 0.88)
+    static let scrollEditing = Color(white: 0.67)
     static let mainFocus = Color(red: 0.1, green: 0.6, blue: 0.9)
     static let zoomingFocus = Color(red: 0.1, green: 0.3, blue: 0.5)
     static let versioniongFocus = Color(red: 0.05, green: 0.1, blue: 0.3)

@@ -304,7 +304,7 @@ extension Drawing {
     }
 }
 extension Drawing {
-    func viewWith(lineWidth: Real, lineColor: Color) -> View {
+    func formViewWith(lineWidth: Real, lineColor: Color) -> View {
         let view = View()
         view.children = lines.compactMap { $0.view(lineWidth: lineWidth, fillColor: lineColor) }
         return view
@@ -366,6 +366,7 @@ extension Drawing: Referenceable {
 extension Drawing: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect) -> View {
         let thumbnailView = View(drawClosure: { self.draw(with: $2, in: $0) })
+        //isEmpty -> Empty
         thumbnailView.frame = frame
         return thumbnailView
     }
@@ -500,5 +501,37 @@ final class DrawingViewStroker<T: BinderProtocol>: ViewStroker {
     
     func update(_ line: Line) {
         lineView?.model = line
+    }
+}
+
+final class CompactDrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
+    typealias Model = Drawing
+    typealias Binder = T
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var notifications = [((CompactDrawingView<Binder>, BasicNotification) -> ())]()
+    
+    init(binder: T, keyPath: BinderKeyPath) {
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        super.init(isLocked: false)
+        updateWithModel()
+    }
+    
+    var minSize: Size {
+        return Size(square: 2)
+    }
+    func updateWithModel() {
+        fillColor = model.isEmpty ? nil : .subContent
+    }
+}
+extension CompactDrawingView: CollectionAssignable {
+    func remove(for p: Point, _ version: Version) {
+        push(Model(), to: version)
     }
 }

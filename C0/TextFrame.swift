@@ -235,7 +235,7 @@ struct TextFrame {
             range = CFRange(location: range.maxLocation, length: 0)
             h += ascent + descent + leading
         }
-        maxWidth = maxWidth.rounded(.up)
+        maxWidth = maxWidth.rounded()
         let width = lineBreakWidth.isInfinite ? maxWidth : lineBreakWidth
         var origin = Point()
         return ls.reversed().map {

@@ -172,8 +172,7 @@ extension Rational: Codable {
     }
 }
 extension Rational: Referenceable {
-    static let name = Text(english: "Rational Number (\(MemoryLayout<Rational>.size * 8)bit)",
-                           japanese: "有理数 (\(MemoryLayout<Rational>.size * 8)bit)")
+    static let name = Text(english: "Rational Number", japanese: "有理数")
 }
 extension Rational: ThumbnailViewable {
     func thumbnailView(withFrame frame: Rect) -> View {
@@ -295,8 +294,42 @@ struct RationalOption: Object1DOption {
     }
     
     private func model(withDelta delta: Real) -> Model {
-        let d = Model(delta) * modelInterval
-        return d.interval(scale: modelInterval)
+        if modelInterval == 0 {
+            return Model(delta)
+        } else {
+            let d = Model(delta) * modelInterval
+            return d.interval(scale: modelInterval)
+        }
+    }
+    private func delta(with model: Model, oldModel: Model) -> Real {
+        if isInfinitesimal {
+            if oldModel.q < 1 {
+                let oldPRatio = Real(oldModel.q) / Real(oldModel.p)
+                if model.q < 1 {
+                    let pRatio = Real(model.q) / Real(model.p)
+                    return -(pRatio - oldPRatio)
+                } else {
+                    let pRatio = Real(model.p) / Real(model.q)
+                    return pRatio + oldPRatio
+                }
+            } else {
+                let oldPRatio = Real(oldModel.p) / Real(oldModel.q)
+                if model.q < 1 {
+                    let pRatio = Real(model.q) / Real(model.p)
+                    return pRatio + oldPRatio
+                } else {
+                    let pRatio = Real(model.p) / Real(model.q)
+                    return pRatio - oldPRatio
+                }
+            }
+        } else {
+            return realValue(with: (model - oldModel) / modelInterval)
+        }
+    }
+    func clippedDelta(withDelta delta: Real, oldModel: Model) -> Real {
+        let minDelta = self.delta(with: minModel, oldModel: oldModel)
+        let maxDelta = self.delta(with: maxModel, oldModel: oldModel)
+        return delta.clip(min: minDelta, max: maxDelta)
     }
     func model(withDelta delta: Real, oldModel: Model) -> Model {
         let newModel: Model
@@ -330,7 +363,9 @@ typealias DiscreteRationalView<Binder: BinderProtocol> = Discrete1DView<Rational
 
 struct IntervalRationalOption: IntervalObject1DOption {
     var intervalModel: Rational
-    
+    var zeroModel: Rational {
+        return 0
+    }
     func model(with model: Rational, applyingIntervalRatio: Real) -> Rational {
         return model + intervalModel * Rational(applyingIntervalRatio)
     }

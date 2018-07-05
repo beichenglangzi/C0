@@ -171,23 +171,23 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
     let xView: Assignable1DView<ModelOption.XOption, Binder>
     let yView: Assignable1DView<ModelOption.YOption, Binder>
     
-    let boundsPadding = 2.0.cg
     var interval = 1.5.cg, minDelta = 5.0.cg
-    let knobView = View.discreteKnob(Size(square: 5), lineWidth: 1)
-    let xNameView: TextFormView
-    let yNameView: TextFormView
     
-    let xLinePathView: View = {
-        let linePathView = View()
-        linePathView.fillColor = .content
-        return linePathView
+    let xNameView: TextFormView
+    let xKnobView = View.discreteKnob(Size(square: 5), lineWidth: 1)
+    let xKnobLineView: View = {
+        let view = View()
+        view.fillColor = .content
+        return view
     } ()
-    let yLinePathView: View = {
-        let linePathView = View()
-        linePathView.fillColor = .content
-        return linePathView
+    
+    let yNameView: TextFormView
+    let yKnobView = View.discreteKnob(Size(square: 5), lineWidth: 1)
+    let yKnobLineView: View = {
+        let view = View()
+        view.fillColor = .content
+        return view
     } ()
-    var knobBounds = Rect()
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
          xyOrientation: Orientation.XY = .horizontal(.leftToRight)) {
@@ -198,58 +198,54 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
         
         xNameView = TextFormView(text: Model.xDisplayText + ":")
         xView = Assignable1DView(binder: binder, keyPath: keyPath.appending(path: \Model.xModel),
+                                 name: Model.xDisplayText,
                                  option: option.xOption)
         yNameView = TextFormView(text: Model.yDisplayText + ":")
         yView = Assignable1DView(binder: binder, keyPath: keyPath.appending(path: \Model.yModel),
+                                 name: Model.yDisplayText,
                                  option: option.yOption)
         
         super.init(isLocked: false)
-        knobView.fillColor = .scroll
-        children = [xNameView, xView, yNameView, yView,
-                    xLinePathView, yLinePathView, knobView]
+        xKnobView.fillColor = .scroll
+        yKnobView.fillColor = .scroll
+        children = [xView, yView,
+                    xKnobLineView, yKnobLineView, xKnobView, yKnobView]
     }
     
     var minSize: Size {
         let padding = Layouter.basicPadding
         let width = Layouter.basicValueWidth
         let height = Layouter.basicTextHeight
-        let xNameSize = xNameView.minSize, yNameSize = yNameView.minSize
         var w = 0.0.cg
-        w += xNameSize.width + width
+        w += width
         w += padding
-        w += yNameSize.width + width
+        w += width
         w += padding
-        w += height
+        w += height + padding * 4
         return Size(width: w + padding * 2, height: height + padding * 2)
     }
     override func updateLayout() {
         let padding = Layouter.basicPadding
         let width = Layouter.basicValueWidth
         let height = Layouter.basicTextHeight
-        let xNameSize = xNameView.minSize, yNameSize = yNameView.minSize
-        
         var x = padding
         let y = padding
-        xNameView.frame = Rect(origin: Point(x: x, y: y), size: xNameSize)
-        x += xNameSize.width
         xView.frame = Rect(x: x, y: y, width: width, height: height)
         x += width + padding
-        yNameView.frame = Rect(origin: Point(x: x, y: y), size: yNameSize)
-        x += yNameSize.width
         yView.frame = Rect(x: x, y: y, width: width, height: height)
         x += width + padding
-        knobBounds = Rect(x: x, y: padding, width: height, height: height)
+        xKnobLineView.frame = Rect(x: x, y: bounds.midY - 0.5, width: height, height: 1)
+        x += height + padding * 2
+        yKnobLineView.frame = Rect(x: x, y: padding, width: 1, height: height)
         updateKnobLayout()
     }
     private func updateKnobLayout() {
-        let b = knobBounds
         let ratio2D = option.ratio2D(with: model)
-        let x = (b.width * ratio2D.x + b.minX).interval(scale: 0.5)
-        let y = (b.height * ratio2D.y + b.minY).interval(scale: 0.5)
-        knobView.position = Point(x: x, y: y)
-        
-        xLinePathView.frame = Rect(x: x - 0.5, y: b.minY, width: 1, height: b.height)
-        yLinePathView.frame = Rect(x: b.minX, y: y - 0.5, width: b.width, height: 1)
+        let xb = xKnobLineView.frame, yb = yKnobLineView.frame
+        let x = (xb.width * ratio2D.x + xb.minX).interval(scale: 0.5)
+        let y = (yb.height * ratio2D.y + yb.minY).interval(scale: 0.5)
+        xKnobView.position = Point(x: x, y: xb.midY)
+        yKnobView.position = Point(x: yb.midX, y: y)
     }
     func updateWithModel() {
         updateKnobLayout()
@@ -274,8 +270,11 @@ final class Discrete2DView<T: Object2DOption, U: BinderProtocol>
     }
 }
 extension Discrete2DView: BasicXSlidable {
-    var xKnobView: View {
-        return knobView
+    var xInterval: Real {
+        return interval
+    }
+    func xClippedDelta(withDelta delta: Real, oldModel: T.Model) -> Real {
+        return option.xOption.clippedDelta(withDelta: delta, oldModel: oldModel.xModel)
     }
     func xModel(delta: Real, old oldModel: T.Model) -> T.Model {
         let ratio2D = Ratio2D(x: t(withDelta: delta), y: 0)

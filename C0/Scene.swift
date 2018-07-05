@@ -22,14 +22,20 @@ import struct Foundation.URL
 struct Scene: Codable {
     var bounds = Rect(x: -288, y: -162, width: 576, height: 324)
     var z = 0.0.cg
-    var editingTime = Rational(0)
-    var animation = Animation<Drafting<Drawing>>()
+    var editingTime = Rational(0) {
+        didSet {
+            if let index = animation.keyframeIndex(atTime: editingTime) {
+                animation.editingKeyframeIndex = index
+            }
+        }
+    }
+    var animation = Animation<Drafting>()
     
     var frameRate = 60.0.cg
     var baseTimeInterval = Rational(1, 60)
 }
 extension Scene {
-    static let padding = 50.0.cg
+    static let padding = 80.0.cg
     var paddingBounds: Rect {
         get { return bounds.inset(by: -Scene.padding) }
         set { bounds = newValue.inset(by: Scene.padding) }
@@ -93,9 +99,9 @@ extension Scene {
     }
 }
 extension Scene {
-    static let zOption = RealOption(minModel: -30, maxModel: 0,
+    static let zOption = RealOption(minModel: -10, maxModel: 0,
                                     modelInterval: 0.01, numberOfDigits: 2)
-}
+} 
 extension Scene: Referenceable {
     static let name = Text(english: "Scene", japanese: "シーン")
 }
@@ -127,34 +133,37 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
     let boundsView: RectView<Binder>
     let zView: DiscreteRealView<Binder>
     let editingTimeView: IntervalRationalView<Binder>
-    let animationView: AnimationView<Drafting<Drawing>, Binder>
-    let editingDraftingView: DraftingView<Drawing, Binder> 
+//    let editingKeyframeIndexView: IntervalRationalView<Binder>
+    let animationView: AnimationView<Drafting, Binder>
+    let editingDraftingView: DraftingView<Binder>
     
+    let clippingView: View
     let transformFormView: View
-    let canvasBorderView = View()
-    let canvasSubBorderView = View()
-    let timeView: View = {
-        let view = View()
-        view.fillColor = .editing
-        view.lineColor = nil
-        return view
-    } ()
+    let boundsBorderView = View()
+    let boundsPaddingView = View(path: Path())
     let intTimesView = View(path: Path())
     
     init(binder: Binder, keyPath: BinderKeyPath, frame: Rect = Rect()) {
         self.binder = binder
         self.keyPath = keyPath
         
+        if binder[keyPath: keyPath].animation.isEmpty {
+            binder[keyPath: keyPath].animation.keyframes = [Keyframe(value: Drafting(), time: 0)]
+        }
+        
         boundsView = RectView(binder: binder,
                               keyPath: keyPath.appending(path: \Model.bounds))
         zView = DiscreteRealView(binder: binder, keyPath: keyPath.appending(path: \Model.z),
+                                 name: "z",
                                  option: Scene.zOption)
         
         let duration = binder[keyPath: keyPath].animation.duration
+        let timeInterval = binder[keyPath: keyPath].baseTimeInterval
         editingTimeView
             = IntervalRationalView(binder: binder,
                                    keyPath: keyPath.appending(path: \Model.editingTime),
                                    option: RationalOption(minModel: 0, maxModel: duration,
+                                                          modelInterval: timeInterval,
                                                           isInfinitesimal: false),
                                    intervalOption: IntervalRationalOption(intervalModel: 1))
         animationView = AnimationView(binder: binder,
@@ -162,23 +171,28 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
         editingDraftingView = DraftingView(binder: self.binder,
                                            keyPath: self.keyPath.appending(path: \Model.animation.editingKeyframe.value))
         transformFormView = View()
+        clippingView = View()
         
         super.init(isLocked: false)
-//        boundsView.notifications.append { [unowned self] (view, notification) in
-//            self.updateLayout()
-//        }
-//        timelineView.notifications.append { [unowned self] (view, notification) in
-//            let drawingView = DrawingView(binder: self.binder,
-//                                          keyPath: self.keyPath.appending(path: \Model.timeline.editingDrawing))
-//            self.canvasView.contentsViews = [drawingView]
-//        }
+        boundsView.notifications.append { [unowned self] (view, notification) in
+            self.updateLayout()
+        }
+        editingTimeView.notifications.append { [unowned self] (view, notification) in
+            self.editingDraftingView.updateWithModel()
+        }
         zView.notifications.append { [unowned self] (view, notification) in
             self.transformFormView.transform.z = view.model
-//            self.canvasView.updateTransform()
+            self.updateBoundsPadding()
         }
+        boundsPaddingView.fillColorComposition = Composition(value: Color(white: 0.8),
+                                                             opacity: 0.5)
+        boundsBorderView.lineColor = .formBorder
+        clippingView.isClipped = true
         
-        transformFormView.children = [editingDraftingView]
-        children = [boundsView, zView, editingTimeView, animationView, transformFormView]
+        transformFormView.children = [editingDraftingView, boundsBorderView]
+        clippingView.children = [transformFormView, boundsPaddingView]
+        editingTimeView.rootView.children = [animationView]
+        children = [boundsView, zView, editingTimeView, clippingView]
         
         updateWithModel()
     }
@@ -186,31 +200,45 @@ final class SceneView<T: BinderProtocol>: ModelView, BindableReceiver {
     var minSize: Size {
         let padding = Layouter.basicPadding, h = Layouter.basicHeight
         let size = model.paddingBounds.size
-        return Size(width: size.width + padding * 2, height: size.height + h * 2 + padding * 2)
+        return Size(width: size.width + padding * 2, height: size.height + h * 2 + padding * 3)
     }
     override func updateLayout() {
-        let padding = Layouter.basicPadding, h = Layouter.basicHeight
+        let padding = Layouter.basicPadding
+        let h = Layouter.basicHeight + padding * 2
+        let zWidth = Layouter.basicValueWidth
+        
+        zView.frame = Rect(x: padding, y: padding,
+                           width: zWidth, height: h + padding)
+        clippingView.frame = Rect(x: padding,
+                                  y: padding * 2 + h,
+                                  width: bounds.width - padding * 2,
+                                  height: bounds.height - padding * 3 - h)
+        editingTimeView.frame = Rect(x: zView.frame.maxX,
+                                     y: padding,
+                                     width: bounds.width - zWidth - padding * 2,
+                                     height: h + padding)
+        animationView.frame = Rect(origin: Point(x: 0, y: 0), size: animationView.minSize)
 
-        let colorsHeight = 100 + padding * 2
-        let y = bounds.height - padding
-        let cs = Size(width: bounds.width - padding * 2,
-                      height: bounds.height - h - padding * 2 - colorsHeight)
+        boundsBorderView.bounds = model.bounds.inset(by: -1)
         
-        var ty = y
-        zView.frame = Rect(x: padding, y: ty,
-                           width: zView.minSize.width, height: h)
-        
-        editingTimeView.frame = Rect(x: zView.frame.maxX, y: padding + h,
-                                     width: bounds.width - zView.bounds.width, height: h)
-//        timeView.frame = Rect(x: padding, y: padding + h,
-//                              width: baseWidth, height: bounds.height - sp * 2)
+        updateTransform()
+        updateBoundsPadding()
     }
     private func updateTransform() {
         var transform = transformFormView.transform
-        let objectsPosition = Point(x: (bounds.width / 2).rounded(),
-                                    y: (bounds.height / 2).rounded())
-        transform.translation += objectsPosition
+        let objectsPosition = Point(x: (clippingView.bounds.width / 2).rounded(),
+                                    y: (clippingView.bounds.height / 2).rounded())
+        transform.translation = objectsPosition
         transformFormView.transform = transform
+    }
+    private func updateBoundsPadding() {
+        var path = Path()
+        path.append(PathLine(points: [clippingView.bounds.minXminYPoint,
+                                      clippingView.bounds.minXmaxYPoint,
+                                      clippingView.bounds.maxXmaxYPoint,
+                                      clippingView.bounds.maxXminYPoint]))
+        path.append(model.bounds.inset(by: -1) * transformFormView.transform.affineTransform)
+        boundsPaddingView.path = path
     }
 }
 //extension SceneView: Exportable {

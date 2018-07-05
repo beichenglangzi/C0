@@ -119,35 +119,36 @@ final class BoolView<Binder: BinderProtocol>: ModelView, BindableReceiver {
         updateWithModel()
     }
     
+    var baselinePadding = Layouter.basicPadding
     var minSize: Size {
         let padding = Layouter.basicPadding
         let minTrueSize = optionTrueNameView.minSize
         let minFalseSize = optionFalseNameView.minSize
         if option.name.isEmpty {
             let width = minTrueSize.width + minFalseSize.width + padding * 3
-            let height = max(minTrueSize.height, minFalseSize.height) + padding * 2
+            let height = max(minTrueSize.height, minFalseSize.height) + baselinePadding * 2
             return Size(width: width, height: height)
         } else {
             let minStringSize = optionStringView.minSize
             let width = minStringSize.width + minTrueSize.width + minFalseSize.width + padding * 4
             let height = max(minStringSize.height,
-                             minTrueSize.height, minFalseSize.height) + padding * 2
+                             minTrueSize.height, minFalseSize.height) + baselinePadding * 2
             return Size(width: width, height: height)
         }
     }
     override func updateLayout() {
-        let padding = Layouter.basicPadding
+        let padding = Layouter.basicPadding, bPadding = baselinePadding
         let minTrueSize = optionTrueNameView.minSize
         let minFalseSize = optionFalseNameView.minSize
         var x = padding
         if !option.name.isEmpty {
             let minStringSize = optionStringView.minSize
-            optionStringView.frame = Rect(origin: Point(x: x, y: padding), size: minStringSize)
+            optionStringView.frame = Rect(origin: Point(x: x, y: bPadding), size: minStringSize)
             x += minStringSize.width + padding
         }
-        optionFalseNameView.frame = Rect(origin: Point(x: x, y: padding), size: minFalseSize)
+        optionFalseNameView.frame = Rect(origin: Point(x: x, y: bPadding), size: minFalseSize)
         x += minFalseSize.width + padding
-        optionTrueNameView.frame = Rect(origin: Point(x: x, y: padding), size: minTrueSize)
+        optionTrueNameView.frame = Rect(origin: Point(x: x, y: bPadding), size: minTrueSize)
         
         updateKnobLayout()
     }
