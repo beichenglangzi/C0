@@ -26,7 +26,6 @@ func hypot²<T: BinaryFloatingPoint>(_ lhs: T, _ rhs: T) -> T {
 typealias Real = CGFloat
 typealias Real32 = Float
 
-extension Real: AdditiveGroup {}
 extension Real {
     var isInteger: Bool {
         return Int(exactly: self) != nil
@@ -44,12 +43,15 @@ extension Real {
         return a + (a > .pi ? -2 * (.pi) : (a < -.pi ? 2 * (.pi) : 0))
     }
     var clippedRotation: Real {
-        return self < -.pi ? self + 2 * (.pi) : (self > .pi ? self - 2 * (.pi) : self)
+        return self < -.pi ?
+            self + 2 * (.pi) :
+            (self > .pi ? self - 2 * (.pi) : self)
     }
     var clippedDegreesRotation: Real {
         return self < -180 ? self + 360 : (self > 180 ? self - 360 : self)
     }
-    func isApproximatelyEqual(other: Real, roundingError: Real = 0.0000000001) -> Bool {
+    func isApproximatelyEqual(other: Real,
+                              roundingError: Real = 0.0000000001) -> Bool {
         return abs(self - other) < roundingError
     }
     var ²: Real {
@@ -65,9 +67,11 @@ extension Real {
         }
     }
     func loopValue(begin: Real = 0, end: Real = 1) -> Real {
-        return self < begin ? self + (end - begin) : (self > end ? self - (end - begin) : self)
+        return self < begin ?
+            self + (end - begin) :
+            (self > end ? self - (end - begin) : self)
     }
-    static func random(min: Real, max: Real) -> Real {
+    static func random(min: Real, max: Real) -> Real {//Swift 4.2
         return (max - min) * (Real(arc4random_uniform(UInt32.max)) / Real(UInt32.max)) + min
     }
     static func bilinear(x: Real, y: Real,
@@ -155,45 +159,14 @@ extension Real: Interpolatable {
         return fb - fa
     }
 }
-extension Real: AnyInitializable {
-    init?(anyValue: Any) {
-        switch anyValue {
-        case let value as Real: self = value
-        case let value as Int: self = Real(value)
-        case let value as Rational: self = Real(value)
-        case let value as String:
-            if let value = Real(value) {
-                self = value
-            } else {
-                return nil
-            }
-        case let valueChain as ValueChain:
-            if let value = Real(anyValue: valueChain.rootChainValue) {
-                self = value
-            } else {
-                return nil
-            }
-        default: return nil
-        }
-    }
-}
-extension Real: KeyframeValue {}
-extension Real: Referenceable {
-    static let name = Text(english: "Real Number", japanese: "実数")
-}
-extension Real: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect) -> View {
-        return String(self).thumbnailView(withFrame: frame)
-    }
-}
 extension Real: Viewable {
-    func standardViewWith<T: BinderProtocol>
+    func viewWith<T: BinderProtocol>
         (binder: T, keyPath: ReferenceWritableKeyPath<T, Real>) -> ModelView {
         
-        return DiscreteRealView(binder: binder, keyPath: keyPath,
-                                option: RealOption(minModel: Real(-Float.greatestFiniteMagnitude),
-                                                   maxModel: Real(Float.greatestFiniteMagnitude),
-                                                   modelInterval: 0.1))
+        let option = RealOption(minModel: Real(-Float.greatestFiniteMagnitude),
+                                maxModel: Real(Float.greatestFiniteMagnitude),
+                                modelInterval: 0.1)
+        return MovableRealView(binder: binder, keyPath: keyPath, option: option)
     }
 }
 extension Real: ObjectViewable {}
@@ -220,38 +193,6 @@ extension String {
     }
 }
 
-struct RealGetterOption: GetterOption {
-    typealias Model = Real
-    
-    var reverseTransformedModel: ((Model) -> (Model))
-    var numberOfDigits: Int
-    var unit: String
-    
-    init(reverseTransformedModel: @escaping ((Model) -> (Model)) = { $0 },
-         numberOfDigits: Int = 0, unit: String = "") {
-        
-        self.reverseTransformedModel = reverseTransformedModel
-        self.numberOfDigits = numberOfDigits
-        self.unit = unit
-    }
-    
-    func string(with model: Model) -> String {
-        return "\(model)"
-    }
-    func displayText(with model: Model) -> Text {
-        if numberOfDigits == 0 {
-            let string = model - floor(model) > 0 ?
-                String(format: "%g", model) + "\(unit)" :
-                "\(Int(model))" + "\(unit)"
-            return Text(string)
-        } else {
-            let string = String(format: "%.\(numberOfDigits)f", model) + "\(unit)"
-            return Text(string)
-        }
-    }
-}
-typealias RealGetterView<Binder: BinderProtocol> = GetterView<RealGetterOption, Binder>
-
 struct RealOption: Object1DOption {
     typealias Model = Real
     
@@ -267,7 +208,8 @@ struct RealOption: Object1DOption {
     init(minModel: Model, maxModel: Model,
          transformedModel: @escaping ((Model) -> (Model)) = { $0 },
          reverseTransformedModel: @escaping ((Model) -> (Model)) = { $0 },
-         modelInterval: Model = 0, exp: Real = 1, numberOfDigits: Int = 1, unit: String = "") {
+         modelInterval: Model = 0, exp: Real = 1,
+         numberOfDigits: Int = 1, unit: String = "") {
         
         self.minModel = minModel
         self.maxModel = maxModel
@@ -282,15 +224,15 @@ struct RealOption: Object1DOption {
     func string(with model: Model) -> String {
         return "\(model)"
     }
-    func displayText(with model: Model) -> Text {
+    func displayText(with model: Model) -> Localization {
         if numberOfDigits == 0 {
             let string = model - floor(model) > 0 ?
                 String(format: "%g", model) + "\(unit)" :
                 "\(Int(model))" + "\(unit)"
-            return Text(string)
+            return Localization(string)
         } else {
             let string = String(format: "%.\(numberOfDigits)f", model) + "\(unit)"
-            return Text(string)
+            return Localization(string)
         }
     }
     func ratio(with model: Model) -> Real {
@@ -337,10 +279,5 @@ struct RealOption: Object1DOption {
         return realValue
     }
 }
-extension RealOption {
-    static let opacity = RealOption(minModel: 0, maxModel: 1)
-}
-typealias AssignableRealView<Binder: BinderProtocol> = Assignable1DView<RealOption, Binder>
-typealias DiscreteRealView<Binder: BinderProtocol> = Discrete1DView<RealOption, Binder>
 typealias MovableRealView<Binder: BinderProtocol> = Movable1DView<RealOption, Binder>
 typealias CircularRealView<Binder: BinderProtocol> = Circular1DView<RealOption, Binder>

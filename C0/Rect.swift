@@ -19,97 +19,6 @@
 
 import CoreGraphics
 
-/**
- Issue: Core Graphicsと置き換え
- */
-struct _Rect: Equatable {
-    var origin = _Point(), size = _Size()
-    init(origin: _Point = _Point(), size: _Size = _Size()) {
-        self.origin = origin
-        self.size = size
-    }
-    init(x: Real, y: Real, width: Real, height: Real) {
-        self.init(origin: _Point(x: x, y: y), size: _Size(width: width, height: height))
-    }
-    
-    func insetBy(dx: Real, dy: Real) -> _Rect {
-        return _Rect(x: minX + dx, y: minY + dy,
-                    width: width - dx * 2, height: height - dy * 2)
-    }
-    func inset(by width: Real) -> _Rect {
-        return insetBy(dx: width, dy: width)
-    }
-    
-    var minX: Real {
-        return origin.x
-    }
-    var minY: Real {
-        return origin.y
-    }
-    var midX: Real {
-        return origin.x + size.width / 2
-    }
-    var midY: Real {
-        return origin.y + size.height / 2
-    }
-    var maxX: Real {
-        return origin.x + size.width
-    }
-    var maxY: Real {
-        return origin.y + size.height
-    }
-    var width: Real {
-        return size.width
-    }
-    var height: Real {
-        return size.height
-    }
-    var isEmpty: Bool {
-        return origin.isEmpty && size.isEmpty
-    }
-    func union(_ other: _Rect) -> _Rect {
-        let minX = min(self.minX, other.minX)
-        let maxX = max(self.maxX, other.maxX)
-        let minY = min(self.minY, other.minY)
-        let maxY = max(self.maxY, other.maxY)
-        return _Rect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
-    }
-    var circleBounds: _Rect {
-        let r = hypot(width, height) / 2
-        return _Rect(x: midX - r, y: midY - r, width: r * 2, height: r * 2)
-    }
-}
-extension _Rect: Hashable {
-    var hashValue: Int {
-        return Hash.uniformityHashValue(with: [origin.hashValue, size.hashValue])
-    }
-}
-extension _Rect: Codable {
-    init(from decoder: Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        let origin = try container.decode(_Point.self)
-        let size = try container.decode(_Size.self)
-        self.init(origin: origin, size: size)
-    }
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(origin)
-        try container.encode(size)
-    }
-}
-extension _Rect: Referenceable {
-    static let name = Text(english: "Rect", japanese: "矩形")
-}
-extension CGRect {
-    init(_ rect: _Rect) {
-        if MemoryLayout<_Rect>.size == MemoryLayout<CGRect>.size {
-            self = unsafeBitCast(rect, to: CGRect.self)
-        } else {
-            self = CGRect(x: rect.origin.x, y: rect.origin.y, width: rect.width, height: rect.height)
-        }
-    }
-}
-
 typealias Rect = CGRect
 extension Rect {
     func distance²(_ point: Point) -> Real {
@@ -171,36 +80,9 @@ extension Rect: AppliableAffineTransform {
         return lhs.applying(rhs)
     }
 }
-extension Rect: AnyInitializable {
-    init?(anyValue: Any) {
-        switch anyValue {
-        case let value as Rect: self = value
-        case let value as String:
-            if let value = Rect(jsonString: value) {
-                self = value
-            } else {
-                return nil
-            }
-        case let valueChain as ValueChain:
-            if let value = Rect(anyValue: valueChain.rootChainValue) {
-                self = value
-            } else {
-                return nil
-            }
-        default: return nil
-        }
-    }
-}
-extension Rect: Referenceable {
-    static let name = Text(english: "Rect", japanese: "矩形")
-}
-extension Rect: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect) -> View {
-        return (jsonString ?? "").thumbnailView(withFrame: frame)
-    }
-}
+
 extension Rect: Viewable {
-    func standardViewWith<T: BinderProtocol>
+    func viewWith<T: BinderProtocol>
         (binder: T, keyPath: ReferenceWritableKeyPath<T, Rect>) -> ModelView {
         
         return RectView(binder: binder, keyPath: keyPath)
@@ -262,6 +144,12 @@ struct AABB: Codable {
     }
     var height: Real {
         return maxY - minY
+    }
+    var midX: Real {
+        return (minX + maxX) / 2
+    }
+    var midY: Real {
+        return (minY + maxY) / 2
     }
     var position: Point {
         return Point(x: minX, y: minY)
@@ -383,11 +271,59 @@ final class RectView<T: BinderProtocol>: ModelView, BindableReceiver {
         self.keyPath = keyPath
         
         super.init(isLocked: false)
+        lineWidth = 1
+        lineColor = .content
     }
     
     func updateWithModel() {
+        frame = model
     }
-    var minSize: Size {
-        return model.size
+    
+    var oldFrame = Rect()
+    func transform(with affineTransform: AffineTransform) {
+        model = oldFrame.applying(affineTransform)
+    }
+    func anchorPoint(from p: Point) -> Point {
+        let frame = transformedBoundingBox
+        var minD = p.distance²(frame.minXminYPoint), anchorPoint = frame.maxXmaxYPoint
+        var d = p.distance²(frame.midXminYPoint)
+        if d < minD {
+            anchorPoint = frame.midXmaxYPoint
+            minD = d
+        }
+        d = p.distance²(frame.maxXminYPoint)
+        if d < minD {
+            anchorPoint = frame.minXmaxYPoint
+            minD = d
+        }
+        d = p.distance²(frame.minXmidYPoint)
+        if d < minD {
+            anchorPoint = frame.maxXmidYPoint
+            minD = d
+        }
+        d = p.distance²(frame.maxXmidYPoint)
+        if d < minD {
+            anchorPoint = frame.minXmidYPoint
+            minD = d
+        }
+        d = p.distance²(frame.minXmaxYPoint)
+        if d < minD {
+            anchorPoint = frame.maxXminYPoint
+            minD = d
+        }
+        d = p.distance²(frame.midXmaxYPoint)
+        if d < minD {
+            anchorPoint = frame.midXminYPoint
+            minD = d
+        }
+        d = p.distance²(frame.maxXmaxYPoint)
+        if d < minD {
+            anchorPoint = frame.minXminYPoint
+            minD = d
+        }
+        return anchorPoint
+    }
+    func captureWillMoveObject(at p: Point, to version: Version) {
+        oldFrame = frame
     }
 }

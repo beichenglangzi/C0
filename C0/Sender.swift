@@ -20,119 +20,20 @@
 import struct Foundation.Locale
 import class Foundation.OperationQueue
 
-protocol SubSender {
-    func send(_ actionMap: ActionMap, from sender: Sender)
-}
-protocol SubSendable {
-    func makeSubSender() -> SubSender
-}
-
 final class Sender {
-    typealias UndoableView = View & Undoable
-    typealias ZoomableView = View & Zoomable
-    typealias RootView = ModelView & Undoable & Zoomable & IndicatableResponder
-    typealias IndicatedReciver = View & IndicatableResponder
+    typealias RootView = ModelView & Undoable & Zoomable & Strokable
     
     var rootView: RootView
-    var mainIndicatedView: View {
-        didSet {
-            guard mainIndicatedView != oldValue else { return }
-            if let view = mainIndicatedView.withSelfAndAllParents(with: UndoableView.self) {
-                self.indicatedVersionView = view
-            }
-        }
-    }
-    var indictedViews: [View]
-    var indicatedVersionView: UndoableView
-    var indicatedZoomableView: ZoomableView
-    
-    var backgroundQueue = OperationQueue()
-    deinit {
-        backgroundQueue.cancelAllOperations()
-    }
-    
     let actionList = ActionList()
-    let subSenders: [SubSender]
-    
-    func updateIndicatedView(with frame: Rect) {
-        if frame.contains(self.currentRootLocation) {
-            mainIndicatedView = rootView.at(currentRootLocation) ?? rootView
-            let receiverType = SelectableSender.IndicatableReceiver.self
-            if let receiver = mainIndicatedView.withSelfAndAllParents(with: receiverType) {
-                let p = receiver.convertFromRoot(currentRootLocation)
-                receiver.indicate(at: p)
-            }
-        }
-    }
-    var currentRootLocation = Point()
-    
     var eventMap = EventMap()
     var actionMaps = [ActionMap]()
+    var backgroundQueue = OperationQueue()
     
     init(rootView: RootView) {
         self.rootView = rootView
-        subSenders = actionList.subActionLists.map { $0.makeSubSender() }
-        
-        mainIndicatedView = rootView
-        indicatedZoomableView = rootView
-        indicatedVersionView = rootView
-        indictedViews = [mainIndicatedView]
     }
-    
-    var locale = Locale.current {
-        didSet {
-            if locale.languageCode != oldValue.languageCode {
-                rootView.allChildrenAndSelf { ($0 as? TextViewProtocol)?.updateText() }
-                rootView.allChildrenAndSelf { ($0 as? ModelView & Layoutable)?.updateWithModel() }
-                rootView.allChildrenAndSelf { $0.updateLayout() }
-            }
-        }
-    }
-    
-    func sendPointing(_ eventValue: DragEvent.Value) {
-        let event = DragEvent(type: .pointing, value: eventValue)
-        let action = actionList.selectableActionList.indicateAction
-        changedOnlySend(event, action)
-    }
-    func changedOnlySend<T: Event>(_ event: T, _ action: Action) {
-        let actionMap = ActionMap(action: action, phase: .changed, events: [event])
-        subSenders.forEach { $0.send(actionMap, from: self) }
-    }
-    
-    func send<T: Event>(_ event: T) {
-        switch event.value.phase {
-        case .began:
-            eventMap.append(event)
-            if let actionMap = eventMap.actionMapWith(event, actionList.actions) {
-                actionMaps.append(actionMap)
-                subSenders.forEach { $0.send(actionMap, from: self) }
-            } else if let inputEvent = event as? InputEvent {
-                input(inputEvent)
-            }
-        case .changed:
-            eventMap.replace(event)
-            if let index = actionMapIndex(with: event) {
-                actionMaps[index].replace(event)
-                let actionMap = actionMaps[index]
-                subSenders.forEach { $0.send(actionMap, from: self) }
-            }
-        case .ended:
-            eventMap.replace(event)
-            if let index = actionMapIndex(with: event) {
-                actionMaps[index].replace(event)
-                let actionMap = actionMaps[index]
-                subSenders.forEach { $0.send(actionMap, from: self) }
-                actionMaps.remove(at: index)
-            }
-            eventMap.remove(event)
-        }
-    }
-    
-    func input(_ inputEvent: InputEvent) {
-        if let receiver = rootView.at(inputEvent.value.rootLocation, (View & KeyInputtable).self) {
-            let p = receiver.convertFromRoot(inputEvent.value.rootLocation)
-            receiver.insert(inputEvent.type.name.currentString, for: p, indicatedVersionView.version)
-        }
+    deinit {
+        backgroundQueue.cancelAllOperations()
     }
     
     func actionMapIndex<T: Event>(with event: T) -> Array<ActionMap>.Index? {
@@ -144,7 +45,7 @@ final class Sender {
             if $0.action.isEditable {
                 var actionMap = $0
                 actionMap.phase = .ended
-                subSenders.forEach { $0.send(actionMap, from: self) }
+                send(actionMap)
             }
         }
         actionMaps = []
@@ -153,93 +54,334 @@ final class Sender {
         actionMaps.forEach {
             var actionMap = $0
             actionMap.phase = .ended
-            subSenders.forEach { $0.send(actionMap, from: self) }
+            send(actionMap)
         }
         actionMaps = []
     }
     
-    var beganMovingOrigins = [Point]()
-    enum DirectionOfMovement {
-        case left, right, up, down
-        
-        func move(_ view: View & Movable, pushView: View) {
-            let viewFrame = view.transformedBoundingBox
-            let pushViewFrame = pushView.transformedBoundingBox
-            switch self {
-            case .left: view.movingOrigin.x -= viewFrame.maxX - pushViewFrame.minX
-            case .right: view.movingOrigin.x += pushViewFrame.maxX - viewFrame.minX
-            case .up: view.movingOrigin.y -= viewFrame.maxY - pushViewFrame.minY
-            case .down: view.movingOrigin.y += pushViewFrame.maxY - viewFrame.minY
+    func send<T: Event>(_ event: T) {
+        switch event.value.phase {
+        case .began:
+            eventMap.append(event)
+            if let actionMap = ActionMap(event, eventMap, actionList.actions) {
+                actionMaps.append(actionMap)
+                send(actionMap)
+            } else if let inputEvent = event as? InputEvent {
+                input(inputEvent)
             }
-            
+        case .changed:
+            eventMap.replace(event)
+            if let index = actionMapIndex(with: event) {
+                actionMaps[index].replace(event)
+                send(actionMaps[index])
+            }
+        case .ended:
+            eventMap.replace(event)
+            if let index = actionMapIndex(with: event) {
+                actionMaps[index].replace(event)
+                send(actionMaps[index])
+                actionMaps.remove(at: index)
+            }
+            eventMap.remove(event)
         }
     }
-    func updateLayout(withMovedViews movedViews: [View], from views: [View & Movable]) {
-        let movedViews = movedViews, unmovedViews = views
-        
-        for (i, unmovedView) in unmovedViews.enumerated() {
-            if !movedViews.contains(unmovedView) {
-                unmovedView.movingOrigin = beganMovingOrigins[i]
-            }
+    
+    func input(_ inputEvent: InputEvent) {
+        if let receiver = rootView.at(inputEvent.value.rootLocation, (View & KeyInputtable).self) {
+            let p = receiver.convertFromRoot(inputEvent.value.rootLocation)
+            receiver.insert(inputEvent.type.name.currentString, for: p, rootView.version)
         }
+    }
+    
+    typealias CopiedObjectViewer = View & CopiedObjectsViewer
+    typealias AssignableReceiver = View & Assignable
+    typealias CollectionReceiver = View & CollectionAssignable
+    typealias CopiableReceiver = View & Copiable
+    typealias NewableReceiver = View & Newable
+    typealias ExportableReceiver = View & Exportable
+    typealias PointEditableReceiver = View & PointEditable
+    typealias PointMovableReceiver = View & PointMovable
+    typealias VertexMovableReceiver = View & VertexMovable
+    typealias MovableReceiver = View & Movable
+    
+    private var zoomableObject: ZoomableObject?
+    private var strokableObject: StrokableObject?
+    
+    private var fp = Point()
+    private var layoutableViews = [(oldP: Point, reciever: MovableReceiver)]()
+    private var viewPointMover: ViewPointMover?, viewVertexMover: ViewVertexMover?
+    
+    func object(at p: Point) -> Newable & Lockable & Findable & Exportable & Assignable {
         
-        for unmovedView in unmovedViews {
-            guard !movedViews.contains(unmovedView) else { continue }
-            if let direction = move(unmovedView, pushViews: movedViews) {
-                move(unmovedView, unmovedViews: unmovedViews, movedViews: movedViews, direction)
+    }
+    
+    func send(_ actionMap: ActionMap) {
+        switch actionMap.action {
+        case actionList.zoomAction:
+            guard let eventValue = actionMap.eventValues(with: PinchEvent.self).first else { return }
+            if actionMap.phase == .began {
+                zoomableObject = ZoomableObject(zoomableView: rootView)
+            }
+            zoomableObject?.zoom(with: eventValue, actionMap.phase, rootView.version)
+            if actionMap.phase == .ended {
+                zoomableObject = nil
+            }
+        case actionList.undoAction:
+            guard actionMap.phase == .began else { break }
+            stopAllEvents()
+            rootView.version.undo()
+        case actionList.redoAction:
+            guard actionMap.phase == .began else { break }
+            stopAllEvents()
+            rootView.version.redo()
+        case actionList.cutAction:
+            guard actionMap.phase == .began else { break }
+            guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
+            let receiver = object(at: eventValue.rootLocation)
+            let p = receiver.convertFromRoot(eventValue.rootLocation)
+            let copiedObjects = receiver.copiedObjects(at: p)
+            if !copiedObjects.isEmpty {
+                stopEditableEvents()
+                receiver.remove(for: p, rootView.version)
+                receiver.push(copiedObjects, to: rootView.version)
+            }
+        case actionList.copyAction:
+            guard actionMap.phase == .began else { break }
+            guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
+            let receiver = object(at: eventValue.rootLocation)
+            let p = receiver.convertFromRoot(eventValue.rootLocation)
+            let copiedObjects = receiver.copiedObjects(at: p)
+            if !copiedObjects.isEmpty {
+                stopEditableEvents()
+                receiver.push(copiedObjects, to: rootView.version)
+            }
+        case actionList.pasteAction:
+            guard actionMap.phase == .began else { break }
+            guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
+            let receiver = object(at: eventValue.rootLocation)
+            let viewer = receiver.withSelfAndAllParents(with: CopiedObjectViewer.self)
+            let p = receiver.convertFromRoot(eventValue.rootLocation)
+            stopEditableEvents()
+            receiver.paste(viewer.copiedObjects, for: p, rootView.version)
+        case actionList.lockAction:
+            guard actionMap.phase == .began else { break }
+            guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
+            let receiver = object(at: eventValue.rootLocation)
+            stopEditableEvents()
+            receiver.lock(with: eventValue, actionMap.phase, rootView.version)
+        case actionList.newAction:
+            guard actionMap.phase == .began else { break }
+            guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
+            let receiver = object(at: eventValue.rootLocation)
+            stopEditableEvents()
+            receiver.new(with: eventValue, actionMap.phase, rootView.version)
+        case actionList.findAction:
+            guard actionMap.phase == .began else { break }
+            guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
+            let receiver = object(at: eventValue.rootLocation)
+            stopEditableEvents()
+            receiver.find(with: eventValue, actionMap.phase, rootView.version)
+        case actionList.exportAction:
+            guard actionMap.phase == .began else { break }
+            guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
+            let receiver = object(at: eventValue.rootLocation)
+            stopEditableEvents()
+            receiver.export(with: eventValue, actionMap.phase, rootView.version)
+        case actionList.strokeAction:
+            guard let eventValue = actionMap.eventValues(with: DragEvent.self).first else { return }
+            if actionMap.phase == .began {
+                strokableObject = StrokableObject(strokableView: rootView)
+            }
+            strokableObject?.stroke(with: eventValue, actionMap.phase, rootView.version)
+            if actionMap.phase == .ended {
+                strokableObject = nil
+            }
+        case actionList.moveAction:
+            guard let eventValue = actionMap.eventValues(with: DragEvent.self).first else { return }
+            if actionMap.phase == .began {
+                let receiver = object(at: eventValue.rootLocation)
+                strokableObject = MovableObject(strokableView: receiver)
+            }
+            movableObject?.move(with: eventValue, actionMap.phase, rootView.version)
+            if actionMap.phase == .ended {
+                strokableObject = nil
+            }
+        default: break
+        }
+    }
+}
+
+protocol Zoomable: class {
+    func captureTransform(to version: Version)
+    var zoomingView: View { get }
+    var zoomingTransform: Transform { get set }
+    func convertZoomingLocalFromZoomingView(_ p: Point) -> Point
+    func convertZoomingLocalToZoomingView(_ p: Point) -> Point
+}
+final class ZoomableObject {
+    typealias ZoomableView = View & Zoomable
+    var zoomableView: ZoomableView
+    
+    init(zoomableView: ZoomableView) {
+        self.zoomableView = zoomableView
+    }
+    
+    var isEndSnap = true
+    var minZ = -20.0.cg, maxZ = 20.0.cg, zInterval = 0.02.cg
+    var correction = 3.0.cg
+    private var beganZ = 0.0.cg, z = 0.0.cg
+    
+    func zoom(with eventValue: PinchEvent.Value, _ phase: Phase, _ version: Version) {
+        if phase == .began {
+            beganZ = zoomableView.zoomingTransform.z
+            z = 0
+            zoomableView.captureTransform(to: version)
+        }
+        let p = zoomableView.zoomingView.convertFromRoot(eventValue.rootLocation)
+        zoom(at: p) {
+            z += eventValue.magnification * correction
+            let newZ = (beganZ + z).interval(scale: zInterval).clip(min: minZ, max: maxZ)
+            zoomableView.zoomingTransform.z = newZ
+        }
+        if phase == .ended {
+            if isEndSnap {
+                zoomableView.zoomingTransform.translation
+                    = zoomableView.zoomingTransform.translation.rounded()
             }
         }
     }
-    func move(_ view: View & Movable, pushViews: [View]) -> DirectionOfMovement? {
-        guard var nearestPushView = pushViews.first else {
-            return nil
-        }
-        var minD = Real.infinity
-        for pushView in pushViews {
-            let d = view.transformedBoundingBox.centerPoint
-                .distance²(pushView.transformedBoundingBox.centerPoint)
-            if d < minD {
-                nearestPushView = pushView
-                minD = d
-            }
-        }
-        
-        let viewFrame = view.transformedBoundingBox
-        let pushViewFrame = nearestPushView.transformedBoundingBox
-        
-        let left = viewFrame.maxX - pushViewFrame.minX
-        let right = pushViewFrame.maxX - viewFrame.minX
-        let up = viewFrame.maxY - pushViewFrame.minY
-        let down = pushViewFrame.maxY - viewFrame.minY
-        let minValue = min(left, right, up, down)
-        
-        let direction: DirectionOfMovement
-        switch minValue {
-        case left: direction = .left
-        case right: direction = .right
-        case up: direction = .up
-        default: direction = .down
-        }
-        
-        var isMoved = false
-        pushViews.forEach { pushView in
-            let viewFrame = view.transformedBoundingBox
-            let pushViewFrame = pushView.transformedBoundingBox
-            guard viewFrame.intersects(pushViewFrame) else { return }
-            isMoved = true
-            direction.move(view, pushView: pushView)
-        }
-        return isMoved ? direction : nil
+    private func zoom(at p: Point, closure: () -> ()) {
+        let point = zoomableView.convertZoomingLocalFromZoomingView(p)
+        closure()
+        let newPoint = zoomableView.convertZoomingLocalToZoomingView(point)
+        zoomableView.zoomingTransform.translation -= (newPoint - p)
     }
-    func move(_ view: View, unmovedViews: [View & Movable],
-              movedViews: [View], _ direction: DirectionOfMovement) {
-        for unmovedView in unmovedViews {
-            if view != unmovedView && !movedViews.contains(unmovedView) &&
-                unmovedView.transformedBoundingBox.intersects(view.transformedBoundingBox) {
-                
-                direction.move(unmovedView, pushView: view)
-                move(unmovedView, unmovedViews: unmovedViews, movedViews: movedViews, direction)
-            }
+}
+
+protocol Undoable {
+    var version: Version { get }
+}
+
+protocol CopiedObjectsViewer: class {
+    var copiedObject: Object { get }
+    func push(_ copiedObject: Object, to version: Version)
+}
+protocol Copiable {
+    func copiedObjects(at p: Point) -> [Object]
+}
+protocol Assignable: Copiable {
+    func paste(_ objects: [Any], for p: Point, _ version: Version)
+}
+protocol CollectionAssignable: Assignable {
+    func remove(for p: Point, _ version: Version)
+}
+
+protocol Newable {
+    func new(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
+}
+protocol Lockable {
+    func lock(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
+}
+protocol Findable {
+    func find(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
+}
+protocol Exportable {
+    func export(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
+}
+
+protocol Strokable: class {
+    func convertToCurrentLocal(_ point: Point) -> Point
+    var viewScale: Real { get set }
+    func insert(_ line: Line, to version: Version)
+    func update(_ line: Line)
+}
+
+protocol ViewPointMover: class {
+    var pointMovableView: View & PointMovable { get }
+    func movePoint(for p: Point, first fp: Point, pressure: Real,
+                   time: Real, _ phase: Phase)
+}
+protocol ViewVertexMover: class {
+    var vertexMovableView: View & VertexMovable { get }
+    func moveVertex(for p: Point, first fp: Point, pressure: Real,
+                    time: Real, _ phase: Phase)
+}
+protocol PointMovable {
+    func captureWillMovePoint(at p: Point, to version: Version)
+    func makeViewPointMover() -> ViewPointMover
+}
+protocol VertexMovable: PointMovable {
+    func makeViewVertexMover() -> ViewVertexMover
+}
+protocol PointEditable: VertexMovable {
+    func insert(_ p: Point, _ version: Version)
+    func removeNearestPoint(for p: Point, _ version: Version)
+}
+
+protocol Movable: class, Layoutable {
+    var isInteger: Bool { get }
+    func captureWillMoveObject(at p: Point, to version: Version)
+    var movingOrigin: Point { get set }
+}
+extension Movable {
+    var isInteger: Bool {
+        return false
+    }
+}
+
+final class TransformingMovableObject {
+    var viewAndFirstOrigins: [(View & TransformProtocol, Point)]
+    var rootView: View
+    var fp = Point()
+    
+    init(viewAndFirstOrigins: [(View & TransformProtocol, Point)], rootView: View) {
+        self.viewAndFirstOrigins = viewAndFirstOrigins
+        self.rootView = rootView
+    }
+    
+    func move(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
+        guard !viewAndFirstOrigins.isEmpty else { return }
+        viewAndFirstOrigins.forEach { (receiver, oldP) in
+            let p = rootView.convertFromRoot(eventValue.rootLocation)
+            receiver.transform.translation = (oldP + p - fp).rounded()
         }
+        
+        if phase == .ended {
+            self.viewAndFirstOrigins = []
+        }
+    }
+}
+
+protocol BasicPointMovable: BindableReceiver, PointMovable {
+    func model(at p: Point) -> Model
+    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model)
+}
+extension BasicPointMovable {
+    func captureWillMovePoint(at p: Point, to version: Version) {
+        capture(model, to: version)
+    }
+}
+extension BasicPointMovable where Self: View {
+    func makeViewPointMover() -> ViewPointMover {
+        return BasicViewPointMover(view: self)
+    }
+}
+final class BasicViewPointMover<T: View & BasicPointMovable>: ViewPointMover {
+    var view: T
+    var pointMovableView: View & PointMovable {
+        return view
+    }
+    
+    init(view: T) {
+        self.view = view
+        beganModel = view.model
+    }
+    
+    private var beganModel: T.Model
+    
+    func movePoint(for p: Point, first fp: Point, pressure: Real, time: Real, _ phase: Phase) {
+        view.binder[keyPath: view.keyPath] = view.model(at: p)
+        view.updateWithModel()
+        view.didChangeFromMovePoint(phase, beganModel: beganModel)
     }
 }

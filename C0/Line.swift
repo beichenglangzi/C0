@@ -114,7 +114,9 @@ extension Line {
                     minDistance: Real, maxDistance: Real) -> Line {
         return Line(points: points.map {
             let d =  hypot($0.x - controlPoint.x, $0.y - controlPoint.y)
-            let ds = d > maxDistance ? 0 : (1 - (d - minDistance) / (maxDistance - minDistance))
+            let ds = d > maxDistance ?
+                0 :
+                (1 - (d - minDistance) / (maxDistance - minDistance))
             return $0 + dp * ds
         })
     }
@@ -140,7 +142,8 @@ extension Line {
     func splited(startIndex: Int, startT: Real, endIndex: Int, endT: Real) -> [Line] {
         let beziers = bezierSequence.map { $0 }
         if startIndex == endIndex {
-            return [Line(jointedBeziers: [beziers[startIndex].clip(startT: startT, endT: endT)])]
+            return [Line(jointedBeziers: [beziers[startIndex]
+                .clip(startT: startT, endT: endT)])]
         } else {
             let sb = beziers[startIndex].clip(startT: 0, endT: startT)
             let eb = beziers[endIndex].clip(startT: endT, endT: 1)
@@ -585,7 +588,8 @@ extension Line {
             }
             
             let lp = points[points.count - 1]
-            let lastTheta = points[points.count - 2].tangential(points[points.count - 1]) + .pi / 2
+            let lastTheta = points[points.count - 2]
+                .tangential(points[points.count - 1]) + .pi / 2
             es.append(.linear(lp + Point(x: cos(lastTheta), y: sin(lastTheta))))
             res.append(.linear(lp - Point(x: cos(lastTheta), y: sin(lastTheta))))
             
@@ -619,43 +623,31 @@ extension Line: Hashable {
         return Hash.uniformityHashValue(with: points.map { $0.hashValue })
     }
 }
-extension Line: Referenceable {
-    static let name = Text(english: "Line", japanese: "線")
-}
 extension Line: Interpolatable {
     static func linear(_ f0: Line, _ f1: Line, t: Real) -> Line {
         return Line(points: [Point].linear(f0.points, f1.points, t: t))
     }
-    static func firstMonospline(_ f1: Line, _ f2: Line, _ f3: Line, with ms: Monospline) -> Line {
-        return Line(points: [Point].firstMonospline(f1.points, f2.points, f3.points, with: ms))
+    static func firstMonospline(_ f1: Line, _ f2: Line, _ f3: Line,
+                                with ms: Monospline) -> Line {
+        return Line(points: [Point].firstMonospline(f1.points, f2.points, f3.points,
+                                                    with: ms))
     }
     static func monospline(_ f0: Line, _ f1: Line, _ f2: Line, _ f3: Line,
                            with ms: Monospline) -> Line {
-        return Line(points: [Point].monospline(f0.points, f1.points, f2.points, f3.points, with: ms))
+        return Line(points: [Point].monospline(f0.points, f1.points, f2.points, f3.points,
+                                               with: ms))
     }
-    static func lastMonospline(_ f0: Line, _ f1: Line, _ f2: Line, with ms: Monospline) -> Line {
-        return Line(points: [Point].lastMonospline(f0.points, f1.points, f2.points, with: ms))
-    }
-}
-extension Line: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect) -> View {
-        let thumbnailView = View(drawClosure: { self.draw(with: $2, in: $0) })
-        thumbnailView.lineColor = .formBorder
-        thumbnailView.frame = frame
-        return thumbnailView
-    }
-    func draw(with bounds: Rect, in ctx: CGContext) {
-        let imageBounds = self.visibleImageBounds(withLineWidth: 1)
-        let c = AffineTransform.centering(from: imageBounds, to: bounds.inset(by: 5))
-        ctx.concatenate(c.affine)
-//        draw(size: 0.5 / c.scale, in: ctx)
+    static func lastMonospline(_ f0: Line, _ f1: Line, _ f2: Line,
+                               with ms: Monospline) -> Line {
+        return Line(points: [Point].lastMonospline(f0.points, f1.points, f2.points,
+                                                   with: ms))
     }
 }
 extension Line: Viewable {
-    func standardViewWith<T: BinderProtocol>
+    func viewWith<T: BinderProtocol>
         (binder: T, keyPath: ReferenceWritableKeyPath<T, Line>) -> ModelView {
         
-        return MiniView(binder: binder, keyPath: keyPath)
+        return LineView(binder: binder, keyPath: keyPath)
     }
 }
 extension Line: ObjectViewable {}
@@ -675,11 +667,11 @@ extension Array where Element == Line {
     }
 }
 extension Array where Element == Line {
-    static let triangleName = Text(english: "Triangle", japanese: "正三角形")
-    static let squareName = Text(english: "Square", japanese: "正方形")
-    static let pentagonName = Text(english: "Pentagon", japanese: "正五角形")
-    static let hexagonName = Text(english: "Hexagon", japanese: "正六角形")
-    static let circleName = Text(english: "Circle", japanese: "円")
+    static let triangleName = Localization(english: "Triangle", japanese: "正三角形")
+    static let squareName = Localization(english: "Square", japanese: "正方形")
+    static let pentagonName = Localization(english: "Pentagon", japanese: "正五角形")
+    static let hexagonName = Localization(english: "Hexagon", japanese: "正六角形")
+    static let circleName = Localization(english: "Circle", japanese: "円")
     
     static func triangle(centerPosition cp: Point = Point(),
                          radius r: Real = 50) -> [Line] {
@@ -756,7 +748,7 @@ final class LineView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     var notifications = [((LineView<Binder>, BasicNotification) -> ())]()
     
-    var width = 1.0.cg
+    var width = Layouter.lineWidth
     
     init(binder: T, keyPath: BinderKeyPath) {
         self.binder = binder
@@ -771,14 +763,14 @@ final class LineView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     func updateWithModel() {
         path = model.path(lineWidth: width)
-        children = model.points.enumerated().map { (i, control) in
-            let view = PointView(binder: binder,
-                                 keyPath: keyPath.appending(path: \Model.points[i]),
-                                 radius: 1.5)
-            view.notifications.append { [unowned self] _, _ in
-                self.path = self.model.path(lineWidth: self.width)
-            }
-            return view
-        }
+//        children = model.points.enumerated().map { (i, control) in
+//            let view = PointView(binder: binder,
+//                                 keyPath: keyPath.appending(path: \Model.points[i]),
+//                                 radius: 1.5)
+//            view.notifications.append { [unowned self] _, _ in
+//                self.path = self.model.path(lineWidth: self.width)
+//            }
+//            return view
+//        }
     }
 }

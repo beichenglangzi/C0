@@ -121,7 +121,7 @@ struct TextMaterial {
     var font: Font, color: Color, lineColor: Color?, lineWidth: Real
     var frameAlignment: TextAlignment, alignment: TextAlignment
     
-    init(font: Font = .default, color: Color = .locked,
+    init(font: Font = .default, color: Color = .content,
          lineColor: Color? = nil, lineWidth: Real = 0,
          frameAlignment: TextAlignment = .left, alignment: TextAlignment = .natural) {
         
@@ -343,6 +343,9 @@ extension TextFrame {
     }
     
     func draw(in bounds: Rect, in ctx: CGContext) {
+        ctx.setShouldSmoothFonts(false)
+        ctx.setShouldSubpixelPositionFonts(false)
+        ctx.setShouldSubpixelQuantizeFonts(false)
         guard let firstLine = lines.first else { return }
         let bounds = bounds.insetBy(dx: paddingSize.width, dy: paddingSize.height)
         ctx.saveGState()
@@ -352,6 +355,9 @@ extension TextFrame {
         ctx.restoreGState()
     }
     func drawWithCenterOfImageBounds(in bounds: Rect, in ctx: CGContext) {
+        ctx.setShouldSmoothFonts(false)
+        ctx.setShouldSubpixelPositionFonts(false)
+        ctx.setShouldSubpixelQuantizeFonts(false)
         let imageBounds = self.imageBounds
         ctx.saveGState()
         ctx.translateBy(x: bounds.midX - imageBounds.midX, y: bounds.midY - imageBounds.midY)

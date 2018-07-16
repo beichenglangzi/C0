@@ -20,22 +20,8 @@
 import CoreGraphics
 import QuartzCore
 
-struct Screen {
-    static var shared = Screen()
-    var backingScaleFactor = 1.0.cg
-}
-
-/**
- Issue: CoreGraphicsとQuartzCoreを廃止し、MetalでGPUレンダリング
- */
 class View {
-    private(set) weak var parent: View? {
-        didSet {
-            if parent == nil {
-                
-            }
-        }
-    }
+    private(set) weak var parent: View?
     private var _children = [View]()
     var children: [View] {
         get { return _children }
@@ -196,6 +182,10 @@ class View {
         get { return caLayer.isHidden }
         set { caLayer.isHidden = newValue }
     }
+    var opacity: Real {
+        get { return Real(caLayer.opacity) }
+        set { caLayer.opacity = Float(newValue) }
+    }
     
     var lineColor: Color? {
         get { return lineColorComposition?.value }
@@ -207,7 +197,7 @@ class View {
             }
         }
     }
-    var lineColorComposition: Composition<Color>? = Composition(value: Color.getSetBorder) {
+    var lineColorComposition: Composition<Color>? {
         didSet {
             guard lineColorComposition != oldValue else { return }
             set(lineWidth: lineColorComposition != nil ? lineWidth : 0)
@@ -266,8 +256,12 @@ class View {
             caGradientLayer.colors = nil
             caGradientLayer.locations = nil
         } else {
-            caGradientLayer.colors = gradient.values.map { $0.colorComposition.cgColor }
-            caGradientLayer.locations = gradient.values.map { NSNumber(value: Double($0.location)) }
+            caGradientLayer.colors = gradient.values.map {
+                $0.colorComposition.cgColor
+            }
+            caGradientLayer.locations = gradient.values.map {
+                NSNumber(value: Double($0.location))
+            }
         }
         caGradientLayer.startPoint = gradient.startPoint
         caGradientLayer.endPoint = gradient.endPoint
@@ -323,7 +317,8 @@ class View {
         }
         let frame = transformedBoundingBox
         let scale = size.width / frame.size.width
-        let viewTransform = Transform(translation: Point(x: size.width / 2, y: size.height / 2),
+        let viewTransform = Transform(translation: Point(x: size.width / 2,
+                                                         y: size.height / 2),
                                       scale: Point(x: scale, y: scale),
                                       rotation: 0)
         let drawView = View(drawClosure: { ctx, _, _ in
@@ -359,8 +354,6 @@ class View {
         let caGradientLayer = CAGradientLayer()
         caGradientLayer.actions = actions
         caGradientLayer.anchorPoint = Point()
-        caGradientLayer.borderWidth = 0.5
-        caGradientLayer.borderColor = Color.getSetBorder.cg
         caLayer = caGradientLayer
         self.gradient = gradient
         View.update(with: gradient, in: caGradientLayer)
@@ -380,7 +373,7 @@ class View {
         caLayer = caShapeLayer
     }
     init(drawClosure: ((CGContext, View, Rect) -> ())?,
-         fillColor: Color? = .background, lineColor: Color? = .getSetBorder,
+         fillColor: Color? = .background, lineColor: Color? = nil,
          isLocked: Bool = true) {
         
         self.isLocked = isLocked
@@ -424,6 +417,12 @@ class View {
         }
         return isParent
     }
+//    func distance(at p: Point) -> Real {
+//
+//    }
+//    func nearest(at p: Point) -> View {
+//
+//    }
     
     func at(_ p: Point) -> View? {
         guard !(isLocked && _children.isEmpty) else {
@@ -524,28 +523,34 @@ extension View {
     static var selection: View {
         let view = View()
         view.fillColorComposition = .select
-        view.lineColorComposition = .selectBorder
+        view.lineColor = .background
         return view
     }
     static var deselection: View {
         let view = View()
-        view.fillColorComposition = .deselect
-        view.lineColorComposition = .deselectBorder
+        view.fillColorComposition = .anti
+        view.lineColor = .background
         return view
     }
-    static func knob(radius: Real = 5, lineWidth: Real = 1) -> View {
+    static var knob: View {
+        return knob(radius: Layouter.knobRadius, lineWidth: Layouter.lineWidth)
+    }
+    static func knob(radius: Real, lineWidth: Real) -> View {
         let view = View()
-        view.fillColor = .knob
-        view.lineColor = .getSetBorder
+        view.fillColor = .content
+        view.lineColor = .background
         view.lineWidth = lineWidth
         view.radius = radius
         return view
     }
-    static func discreteKnob(_ size: Size = Size(width: 10, height: 10),
-                             lineWidth: Real = 1) -> View {
+    static var slidableKnob: View {
+        return slidableKnob(Size(square: Layouter.slidableKnobRadius * 2),
+                            lineWidth: Layouter.lineWidth)
+    }
+    static func slidableKnob(_ size: Size, lineWidth: Real) -> View {
         let view = View()
-        view.fillColor = .knob
-        view.lineColor = .getSetBorder
+        view.fillColor = .content
+        view.lineColor = .background
         view.lineWidth = lineWidth
         view.bounds = Rect(origin: Point(x: -size.width / 2, y: -size.height / 2), size: size)
         return view
@@ -553,13 +558,12 @@ extension View {
 }
 
 private final class C0DrawLayer: CALayer {
-    init(backgroundColor: Color? = .background, borderColor: Color? = .getSetBorder) {
+    init(backgroundColor: Color? = .background, borderColor: Color? = nil) {
         super.init()
         needsDisplayOnBoundsChange = true
         drawsAsynchronously = true
         anchorPoint = Point()
         isOpaque = backgroundColor != nil
-        borderWidth = borderColor == nil ? 0 : 0.5
         self.backgroundColor = backgroundColor?.cg
         self.borderColor = borderColor?.cg
     }
@@ -579,9 +583,7 @@ private final class C0DrawLayer: CALayer {
         }
     }
     override var contentsScale: Real {
-        didSet {
-            setNeedsDisplay()
-        }
+        didSet { setNeedsDisplay() }
     }
     var drawClosure: ((CGContext) -> ())?
     override func draw(in ctx: CGContext) {
@@ -616,12 +618,11 @@ extension CALayer {
         return layer
     }
     static func interface(backgroundColor: Color? = nil,
-                          borderColor: Color? = .getSetBorder) -> CALayer {
+                          borderColor: Color? = nil) -> CALayer {
         let layer = CALayer()
         layer.isOpaque = true
         layer.anchorPoint = Point()
         layer.actions = disabledAnimationActions
-        layer.borderWidth = borderColor == nil ? 0.0 : 0.5
         layer.backgroundColor = backgroundColor?.cg
         layer.borderColor = borderColor?.cg
         return layer
@@ -679,7 +680,6 @@ final class DisplayLink {
     private var oldTimestamp = Date()
     
     init?(queue: DispatchQueue = DispatchQueue.main) {
-        return nil//
         source = DispatchSource.makeUserDataAddSource(queue: queue)
         var aCV: CVDisplayLink?
         var success = CVDisplayLinkCreateWithActiveCGDisplays(&aCV)
@@ -717,9 +717,7 @@ final class DisplayLink {
             }
         }
     }
-    deinit {
-        stop()
-    }
+    deinit { stop() }
     
     func start() {
         guard !isRunning else { return }

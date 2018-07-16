@@ -165,7 +165,7 @@ extension Bezier2 {
         guard aabb0.intersects(aabb1) else {
             return false
         }
-        if max(aabb1.maxX - aabb1.minX, aabb1.maxY - aabb1.minY) < Bezier2.intersectsMinRange {
+        if max(aabb1.width, aabb1.height) < Bezier2.intersectsMinRange {
             return true
         }
         let range1 = max1 - min1
@@ -192,7 +192,7 @@ extension Bezier2 {
         let aabb0 = AABB(self), aabb1 = AABB(other)
         guard aabb0.intersects(aabb1) else { return }
         let range1 = max1 - min1
-        if max(aabb1.maxX - aabb1.minX, aabb1.maxY - aabb1.minY) >= Bezier2.intersectsMinRange {
+        if max(aabb1.width, aabb1.height) >= Bezier2.intersectsMinRange {
             let nb = other.midSplit()
             nb.b0.intersections(self, &results, min1, min1 + range1 / 2,
                                 min0, max0, isFlipped: !isFlipped)
@@ -202,7 +202,7 @@ extension Bezier2 {
             }
             return
         }
-        let newP = Point(x: (aabb1.minX + aabb1.maxX) / 2, y: (aabb1.minY + aabb1.maxY) / 2)
+        let newP = Point(x: aabb1.midX, y: aabb1.midY)
         func isSolution() -> Bool {
             if !results.isEmpty {
                 let oldP = results[results.count - 1].point
@@ -330,9 +330,6 @@ extension Bezier2 {
         }
     }
 }
-extension Bezier2: Referenceable {
-    static let name = Text(english: "Quadratic Bezier", japanese: "二次ベジェ曲線")
-}
 
 struct Bezier3: Codable, Hashable {
     var p0 = Point(), cp0 = Point(), cp1 = Point(), p1 = Point()
@@ -369,7 +366,7 @@ extension Bezier3 {
         let minMaxX = minMaxWith(p0.x, cp0.x, cp1.x, p1.x)
         let minMaxY = minMaxWith(p0.y, cp0.y, cp1.y, p1.y)
         return Rect(x: minMaxX.min, y: minMaxY.min,
-                      width: minMaxX.max - minMaxX.min, height: minMaxY.max - minMaxY.min)
+                    width: minMaxX.max - minMaxX.min, height: minMaxY.max - minMaxY.min)
     }
     func length(flatness: Int = 128) -> Real {
         var d = 0.0.cg, oldP = p0
@@ -488,7 +485,7 @@ extension Bezier3 {
             && aabb0.minY <= aabb1.maxY && aabb0.maxY >= aabb1.minY {
             
             let range1 = max1 - min1
-            if max(aabb1.maxX - aabb1.minX, aabb1.maxY - aabb1.minY) < Bezier3.intersectsMinRange {
+            if max(aabb1.width, aabb1.height) < Bezier3.intersectsMinRange {
                 return true
             } else {
                 let nb = other.midSplit()
@@ -517,9 +514,8 @@ extension Bezier3 {
             && aabb0.minY <= aabb1.maxY && aabb0.maxY >= aabb1.minY {
             
             let range1 = max1 - min1
-            if max(aabb1.maxX - aabb1.minX, aabb1.maxY - aabb1.minY) < Bezier3.intersectsMinRange {
-                let i = results.count, newP = Point(x: (aabb1.minX + aabb1.maxX) / 2,
-                                                      y: (aabb1.minY + aabb1.maxY) / 2)
+            if max(aabb1.width, aabb1.height) < Bezier3.intersectsMinRange {
+                let i = results.count, newP = Point(x: aabb1.midX, y: aabb1.midY)
                 var isSolution = true
                 if i > 0 {
                     let oldP = results[i - 1].point

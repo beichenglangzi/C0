@@ -17,7 +17,7 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-struct Rational: AdditiveGroup, SignedNumeric {
+struct Rational: SignedNumeric {
     var p, q: Int
     
     init() {
@@ -57,6 +57,10 @@ struct Rational: AdditiveGroup, SignedNumeric {
             (p1, q1) = (p2, q2)
         }
         self.init(p1, q1)
+    }
+    
+    static func -(lhs: Rational, rhs: Rational) -> Rational {
+        return lhs + (-rhs)
     }
 }
 extension Rational {
@@ -171,27 +175,6 @@ extension Rational: Codable {
         try container.encode(q)
     }
 }
-extension Rational: Referenceable {
-    static let name = Text(english: "Rational Number", japanese: "有理数")
-}
-extension Rational: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect) -> View {
-        return description.thumbnailView(withFrame: frame)
-    }
-}
-extension Rational: Viewable {
-    func standardViewWith<T: BinderProtocol>
-        (binder: T, keyPath: ReferenceWritableKeyPath<T, Rational>) -> ModelView {
-        
-        return DiscreteRationalView(binder: binder, keyPath: keyPath,
-                                    option: RationalOption(minModel: .min,
-                                                           maxModel: .max,
-                                                           modelInterval: Rational(1, 10),
-                                                           descriptionQ: 10,
-                                                           isInfinitesimal: false))
-    }
-}
-extension Rational: ObjectViewable {}
 extension Rational: LosslessStringConvertible {
     init?(_ description: String) {
         let values = description.components(separatedBy: "/")
@@ -217,28 +200,21 @@ extension Rational: ExpressibleByIntegerLiteral {
         self.init(value)
     }
 }
-extension Rational: AnyInitializable {
-    init?(anyValue: Any) {
-        switch anyValue {
-        case let value as Rational: self = value
-        case let value as Int: self = Rational(value)
-        case let value as Real: self = Rational(value)
-        case let value as String:
-            if let value = Rational(value) {
-                self = value
-            } else {
-                return nil
-            }
-        case let valueChain as ValueChain:
-            if let value = Rational(anyValue: valueChain.rootChainValue) {
-                self = value
-            } else {
-                return nil
-            }
-        default: return nil
-        }
+extension Rational: Viewable {
+    func viewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Rational>) -> ModelView {
+        
+        let option = RationalOption(minModel: .min,
+                                    maxModel: .max,
+                                    modelInterval: Rational(1, 10),
+                                    descriptionQ: 10,
+                                    isInfinitesimal: false)
+        return MovableRationalView(binder: binder, keyPath: keyPath,
+                                   option: option)
     }
 }
+extension Rational: ObjectViewable {}
+
 func floor(_ x: Rational) -> Rational {
     let i = x.integralPart
     return Rational(x.decimalPart.p == 0 ? i : (x < 0 ? i - 1 : i))
@@ -276,17 +252,21 @@ struct RationalOption: Object1DOption {
     }
     
     func string(with model: Model) -> String {
-        if let descriptionQ = descriptionQ, let description = model.description(q: descriptionQ) {
+        if let descriptionQ = descriptionQ,
+            let description = model.description(q: descriptionQ) {
+            
             return description
         } else {
             return model.description
         }
     }
-    func displayText(with model: Model) -> Text {
-        if let descriptionQ = descriptionQ, let description = model.description(q: descriptionQ) {
-            return Text(description + "\(unit)")
+    func displayText(with model: Model) -> Localization {
+        if let descriptionQ = descriptionQ,
+            let description = model.description(q: descriptionQ) {
+            
+            return Localization(description + "\(unit)")
         } else {
-            return Text(model.description + "\(unit)")
+            return Localization(model.description + "\(unit)")
         }
     }
     func ratio(with model: Model) -> Real {
@@ -359,30 +339,5 @@ struct RationalOption: Object1DOption {
         return Model(realValue)
     }
 }
-typealias DiscreteRationalView<Binder: BinderProtocol> = Discrete1DView<RationalOption, Binder>
-
-struct IntervalRationalOption: IntervalObject1DOption {
-    var intervalModel: Rational
-    var zeroModel: Rational {
-        return 0
-    }
-    func model(with model: Rational, applyingIntervalRatio: Real) -> Rational {
-        return model + intervalModel * Rational(applyingIntervalRatio)
-    }
-    func differenceIntervalRatio(with model: Rational, other otherModel: Rational) -> Real {
-        return Real((model - otherModel) / intervalModel)
-    }
-    
-    func int(with model: Rational, rounded: FloatingPointRoundingRule) -> Int {
-        switch rounded {
-        case .up: return ceil(model).integralPart
-        case .down: return floor(model).integralPart
-        default: return model.integralPart
-        }
-    }
-    func model(with int: Int) -> Rational {
-        return Rational(int)
-    }
-}
-typealias IntervalRationalView<Binder: BinderProtocol>
-    = SlidableInterval1DView<RationalOption, IntervalRationalOption, Binder>
+typealias MovableRationalView<Binder: BinderProtocol>
+    = Movable1DView<RationalOption, Binder>

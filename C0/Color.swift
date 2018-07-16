@@ -95,38 +95,12 @@ extension Color {
     static let green = Color(hue: 156.0 / 360, saturation: 1, brightness: 0.69)
     static let orange = Color(hue: 38.0 / 360, saturation: 1, brightness: 0.95)
     
-    static let rgbRed = Color(red: 1, green: 0, blue: 0)
-    static let rgbOrange = Color(red: 1, green: 0.5, blue: 0)
-    static let rgbYellow = Color(red: 1, green: 1, blue: 0)
-    static let rgbGreen = Color(red: 0, green: 1, blue: 0)
-    static let rgbCyan = Color(red: 0, green: 1, blue: 1)
-    static let rgbBlue = Color(red: 0, green: 0, blue: 1)
-    static let rgbMagenta = Color(red: 1, green: 0, blue: 1)
-    
     static let background = Color(white: 0.93)
-    static let getSetBorder = Color(white: 0.7)
-    static let getBorder = Color(white: 0.8)
-    static let sendBorder = Color(white: 0.6)
-    static let formBorder = Color(white: 0.84)
-    static let bindingBorder = Color(red: 1.0, green: 0.0, blue: 1.0)
     static let content = Color(white: 0.35)
-    static let subContent = Color(white: 0.88)
-    static let font = Color(white: 0.05)
-    static let knob = white
-    static let scroll = Color(white: 0.77)
-    static let locked = Color(white: 0.5)
-    static let subLocked = Color(white: 0.65)
-    static let editing = Color(white: 0.88)
-    static let scrollEditing = Color(white: 0.67)
-    static let mainFocus = Color(red: 0.1, green: 0.6, blue: 0.9)
-    static let zoomingFocus = Color(red: 0.1, green: 0.3, blue: 0.5)
-    static let versioniongFocus = Color(red: 0.05, green: 0.1, blue: 0.3)
-    static let indicated = Color(red: 0.1, green: 0.6, blue: 0.9)
-    static let noBorderIndicated = Color(red: 0.85, green: 0.9, blue: 0.94)
-    static let subIndicated = Color(red: 0.6, green: 0.95, blue: 1)
     static let selected = Color(red: 0.1, green: 0.7, blue: 1)
-    static let subSelected = Color(red: 0.8, green: 0.95, blue: 1)
-    static let warning = rgbRed
+    static let draft = Color(red: 0, green: 0.5, blue: 1)
+    static let caution = orange
+    static let warning = red
 }
 extension Color {
     static func random(rgbColorSpace: RGBColorSpace = .sRGB) -> Color {
@@ -272,9 +246,6 @@ extension Color: Hashable {
                                                rgbColorSpace.hashValue])
     }
 }
-extension Color: Referenceable {
-    static let name = Text(english: "Color", japanese: "カラー")
-}
 extension Color: Interpolatable {
     static func linear(_ f0: Color, _ f1: Color, t: Real) -> Color {
         let rgb = RGB.linear(f0.rgb, f1.rgb, t: t)
@@ -320,13 +291,8 @@ extension Color: Interpolatable {
                                                 with: ms).loopValue())
     }
 }
-extension Color: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect) -> View {
-        return View(frame: frame, fillColor: self)
-    }
-}
 extension Color: Viewable {
-    func standardViewWith<T: BinderProtocol>
+    func viewWith<T: BinderProtocol>
         (binder: T, keyPath: ReferenceWritableKeyPath<T, Color>) -> ModelView {
         
         return ColorView(binder: binder, keyPath: keyPath)
@@ -380,19 +346,22 @@ extension RGB: Interpolatable {
         let b = Real.linear(f0.b, f1.b, t: t)
         return RGB(r: r, g: g, b: b)
     }
-    static func firstMonospline(_ f1: RGB, _ f2: RGB, _ f3: RGB, with ms: Monospline) -> RGB {
+    static func firstMonospline(_ f1: RGB, _ f2: RGB, _ f3: RGB,
+                                with ms: Monospline) -> RGB {
         let r = Real.firstMonospline(f1.r, f2.r, f3.r, with: ms)
         let g = Real.firstMonospline(f1.g, f2.g, f3.g, with: ms)
         let b = Real.firstMonospline(f1.b, f2.b, f3.b, with: ms)
         return RGB(r: r, g: g, b: b)
     }
-    static func monospline(_ f0: RGB, _ f1: RGB, _ f2: RGB, _ f3: RGB, with ms: Monospline) -> RGB {
+    static func monospline(_ f0: RGB, _ f1: RGB, _ f2: RGB, _ f3: RGB,
+                           with ms: Monospline) -> RGB {
         let r = Real.monospline(f0.r, f1.r, f2.r, f3.r, with: ms)
         let g = Real.monospline(f0.g, f1.g, f2.g, f3.g, with: ms)
         let b = Real.monospline(f0.b, f1.b, f2.b, f3.b, with: ms)
         return RGB(r: r, g: g, b: b)
     }
-    static func lastMonospline(_ f0: RGB, _ f1: RGB, _ f2: RGB, with ms: Monospline) -> RGB {
+    static func lastMonospline(_ f0: RGB, _ f1: RGB, _ f2: RGB,
+                               with ms: Monospline) -> RGB {
         let r = Real.lastMonospline(f0.r, f1.r, f2.r, with: ms)
         let g = Real.lastMonospline(f0.g, f1.g, f2.g, with: ms)
         let b = Real.lastMonospline(f0.b, f1.b, f2.b, with: ms)
@@ -440,9 +409,6 @@ extension HSV: Codable {
 enum RGBColorSpace: Int8, Codable, Hashable {
     case sRGB, displayP3
 }
-extension RGBColorSpace: Referenceable {
-    static let name = Text(english: "Color space", japanese: "色空間")
-}
 extension RGBColorSpace: CustomStringConvertible {
     var description: String {
         switch self {
@@ -451,11 +417,11 @@ extension RGBColorSpace: CustomStringConvertible {
         }
     }
 }
-extension RGBColorSpace: DisplayableText {
-    var displayText: Text {
-        return Text(description)
+extension RGBColorSpace {
+    var displayText: Localization {
+        return Localization(description)
     }
-    static var displayTexts: [Text] {
+    static var displayTexts: [Localization] {
         return [sRGB.displayText, displayP3.displayText]
     }
 }
@@ -532,7 +498,9 @@ struct HueCircle {
     }
     private(set) var radius: Real
     
-    init(lineWidth: Real = 2, bounds: Rect = Rect(), rgbColorSpace: RGBColorSpace = .sRGB) {
+    init(lineWidth: Real = Layouter.padding * 2,
+         bounds: Rect = Rect(), rgbColorSpace: RGBColorSpace = .sRGB) {
+        
         self.lineWidth = lineWidth
         self.bounds = bounds
         self.radius = min(bounds.width, bounds.height) / 2
@@ -576,46 +544,24 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
     let hueView: CircularRealView<Binder>
     let slView: MovablePointView<Binder>
     
-    var hueLineWidth: Real {
-        didSet {
-            hueCircle.lineWidth = hueLineWidth
-        }
-    }
     var hueCircle = HueCircle() {
-        didSet {
-            hueDrawView.displayLinkDraw()
-        }
+        didSet { hueDrawView.displayLinkDraw() }
     }
-    var slRatio = 0.82.cg {
-        didSet { updateLayout() }
-    }
-    var formHeight = 10.0.cg
     let hueDrawView = View(drawClosure: { _, _, _ in })
     let slColorGradientView: View
     let slBlackWhiteGradientView: View
-    let colorFormView: View
     
-    init(binder: Binder, keyPath: BinderKeyPath,
-         hLineWidth: Real = 2.5, hWidth: Real = 16,
-         slPadding: Real? = nil, slRatio: Real = 0.82) {
-        
+    init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
         let valueOption = RealOption(minModel: 0, maxModel: 1)
+        let hueWidth = Layouter.movableLineWidth + Layouter.movablePadding * 2
         hueView = CircularRealView(binder: binder, keyPath: keyPath.appending(path: \Color.hue),
-                                   option: valueOption, startAngle: 0, width: hWidth)
+                                   option: valueOption, startAngle: 0, width: hueWidth)
         let slOption = PointOption(xOption: valueOption, yOption: valueOption)
         slView = MovablePointView(binder: binder, keyPath: keyPath.appending(path: \Color.ls),
                                    option: slOption)
-        slView.fillColor = .background
-        
-        if let slPadding = slPadding {
-            slView.padding = slPadding
-        }
-        hueView.width = hWidth
-        self.hueLineWidth = hLineWidth
-        self.slRatio = slRatio
         
         let hue = binder[keyPath: keyPath].hue
         let y = Color.y(withHSLHue: hue)
@@ -639,11 +585,10 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
         slBlackWhiteGradientView = View(gradient: Gradient(values: slgValues,
                                                            startPoint: Point(x: 0, y: 0),
                                                            endPoint: Point(x: 1, y: 0)))
-        colorFormView = View(path: Path())
-        colorFormView.lineColor = .formBorder
-        colorFormView.fillColor = binder[keyPath: keyPath]
         
         super.init(isLocked: false)
+        lineColor = .content
+        fillColor = binder[keyPath: keyPath]
         hueDrawView.fillColor = nil
         hueDrawView.lineColor = nil
         slBlackWhiteGradientView.lineColor = nil
@@ -651,44 +596,43 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
         hueDrawView.drawClosure = { [unowned self] ctx, _, _ in self.hueCircle.draw(in: ctx) }
         hueView.backgroundViews = [hueDrawView]
         slView.children = [slColorGradientView, slBlackWhiteGradientView, slView.knobView]
-        children = [colorFormView, hueView, slView]
+        children = [hueView, slView]
         
         hueView.notifications.append { [unowned self] (_, _) in self.updateGradient() }
         slView.notifications.append { [unowned self] (_, _) in self.updateGradient() }
+        
+        update(withBounds: Rect(origin: Point(), size: size))
     }
     
-    var minSize: Size {
-        return Size(width: 70, height: 100)
-    }
-    override func updateLayout() {
-        let padding = Layouter.basicPadding
-        let huePadding = Layouter.smallPadding
-        let r = bounds.width / 2 - huePadding
-        let cp = Point(x: bounds.midX, y: bounds.height - huePadding - r)
+    let slSize = Size(width: 70, height: 20)
+    let size = Size(square: 70)
+    func update(withBounds bounds: Rect) {
+        let r = bounds.width / 2
+        let cp = bounds.centerPoint
         let hueSize = Size(width: r * 2, height: r * 2)
         let hueFrame = Rect(origin: Point(x: -hueSize.width / 2,
                                           y: -hueSize.height / 2),
                             size: hueSize)
         hueView.path = hueView.circularPath(withBounds: hueFrame)
         hueView.position = cp
-        colorFormView.path = hueView.circularInternalPath(withBounds: hueFrame)
-        colorFormView.position = cp
+        path = hueView.circularInternalPath(withBounds: hueFrame)
+        position = cp
         
-        let slFrame = Rect(x: padding,
-                           y: padding,
-                           width: bounds.width - padding * 2,
-                           height: bounds.height - r * 2 - huePadding * 2 - padding)
+        let slFrame = Rect(origin: Point(x: 0, y: -hueFrame.minY - hueView.width),
+                           size: size)
         slView.frame = slFrame
-        let slInFrame = Rect(origin: Point(), size: slFrame.size).inset(by: slView.padding)
+        let slInFrame = Rect(origin: Point(),
+                             size: slFrame.size).inset(by: Layouter.movablePadding)
         slColorGradientView.frame = slInFrame
         slBlackWhiteGradientView.frame = slInFrame
         
-        let hueDrawPadding = ((hueView.width - hueLineWidth) / 2).rounded()
+        let hueDrawPadding = ((hueView.width - Layouter.movableLineWidth) / 2).rounded()
         let hueDrawFrame = hueFrame.inset(by: hueDrawPadding).integral
         hueDrawView.frame = hueDrawFrame
-        hueCircle = HueCircle(lineWidth: hueLineWidth,
+        hueCircle = HueCircle(lineWidth: Layouter.movableLineWidth,
                               bounds: Rect(origin: Point(), size: hueDrawFrame.size),
                               rgbColorSpace: model.rgbColorSpace)
+        self.bounds = bounds
     }
     func updateWithModel() {
         if model.rgbColorSpace != hueCircle.rgbColorSpace {
@@ -707,7 +651,7 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
         slColorGradientView.gradient?.colorCompositions = cs
         slBlackWhiteGradientView.gradient?.locations = [0, y, y, 1]
         
-        colorFormView.fillColor = model
+        fillColor = model
     }
     private func updateWithColorSpace() {
         let cs = [Composition(value: Color(white: 0), opacity: 1),
@@ -715,7 +659,7 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
                   Composition(value: Color(white: 1), opacity: 0),
                   Composition(value: Color(white: 1), opacity: 1)]
         slBlackWhiteGradientView.gradient?.colorCompositions = cs
-        hueCircle = HueCircle(lineWidth: hueLineWidth,
+        hueCircle = HueCircle(lineWidth: Layouter.movableLineWidth,
                               bounds: hueDrawView.bounds,
                               rgbColorSpace: model.rgbColorSpace)
     }

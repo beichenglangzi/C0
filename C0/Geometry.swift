@@ -173,7 +173,8 @@ extension Geometry {
             return Point(x: p.x + dp.x * ds, y: p.y + dp.y * ds)
         }
         let newLines = lines.map { $0.warpedWith(deltaPoint: dp, controlPoint: controlPoint,
-                                                 minDistance: minDistance, maxDistance: maxDistance) }
+                                                 minDistance: minDistance,
+                                                 maxDistance: maxDistance) }
         return Geometry(lines: newLines)
     }
     
@@ -451,7 +452,6 @@ extension Geometry {
     
     static func view(with geometries: [Geometry], color: Color) -> View {
         let fillColor: Color = {
-            var color = color
             return color
         } ()
         let view = View(path: Path())
@@ -493,9 +493,6 @@ extension Geometry: Interpolatable {
         let lines = [Line].lastMonospline(f0.lines, f1.lines, f2.lines, with: ms)
         return Geometry(lines: lines)
     }
-}
-extension Geometry: Referenceable {
-    static let name = Text(english: "Geometry", japanese: "ジオメトリ")
 }
 extension Geometry: Codable {
     init(from decoder: Decoder) throws {

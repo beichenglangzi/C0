@@ -21,7 +21,7 @@ import CoreGraphics
 
 struct Drawing: Codable, Equatable {
     var lines = [Line]()
-    
+    //membranes
     static let lineWidth = 1.0.cg
 }
 extension Drawing {
@@ -311,8 +311,6 @@ extension Drawing {
     }
 }
 extension Drawing {
-    private static let editPointRadius = 0.5.cg, lineEditPointRadius = 1.5.cg
-    private static let pointEditPointRadius = 3.0.cg
     func jointedPointViews() -> [View] {
         var capPointDic = [Point: Bool]()
         for line in lines {
@@ -329,9 +327,8 @@ extension Drawing {
             }
         }
         func jointedView(for p: Point) -> View {
-            let view = View()
+            let view = View.knob
             view.fillColor = .red
-            view.radius = 3
             view.position = p
             return view
         }
@@ -339,7 +336,7 @@ extension Drawing {
         return capPointDic.compactMap { $0.value ? jointedView(for: $0.key) : nil }
     }
 }
-extension Drawing: KeyframeValue {
+extension Drawing: Interpolatable {
     static func linear(_ f0: Drawing, _ f1: Drawing, t: Real) -> Drawing {
         let lines = [Line].linear(f0.lines, f1.lines, t: t)
         return Drawing(lines: lines)
@@ -360,28 +357,8 @@ extension Drawing: KeyframeValue {
         return Drawing(lines: lines)
     }
 }
-extension Drawing: Referenceable {
-    static let name = Text(english: "Drawing", japanese: "ドローイング")
-}
-extension Drawing: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect) -> View {
-        let thumbnailView = View(drawClosure: { self.draw(with: $2, in: $0) })
-        //isEmpty -> Empty
-        thumbnailView.frame = frame
-        return thumbnailView
-    }
-    func draw(with bounds: Rect, in ctx: CGContext) {
-        let imageBounds = self.imageBounds(withLineWidth: 1)
-        let centering = AffineTransform.centering(from: imageBounds, to: bounds.inset(by: 5))
-        let view = View()
-        view.bounds = bounds
-        //        ctx.concatenate(centering.affine)
-        //        draw(lineWidth: 0.5 / centering.scale, lineColor: Color.strokeLine, in: ctx)
-        //        drawDraft(lineWidth: 0.5 / centering.scale, lineColor: Color.draft, in: ctx)
-    }
-}
 extension Drawing: Viewable {
-    func standardViewWith<T: BinderProtocol>
+    func viewWith<T: BinderProtocol>
         (binder: T, keyPath: ReferenceWritableKeyPath<T, Drawing>) -> ModelView {
         
         return DrawingView(binder: binder, keyPath: keyPath)
@@ -429,109 +406,20 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     override func at(_ p: Point) -> View? {
         guard let nearest = model.nearest(at: p, isVertex: false),
-            nearest.minDistance² < 100 else {
-            
+            nearest.minDistance² < Layouter.movablePadding ** 2 else {
                 return containsPath(p) ? self : nil
         }
         
-        switch nearest.result {
-        case .linePoint(let linePoint):
-            return children[linePoint.lineIndex].children[linePoint.pointIndex]
-        case .lineCapResult(let lineCapResult):
-            if let lineCap = lineCapResult.lineCapsItem.lineCaps.first {
-                return children[lineCap.lineIndex].children[lineCap.pointIndex]
-            } else {
-                return containsPath(p) ? self : nil
-            }
-        }
-//        nearest.result
-//        return children[nearest.lineIndex].children[nearest.pointIndex]
-    }
-}
-extension DrawingView: Newable {
-    func new(for p: Point, _ version: Version) {
-        guard let nearestResult = model.nearest(at: p, isVertex: false)?.result else { return }
-        switch nearestResult {
-        case .linePoint(let linePoint):
-            let lines = [linePoint.line]// -> selection
-            let geometry = Geometry(lines: lines, scale: viewScale)
-            guard !geometry.isEmpty else { return }
-            //remove Lines
-            //insertCell
-        default: break
-        }
-    }
-}
-extension DrawingView: Strokable {
-    func makeViewStroker() -> ViewStroker {
-        return DrawingViewStroker(self)
-    }
-}
-
-final class DrawingViewStroker<T: BinderProtocol>: ViewStroker {
-    var view: View & Strokable {
-        return drawingView
-    }
-    
-    var drawingView: DrawingView<T>
-    
-    init(_ drawingView: DrawingView<T>) {
-        self.drawingView = drawingView
-    }
-    
-    func convertToCurrentLocal(_ point: Point) -> Point {
-        return point
-    }
-    
-    var viewScale: Real {
-        get { return drawingView.viewScale }
-        set { drawingView.viewScale = newValue }
-    }
-    
-    var lineView: LineView<T>?
-    func insert(_ line: Line, to version: Version) {
-        drawingView.binder[keyPath: drawingView.keyPath].lines.append(line)
-        let index = drawingView.model.lines.count - 1
-        let lineView = LineView(binder: drawingView.binder,
-                                keyPath: drawingView.keyPath.appending(path: \Drawing.lines[index]))
-        lineView.fillColor = .black
-        drawingView.append(child: lineView)
-        self.lineView = lineView
-    }
-    
-    func update(_ line: Line) {
-        lineView?.model = line
-    }
-}
-
-final class CompactDrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
-    typealias Model = Drawing
-    typealias Binder = T
-    var binder: Binder {
-        didSet { updateWithModel() }
-    }
-    var keyPath: BinderKeyPath {
-        didSet { updateWithModel() }
-    }
-    var notifications = [((CompactDrawingView<Binder>, BasicNotification) -> ())]()
-    
-    init(binder: T, keyPath: BinderKeyPath) {
-        self.binder = binder
-        self.keyPath = keyPath
-        
-        super.init(isLocked: false)
-        updateWithModel()
-    }
-    
-    var minSize: Size {
-        return Size(square: 2)
-    }
-    func updateWithModel() {
-        fillColor = model.isEmpty ? nil : .subContent
-    }
-}
-extension CompactDrawingView: CollectionAssignable {
-    func remove(for p: Point, _ version: Version) {
-        push(Model(), to: version)
+//        switch nearest.result {
+//        case .linePoint(let linePoint):
+//            return children[linePoint.lineIndex].children[linePoint.pointIndex]
+//        case .lineCapResult(let lineCapResult):
+//            if let lineCap = lineCapResult.lineCapsItem.lineCaps.first {
+//                return children[lineCap.lineIndex].children[lineCap.pointIndex]
+//            } else {
+//                return containsPath(p) ? self : nil
+//            }
+//        }
+        return nil
     }
 }

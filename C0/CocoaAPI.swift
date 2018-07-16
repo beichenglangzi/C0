@@ -90,27 +90,33 @@ final class C0Application: NSApplication {
     
     func updateString(with locale :Locale) {
         let appName = Bundle.main.infoDictionary?[kCFBundleNameKey as String] as? String ?? "C0"
-        aboutAppItem?.title = Text(english: "About \(appName)",
+        aboutAppItem?.title = Localization(english: "About \(appName)",
             japanese: "\(appName) について").string(with: locale)
-        servicesItem?.title = Text(english: "Services", japanese: "サービス").string(with: locale)
-        hideAppItem?.title = Text(english: "Hide \(appName)",
+        servicesItem?.title = Localization(english: "Services",
+                                           japanese: "サービス").string(with: locale)
+        hideAppItem?.title = Localization(english: "Hide \(appName)",
             japanese: "\(appName) を隠す").string(with: locale)
-        hideOthersItem?.title = Text(english: "Hide Others", japanese: "ほかを隠す").string(with: locale)
-        showAllItem?.title = Text(english: "Show All", japanese: "すべてを表示").string(with: locale)
-        quitAppItem?.title = Text(english: "Quit \(appName)",
+        hideOthersItem?.title = Localization(english: "Hide Others",
+                                             japanese: "ほかを隠す").string(with: locale)
+        showAllItem?.title = Localization(english: "Show All",
+                                          japanese: "すべてを表示").string(with: locale)
+        quitAppItem?.title = Localization(english: "Quit \(appName)",
             japanese: "\(appName) を終了").string(with: locale)
-        fileMenu?.title = Text(english: "File", japanese: "ファイル").string(with: locale)
-        newItem?.title = Text(english: "New", japanese: "新規").string(with: locale)
-        openItem?.title = Text(english: "Open…", japanese: "開く…").string(with: locale)
-        saveAsItem?.title = Text(english: "Save As…", japanese: "別名で保存…").string(with: locale)
-        openRecentItem?.title = Text(english: "Open Recent",
+        fileMenu?.title = Localization(english: "File", japanese: "ファイル").string(with: locale)
+        newItem?.title = Localization(english: "New", japanese: "新規").string(with: locale)
+        openItem?.title = Localization(english: "Open…", japanese: "開く…").string(with: locale)
+        saveAsItem?.title = Localization(english: "Save As…",
+                                         japanese: "別名で保存…").string(with: locale)
+        openRecentItem?.title = Localization(english: "Open Recent",
                                      japanese: "最近使った項目を開く").string(with: locale)
-        closeItem?.title = Text(english: "Close", japanese: "閉じる").string(with: locale)
-        saveItem?.title = Text(english: "Save…", japanese: "保存…").string(with: locale)
-        windowMenu?.title = Text(english: "Window", japanese: "ウインドウ").string(with: locale)
-        minimizeItem?.title = Text(english: "Minimize", japanese: "しまう").string(with: locale)
-        zoomItem?.title = Text(english: "Zoom", japanese: "拡大／縮小").string(with: locale)
-        bringAllToFrontItem?.title = Text(english: "Bring All to Front",
+        closeItem?.title = Localization(english: "Close", japanese: "閉じる").string(with: locale)
+        saveItem?.title = Localization(english: "Save…", japanese: "保存…").string(with: locale)
+        windowMenu?.title = Localization(english: "Window",
+                                         japanese: "ウインドウ").string(with: locale)
+        minimizeItem?.title = Localization(english: "Minimize",
+                                           japanese: "しまう").string(with: locale)
+        zoomItem?.title = Localization(english: "Zoom", japanese: "拡大／縮小").string(with: locale)
+        bringAllToFrontItem?.title = Localization(english: "Bring All to Front",
                                           japanese: "すべてを手前に移動").string(with: locale)
     }
     
@@ -129,9 +135,6 @@ final class TestDocument {
     }
 }
 
-/**
- Issue: NSDocument廃止
- */
 final class C0Document: NSDocument, NSWindowDelegate {
     let rootDataModelKey = "root"
     var rootDataModel: DataModel {
@@ -194,7 +197,6 @@ final class C0Document: NSDocument, NSWindowDelegate {
         let windowController = storyboard
             .instantiateController(withIdentifier: identifier) as! NSWindowController
         addWindowController(windowController)
-        window.acceptsMouseMovedEvents = true
         c0View = windowController.contentViewController!.view as? C0View
         
         if let desktopDataModel = rootDataModel.children[c0View.desktopBinder.dataModelKey] {
@@ -221,9 +223,11 @@ final class C0Document: NSDocument, NSWindowDelegate {
         
         c0View.desktopBinder.diffDesktopDataModel.isWrite = false
         
-        c0View.desktopView.copiedObjectsView.valuesView.push(NSPasteboard.general.copiedObjects,
-                                                             to: c0View.desktopView.version)
-        c0View.desktopView.copiedObjectsView.notifications.append({ [unowned self] _, _ in
+        if let copiedObject = NSPasteboard.general.copiedObjects.first {
+            c0View.desktopView.copiedObjectView.push(copiedObject,
+                                                     to: c0View.desktopView.version)
+        }
+        c0View.desktopView.copiedObjectView.notifications.append({ [unowned self] _, _ in
             self.didSetCopiedObjects()
         })
     }
@@ -266,8 +270,10 @@ final class C0Document: NSDocument, NSWindowDelegate {
         let pasteboard = NSPasteboard.general
         if pasteboard.changeCount != oldChangeCountWithPsteboard {
             oldChangeCountWithPsteboard = pasteboard.changeCount
-            c0View.desktopView.copiedObjectsView.valuesView.push(pasteboard.copiedObjects,
-                                                                 to: c0View.desktopView.version)
+            if let copiedObject = pasteboard.copiedObjects.first {
+                c0View.desktopView.copiedObjectView.push(copiedObject,
+                                                         to: c0View.desktopView.version)
+            }
             oldChangeCountWithCopiedObjects = changeCountWithCopiedObjects
         }
     }
@@ -275,7 +281,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
         if oldChangeCountWithCopiedObjects != changeCountWithCopiedObjects {
             oldChangeCountWithCopiedObjects = changeCountWithCopiedObjects
             let pasteboard = NSPasteboard.general
-            pasteboard.set(copiedObjects: desktop.copiedObjects.values)
+            pasteboard.set(copiedObjects: [desktop.copiedObject])
             oldChangeCountWithPsteboard = pasteboard.changeCount
         }
     }
@@ -300,8 +306,6 @@ extension NSPasteboard {
             urls.forEach {
                 if let image = Image(url: $0) {
                     copiedObjects.append(Object(image))
-                } else {
-                    copiedObjects.append(Object($0))
                 }
             }
         }
@@ -402,24 +406,19 @@ protocol CocoaKeyInputtable {
     func insertText(_ string: Any, replacementRange: NSRange)
 }
 
-/**
- Issue: トラックパッドの環境設定を無効化
- */
 final class C0View: NSView, NSTextInputClient {
     let sender: Sender
     let desktopBinder: DesktopBinder
     let desktopView: DesktopView<DesktopBinder>
     
-    private let isHiddenActionListKey = "isHiddenActionListKey"
-    
     override init(frame frameRect: NSRect) {
         fatalError()
     }
     required init?(coder: NSCoder) {
-        let desktop = Desktop()
+        var desktop = Desktop()
+        desktop.objects += [Object(ActionList().layoutsAndSize.layouts)]
         desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
-        desktopView.objectsView.valuesView.newableValue = Scene()
         sender = Sender(rootView: desktopView)
         
         dragManager = DragManager(sender: sender, clickType: .click, dragType: .drag)
@@ -427,7 +426,7 @@ final class C0View: NSView, NSTextInputClient {
         super.init(coder: coder)
         setup()
     }
-    private var token: NSObjectProtocol?, localToken: NSObjectProtocol?
+    private var token: NSObjectProtocol?
     func setup() {
         acceptsTouchEvents = true
         wantsLayer = true
@@ -435,18 +434,7 @@ final class C0View: NSView, NSTextInputClient {
         
         desktopView.allChildrenAndSelf { $0.contentsScale = layer.contentsScale }
         
-        desktopView.isHiddenActionListView.notifications.append({ [unowned self] view, _ in
-            UserDefaults.standard.set(view.model,
-                                      forKey: self.isHiddenActionListKey)
-        })
-        desktopView.model.isHiddenActionList
-            = UserDefaults.standard.bool(forKey: isHiddenActionListKey)
-        
         let nc = NotificationCenter.default
-        localToken = nc.addObserver(forName: NSLocale.currentLocaleDidChangeNotification,
-                                    object: nil,
-                                    queue: nil) { [unowned self] _ in
-                                        self.sender.locale = .current }
         token = nc.addObserver(forName: NSView.frameDidChangeNotification,
                                object: self,
                                queue: nil) { ($0.object as? C0View)?.updateFrame() }
@@ -459,9 +447,6 @@ final class C0View: NSView, NSTextInputClient {
     deinit {
         if let token = token {
             NotificationCenter.default.removeObserver(token)
-        }
-        if let localToken = localToken {
-            NotificationCenter.default.removeObserver(localToken)
         }
     }
     
@@ -477,8 +462,7 @@ final class C0View: NSView, NSTextInputClient {
     
     override func viewDidChangeBackingProperties() {
         if let backingScaleFactor = window?.backingScaleFactor {
-            Screen.shared.backingScaleFactor = backingScaleFactor
-            desktopView.contentsScale = backingScaleFactor
+            desktopView.allChildrenAndSelf { $0.contentsScale = backingScaleFactor }
         }
     }
     
@@ -536,7 +520,7 @@ final class C0View: NSView, NSTextInputClient {
                                  time: nsEvent.timestamp.cg,
                                  scrollDeltaPoint: Point(x: nsEvent.scrollingDeltaX,
                                                          y: -nsEvent.scrollingDeltaY),
-                                 phase: phase,
+                                 phase: scrollMomentumPhase ?? phase,
                                  momentumPhase: scrollMomentumPhase)
     }
     func pinchEventValueWith(_ nsEvent: NSEvent, _ phase: Phase) -> PinchEvent.Value {
@@ -581,21 +565,16 @@ final class C0View: NSView, NSTextInputClient {
     override func keyDown(with nsEvent: NSEvent) {
         guard !nsEvent.isARepeat else { return }
         if let key = nsEvent.key {
-            sender.send(InputEvent(type: key, value: inputEventValueWith(nsEvent, .began)))
+            let eventValue = inputEventValueWith(nsEvent, .began)
+            sender.send(InputEvent(type: key, value: eventValue))
+            editingStringView = desktopView.at(eventValue.rootLocation,
+                                               (View & CocoaKeyInputtable).self)
         }
     }
     override func keyUp(with nsEvent: NSEvent) {
         if let key = nsEvent.key {
             sender.send(InputEvent(type: key, value: inputEventValueWith(nsEvent, .ended)))
         }
-    }
-    
-    override func cursorUpdate(with nsEvent: NSEvent) {
-        super.cursorUpdate(with: nsEvent)
-        mouseMoved(with: nsEvent)
-    }
-    override func mouseMoved(with nsEvent: NSEvent) {
-        sender.sendPointing(dragEventValueWith(pointing: nsEvent))
     }
     
     private final class DragManager {
@@ -616,7 +595,6 @@ final class C0View: NSView, NSTextInputClient {
         private var workItem: DispatchWorkItem?, beganDragEvent: DragEvent?
         
         func mouseDown(with nsEvent: NSEvent, _ view: C0View) {
-            sender.sendPointing(view.dragEventValueWith(pointing: nsEvent))
             let beganDragEvent = DragEvent(type: dragType,
                                            value: view.dragEventValueWith(nsEvent, .began))
             self.beganDragEvent = beganDragEvent
@@ -630,7 +608,6 @@ final class C0View: NSView, NSTextInputClient {
                                           execute: workItem)
         }
         func mouseDragged(with nsEvent: NSEvent, _ view: C0View) {
-            sender.sendPointing(view.dragEventValueWith(pointing: nsEvent))
             if workItem != nil {
                 workItem?.perform()
             }
@@ -646,7 +623,6 @@ final class C0View: NSView, NSTextInputClient {
                 
                 guard let beganDragEvent = beganDragEvent else { return }
                 if beganDragEvent.value.rootLocation != endedDragEvent.value.rootLocation {
-                    sender.sendPointing(view.dragEventValueWith(pointing: nsEvent))
                     sender.send(beganDragEvent)
                     sender.send(endedDragEvent)
                 } else {
@@ -661,7 +637,6 @@ final class C0View: NSView, NSTextInputClient {
                     sender.send(clickEventWith(beganDragEvent, .ended))
                 }
             } else {
-                sender.sendPointing(view.dragEventValueWith(pointing: nsEvent))
                 sender.send(endedDragEvent)
             }
         }
@@ -682,16 +657,13 @@ final class C0View: NSView, NSTextInputClient {
     private let dragManager: DragManager
     
     override func mouseDown(with nsEvent: NSEvent) {
-        sender.sendPointing(dragEventValueWith(pointing: nsEvent))
         sender.send(DragEvent(type: .drag, value: dragEventValueWith(nsEvent, .began)))
     }
     override func mouseDragged(with nsEvent: NSEvent) {
-        sender.sendPointing(dragEventValueWith(pointing: nsEvent))
         sender.send(DragEvent(type: .drag, value: dragEventValueWith(nsEvent, .changed)))
     }
     override func mouseUp(with nsEvent: NSEvent) {
         sender.send(DragEvent(type: .drag, value: dragEventValueWith(nsEvent, .ended)))
-        sender.sendPointing(dragEventValueWith(pointing: nsEvent))
     }
     
     private var beginTouchesNormalizedPosition = Point()
@@ -780,12 +752,7 @@ final class C0View: NSView, NSTextInputClient {
             inputContext?.handleEvent(nsEvent)
         }
     }
-    var indicatedVView: View {
-        return sender.mainIndicatedView
-    }
-    var editingStringView: CocoaKeyInputtable? {
-        return indicatedVView as? CocoaKeyInputtable
-    }
+    var editingStringView: (View & CocoaKeyInputtable)?
     func hasMarkedText() -> Bool {
         return editingStringView?.hasMarkedText ?? false
     }
@@ -815,7 +782,7 @@ final class C0View: NSView, NSTextInputClient {
     }
     func characterIndex(for point: NSPoint) -> Int {
         if let stringView = editingStringView {
-            let p = indicatedVView.convertFromRoot(convertFromTopScreen(point))
+            let p = stringView.convertFromRoot(convertFromTopScreen(point))
             return stringView.editingCharacterIndex(for: p)
         } else {
             return 0
@@ -824,7 +791,7 @@ final class C0View: NSView, NSTextInputClient {
     func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
         if let stringView = editingStringView {
             let rect = stringView.firstRect(forCharacterRange: range, actualRange: actualRange)
-            return convertToTopScreen(indicatedVView.convertToRoot(rect))
+            return convertToTopScreen(stringView.convertToRoot(rect))
         } else {
             return NSRect()
         }
@@ -834,7 +801,7 @@ final class C0View: NSView, NSTextInputClient {
     }
     func fractionOfDistanceThroughGlyph(for point: NSPoint) -> Real {
         if let stringView = editingStringView {
-            let p = indicatedVView.convertFromRoot(convertFromTopScreen(point))
+            let p = stringView.convertFromRoot(convertFromTopScreen(point))
             return stringView.characterFraction(for: p)
         } else {
             return 0
@@ -910,14 +877,14 @@ protocol FileTypeProtocol {
 }
 extension URL {
     struct File {
-        var url: URL, name: Text, isExtensionHidden: Bool
+        var url: URL, name: Localization, isExtensionHidden: Bool
         
         var attributes: [FileAttributeKey: Any] {
             return [.extensionHidden: isExtensionHidden]
         }
     }
-    static func file(message: Text? = nil,
-                     name: Text? = nil,
+    static func file(message: Localization? = nil,
+                     name: Localization? = nil,
                      fileTypes: [FileTypeProtocol],
                      completionClosure closure: @escaping (URL.File) -> (Void)) {
         guard let window = NSApp.mainWindow else { return }
@@ -931,7 +898,7 @@ extension URL {
         savePanel.beginSheetModal(for: window) { [unowned savePanel] result in
             if result == .OK, let url = savePanel.url {
                 closure(URL.File(url: url,
-                                 name: Text(savePanel.nameFieldStringValue),
+                                 name: Localization(savePanel.nameFieldStringValue),
                                  isExtensionHidden: savePanel.isExtensionHidden))
             }
         }

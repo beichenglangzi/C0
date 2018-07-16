@@ -23,7 +23,8 @@ struct EnumOption<Model: EnumType> {
     var cationModels: [Model]
     let indexClosure: ((Model.RawValue) -> (Int))
     let rawValueClosure: ((Int) -> (Model.RawValue?))
-    let names: [Text]
+    let title: Localization
+    let names: [Localization]
     
     func index(with model: Model) -> Int {
         return indexClosure(model.rawValue)
@@ -54,9 +55,8 @@ final class EnumView<T: EnumType, U: BinderProtocol>: ModelView, BindableReceive
         didSet { updateWithModel() }
     }
     
-    let classNameView: TextFormView
-    let nameViews: [TextFormView]
-    let knobView: View
+    let stringView: StringFormView
+    let nameViews: [StringFormView]
     
     init(binder: Binder, keyPath: BinderKeyPath, option: ModelOption,
          isUninheritance: Bool = false) {
@@ -65,35 +65,33 @@ final class EnumView<T: EnumType, U: BinderProtocol>: ModelView, BindableReceive
         self.keyPath = keyPath
         self.option = option
         
-        let className = isUninheritance ? Model.uninheritanceName : Model.name
-        classNameView = TextFormView(text: className, font: .bold)
+        stringView = StringFormView(string: option.title.currentString, font: .bold)
         nameViews = option.names.map {
-            TextFormView(text: $0, paddingSize: Size(width: 4, height: 1))
+            StringFormView(string: $0.currentString, paddingSize: Size(width: 4, height: 1))
         }
-        knobView = View.discreteKnob(Size(square: 8), lineWidth: 1)
         
         super.init(isLocked: false)
         nameViews.forEach { $0.fillColor = nil }
-        children = [classNameView, knobView] + nameViews
+        children = [stringView] + nameViews
         updateWithModel()
     }
     
     var minSize: Size {
-        let padding = Layouter.basicPadding, height = Layouter.basicHeight
+        let padding = Layouter.padding, height = Layouter.textPaddingHeight
         let np = Real(nameViews.count - 1) * padding
         let nw = nameViews.reduce(0.0.cg) { $0 + $1.minSize.width } + np
-        return Size(width: classNameView.minSize.width + nw + padding * 3, height: height)
+        return Size(width: stringView.minSize.width + nw + padding * 3, height: height)
     }
     override func updateLayout() {
-        let padding = Layouter.basicPadding
-        let classNameSize = classNameView.minSize
+        let padding = Layouter.padding
+        let classNameSize = stringView.minSize
         let classNameOrigin = Point(x: padding,
                                     y: bounds.height - classNameSize.height - padding)
-        classNameView.frame = Rect(origin: classNameOrigin, size: classNameSize)
+        stringView.frame = Rect(origin: classNameOrigin, size: classNameSize)
         
-        let h = Layouter.basicHeight - padding * 2
+        let h = Layouter.textPaddingHeight - padding * 2
         var y = bounds.height - padding - h
-        _ = nameViews.reduce(classNameView.frame.maxX + padding) {
+        _ = nameViews.reduce(stringView.frame.maxX + padding) {
             let x: Real
             let minSize = $1.minSize
             if $0 + minSize.width + padding > bounds.width {
@@ -105,30 +103,15 @@ final class EnumView<T: EnumType, U: BinderProtocol>: ModelView, BindableReceive
             $1.frame = Rect(origin: Point(x: x, y: y), size: minSize)
             return x + minSize.width + padding
         }
-        
-        updateKnobLayout()
-    }
-    private func updateKnobLayout() {
-        let index = option.index(with: model)
-        knobView.frame = nameViews[index].frame
     }
     func updateWithModel() {
-        updateKnobLayout()
         let index = option.index(with: model)
-        nameViews.forEach {
-            $0.lineColor = .subContent
-        }
-        if !option.cationModels.isEmpty {
-            knobView.lineColor = knobLineColor
-        }
-        nameViews[index].lineColor = nil
-        nameViews.enumerated().forEach {
-            $0.element.textMaterial.color = $0.offset == index ? .locked : .subLocked
-        }
+        nameViews.forEach { $0.lineColor = nil }
+        nameViews[index].lineColor = editingLineColor
     }
     
-    var knobLineColor: Color {
-        return option.cationModels.contains(model) ? .warning : .getSetBorder
+    var editingLineColor: Color {
+        return option.cationModels.contains(model) ? .warning : .content
     }
     func model(at p: Point) -> T {
         var minI = 0, minD = Real.infinity
@@ -142,13 +125,10 @@ final class EnumView<T: EnumType, U: BinderProtocol>: ModelView, BindableReceive
         return option.model(at: minI) ?? model
     }
 }
-extension EnumView: Runnable {
-    func run(for p: Point, _ version: Version) {
-        push(model(at: p), to: version)
-    }
-}
 extension EnumView: BasicPointMovable {
     func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
-        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
+        notifications.forEach {
+            $0(self, .didChangeFromPhase(phase, beginModel: beganModel))
+        }
     }
 }

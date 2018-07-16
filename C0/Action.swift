@@ -18,17 +18,12 @@
  */
 
 struct Action {
-    let name: Text, description: Text, quasimode: Quasimode, isEditable: Bool
+    let name: Localization, quasimode: Quasimode, isEditable: Bool
     
-    init(name: Text = "", description: Text = "", quasimode: Quasimode, isEditable: Bool = true) {
+    init(name: Localization, quasimode: Quasimode, isEditable: Bool = true) {
         self.name = name
-        self.description = description
         self.quasimode = quasimode
         self.isEditable = isEditable
-    }
-    
-    var quasimodeDisplayText: Text {
-        return quasimode.displayText
     }
 }
 extension Action: Equatable {
@@ -36,154 +31,189 @@ extension Action: Equatable {
         return lhs.name.base == rhs.name.base
     }
 }
-extension Action: Referenceable {
-    static let name = Text(english: "Action", japanese: "アクション")
-}
 
-protocol SubActionList: SubSendable {
-    var actions: [Action] { get }
+struct ActionMap {
+    var action: Action, phase: Phase, events: [EventProtocol]
+    
+    init?<T: Event>(_ event: T, _ eventMap: EventMap, _ actions: [Action]) {
+        func containsEventType(with algebraicEventTypes: [AlgebraicEventType]) -> Bool {
+            for algebraicEventType in algebraicEventTypes {
+                if algebraicEventType.contains(event.type) {
+                    return true
+                }
+            }
+            return false
+        }
+        func containsEvents(with algebraicEventTypes: [AlgebraicEventType]) -> Bool {
+            for algebraicEventType in algebraicEventTypes {
+                func containsEventType(_ eventProtocol: EventProtocol) -> Bool {
+                    return algebraicEventType.contains(eventProtocol.protocolType)
+                }
+                if !eventMap.events.contains(where: containsEventType) {
+                    return false
+                }
+            }
+            return true
+        }
+        
+        var hitActions = [Action]()
+        for action in actions {
+            guard containsEventType(with: action.quasimode.eventTypes) else { continue }
+            if containsEvents(with: action.quasimode.allEventTypes) {
+                hitActions.append(action)
+            }
+        }
+        let maxAction = hitActions.max {
+            $0.quasimode.allEventTypes.count < $1.quasimode.allEventTypes.count
+        }
+        guard let action = maxAction else {
+            return nil
+        }
+        
+        let actionEventTypes = action.quasimode.eventTypes
+        var actionEvents = [EventProtocol]()
+        actionEvents.reserveCapacity(actionEventTypes.count)
+        for actionEventType in actionEventTypes {
+            func containsEventType(_ eventProtocol: EventProtocol) -> Bool {
+                return actionEventType.contains(eventProtocol.protocolType)
+            }
+            if let index = eventMap.events.index(where: containsEventType) {
+                actionEvents.append(eventMap.events[index])
+            } else {
+                return nil
+            }
+        }
+        self.action = action
+        phase = event.value.phase
+        events = actionEvents
+    }
+    
+    func eventValuesWith<T: Event>(_ action: Action, _ type: T.Type) -> [T.Value] {
+        if self.action == action {
+            return events.compactMap { ($0 as? T)?.value }
+        } else {
+            return []
+        }
+    }
+    func eventValues<T: Event>(with type: T.Type) -> [T.Value] {
+        return events.compactMap { ($0 as? T)?.value }
+    }
+    func contains<T: Event>(_ event: T) -> Bool {
+        func isEqual(_ lhsProtocol: EventProtocol) -> Bool {
+            let rhs = event.type
+            if let lhs = lhsProtocol.protocolType as? T.EventType {
+                return lhs == rhs
+            } else {
+                return false
+            }
+        }
+        return events.contains(where: isEqual)
+    }
+    mutating func replace<T: Event>(_ event: T) {
+        func isEqual(_ lhsProtocol: EventProtocol) -> Bool {
+            let rhs = event.type
+            if let lhs = lhsProtocol.protocolType as? T.EventType {
+                return lhs == rhs
+            } else {
+                return false
+            }
+        }
+        if let index = events.index(where: isEqual) {
+            events[index] = event
+            phase = event.value.phase
+        }
+    }
 }
 
 struct ActionList {
-    let selectableActionList = SelectableActionList()
-    let zoomableActionList = ZoomableActionList()
-    let undoableActionList = UndoableActionList()
-    let assignableActionList = AssignableActionList()
-    let runnableActionList = RunnableActionList()
-    let strokableActionList = StrokableActionList()
-    let movableActionList = MovableActionList()
+    let zoomAction = Action(name: Localization(english: "Zoom", japanese: "ズーム"),
+                            quasimode: Quasimode([.pinch(.pinch)]),
+                            isEditable: false)
     
-    let subActionLists: [SubActionList]
-    let actions: [Action]
+    //timeLeapAction
+    let undoAction = Action(name: Localization(english: "Undo", japanese: "取り消す"),
+                            quasimode: Quasimode(modifier: [.input(.command)],
+                                                 [.input(.z)]))
+    let redoAction = Action(name: Localization(english: "Redo", japanese: "やり直す"),
+                            quasimode: Quasimode(modifier: [.input(.shift),
+                                                            .input(.command)],
+                                                 [.input(.z)]))
     
+    //delete
+    let cutAction = Action(name: Localization(english: "Cut", japanese: "カット"),
+                           quasimode: Quasimode(modifier: [.input(.command)],
+                                                [.input(.x)]))
+    let copyAction = Action(name: Localization(english: "Copy", japanese: "コピー"),
+                            quasimode: Quasimode(modifier: [.input(.command)],
+                                                 [.input(.c)]))
+    let pasteAction = Action(name: Localization(english: "Paste", japanese: "ペースト"),
+                             quasimode: Quasimode(modifier: [.input(.command)],
+                                                  [.input(.v)]))
+    
+    let lockAction = Action(name: Localization(english: "Lock", japanese: "ロック"),
+                            quasimode: Quasimode(modifier: [.input(.command)],
+                                                 [.input(.l)]))
+    let newAction = Action(name: Localization(english: "New", japanese: "新規"),
+                           quasimode: Quasimode(modifier: [.input(.command)],
+                                                [.input(.d)]))
+    let findAction = Action(name: Localization(english: "Find", japanese: "検索"),
+                           quasimode: Quasimode(modifier: [.input(.command)],
+                                                [.input(.f)]))
+    let exportAction = Action(name: Localization(english: "Export", japanese: "書き出す"),
+                              quasimode: Quasimode(modifier: [.input(.command)],
+                                                   [.input(.e)]))
+    
+    let strokeAction = Action(name: Localization(english: "Stroke", japanese: "ストローク"),
+                              quasimode: Quasimode([.drag(.drag)]))
+    let moveAction = Action(name: Localization(english: "Move", japanese: "移動"),
+                            quasimode: Quasimode(modifier: [.input(.shift)],
+                                                 [.drag(.drag)]))
+    //duplicateAction
+    
+    struct Sub {
+        var actions: [Action]
+    }
+    
+    let subs: [Sub], actions: [Action]
     init() {
-        subActionLists = [selectableActionList, zoomableActionList,
-                          undoableActionList, assignableActionList,
-                          runnableActionList, strokableActionList, movableActionList]
-        actions = subActionLists.flatMap { $0.actions }
+        subs = [Sub(actions: [zoomAction]),
+                Sub(actions: [undoAction, redoAction]),
+                Sub(actions: [cutAction, copyAction, pasteAction]),
+                Sub(actions: [lockAction, newAction, findAction, exportAction]),
+                Sub(actions: [strokeAction, moveAction])]
+        actions = subs.flatMap { $0.actions }
     }
 }
-extension ActionList: Referenceable {
-    static let name = Text(english: "Action List", japanese: "アクション一覧")
-}
-
-final class ActionFormView: View, LayoutMinSize {
-    var action: Action
-    
-    var nameView: TextFormView, quasimodeDisplayTextView: TextFormView
-    
-    init(action: Action) {
-        self.action = action
-        
-        nameView = TextFormView(text: action.name)
-        quasimodeDisplayTextView = TextFormView(text: action.quasimode.displayText,
-                                                font: Font(monospacedSize: 10),
-                                                alignment: .right)
-        
-        super.init()
-        lineColor = .formBorder
-        children = [nameView, quasimodeDisplayTextView]
-    }
-    
-    var minSize: Size {
-        let nameViewMinSize = nameView.minSize
-        let quasimodeDisplayTextMinSize = quasimodeDisplayTextView.minSize
-        let padding = Layouter.basicPadding, smallPadding = Layouter.smallPadding
-        let width = nameViewMinSize.width + padding + quasimodeDisplayTextMinSize.width
-        let height = nameViewMinSize.height + smallPadding * 2
-        return Size(width: width, height: height)
-    }
-    override func updateLayout() {
-        let padding = Layouter.basicPadding, smallPadding = Layouter.smallPadding
-        let nameSize = nameView.minSize, quasimodeSize = quasimodeDisplayTextView.minSize
-        let nameOrigin = Point(x: padding,
-                               y: bounds.height - nameSize.height - smallPadding)
-        nameView.frame = Rect(origin: nameOrigin, size: nameSize)
-        
-        let qx = bounds.width - quasimodeSize.width - padding
-        let qy = bounds.height - nameSize.height - smallPadding
-        quasimodeDisplayTextView.frame = Rect(origin: Point(x: qx, y: qy), size: quasimodeSize)
-    }
-}
-
-final class SubActionListFormView<T: SubActionList>: View, LayoutMinSize {
-    var subActionList: T
-    
-    init(_ subActionList: T) {
-        self.subActionList = subActionList
-        
-        super.init()
-        lineColor = .formBorder
-        children = subActionList.actions.map { ActionFormView(action: $0) }
-    }
-    
-    var minSize: Size {
-        let padding = Layouter.basicPadding
-        let actionHeight = Layouter.basicTextHeight + Layouter.smallPadding * 2
-        let height = actionHeight * Real(subActionList.actions.count) + padding * 2
-        return Size(width: Layouter.propertyWidth, height: height)
-    }
-    override func updateLayout() {
-        let padding = Layouter.basicPadding
-        let ah = Layouter.basicTextHeight + Layouter.smallPadding * 2
-        let aw = bounds.width - padding * 2
-        var y = bounds.height - padding
-        children.forEach {
-            y -= ah
-            $0.frame = Rect(x: padding, y: y, width: aw, height: ah)
+extension ActionList {
+    var layoutsAndSize: (layouts: [Layout<String>], size: Size) {
+        var layouts = [Layout<String>]()
+        var maxNameX = 0.0.cg, y = 0.0.cg
+        for sub in subs {
+            for action in sub.actions {
+                let name = action.name.currentString
+                let view = StringFormView(string: name)
+                view.frame.origin.y = y
+                layouts.append(Layout(name, transform: Transform(translation: Point(x: 0, y: y),
+                                                                 z: 0)))
+                maxNameX = max(maxNameX, view.minSize.width)
+                y -= view.minSize.height
+            }
+            y -= Layouter.padding
         }
-    }
-}
-
-/**
- Hardware Issue: アクションをキーボードとトラックパッドに直接表示
- */
-final class ActionListFormView: View {
-    var actionList: ActionList
-    
-    let selectableActionListView = SubActionListFormView(SelectableActionList())
-    let zoomableActionListView = SubActionListFormView(ZoomableActionList())
-    let undoableActionListView = SubActionListFormView(UndoableActionList())
-    let assignableActionListView = SubActionListFormView(AssignableActionList())
-    let runnableActionListView = SubActionListFormView(RunnableActionList())
-    let movableActionListView = SubActionListFormView(MovableActionList())
-    let strokableActionListView = SubActionListFormView(StrokableActionList())
-    let subActionListViews: [View & LayoutMinSize]
-    
-    let classNameView = TextFormView(text: ActionList.name, font: .bold)
-    var width = 210.0.cg
-    
-    init(actionList: ActionList = ActionList()) {
-        self.actionList = actionList
-        
-        subActionListViews = [selectableActionListView, zoomableActionListView,
-                              undoableActionListView, assignableActionListView,
-                              runnableActionListView, movableActionListView,
-                              strokableActionListView]
-        
-        super.init()
-        lineColor = .formBorder
-        children = [classNameView] + subActionListViews
-    }
-    
-    var minSize: Size {
-        let padding = Layouter.basicPadding
-        let ah = subActionListViews.reduce(0.0.cg) { $0 + $1.minSize.height }
-        let height = classNameView.minSize.height + padding * 3 + ah
-        return Size(width: width + padding * 2, height: height)
-    }
-    override func updateLayout() {
-        let padding = Layouter.basicPadding
-        let w = bounds.width - padding * 2
-        let classNameFitSize = classNameView.minSize
-        var y = bounds.height - classNameFitSize.height - padding
-        classNameView.frame = Rect(origin: Point(x: padding, y: y), size: classNameFitSize)
-        y -= padding
-        _ = subActionListViews.reduce(y) {
-            let h = $1.minSize.height
-            let ny = $0 - h
-            $1.frame = Rect(x: padding, y: ny, width: w, height: h)
-            return ny
+        y = 0
+        let x = maxNameX + Layouter.padding * 2
+        var maxQuasimodeX = 0.0.cg
+        for sub in subs {
+            for action in sub.actions {
+                let quasimode = action.quasimode.displayText.currentString
+                let view = StringFormView(string: quasimode)
+                layouts.append(Layout(quasimode, transform: Transform(translation: Point(x: x, y: y),
+                                                                      z: 0)))
+                maxQuasimodeX = max(maxNameX, view.minSize.width)
+                y -= view.minSize.height
+            }
+            y -= Layouter.padding
         }
+        return (layouts, Size(width: x + maxQuasimodeX, height: -(y + Layouter.padding)))
     }
 }

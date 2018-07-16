@@ -239,31 +239,14 @@ struct Membrane: Codable, Equatable {
 //        }
 //    }
 //}
-//extension Membrane: Referenceable {
-//    static let name = Text(english: "Membrane", japanese: "膜")
-//}
-//extension Membrane: ThumbnailViewable {
-//    func thumbnailView(withFrame frame: Rect) -> View {
-//        let thumbnailView = View(drawClosure: { self.draw(with: $2, in: $0) })
-//        thumbnailView.frame = frame
-//        return thumbnailView
-//    }
-//    func draw(with bounds: Rect, in ctx: CGContext) {
-//        let c = AffineTransform.centering(from: allImageBounds, to: bounds.inset(by: 3))
-//        let view = self.view()
-//        view.transform = Transform(translation: Point(), scale: c.scale, rotation: 0)
-//        return view
-//    }
-//}
 //extension Membrane: Viewable {
-//    func standardViewWith<T: BinderProtocol>
+//    func viewWith<T: BinderProtocol>
 //        (binder: T, keyPath: ReferenceWritableKeyPath<T, Membrane>) -> ModelView {
 //        
 //        return MiniView(binder: binder, keyPath: keyPath)
 //    }
 //}
 //extension Membrane: ObjectViewable {}
-//
 //
 //struct MembraneFrame: Codable, Equatable {
 //    var geometry: Geometry, material: Material

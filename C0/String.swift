@@ -26,7 +26,6 @@ extension String {
     func union(_ other: String, space: String = " ") -> String {
         return other.isEmpty ? self : (isEmpty ? other : self + space + other)
     }
-    
     var calculate: String {
         let expressionValue = NSExpression(format: self).expressionValue(with: nil, context: nil)
         return (expressionValue as? NSNumber)?.stringValue ?? "Error"
@@ -39,30 +38,8 @@ extension String {
         }
     }
 }
-extension String: Referenceable {
-    static let name = Text(english: "String", japanese: "文字")
-}
-extension String: AnyInitializable {
-    init?(anyValue: Any) {
-        switch anyValue {
-        case let value as String: self = value
-        case let value as Bool: self = String(value)
-        case let value as Int: self = String(value)
-        case let value as Rational: self = String(value)
-        case let value as Real: self = String(value)
-        default: return nil
-        }
-    }
-}
-extension String: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect) -> View {
-        let view = TextFormView(text: Text(self), font: .small)
-        view.frame = frame
-        return view
-    }
-}
 extension String: Viewable {
-    func standardViewWith<T: BinderProtocol>
+    func viewWith<T: BinderProtocol>
         (binder: T, keyPath: ReferenceWritableKeyPath<T, String>) -> ModelView {
         
         return StringView(binder: binder, keyPath: keyPath, lineBreakWidth: 400)
@@ -87,77 +64,77 @@ extension String: Interpolatable {
     }
 }
 
-protocol Namable {
-    var name: String { get }
+protocol KeyInputtable {
+    func insert(_ string: String, for p: Point, _ version: Version)
 }
 
-final class StringGetterView<T: BinderProtocol>: ModelView, BindableGetterReceiver {
-    typealias Model = String
-    typealias Binder = T
-    var binder: Binder {
-        didSet { updateWithModel() }
-    }
-    var keyPath: BinderKeyPath {
-        didSet { updateWithModel() }
+final class StringFormView: View {
+    var string: String {
+        didSet { updateTextFrame() }
     }
     
     var textMaterial: TextMaterial {
-        didSet { updateWithModel() }
+        didSet { updateTextFrame() }
     }
     var lineBreakWidth: Real? {
-        didSet { updateText() }
+        didSet { updateTextFrame() }
     }
     var paddingSize: Size {
-        didSet { updateLayout() }
+        didSet { updateTextFrame() }
     }
     private var textFrame: TextFrame {
         didSet { displayLinkDraw() }
     }
     
-    init(binder: Binder, keyPath: BinderKeyPath, textMaterial: TextMaterial = TextMaterial(),
+    convenience init(string: String = "",
+                     font: Font = .default, color: Color = .content,
+                     lineColor: Color? = nil, lineWidth: Real = 0,
+                     alignment: TextAlignment = .natural,
+                     lineBreakWidth: Real? = .infinity,
+                     paddingSize: Size = Size(square: 1)) {
+        let textMaterial = TextMaterial(font: font, color: color,
+                                        lineColor: lineColor, lineWidth: lineWidth,
+                                        alignment: alignment)
+        self.init(string: string, textMaterial: textMaterial,
+                  lineBreakWidth: lineBreakWidth, paddingSize: paddingSize)
+    }
+    init(string: String = "", textMaterial: TextMaterial = TextMaterial(),
          lineBreakWidth: Real? = .infinity, paddingSize: Size = Size(square: 1)) {
         
-        self.binder = binder
-        self.keyPath = keyPath
-        
+        self.string = string
         self.textMaterial = textMaterial
         self.lineBreakWidth = lineBreakWidth
         self.paddingSize = paddingSize
-        
-        textFrame = TextFrame(string: binder[keyPath: keyPath],
+        textFrame = TextFrame(string: string,
                               textMaterial: textMaterial,
-                              lineBreakWidth: 0,
+                              lineBreakWidth: lineBreakWidth ?? 0,
                               paddingSize: paddingSize)
         
-        super.init(drawClosure: { (ctx, view, _) in view.draw(in: ctx) }, isLocked: false)
-        lineColor = .getBorder
+        super.init(drawClosure: { ctx, view, _ in view.draw(in: ctx) })
+        lineColor = nil
     }
     
     var minSize: Size {
-        return Size(width: Layouter.defaultMinWidth, height: Layouter.basicTextHeight)
-    }
-    var fitSize: Size {
-        return textFrame.fitSize
+        if lineBreakWidth == nil {
+            return Size(width: Layouter.minWidth, height: Layouter.textHeight)
+        } else {
+            return textFrame.fitSize
+        }
     }
     override func updateLayout() {
-        updateText()
+        updateTextFrame()
     }
-    func updateText() {
-        textFrame = TextFrame(string: model,
+    private func updateTextFrame() {
+        textFrame = TextFrame(string: string,
                               textMaterial: textMaterial,
-                              lineBreakWidth: lineBreakWidth ?? frame.width - paddingSize.width * 2)
+                              lineBreakWidth: lineBreakWidth ?? frame.width - paddingSize.width * 2,
+                              paddingSize: paddingSize)
     }
     
     override func draw(in ctx: CGContext) {
         textFrame.draw(in: bounds, in: ctx)
     }
 }
-
-protocol KeyInputtable {
-    func insert(_ string: String, for p: Point, _ version: Version)
-}
-
-//BoundsView<String>
 
 final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = String
@@ -195,7 +172,7 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
 
     init(binder: Binder, keyPath: BinderKeyPath,
-         textMaterial: TextMaterial = TextMaterial(),
+         textMaterial: TextMaterial = TextMaterial(color: .content),
          lineBreakWidth: Real? = .infinity, paddingSize: Size = Size(square: 1)) {
 
         self.binder = binder
@@ -211,14 +188,15 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
                               paddingSize: paddingSize)
 
         super.init(drawClosure: { ctx, view, _ in view.draw(in: ctx) }, isLocked: false)
+        bounds.size = defaultSize
     }
     deinit {
         timer.cancel()
     }
     
-    var minSize: Size {
+    var defaultSize: Size {
         if lineBreakWidth == nil {
-            return Size(width: Layouter.defaultMinWidth, height: Layouter.basicTextHeight)
+            return Size(width: Layouter.minWidth, height: Layouter.textHeight)
         } else {
             return textFrame.fitSize
         }
@@ -256,12 +234,6 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
 
     private let timer = RunTimer()
     private var oldModel = "", isinputting = false
-}
-extension StringView: Indicatable {
-    func indicate(at p: Point) {
-        guard let index = editingCharacterIndex(for: p) else { return }
-        selectedRange = model.rangeOfComposedCharacterSequence(at: index)
-    }
 }
 extension StringView: KeyInputtable {
     func insert(_ string: String, for p: Point, _ version: Version) {

@@ -17,7 +17,6 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-extension Int: AdditiveGroup {}
 extension Int {
     static func gcd(_ m: Int, _ n: Int) -> Int {
         return n == 0 ? m : gcd(n, m % n)
@@ -38,79 +37,30 @@ extension Int: Interpolatable {
     static func linear(_ f0: Int, _ f1: Int, t: Real) -> Int {
         return Int(Real.linear(Real(f0), Real(f1), t: t))
     }
-    static func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) -> Int {
+    static func firstMonospline(_ f1: Int, _ f2: Int, _ f3: Int,
+                                with ms: Monospline) -> Int {
         return Int(Real.firstMonospline(Real(f1), Real(f2), Real(f3), with: ms))
     }
-    static func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int, with ms: Monospline) -> Int {
+    static func monospline(_ f0: Int, _ f1: Int, _ f2: Int, _ f3: Int,
+                           with ms: Monospline) -> Int {
         return Int(Real.monospline(Real(f0), Real(f1), Real(f2), Real(f3), with: ms))
     }
-    static func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int, with ms: Monospline) -> Int {
+    static func lastMonospline(_ f0: Int, _ f1: Int, _ f2: Int,
+                               with ms: Monospline) -> Int {
         return Int(Real.lastMonospline(Real(f0), Real(f1), Real(f2), with: ms))
     }
 }
-extension Int: Referenceable {
-    static let name = Text(english: "Integer", japanese: "整数")
-}
-extension Int: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect) -> View {
-        return String(self).thumbnailView(withFrame: frame)
-    }
-}
 extension Int: Viewable {
-    func standardViewWith<T: BinderProtocol>
+    func viewWith<T: BinderProtocol>
         (binder: T, keyPath: ReferenceWritableKeyPath<T, Int>) -> ModelView {
         
-        return DiscreteIntView(binder: binder, keyPath: keyPath,
-                               option: IntOption(minModel: Int(Int32.min),
-                                                 maxModel: Int(Int32.max),
-                                                 modelInterval: 1))
+        return MovableIntView(binder: binder, keyPath: keyPath,
+                              option: IntOption(minModel: Int(Int32.min),
+                                                maxModel: Int(Int32.max),
+                                                modelInterval: 1))
     }
 }
 extension Int: ObjectViewable {}
-extension Int: AnyInitializable {
-    init?(anyValue: Any) {
-        switch anyValue {
-        case let value as Int: self = value
-        case let value as Rational: self = Int(value)
-        case let value as Real: self = Int(value)
-        case let value as String:
-            if let value = Int(value) {
-                self = value
-            } else {
-                return nil
-            }
-        case let valueChain as ValueChain:
-            if let value = Int(anyValue: valueChain.rootChainValue) {
-                self = value
-            } else {
-                return nil
-            }
-        default: return nil
-        }
-    }
-}
-
-struct IntGetterOption: GetterOption {
-    typealias Model = Int
-    
-    var reverseTransformedModel: ((Model) -> (Model))
-    var unit: String
-    
-    init(reverseTransformedModel: @escaping ((Model) -> (Model)) = { $0 },
-         unit: String = "") {
-        
-        self.reverseTransformedModel = reverseTransformedModel
-        self.unit = unit
-    }
-    
-    func string(with model: Model) -> String {
-        return "\(model)"
-    }
-    func displayText(with model: Model) -> Text {
-        return Text("\(model)\(unit)")
-    }
-}
-typealias IntGetterView<Binder: BinderProtocol> = GetterView<IntGetterOption, Binder>
 
 struct IntOption: Object1DOption {
     typealias Model = Int
@@ -140,8 +90,8 @@ struct IntOption: Object1DOption {
     func string(with model: Model) -> String {
         return model.description
     }
-    func displayText(with model: Model) -> Text {
-        return Text(model.description + "\(unit)")
+    func displayText(with model: Model) -> Localization {
+        return Localization(model.description + "\(unit)")
     }
     func ratio(with model: Model) -> Real {
         return Real(model - minModel) / Real(maxModel - minModel)
@@ -178,4 +128,4 @@ struct IntOption: Object1DOption {
         return Model(realValue)
     }
 }
-typealias DiscreteIntView<Binder: BinderProtocol> = Discrete1DView<IntOption, Binder>
+typealias MovableIntView<Binder: BinderProtocol> = Movable1DView<IntOption, Binder>

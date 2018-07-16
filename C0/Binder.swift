@@ -23,19 +23,19 @@ protocol BinderProtocol: class {
     init(rootModel: Model)
 }
 
-final class BasicBinder<Model>: BinderProtocol {
+protocol NotificationBinderProtocol {
+    var notification: ((Object.Value, BasicNotification) -> ())? { get set }
+}
+final class BasicBinder<Model: Object.Value>: BinderProtocol, NotificationBinderProtocol {
     var rootModel: Model {
-        didSet { notification?(self, .didChange) }
+        didSet { notification?(rootModel, .didChange) }
     }
     init(rootModel: Model) {
         self.rootModel = rootModel
     }
-    var notification: ((BasicBinder<Model>, BasicNotification) -> ())?
+    var notification: ((Object.Value, BasicNotification) -> ())?
 }
 
-/**
- Compiler Issue: Protocolとenumのcaseが衝突する
- */
 protocol NotificationProtocol {
     static var _didChange: Self { get }
 }
@@ -55,76 +55,22 @@ enum BasicPhaseNotification<Model>: NotificationProtocol {
     }
 }
 
-protocol StandardViewable {
-    func standardViewWith<T: BinderProtocol>
-        (binder: T, keyPath: ReferenceWritableKeyPath<T, Self>) -> ModelView
-}
-
-protocol ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect) -> View
-}
-extension ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect) -> View {
-        let view = View()
-        view.bounds = frame
-        view.lineColor = .formBorder
-        return view
-    }
-}
-protocol DisplayableText {
-    var displayText: Text { get }
-}
-extension ThumbnailViewable where Self: DisplayableText {
-    func thumbnailView(withFrame frame: Rect) -> View {
-        return displayText.thumbnailView(withFrame: frame)
-    }
-}
-protocol MiniViewable: Referenceable, ThumbnailViewable {
-    func miniViewWith<T: BinderProtocol>(binder: T,
-                                         keyPath: ReferenceWritableKeyPath<T, Self>) -> ModelView
-}
-extension MiniViewable where Self: Object0D {
-    func miniViewWith<T: BinderProtocol>(binder: T,
-                                         keyPath: ReferenceWritableKeyPath<T, Self>) -> ModelView {
-        return MiniView(binder: binder, keyPath: keyPath)
-    }
-}
-
-enum ViewableType {
-    case standard, mini
-}
-protocol Viewable: StandardViewable, MiniViewable {
+protocol Viewable {
     func viewWith<T: BinderProtocol>(binder: T,
-                                     keyPath: ReferenceWritableKeyPath<T, Self>,
-                                     type: ViewableType) -> ModelView
-}
-extension Viewable {
-    func viewWith<T: BinderProtocol>(binder: T,
-                                     keyPath: ReferenceWritableKeyPath<T, Self>,
-                                     type: ViewableType) -> ModelView {
-        switch type {
-        case .standard: return standardViewWith(binder: binder, keyPath: keyPath)
-        default: return miniViewWith(binder: binder, keyPath: keyPath)
-        }
-    }
+                                     keyPath: ReferenceWritableKeyPath<T, Self>) -> ModelView
 }
 
 protocol Modeler: class {
     func updateWithModel()
 }
-typealias ModelView = View & Modeler & LayoutMinSize
+typealias ModelView = View & Modeler
 extension Modeler where Self: View {
     func updateWithModel() {
         children.forEach { ($0 as? ModelView)?.updateWithModel() }
     }
 }
-extension LayoutMinSize where Self: View {
-    func updateMinSize() {
-        (parent as? LayoutMinSize)?.updateMinSize()
-    }
-}
 
-protocol BindableReceiver: Modeler, Assignable, IndicatableResponder, LayoutMinSize {
+protocol BindableReceiver: Modeler, Assignable {
     associatedtype Model: Object.Value
     associatedtype Binder: BinderProtocol
     associatedtype Notification: NotificationProtocol
@@ -160,11 +106,6 @@ extension BindableReceiver {
     }
 }
 extension BindableReceiver {
-    var indicatedLineColor: Color? {
-        return .indicated
-    }
-}
-extension BindableReceiver {
     func clippedModel(_ model: Model) -> Model {
         return model
     }
@@ -180,34 +121,10 @@ extension BindableReceiver {
     }
     func paste(_ values: [Any], for p: Point, _ version: Version) {
         for value in values {
-            if let model = Model(anyValue: value) {
+            if let model = value as? Model {
                 push(clippedModel(model), to: version)
                 return
             }
         }
-    }
-}
-
-protocol BindableGetterReceiver: Modeler, Copiable, IndicatableResponder, LayoutMinSize {
-    associatedtype Model: Object.Value
-    associatedtype Binder: BinderProtocol
-    var model: Model { get }
-    var binder: Binder { get set }
-    var keyPath: KeyPath<Binder, Model> { get set }
-}
-extension BindableGetterReceiver {
-    typealias BinderKeyPath = KeyPath<Binder, Model>
-    var model: Model {
-        return binder[keyPath: keyPath]
-    }
-}
-extension BindableGetterReceiver {
-    var indicatedLineColor: Color? {
-        return .indicated
-    }
-}
-extension BindableGetterReceiver {
-    func copiedObjects(at p: Point) -> [Object] {
-        return [Object(model)]
     }
 }

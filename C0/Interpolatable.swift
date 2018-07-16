@@ -247,19 +247,16 @@ struct Monospline {
 enum Interpolation: Int8, Codable {
     case spline, bound, linear, step
 }
-extension Interpolation: Referenceable {
-    static let name = Text(english: "Interpolation", japanese: "補間")
-}
-extension Interpolation: DisplayableText {
-    var displayText: Text {
+extension Interpolation {
+    var displayText: Localization {
         switch self {
-        case .spline: return Text(english: "Spline", japanese: "スプライン")
-        case .bound: return Text(english: "Bound", japanese: "バウンド")
-        case .linear: return Text(english: "Linear", japanese: "リニア")
-        case .step: return Text(english: "Step", japanese: "ステップ")
+        case .spline: return Localization(english: "Spline", japanese: "スプライン")
+        case .bound: return Localization(english: "Bound", japanese: "バウンド")
+        case .linear: return Localization(english: "Linear", japanese: "リニア")
+        case .step: return Localization(english: "Step", japanese: "ステップ")
         }
     }
-    static var displayTexts: [Text] {
+    static var displayTexts: [Localization] {
         return [spline.displayText,
                 bound.displayText,
                 linear.displayText,
@@ -271,11 +268,12 @@ extension Interpolation {
         return EnumOption(cationModels: [],
                           indexClosure: { Int($0) },
                           rawValueClosure: { Interpolation.RawValue($0) },
+                          title: "",
                           names: Interpolation.displayTexts)
     }
 }
 extension Interpolation: Viewable {
-    func standardViewWith<T: BinderProtocol>
+    func viewWith<T: BinderProtocol>
         (binder: T, keyPath: ReferenceWritableKeyPath<T, Interpolation>) -> ModelView {
         
         return EnumView(binder: binder, keyPath: keyPath, option: Interpolation.defaultOption)

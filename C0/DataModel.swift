@@ -39,9 +39,6 @@ extension Data {
         return ByteCountFormatter().string(fromByteCount: Int64(count))
     }
 }
-extension Data: Referenceable {
-    static let name = Text(english: "Data", japanese: "データ")
-}
 
 extension Decodable {
     init?(jsonData: Data) {

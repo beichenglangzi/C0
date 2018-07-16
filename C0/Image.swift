@@ -75,9 +75,6 @@ extension Image {
         try cg?.write(type, to: url)
     }
 }
-extension Image: Referenceable {
-    static let name = Text(english: "Image", japanese: "画像")
-}
 extension Image: Equatable {
     static func ==(lhs: Image, rhs: Image) -> Bool {
         return lhs.cg == rhs.cg
@@ -109,15 +106,8 @@ extension Image: Codable {
         }
     }
 }
-extension Image: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect) -> View {
-        let view = View(frame: frame)
-        view.image = self
-        return view
-    }
-}
 extension Image: Viewable {
-    func standardViewWith<T: BinderProtocol>
+    func viewWith<T: BinderProtocol>
         (binder: T, keyPath: ReferenceWritableKeyPath<T, Image>) -> ModelView {
         
         return ImageView(binder: binder, keyPath: keyPath)
@@ -185,9 +175,14 @@ final class ImageView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     func updateWithModel() {
         self.image = model
+        bounds.size = model.size
     }
-    
-    var minSize: Size {
-        return Size(square: Layouter.defaultMinWidth)
+}
+extension ImageView: URLEncodable {
+    func write(to url: URL,
+               progressClosure: @escaping (Real, inout Bool) -> (),
+               completionClosure: @escaping (Error?) -> ()) throws {
+        try model.write(.png, to: url)
+        completionClosure(nil)
     }
 }

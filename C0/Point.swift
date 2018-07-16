@@ -19,38 +19,6 @@
 
 import CoreGraphics
 
-/**
- Issue: Core Graphicsと置き換え
- */
-struct _Point: Equatable {
-    var x = 0.0.cg, y = 0.0.cg
-    
-    var isEmpty: Bool {
-        return x == 0 && y == 0
-    }
-}
-extension _Point: Hashable {
-    var hashValue: Int {
-        return Hash.uniformityHashValue(with: [x.hashValue, y.hashValue])
-    }
-}
-extension _Point: Codable {
-    init(from decoder: Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        let x = try container.decode(Real.self)
-        let y = try container.decode(Real.self)
-        self.init(x: x, y: y)
-    }
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(x)
-        try container.encode(y)
-    }
-}
-extension _Point: Referenceable {
-    static let name = Text(english: "Point", japanese: "ポイント")
-}
-
 typealias Point = CGPoint
 extension Point {
     func mid(_ other: Point) -> Point {
@@ -124,7 +92,9 @@ extension Point {
         return hypot(other.x - x, other.y - y)
     }
     func distanceWithLine(ap: Point, bp: Point) -> Real {
-        return ap == bp ? distance(ap) : abs((bp - ap).crossVector(self - ap)) / ap.distance(bp)
+        return ap == bp ?
+            distance(ap) :
+            abs((bp - ap).crossVector(self - ap)) / ap.distance(bp)
     }
     func normalLinearInequality(ap: Point, bp: Point) -> Bool {
         if bp.y - ap.y == 0 {
@@ -220,7 +190,8 @@ extension Point {
         let pa = p1 - p0
         let pb = p2 - pa
         let ab = hypot(pa.x, pa.y) * hypot(pb.x, pb.y)
-        return ab == 0 ? 0 :
+        return ab == 0 ?
+            0 :
             (pa.x * pb.y - pa.y * pb.x > 0 ? 1 : -1) * acos((pa.x * pb.x + pa.y * pb.y) / ab)
     }
     static func differenceAngle(p0: Point, p1: Point, p2: Point) -> Real {
@@ -273,24 +244,9 @@ extension Point: AppliableAffineTransform {
     }
 }
 extension Point {
-    static let snapColor = Color(red: 0.5, green: 0, blue: 1)
-    static let controlEditPointInColor = Color(red: 1, green: 1, blue: 0)
-    static let controlPointInColor = Color.knob
-    static let controlPointCapInColor = Color.knob
-    static let controlPointJointInColor = Color(red: 1, green: 0, blue: 0)
-    static let controlPointOtherJointInColor = Color(red: 1, green: 0.5, blue: 1)
-    static let controlPointUnionInColor = Color(red: 0, green: 1, blue: 0.2)
-    static let controlPointPathInColor = Color(red: 0, green: 1, blue: 1)
-    static let controlPointOutColor = Color.getSetBorder
-    static let editControlPointInColor = Color(red: 1, green: 0, blue: 0)
-    static let editControlPointOutColor = Color(red: 1, green: 0.5, blue: 0.5)
-    static let contolLineInColor = Color(red: 1, green: 0.5, blue: 0.5)
-    static let contolLineOutColor = Color(red: 1, green: 0, blue: 0)
-}
-extension Point {
     func view(radius r: Real, lineWidth: Real = 1,
-              fillColor: Color = .knob, lineColor: Color = .getSetBorder) -> View {
-        let view = View.knob()
+              fillColor: Color = .content, lineColor: Color = .background) -> View {
+        let view = View.knob
         view.fillColor = fillColor
         view.lineColor = lineColor
         view.lineWidth = lineWidth
@@ -324,47 +280,6 @@ extension Point: Interpolatable {
                      y: Real.lastMonospline(f0.y, f1.y, f2.y, with: ms))
     }
 }
-extension Point: AnyInitializable {
-    init?(anyValue: Any) {
-        switch anyValue {
-        case let value as Point: self = value
-        case let value as String:
-            if let value = Point(jsonString: value) {
-                self = value
-            } else {
-                return nil
-            }
-        case let valueChain as ValueChain:
-            if let value = Point(anyValue: valueChain.rootChainValue) {
-                self = value
-            } else {
-                return nil
-            }
-        default: return nil
-        }
-    }
-}
-extension Point: Referenceable {
-    static let name = Text(english: "Point", japanese: "ポイント")
-}
-extension Point: ThumbnailViewable {
-    func thumbnailView(withFrame frame: Rect) -> View {
-        return (jsonString ?? "").thumbnailView(withFrame: frame)
-    }
-}
-extension Point: Viewable {
-    func standardViewWith<T: BinderProtocol>
-        (binder: T, keyPath: ReferenceWritableKeyPath<T, Point>) -> ModelView {
-        
-        let valueOption = PointOption.XOption(minModel: Real(-Float.greatestFiniteMagnitude),
-                                              maxModel: Real(Float.greatestFiniteMagnitude),
-                                              modelInterval: 0.1)
-        return DiscretePointView(binder: binder, keyPath: keyPath,
-                                 option: PointOption(xOption: valueOption,
-                                                     yOption: valueOption))
-    }
-}
-extension Point: ObjectViewable {}
 
 extension Array where Element == Point {
     var convexHull: [Point] {
@@ -411,18 +326,18 @@ extension Point: Object2D {
         get { return y }
         set { y = newValue }
     }
-    static let xDisplayText = Text("x")
-    static let yDisplayText = Text("y")
+    static let xDisplayText = Localization("x")
+    static let yDisplayText = Localization("y")
 }
 
-extension Point {
-    func concreteViewWith<T>
-        (binder: T,
-         keyPath: ReferenceWritableKeyPath<T, Point>) -> ModelView where T: BinderProtocol {
+extension Point: Viewable {
+    func viewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Point>) -> ModelView {
         
         return PointView(binder: binder, keyPath: keyPath)
     }
 }
+extension Point: ObjectViewable {}
 
 struct PointOption: Object2DOption {
     typealias Model = Point
@@ -432,8 +347,6 @@ struct PointOption: Object2DOption {
     var xOption: XOption
     var yOption: YOption
 }
-typealias AssignablePointView<Binder: BinderProtocol> = AssignableObject2DView<PointOption, Binder>
-typealias DiscretePointView<Binder: BinderProtocol> = Discrete2DView<PointOption, Binder>
 typealias MovablePointView<Binder: BinderProtocol> = Movable2DView<PointOption, Binder>
 
 final class PointView<T: BinderProtocol>: ModelView, BindableReceiver {
@@ -455,29 +368,13 @@ final class PointView<T: BinderProtocol>: ModelView, BindableReceiver {
         super.init(isLocked: false)
         self.radius = radius
         self.lineWidth = lineWidth
-        fillColor = .knob
-        lineColor = .getSetBorder
+        fillColor = .content
+        lineColor = .background
         
         updateWithModel()
     }
     
-    var minSize: Size {
-        return Size(square: radius * 2)
-    }
     func updateWithModel() {
         position = model
-    }
-}
-extension PointView: BasicDiscretePointMovable {
-    func model(at p: Point, first fp: Point, old: Point) -> Point {
-        return model + convert(p, to: parent!) - convert(fp, to: parent!)
-    }
-    
-    var knobView: View {
-        return self
-    }
-    
-    func didChangeFromMovePoint(_ phase: Phase, beganModel: Model) {
-        notifications.forEach { $0(self, .didChangeFromPhase(phase, beginModel: beganModel)) }
     }
 }

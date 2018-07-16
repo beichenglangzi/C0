@@ -17,46 +17,15 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-struct Desktop {
+struct Desktop: Codable {
     var version = Version()
-    var copiedObjects = Selection<Object>()
+    var copiedObject = Object(Localization(english: "Empty Copied Object",
+                                           japanese: "空のコピー済みオブジェクト").currentString)
     var transform = Transform()
-    var objects = Selection<Layout<Object>>()
-    var isHiddenActionList = false
-    let actionList = ActionList()
-}
-extension Desktop: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case version, copiedObjects, transform, objects, isHiddenActionList
-    }
-    init(from decoder: Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        version = try values.decode(Version.self, forKey: .version)
-        copiedObjects = try values.decode(Selection<Object>.self, forKey: .copiedObjects)
-        transform = try values.decode(Transform.self, forKey: .transform)
-        objects = try values.decode(Selection<Layout<Object>>.self, forKey: .objects)
-        isHiddenActionList = try values.decode(Bool.self, forKey: .isHiddenActionList)
-    }
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(version, forKey: .version)
-        try container.encode(copiedObjects, forKey: .copiedObjects)
-        try container.encode(transform, forKey: .transform)
-        try container.encode(objects, forKey: .objects)
-        try container.encode(isHiddenActionList, forKey: .isHiddenActionList)
-    }
-}
-extension Desktop: Referenceable {
-    static let name = Text(english: "Desktop", japanese: "デスクトップ")
-}
-extension Desktop {
-    static let isHiddenActionListOption = BoolOption(cationModel: nil,
-                                                     name: ActionList.name,
-                                                     info: .hidden)
-    static let copiedObjectsInferenceName = Text(english: "Copied", japanese: "コピー済み")
+    var objects = [Object]()
 }
 extension Desktop: Viewable {
-    func standardViewWith<T: BinderProtocol>
+    func viewWith<T: BinderProtocol>
         (binder: T, keyPath: ReferenceWritableKeyPath<T, Desktop>) -> ModelView {
         
         return DesktopView(binder: binder, keyPath: keyPath)
@@ -122,130 +91,37 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     var notifications = [((DesktopView<Binder>, BasicNotification) -> ())]()
     
-    let versionView: VersionView<Binder>
-    let copiedObjectsNameView = TextFormView(text: Desktop.copiedObjectsInferenceName + ":")
-    let copiedObjectsView: SelectionView<Object, Binder>
-    let transformView: BasicTransformView<Binder>
-    let objectsView: SelectionView<Layout<Object>, Binder>
-    let isHiddenActionListView: BoolView<Binder>
-    var actionListView: ActionListFormView?
-
-    var versionWidth = 150.0.cg
-    var topViewsHeight = Layouter.basicHeight {
-        didSet { updateLayout() }
-    }
+    let copiedObjectView: ObjectView<Binder>
+    let transformView: TransformView<Binder>
+    let objectsView: ArrayView<Object, Binder>
 
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
 
-        versionView = VersionView(binder: binder,
-                                  keyPath: keyPath.appending(path: \Model.version))
-        copiedObjectsView = SelectionView(binder: binder,
-                                          keyPath: keyPath.appending(path: \Model.copiedObjects),
-                                          viewableType: .mini)
-        copiedObjectsView.valuesView.xyOrientation = .horizontal(.leftToRight)
-        transformView = BasicTransformView(binder: binder,
-                                           keyPath: keyPath.appending(path: \Model.transform),
-                                           option: TransformOption())
-        objectsView = SelectionView(binder: binder,
-                                    keyPath: keyPath.appending(path: \Model.objects))
-
-        isHiddenActionListView
-            = BoolView(binder: binder,
-                       keyPath: keyPath.appending(path: \Model.isHiddenActionList),
-                       option: Model.isHiddenActionListOption)
-
-        super.init(isLocked: false)
-        isHiddenActionListView.notifications.append({ [unowned self] _, _ in
-            self.updateHiddenActionList()
-            self.updateLayout()
-        })
-        transformView.notifications.append({ [unowned self] _, _ in
-            self.updateTransform()
-        })
-        fillColor = .background
-        updateHiddenActionList()
-    }
-
-    override var contentsScale: Real {
-        didSet {
-            if contentsScale != oldValue {
-                allChildrenAndSelf { $0.contentsScale = contentsScale }
-            }
-        }
-    }
-
-    var minSize: Size {
-        let w = versionView.minSize.width
-            + isHiddenActionListView.minSize.width + copiedObjectsNameView.minSize.width
-        return Size(width: w, height: Layouter.basicHeight) + Layouter.basicPadding * 2
-    }
-    override func updateLayout() {
-        versionView.baselinePadding = Layouter.basicPadding * 2
-        isHiddenActionListView.baselinePadding = Layouter.basicPadding * 2
+        copiedObjectView = ObjectView(binder: binder,
+                                      keyPath: keyPath.appending(path: \Model.copiedObject))
+        transformView = TransformView(binder: binder,
+                                      keyPath: keyPath.appending(path: \Model.transform))
+        objectsView = ArrayView(binder: binder,
+                                keyPath: keyPath.appending(path: \Model.objects))
         
-        let padding = Layouter.basicPadding
-        let ihamvw = isHiddenActionListView.minSize.width
-        let tw = transformView.minSize.width
-        let headerY = bounds.height - topViewsHeight - padding * 3
-        versionView.frame = Rect(x: padding, y: headerY,
-                                 width: versionWidth, height: topViewsHeight + padding * 2)
-        let conms = copiedObjectsNameView.minSize
-        copiedObjectsNameView.frame = Rect(origin: Point(x: versionView.frame.maxX + padding,
-                                                         y: headerY + padding * 2),
-                                           size: conms)
-        let conw = copiedObjectsNameView.frame.width
-        let d = bounds.width - versionWidth - ihamvw
-        let cw = max(d - conw - tw - padding * 3,
-                     0)
-        copiedObjectsView.frame = Rect(x: copiedObjectsNameView.frame.maxX, y: headerY,
-                                       width: cw, height: topViewsHeight + padding * 2)
-
-        transformView.frame = Rect(x: copiedObjectsView.frame.maxX, y: headerY,
-                                   width: tw, height: topViewsHeight + padding * 2)
-
-        isHiddenActionListView.frame = Rect(x: transformView.frame.maxX, y: headerY,
-                                            width: ihamvw, height: topViewsHeight + padding * 2)
-
-        let objectsHeight = bounds.height - topViewsHeight - padding * 4
-        if model.isHiddenActionList {
-            objectsView.frame = Rect(x: padding,
-                                     y: padding,
-                                     width: bounds.width - padding * 2,
-                                     height: objectsHeight)
-        } else if let actionListView = actionListView {
-            let actionWidth = actionListView.width
-            let ow = max(bounds.width - actionWidth - padding * 2, 0)
-            objectsView.frame = Rect(x: padding,
-                                     y: padding,
-                                     width: ow,
-                                     height: objectsHeight)
-
-            actionListView.frame = Rect(x: padding + ow,
-                                        y: padding,
-                                        width: actionWidth,
-                                        height: objectsHeight)
-        }
+        copiedObjectView.lineColor = .content
+        copiedObjectView.opacity = 0.5
+        
+        super.init(isLocked: false)
+        fillColor = .background
+        children = [objectsView]
+    }
+    
+    func update(withBounds bounds: Rect) {
+        objectsView.frame = bounds
+        self.bounds = bounds
         updateTransform()
     }
-    func updateHiddenActionList() {
-        if model.isHiddenActionList {
-            children = [versionView, copiedObjectsNameView, copiedObjectsView,
-                        isHiddenActionListView, objectsView, transformView]
-        } else {
-            let actionListView = ActionListFormView()
-            self.actionListView = actionListView
-            children = [versionView, copiedObjectsNameView, copiedObjectsView,
-                        isHiddenActionListView, actionListView, objectsView, transformView]
-        }
-    }
-    func updateWithModel() {
-        isHiddenActionListView.updateWithModel()
-        copiedObjectsView.updateWithModel()
-        objectsView.updateWithModel()
-        versionView.updateWithModel()
-        transformView.updateWithModel()
+    override func updateLayout() {
+        objectsView.frame = bounds
+        updateTransform()
     }
 
     var zoomingTransform: Transform {
@@ -253,7 +129,6 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         set {
             binder[keyPath: keyPath].transform = newValue
             updateTransform()
-            transformView.updateWithModel()
         }
     }
     func convertZoomingLocalFromZoomingView(_ p: Point) -> Point {
@@ -264,16 +139,16 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     func updateTransform() {
         var transform = zoomingTransform
-        let objectsPosition = Point(x: (bounds.width - Layouter.basicPadding * 2).rounded(),
+        let objectsPosition = Point(x: (bounds.width - Layouter.padding * 2).rounded(),
                                     y: (objectsView.bounds.height / 2).rounded())
         transform.translation += objectsPosition
         zoomingLocalView.transform = transform
     }
     var zoomingView: View {
-        return objectsView.valuesView
+        return objectsView
     }
     var zoomingLocalView: View {
-        return objectsView.valuesView.rootView
+        return objectsView.rootView
     }
 }
 extension DesktopView: Zoomable {
@@ -283,15 +158,15 @@ extension DesktopView: Zoomable {
 }
 extension DesktopView: Undoable {
     var version: Version {
-        return versionView.model
+        return model.version
     }
 }
 extension DesktopView: CopiedObjectsViewer {
-    var copiedObjects: [Object] {
-        get { return copiedObjectsView.valuesView.model }
-        set { copiedObjectsView.valuesView.model = newValue }
+    var copiedObject: Object {
+        get { return copiedObjectView.model }
+        set { copiedObjectView.model = newValue }
     }
-    func push(_ copiedObjects: [Object], to version: Version) {
-        copiedObjectsView.valuesView.push(copiedObjects, to: version)
+    func push(_ copiedObject: Object, to version: Version) {
+        copiedObjectView.push(copiedObject, to: version)
     }
 }

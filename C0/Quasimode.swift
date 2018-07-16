@@ -38,14 +38,11 @@ struct Quasimode {
         allEventTypes = modifierEventTypes + eventTypes
     }
     
-    var displayText: Text {
+    var displayText: Localization {
         let mets = modifierEventTypes
-        let mt = mets.reduce(into: Text()) { $0 += $0.isEmpty ? $1.name : " " + $1.name }
+        let mt = mets.reduce(into: Localization()) { $0 += $0.isEmpty ? $1.name : " " + $1.name }
         let ets = eventTypes
-        let t = ets.reduce(into: Text()) { $0 += $0.isEmpty ? $1.name : " " + $1.name }
+        let t = ets.reduce(into: Localization()) { $0 += $0.isEmpty ? $1.name : " " + $1.name }
         return mt.isEmpty ? t : "[" + mt + "] " + t
     }
-}
-extension Quasimode: Referenceable {
-    static let name = Text(english: "Quasimode", japanese: "擬似モード")
 }

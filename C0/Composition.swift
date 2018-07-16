@@ -22,18 +22,15 @@ import CoreGraphics
 enum BlendType: Int8, Codable, Hashable {
     case normal, addition, subtract
 }
-extension BlendType: Referenceable {
-    static let name = Text(english: "Blend Type", japanese: "合成タイプ")
-}
-extension BlendType: DisplayableText {
-    var displayText: Text {
+extension BlendType {
+    var displayText: Localization {
         switch self {
-        case .normal: return Text(english: "Normal", japanese: "通常")
-        case .addition: return Text(english: "Addition", japanese: "加算")
-        case .subtract: return Text(english: "Subtract", japanese: "減算")
+        case .normal: return Localization(english: "Normal", japanese: "通常")
+        case .addition: return Localization(english: "Addition", japanese: "加算")
+        case .subtract: return Localization(english: "Subtract", japanese: "減算")
         }
     }
-    static var displayTexts: [Text] {
+    static var displayTexts: [Localization] {
         return [normal.displayText,
                 addition.displayText,
                 subtract.displayText]
@@ -44,11 +41,12 @@ extension BlendType {
         return EnumOption(cationModels: [],
                           indexClosure: { Int($0) },
                           rawValueClosure: { BlendType.RawValue($0) },
+                          title: Localization(english: "Blend Type", japanese: "合成タイプ"),
                           names: BlendType.displayTexts)
     }
 }
 extension BlendType: Viewable {
-    func standardViewWith<T: BinderProtocol>
+    func viewWith<T: BinderProtocol>
         (binder: T, keyPath: ReferenceWritableKeyPath<T, BlendType>) -> ModelView {
         
         return EnumView(binder: binder, keyPath: keyPath, option: BlendType.defaultOption)
@@ -69,11 +67,8 @@ struct Composition<T: Equatable>: Equatable {
 }
 
 extension Composition where T == Color {
-    static let translucentEdit = Composition(value: Color(white: 0), opacity: 0.1)
-    static let select = Composition(value: Color(red: 0, green: 0.7, blue: 1), opacity: 0.3)
-    static let selectBorder = Composition(value: Color(red: 0, green: 0.5, blue: 1), opacity: 0.5)
-    static let deselect = Composition(value: Color(red: 0.9, green: 0.3, blue: 0), opacity: 0.3)
-    static let deselectBorder = Composition(value: Color(red: 1, green: 0, blue: 0), opacity: 0.5)
+    static let select = Composition(value: Color.selected, opacity: 0.3)
+    static let anti = Composition(value: Color(red: 0.9, green: 0.3, blue: 0), opacity: 0.3)
     
     func multiply(alpha: Real) -> Composition<Color> {
         return Composition(value: Color(hue: value.hue,
