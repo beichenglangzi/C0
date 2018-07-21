@@ -34,52 +34,6 @@ enum Orientation {
     case xy(XY), circular(Circular)
 }
 
-typealias LayoutValue = Codable & Viewable
-
-protocol Layoutable {
-    var frame: Rect { get set }
-    var transform: Transform { get set }
-}
-
-enum ConstraintType {
-    case none, width, height, widthAndHeight
-}
-
-protocol LayoutProtocol {
-    var transform: Transform { get set }
-}
-struct Layout<Value: LayoutValue>: Codable, LayoutProtocol {
-    var value: Value
-    var transform: Transform
-    
-    init(_ value: Value, transform: Transform = Transform()) {
-        self.value = value
-        self.transform = transform
-    }
-}
-extension Layout: ValueChain {
-    var chainValue: Any { return value }
-}
-extension Layout {
-    init?(anyValue: Any) {
-        if let value = (anyValue as? ValueChain)?.value(Value.self) {
-            self = Layout(value)
-        } else if let value = anyValue as? Value {
-            self = Layout(value)
-        } else {
-            return nil
-        }
-    }
-}
-extension Layout: Viewable {
-    func viewWith<T: BinderProtocol>
-        (binder: T, keyPath: ReferenceWritableKeyPath<T, Layout<Value>>) -> ModelView {
-        
-        return LayoutView(binder: binder, keyPath: keyPath)
-    }
-}
-extension Layout: ObjectViewable {}
-
 enum Layouter {
     static let knobRadius = 4.0.cg
     static let slidableKnobRadius = 2.5.cg
@@ -91,44 +45,4 @@ enum Layouter {
     static let textHeight = Font.default.ceilHeight(withPadding: 1)
     static let textPaddingHeight = textHeight + padding * 2
     static let valueWidth = 80.cg
-}
-
-final class LayoutView<Value: LayoutValue, Binder: BinderProtocol>
-: ModelView, BindableReceiver, Layoutable {
-    typealias Model = Layout<Value>
-    typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
-    var binder: Binder {
-        didSet { updateWithModel() }
-    }
-    var keyPath: BinderKeyPath {
-        didSet { updateWithModel() }
-    }
-    var notifications = [((LayoutView<Value, Binder>, BasicPhaseNotification<Model>) -> ())]()
-    
-    var valueView: View
-    
-    init(binder: Binder, keyPath: BinderKeyPath) {
-        self.binder = binder
-        self.keyPath = keyPath
-        
-        valueView = binder[keyPath: keyPath].value
-            .viewWith(binder: binder,
-                              keyPath: keyPath.appending(path: \Model.value))
-        
-        super.init(isLocked: false)
-        children = [valueView]
-        updateWithModel()
-    }
-    
-    func updateWithModel() {
-        transform = model.transform
-    }
-    
-    var movingOrigin: Point {
-        get { return model.transform.translation }
-        set {
-            binder[keyPath: keyPath].transform.translation = newValue
-            self.transform.translation = newValue
-        }
-    }
 }

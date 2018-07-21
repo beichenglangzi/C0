@@ -305,20 +305,22 @@ extension NSPasteboard {
                                   options: nil) as? [URL], !urls.isEmpty {
             urls.forEach {
                 if let image = Image(url: $0) {
-                    copiedObjects.append(Object(image))
+                    copiedObjects.append(Object(Transforming(image, transform: Transform())))
                 }
             }
         }
         if !copiedObjects.isEmpty {
             return copiedObjects
         } else if let string = string(forType: .string) {
-            copiedObjects.append(Object(string))
+            copiedObjects.append(Object(Text(stringLines: [StringLine(string: string,
+                                                                      origin: Point())])))
         } else if let types = types {
             for type in types {
                 if let data = data(forType: type) {
                     append(with: data, type: type)
                 } else if let string = string(forType: .string) {
-                    copiedObjects.append(Object(string))
+                    copiedObjects.append(Object(Text(stringLines: [StringLine(string: string,
+                                                                              origin: Point())])))
                 }
             }
         } else if let items = pasteboardItems {
@@ -327,7 +329,8 @@ extension NSPasteboard {
                     if let data = item.data(forType: type) {
                         append(with: data, type: type)
                     } else if let string = item.string(forType: .string) {
-                        copiedObjects.append(Object(string))
+                        copiedObjects.append(Object(Text(stringLines: [StringLine(string: string,
+                                                                                  origin: Point())])))
                     }
                 }
             }
@@ -416,13 +419,14 @@ final class C0View: NSView, NSTextInputClient {
     }
     required init?(coder: NSCoder) {
         var desktop = Desktop()
-        desktop.objects += [Object(ActionList().layoutsAndSize.layouts)]
+        desktop.objects += [Object(ActionList().textAndSize.text)]
         desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
         sender = Sender(rootView: desktopView)
         
         dragManager = DragManager(sender: sender, clickType: .click, dragType: .drag)
         subDragManager = DragManager(sender: sender, clickType: .subClick, dragType: .subDrag)
+        
         super.init(coder: coder)
         setup()
     }

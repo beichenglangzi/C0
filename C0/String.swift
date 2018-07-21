@@ -38,14 +38,6 @@ extension String {
         }
     }
 }
-extension String: Viewable {
-    func viewWith<T: BinderProtocol>
-        (binder: T, keyPath: ReferenceWritableKeyPath<T, String>) -> ModelView {
-        
-        return StringView(binder: binder, keyPath: keyPath, lineBreakWidth: 400)
-    }
-}
-extension String: ObjectViewable {}
 extension String: Interpolatable {
     static func linear(_ f0: String, _ f1: String, t: Real) -> String {
         return f0
@@ -136,8 +128,21 @@ final class StringFormView: View {
     }
 }
 
-final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
-    typealias Model = String
+struct StringLine: Codable {
+    var string: String
+    var origin: Point
+}
+extension StringLine: Viewable {
+    func viewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, StringLine>) -> ModelView {
+        
+        return StringLineView(binder: binder, keyPath: keyPath)
+    }
+}
+extension StringLine: ObjectViewable {}
+
+final class StringLineView<T: BinderProtocol>: ModelView, BindableReceiver {
+    typealias Model = StringLine
     typealias Binder = T
     var binder: Binder {
         didSet { updateWithModel() }
@@ -145,7 +150,7 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
     var keyPath: BinderKeyPath {
         didSet { updateWithModel() }
     }
-    var notifications = [((StringView<Binder>, BasicNotification) -> ())]()
+    var notifications = [((StringLineView<Binder>, BasicNotification) -> ())]()
 
     var markedRange: Range<String.Index>? {
         didSet{
@@ -157,7 +162,6 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
             if selectedRange != oldValue { displayLinkDraw() }
         }
     }
-
     var textMaterial: TextMaterial {
         didSet { updateWithModel() }
     }
@@ -182,13 +186,13 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
         self.lineBreakWidth = lineBreakWidth
         self.paddingSize = paddingSize
         
-        textFrame = TextFrame(string: binder[keyPath: keyPath],
+        textFrame = TextFrame(string: binder[keyPath: keyPath].string,
                               textMaterial: textMaterial,
                               lineBreakWidth: lineBreakWidth ?? 0,
                               paddingSize: paddingSize)
 
         super.init(drawClosure: { ctx, view, _ in view.draw(in: ctx) }, isLocked: false)
-        bounds.size = defaultSize
+        bounds = Rect(origin: model.origin, size: textFrame.fitSize)
     }
     deinit {
         timer.cancel()
@@ -205,12 +209,14 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
         updateText()
     }
     func updateWithModel() {
+        position = model.origin
         updateText()
     }
     func updateText() {
-        textFrame = TextFrame(string: model,
+        textFrame = TextFrame(string: model.string,
                               textMaterial: textMaterial,
                               lineBreakWidth: lineBreakWidth ?? frame.width - paddingSize.width * 2)
+        bounds = Rect(origin: model.origin, size: textFrame.fitSize)
     }
     
     func convertToLocal(_ p: Point) -> Point {
@@ -223,7 +229,7 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
 
     func editingCharacterIndex(for p: Point) -> String.Index? {
-        guard !model.isEmpty else { return nil }
+        guard !model.string.isEmpty else { return nil }
         let index = textFrame.editCharacterIndex(for: convertToLocal(p))
         return String.Index(encodedOffset: index)
     }
@@ -235,7 +241,16 @@ final class StringView<T: BinderProtocol>: ModelView, BindableReceiver {
     private let timer = RunTimer()
     private var oldModel = "", isinputting = false
 }
-extension StringView: KeyInputtable {
+extension StringLineView: MovableOrigin {
+    var movingOrigin: Point {
+        get { return model.origin }
+        set {
+            binder[keyPath: keyPath].origin = newValue
+            self.position = newValue
+        }
+    }
+}
+extension StringLineView: KeyInputtable {
     func insert(_ string: String, for p: Point, _ version: Version) {
         let beginClosure: () -> () = { [unowned self] in
             if !self.isinputting {
@@ -244,10 +259,10 @@ extension StringView: KeyInputtable {
                 self.isinputting = true
             }
             
-            self.model.append(string)
+            self.model.string.append(string)
         }
         let waitClosure: () -> () = { [unowned self] in
-            self.model.append(string)
+            self.model.string.append(string)
         }
         let endClosure: () -> () = { [unowned self] in
             self.isinputting = false
@@ -258,4 +273,3 @@ extension StringView: KeyInputtable {
                   endClosure: endClosure)
     }
 }
-//encode

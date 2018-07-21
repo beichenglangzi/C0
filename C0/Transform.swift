@@ -267,6 +267,17 @@ struct Transforming<Value: Object.Value & Viewable>: Codable, TransformProtocol 
         self.transform = transform
     }
 }
+extension Transforming: ValueChain {
+    var chainValue: Any { return value }
+}
+extension Transforming: Viewable {
+    func viewWith<T: BinderProtocol>
+        (binder: T, keyPath: ReferenceWritableKeyPath<T, Transforming<Value>>) -> ModelView {
+        
+        return TransformingView(binder: binder, keyPath: keyPath)
+    }
+}
+extension Transforming: ObjectViewable {}
 
 final class TransformView<T: BinderProtocol>: ModelView, BindableReceiver {
     typealias Model = Transform
@@ -288,5 +299,46 @@ final class TransformView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     func updateWithModel() {
         transform = model
+    }
+}
+
+final class TransformingView<Value: Object.Value & Viewable, Binder: BinderProtocol>
+: ModelView, BindableReceiver {
+    typealias Model = Transforming<Value>
+    typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
+    var binder: Binder {
+        didSet { updateWithModel() }
+    }
+    var keyPath: BinderKeyPath {
+        didSet { updateWithModel() }
+    }
+    var notifications = [((TransformingView<Value, Binder>, BasicPhaseNotification<Model>) -> ())]()
+    
+    var valueView: View
+    
+    init(binder: Binder, keyPath: BinderKeyPath) {
+        self.binder = binder
+        self.keyPath = keyPath
+        
+        valueView = binder[keyPath: keyPath].value
+            .viewWith(binder: binder,
+                      keyPath: keyPath.appending(path: \Model.value))
+        
+        super.init(isLocked: false)
+        children = [valueView]
+        updateWithModel()
+    }
+    
+    func updateWithModel() {
+        transform = model.transform
+    }
+}
+extension TransformingView: MovableOrigin {
+    var movingOrigin: Point {
+        get { return model.transform.translation }
+        set {
+            binder[keyPath: keyPath].transform.translation = newValue
+            self.transform.translation = newValue
+        }
     }
 }

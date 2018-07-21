@@ -21,7 +21,7 @@ import struct Foundation.Locale
 import class Foundation.OperationQueue
 
 final class Sender {
-    typealias RootView = ModelView & Undoable & Zoomable & Strokable
+    typealias RootView = ModelView & Undoable & Zoomable & CopiableViewer & MakableStrokable & MakableKeyInputtable & Assignable
     
     var rootView: RootView
     let actionList = ActionList()
@@ -90,10 +90,14 @@ final class Sender {
         if let receiver = rootView.at(inputEvent.value.rootLocation, (View & KeyInputtable).self) {
             let p = receiver.convertFromRoot(inputEvent.value.rootLocation)
             receiver.insert(inputEvent.type.name.currentString, for: p, rootView.version)
+        } else if let receiver = ((userObject as? MakableKeyInputtable)?.keyInputable(withRootView: rootView, at: inputEvent.value.rootLocation) ?? rootView.keyInputable(withRootView: rootView, at: inputEvent.value.rootLocation)) as? (View & KeyInputtable) {
+            
+            let p = receiver.convertFromRoot(inputEvent.value.rootLocation)
+            receiver.insert(inputEvent.type.name.currentString, for: p, rootView.version)
         }
     }
     
-    typealias CopiedObjectViewer = View & CopiedObjectsViewer
+    typealias CopiedObjectViewer = View & CopiableViewer
     typealias AssignableReceiver = View & Assignable
     typealias CollectionReceiver = View & CollectionAssignable
     typealias CopiableReceiver = View & Copiable
@@ -105,14 +109,26 @@ final class Sender {
     typealias MovableReceiver = View & Movable
     
     private var zoomableObject: ZoomableObject?
-    private var strokableObject: StrokableObject?
+    private var strokableUserObject: Strokable?
+    private var movableObject: Movable?
     
     private var fp = Point()
     private var layoutableViews = [(oldP: Point, reciever: MovableReceiver)]()
     private var viewPointMover: ViewPointMover?, viewVertexMover: ViewVertexMover?
     
-    func object(at p: Point) -> Newable & Lockable & Findable & Exportable & Assignable {
-        
+    func userObject(at p: Point) -> Newable & Lockable & Findable & Exportable & CollectionAssignable & Movable {
+        let tmo: TransformingMovableObject?
+        if let view = rootView.at(p, (View & MovableOrigin).self) {
+            tmo = TransformingMovableObject(viewAndFirstOrigins: [(view, view.transform.translation)],
+                                            rootView: rootView)
+        } else {
+            tmo = nil
+        }
+        let userObject = UserObject(rootView: rootView, transformingMovableObject: tmo)
+        if let view = rootView.at(p, Copiable.self) {
+            userObject.copiedObject = view.copiedObject
+        }
+        return userObject
     }
     
     func send(_ actionMap: ActionMap) {
@@ -137,78 +153,117 @@ final class Sender {
         case actionList.cutAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let receiver = object(at: eventValue.rootLocation)
-            let p = receiver.convertFromRoot(eventValue.rootLocation)
-            let copiedObjects = receiver.copiedObjects(at: p)
-            if !copiedObjects.isEmpty {
-                stopEditableEvents()
-                receiver.remove(for: p, rootView.version)
-                receiver.push(copiedObjects, to: rootView.version)
-            }
+            let userObject = self.userObject(at: eventValue.rootLocation)
+            let copiedObject = userObject.copiedObject
+            stopEditableEvents()
+            userObject.remove(with: eventValue, actionMap.phase, rootView.version)
+            rootView.push(copiedObject, to: rootView.version)
         case actionList.copyAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let receiver = object(at: eventValue.rootLocation)
-            let p = receiver.convertFromRoot(eventValue.rootLocation)
-            let copiedObjects = receiver.copiedObjects(at: p)
-            if !copiedObjects.isEmpty {
-                stopEditableEvents()
-                receiver.push(copiedObjects, to: rootView.version)
-            }
+            let userObject = self.userObject(at: eventValue.rootLocation)
+            let copiedObject = userObject.copiedObject
+            stopEditableEvents()
+            rootView.push(copiedObject, to: rootView.version)
         case actionList.pasteAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let receiver = object(at: eventValue.rootLocation)
-            let viewer = receiver.withSelfAndAllParents(with: CopiedObjectViewer.self)
-            let p = receiver.convertFromRoot(eventValue.rootLocation)
+            let userObject = self.userObject(at: eventValue.rootLocation)
             stopEditableEvents()
-            receiver.paste(viewer.copiedObjects, for: p, rootView.version)
+            userObject.paste(rootView.copiedObject,
+                             with: eventValue, actionMap.phase, rootView.version)
         case actionList.lockAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let receiver = object(at: eventValue.rootLocation)
+            let userObject = self.userObject(at: eventValue.rootLocation)
             stopEditableEvents()
-            receiver.lock(with: eventValue, actionMap.phase, rootView.version)
+            userObject.lock(with: eventValue, actionMap.phase, rootView.version)
         case actionList.newAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let receiver = object(at: eventValue.rootLocation)
+            let userObject = self.userObject(at: eventValue.rootLocation)
             stopEditableEvents()
-            receiver.new(with: eventValue, actionMap.phase, rootView.version)
+            userObject.new(with: eventValue, actionMap.phase, rootView.version)
         case actionList.findAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let receiver = object(at: eventValue.rootLocation)
+            let userObject = self.userObject(at: eventValue.rootLocation)
             stopEditableEvents()
-            receiver.find(with: eventValue, actionMap.phase, rootView.version)
+            userObject.find(with: eventValue, actionMap.phase, rootView.version)
         case actionList.exportAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let receiver = object(at: eventValue.rootLocation)
+            let userObject = self.userObject(at: eventValue.rootLocation)
             stopEditableEvents()
-            receiver.export(with: eventValue, actionMap.phase, rootView.version)
-        case actionList.strokeAction:
+            userObject.export(with: eventValue, actionMap.phase, rootView.version)
+        case actionList.strokeAction, actionList.lassoFillAction:
             guard let eventValue = actionMap.eventValues(with: DragEvent.self).first else { return }
             if actionMap.phase == .began {
-                strokableObject = StrokableObject(strokableView: rootView)
+                let userObject = self.userObject(at: eventValue.rootLocation)
+                strokableUserObject = (userObject as? MakableStrokable)?
+                    .strokable(withRootView: rootView) ?? rootView.strokable(withRootView: rootView)
             }
-            strokableObject?.stroke(with: eventValue, actionMap.phase, rootView.version)
+            strokableUserObject?.stroke(with: eventValue, actionMap.phase,
+                                        isSurface: actionMap.action == actionList.lassoFillAction,
+                                        rootView.version)
             if actionMap.phase == .ended {
-                strokableObject = nil
+                strokableUserObject = nil
             }
         case actionList.moveAction:
             guard let eventValue = actionMap.eventValues(with: DragEvent.self).first else { return }
             if actionMap.phase == .began {
-                let receiver = object(at: eventValue.rootLocation)
-                strokableObject = MovableObject(strokableView: receiver)
+                movableObject = userObject(at: eventValue.rootLocation)
             }
             movableObject?.move(with: eventValue, actionMap.phase, rootView.version)
             if actionMap.phase == .ended {
-                strokableObject = nil
+                movableObject = nil
             }
         default: break
         }
     }
+}
+
+final class UserObject: Newable, Lockable, Findable, Exportable, CollectionAssignable, Movable {
+    var copiedObject = Object(Text(stringLines: [StringLine(string: "None", origin: Point())]))
+    
+    var rootView: Sender.RootView
+//    var views: [View & Layoutable]
+    
+    var transformingMovableObject: TransformingMovableObject?
+    
+    init(rootView: Sender.RootView, transformingMovableObject: TransformingMovableObject?) {
+        self.rootView = rootView
+        self.transformingMovableObject = transformingMovableObject
+    }
+    
+    func move(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
+        transformingMovableObject?.move(with: eventValue, phase, version)
+    }
+    
+    func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        
+    }
+    func paste(_ object: Object,
+               with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        rootView.paste(object, with: eventValue, phase, version)
+    }
+    
+    func new(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        
+    }
+    func lock(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        
+    }
+    func find(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        
+    }
+    func export(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        
+    }
+}
+
+protocol MakableKeyInputtable {
+    func keyInputable(withRootView rootView: View, at p: Point) -> KeyInputtable
 }
 
 protocol Zoomable: class {
@@ -262,18 +317,19 @@ protocol Undoable {
     var version: Version { get }
 }
 
-protocol CopiedObjectsViewer: class {
+protocol CopiableViewer: class {
     var copiedObject: Object { get }
     func push(_ copiedObject: Object, to version: Version)
 }
 protocol Copiable {
-    func copiedObjects(at p: Point) -> [Object]
+    var copiedObject: Object { get }
 }
 protocol Assignable: Copiable {
-    func paste(_ objects: [Any], for p: Point, _ version: Version)
+    func paste(_ object: Object,
+               with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
 }
 protocol CollectionAssignable: Assignable {
-    func remove(for p: Point, _ version: Version)
+    func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
 }
 
 protocol Newable {
@@ -290,10 +346,7 @@ protocol Exportable {
 }
 
 protocol Strokable: class {
-    func convertToCurrentLocal(_ point: Point) -> Point
-    var viewScale: Real { get set }
-    func insert(_ line: Line, to version: Version)
-    func update(_ line: Line)
+    func stroke(with eventValue: DragEvent.Value, _ phase: Phase, isSurface: Bool, _ version: Version)
 }
 
 protocol ViewPointMover: class {
@@ -318,23 +371,18 @@ protocol PointEditable: VertexMovable {
     func removeNearestPoint(for p: Point, _ version: Version)
 }
 
-protocol Movable: class, Layoutable {
-    var isInteger: Bool { get }
-    func captureWillMoveObject(at p: Point, to version: Version)
+protocol MovableOrigin: class {
     var movingOrigin: Point { get set }
 }
-extension Movable {
-    var isInteger: Bool {
-        return false
-    }
+protocol Movable {
+    func move(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version)
 }
-
-final class TransformingMovableObject {
-    var viewAndFirstOrigins: [(View & TransformProtocol, Point)]
+final class TransformingMovableObject: Movable {
+    var viewAndFirstOrigins: [(View & MovableOrigin, Point)]
     var rootView: View
     var fp = Point()
     
-    init(viewAndFirstOrigins: [(View & TransformProtocol, Point)], rootView: View) {
+    init(viewAndFirstOrigins: [(View & MovableOrigin, Point)], rootView: View) {
         self.viewAndFirstOrigins = viewAndFirstOrigins
         self.rootView = rootView
     }
@@ -343,7 +391,7 @@ final class TransformingMovableObject {
         guard !viewAndFirstOrigins.isEmpty else { return }
         viewAndFirstOrigins.forEach { (receiver, oldP) in
             let p = rootView.convertFromRoot(eventValue.rootLocation)
-            receiver.transform.translation = (oldP + p - fp).rounded()
+            receiver.movingOrigin = (oldP + p - fp).rounded()
         }
         
         if phase == .ended {

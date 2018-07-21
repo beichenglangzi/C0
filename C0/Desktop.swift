@@ -19,8 +19,9 @@
 
 struct Desktop: Codable {
     var version = Version()
-    var copiedObject = Object(Localization(english: "Empty Copied Object",
-                                           japanese: "空のコピー済みオブジェクト").currentString)
+    var copiedObject = Object(Text(stringLines:
+        [StringLine(string: Localization(english: "Empty", japanese: "空").currentString,
+                    origin: Point())]))
     var transform = Transform()
     var objects = [Object]()
 }
@@ -40,7 +41,6 @@ final class DesktopBinder: BinderProtocol {
     
     init(rootModel: Desktop) {
         self.rootModel = rootModel
-        
         diffDesktopDataModel = DataModel(key: diffDesktopDataModelKey)
         objectsDataModel = DataModel(key: objectsDataModelKey, directoryWith: [])
         dataModel = DataModel(key: dataModelKey,
@@ -161,12 +161,35 @@ extension DesktopView: Undoable {
         return model.version
     }
 }
-extension DesktopView: CopiedObjectsViewer {
+extension DesktopView: CopiableViewer {
     var copiedObject: Object {
         get { return copiedObjectView.model }
         set { copiedObjectView.model = newValue }
     }
     func push(_ copiedObject: Object, to version: Version) {
         copiedObjectView.push(copiedObject, to: version)
+    }
+}
+extension DesktopView: Assignable {
+    func paste(_ object: Object,
+               with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        objectsView.insert(object, at: objectsView.model.count, version)
+    }
+}
+extension DesktopView: MakableStrokable {
+    func strokable(withRootView rootView: View) -> Strokable {
+        objectsView.insert(Object(Drawing()), at: objectsView.model.count, version)
+        let objectView = objectsView.modelViews.last as! ObjectView<Binder>
+        let drawingView = objectView.valueView as! DrawingView<BasicBinder<Drawing>>
+        return StrokableUserObject(rootView: rootView, drawingView: drawingView)
+    }
+}
+extension DesktopView: MakableKeyInputtable {
+    func keyInputable(withRootView rootView: View, at p: Point) -> KeyInputtable {
+        objectsView.insert(Object(Text(stringLines: [StringLine(string: "", origin: p)])),
+                           at: objectsView.model.count, version)
+        let objectView = objectsView.modelViews.last as! ObjectView<Binder>
+        let textView = objectView.valueView as! TextView<BasicBinder<Text>>
+        return textView.stringLinesView.modelViews.first! as! KeyInputtable
     }
 }

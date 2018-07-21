@@ -19,11 +19,26 @@
 
 import func CoreGraphics.sqrt
 
-final class StrokableObject {
-    var strokableView: View & Strokable
+protocol MakableStrokable {
+    func strokable(withRootView rootView: View) -> Strokable
+}
+final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
+    var rootView: View
+    var drawingView: DrawingView<Binder>
+    var surfaceView: SurfaceView<Binder>?
+    var lineView: LineView<Binder>?
     
-    init(strokableView: View & Strokable) {
-        self.strokableView = strokableView
+    func convertToCurrentLocal(_ point: Point) -> Point {
+        return drawingView.convertFromRoot(point)
+    }
+    var viewScale: Real {
+        get { return rootView.transform.z }
+        set { rootView.transform.z = newValue }
+    }
+    
+    init(rootView: View, drawingView: DrawingView<Binder>) {
+        self.rootView = rootView
+        self.drawingView = drawingView
     }
     
     var line: Line?
@@ -136,12 +151,15 @@ final class StrokableObject {
     
     var tempPoints = [Point]()
     var minDistance = 2.0.cg, oldP = Point()
-    func stroke(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
-        
+    func stroke(with eventValue: DragEvent.Value, _ phase: Phase,
+                isSurface: Bool, _ version: Version) {
+        let p = rootView.convertFromRoot(eventValue.rootLocation)
+        stroke(for: p, pressure: eventValue.pressure, time: eventValue.time, phase,
+               isSurface: isSurface, to: version)
     }
-    func stroke(for point: Point, pressure: Real, time: Real, _ phase: Phase,
+    func stroke(for point: Point, pressure: Real, time: Real, _ phase: Phase, isSurface: Bool,
                 isAppendLine: Bool = true, to version: Version? = nil) {
-        let ap = strokableView.convertToCurrentLocal(point)
+        let ap = convertToCurrentLocal(point)
         switch phase {
         case .began:
             let line = Line(beziers: [Bezier2(p0: ap, cp: ap, p1: ap)])
@@ -149,7 +167,14 @@ final class StrokableObject {
             oldP = ap
             tempPoints = [ap]
             if isAppendLine, let version = version {
-                strokableView.insert(line, to: version)
+                if isSurface {
+                    drawingView.surfacesView.insert(Surface(line: line),
+                                                    at: drawingView.surfacesView.model.count, version)
+                    lineView = (drawingView.surfacesView.modelViews.last as? SurfaceView<Binder>)?.lineView
+                } else {
+                    drawingView.linesView.insert(line, at: drawingView.linesView.model.count, version)
+                    lineView = drawingView.linesView.modelViews.last as? LineView<Binder>
+                }
             }
         case .changed, .ended:
             guard var line = line else { return }
@@ -208,7 +233,7 @@ final class StrokableObject {
                 tempPoints = [lastP, p]
                 line.beziers.append(Bezier2(p0: lastP, cp: lastP, p1: p))
                 self.line = line
-                strokableView.update(line)
+                lineView?.model = line
                 return
             }
             let distance = tempPoints.reduce(0.0.cg) {
@@ -222,7 +247,7 @@ final class StrokableObject {
                 line.beziers.append(Bezier2(p0: lastP, cp: lastP, p1: p))
             }
             self.line = line
-            strokableView.update(line)
+            lineView?.model = line
         }
     }
     
@@ -297,7 +322,8 @@ final class StrokableObject {
     var lines = [Line]()
     
     func lassoErase(for p: Point, pressure: Real, time: Real, _ phase: Phase) {
-        _ = stroke(for: p, pressure: pressure, time: time, phase, isAppendLine: false)
+        _ = stroke(for: p, pressure: pressure, time: time, phase,
+                   isSurface: false, isAppendLine: false)
         switch phase {
         case .began:
             break
@@ -309,7 +335,7 @@ final class StrokableObject {
     }
     func lassoErase(with line: Line) {
         var isRemoveLineInDrawing = false
-        let lasso = GeometryLasso(geometry: Geometry(lines: [line]))
+        let lasso = SurfaceLasso(surface: Surface(line: line))
         let newDrawingLines = lines.reduce(into: [Line]()) {
             if let splitedLine = lasso.splitedLine(with: $1) {
                 switch splitedLine {

@@ -368,12 +368,13 @@ class View {
         caShapeLayer.anchorPoint = Point()
         caShapeLayer.fillColor = nil
         caShapeLayer.lineWidth = 0
+        caShapeLayer.lineCap = kCALineCapRound
         caShapeLayer.strokeColor = lineColor?.cg
         caShapeLayer.path = path.cg
         caLayer = caShapeLayer
     }
     init(drawClosure: ((CGContext, View, Rect) -> ())?,
-         fillColor: Color? = .background, lineColor: Color? = nil,
+         fillColor: Color? = nil, lineColor: Color? = nil,
          isLocked: Bool = true) {
         
         self.isLocked = isLocked
@@ -558,7 +559,7 @@ extension View {
 }
 
 private final class C0DrawLayer: CALayer {
-    init(backgroundColor: Color? = .background, borderColor: Color? = nil) {
+    init(backgroundColor: Color? = nil, borderColor: Color? = nil) {
         super.init()
         needsDisplayOnBoundsChange = true
         drawsAsynchronously = true

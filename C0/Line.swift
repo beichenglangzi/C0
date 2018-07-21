@@ -155,86 +155,6 @@ extension Line {
             }
         }
     }
-//    func splited(startIndex: Int, startT: Real, endIndex: Int, endT: Real,
-//                 isMultiLine: Bool = true) -> [Line] {
-//        func pressure(at i: Int, t: Real) -> Real {
-//            if points.count == 2 {
-//                return Real.linear(points[0].pressure, points[1].pressure, t: t)
-//            } else if points.count == 3 {
-//                return t < 0.5 ?
-//                    Real.linear(points[0].pressure, points[1].pressure, t: t * 2) :
-//                    Real.linear(points[1].pressure, points[2].pressure, t: (t - 0.5) * 2)
-//            } else {
-//                let previousPressure = i == 0 ?
-//                    points[0].pressure :
-//                    (points[i].pressure + points[i + 1].pressure) / 2
-//                let nextPressure = i == points.count - 3 ?
-//                    points[points.count - 1].pressure :
-//                    (points[i + 1].pressure + points[i + 2].pressure) / 2
-//                return i  > 0 ?
-//                    Real.linear(previousPressure, nextPressure, t: t) :
-//                    points[i].pressure
-//            }
-//        }
-//        if startIndex == endIndex {
-//            let b = bezier(at: startIndex).clip(startT: startT, endT: endT)
-//            let pr0 = startIndex == 0 && startT == 0 ?
-//                points[0].pressure :
-//                pressure(at: startIndex, t: startT)
-//            let pr1 = endIndex == points.count - 3 && endT == 1 ?
-//                points[points.count - 1].pressure :
-//                pressure(at: endIndex, t: endT)
-//            return [Line(bezier: b, p0Pressure: pr0, cpPressure: (pr0 + pr1) / 2, p1Pressure: pr1)]
-//        } else if isMultiLine {
-//            var newLines = [Line]()
-//            let indexes = startIndex + 1..<endIndex + 2
-//            var cs = Array(points[indexes])
-//            if startIndex == 0 && startT == 0 {
-//                cs.insert(points[0], at: 0)
-//            } else {
-//                cs[0] = points[startIndex + 1].mid(points[startIndex + 2])
-//                let fprs0 = pressure(at: startIndex, t: startT), fprs1 = cs[0].pressure
-//                newLines.append(Line(bezier: bezier(at: startIndex).clip(startT: startT, endT: 1),
-//                                     p0Pressure: fprs0,
-//                                     cpPressure: (fprs0 + fprs1) / 2,
-//                                     p1Pressure: fprs1))
-//            }
-//            if endIndex == points.count - 3 && endT == 1 {
-//                cs.append(points[points.count - 1])
-//                newLines.append(Line(points: cs))
-//            } else {
-//                cs[cs.count - 1] = points[endIndex].mid(points[endIndex + 1])
-//                newLines.append(Line(points: cs))
-//                let eprs0 = cs[cs.count - 1].pressure, eprs1 = pressure(at: endIndex, t: endT)
-//                newLines.append(Line(bezier: bezier(at: endIndex).clip(startT: 0, endT: endT),
-//                                     p0Pressure: eprs0,
-//                                     cpPressure: (eprs0 + eprs1) / 2,
-//                                     p1Pressure: eprs1))
-//            }
-//            return newLines
-//        } else {
-//            let indexes = startIndex + 1..<endIndex + 2
-//            var cs = Array(points[indexes])
-//            if endIndex - startIndex >= 1 && cs.count >= 2 {
-//                cs[0].point = Point.linear(cs[0].point, cs[1].point, t: startT * 0.5)
-//                cs[cs.count - 1].point = Point.linear(cs[cs.count - 2].point,
-//                                                      cs[cs.count - 1].point,
-//                                                      t: endT * 0.5 + 0.5)
-//            }
-//            let fc = startIndex == 0 && startT == 0 ?
-//                Point(point: points[0].point, pressure: points[0].pressure) :
-//                Point(point: bezier(at: startIndex).position(withT: startT),
-//                        pressure: pressure(at: startIndex + 1, t: startT))
-//            cs.insert(fc, at: 0)
-//            let lc = endIndex == points.count - 3 && endT == 1 ?
-//                Point(point: points[points.count - 1].point,
-//                        pressure: points[points.count - 1].pressure) :
-//                Point(point: bezier(at: endIndex).position(withT: endT),
-//                        pressure: pressure(at: endIndex + 1, t: endT))
-//            cs.append(lc)
-//            return [Line(points: cs)]
-//        }
-//    }
     
     func approximatedBezierLine(withScale scale: Real) -> Line {
         if points.count <= 2 {
@@ -487,125 +407,24 @@ extension Line {
     }
 }
 extension Line {
-    func concreteViewWith<T>
-        (binder: T,
-         keyPath: ReferenceWritableKeyPath<T, Line>) -> ModelView where T: BinderProtocol {
-        
-        return LineView(binder: binder, keyPath: keyPath)
-    }
     func view(lineWidth size: Real, fillColor: Color) -> View {
         let path = self.path(lineWidth: size)
         let view = View(path: path)
-        view.fillColor = fillColor
+        view.lineColor = fillColor
+        view.lineWidth = 1
         return view
     }
     func path(lineWidth size: Real) -> Path {
-        let s = size / 2
-        
         guard let firstPoint = beziers.first?.p0 else {
             return Path()
         }
-        var es = [PathLine.Element](), res = [PathLine.Element]()
+        var es = [PathLine.Element]()
         for bezier in beziers {
-            let length = bezier.p0.distance(bezier.cp) + bezier.cp.distance(bezier.p1)
-            let count = Int(length)
-            if count > 0 {
-                let splitDeltaT = 1 / length
-                var t = 0.0.cg
-                for _ in 0..<count {
-                    t += splitDeltaT
-                    let p = bezier.position(withT: t)
-                    let dp = bezier.difference(withT: t)
-                        .perpendicularDeltaPoint(withDistance: s)
-                    es.append(.linear(p + dp))
-                    res.append(.linear(p - dp))
-                }
-            }
+            es.append(.bezier2(point: bezier.p1, control: bezier.cp))
         }
-        es += res.reversed()
         var path = Path()
         path.append(PathLine(firstPoint: firstPoint, elements: es))
         return path
-        
-        if points.count <= 2 {
-            guard points.count == 2 else {
-                return Path()
-            }
-            let firstTheta = points[0].tangential(points[1]) + .pi / 2
-            let dp0 = Point(x: cos(firstTheta), y: sin(firstTheta))
-            let dp1 = Point(x: cos(firstTheta), y: sin(firstTheta))
-            
-            let fp = points[0] + dp0
-            let p0 = points[1] + dp1
-            let arc0 = PathLine.Arc(radius: s,
-                                    startAngle: firstTheta + .pi, endAngle: firstTheta - .pi)
-            let p1 = points[0] - dp0
-            let arc1 = PathLine.Arc(radius: s,
-                                    startAngle: firstTheta - .pi, endAngle: firstTheta + .pi)
-            let pathLine = PathLine(firstPoint: fp, elements: [.linear(p0), .arc(arc0),
-                                                               .linear(p1), .arc(arc1)])
-            
-            var path = Path()
-            path.append(pathLine)
-            return path
-        } else {
-            let firstTheta = points[0].tangential(points[1]) + .pi / 2
-            var es = [PathLine.Element](), res = [PathLine.Element]()
-            let fp = points[0] + Point(x: cos(firstTheta), y: sin(firstTheta))
-            if points.count == 3 {
-                let bezier = self.bezier(at: 0)
-                let length = bezier.p0.distance(bezier.cp) + bezier.cp.distance(bezier.p1)
-                let count = Int(length)
-                if count > 0 {
-                    let splitDeltaT = 1 / length
-                    var t = 0.0.cg
-                    for _ in 0..<count {
-                        t += splitDeltaT
-                        let p = bezier.position(withT: t)
-                        let dp = bezier.difference(withT: t)
-                            .perpendicularDeltaPoint(withDistance: s)
-                        es.append(.linear(p + dp))
-                        res.append(.linear(p - dp))
-                    }
-                }
-            } else {
-                for bezier in bezierSequence {
-                    let length = bezier.p0.distance(bezier.cp) + bezier.cp.distance(bezier.p1)
-                    let count = Int(length)
-                    if count > 0 {
-                        let splitDeltaT = 1 / length
-                        var t = 0.0.cg
-                        for _ in 0..<count {
-                            t += splitDeltaT
-                            let p = bezier.position(withT: t)
-                            let dp = bezier.difference(withT: t)
-                                .perpendicularDeltaPoint(withDistance: s)
-                            es.append(.linear(p + dp))
-                            res.append(.linear(p - dp))
-                        }
-                    }
-                }
-            }
-            
-            let lp = points[points.count - 1]
-            let lastTheta = points[points.count - 2]
-                .tangential(points[points.count - 1]) + .pi / 2
-            es.append(.linear(lp + Point(x: cos(lastTheta), y: sin(lastTheta))))
-            res.append(.linear(lp - Point(x: cos(lastTheta), y: sin(lastTheta))))
-            
-            es.append(.arc(PathLine.Arc(radius: s,
-                                        startAngle: lastTheta,
-                                        endAngle: lastTheta + .pi)))
-            es += res.reversed()
-            es.append(.linear(points[0] - Point(x: cos(firstTheta), y: sin(firstTheta))))
-            es.append(.arc(PathLine.Arc(radius: s,
-                                        startAngle: firstTheta + .pi,
-                                        endAngle: firstTheta)))
-            
-            var path = Path()
-            path.append(PathLine(firstPoint: fp, elements: es))
-            return path
-        }
     }
 }
 extension Line: AppliableAffineTransform {
@@ -755,6 +574,8 @@ final class LineView<T: BinderProtocol>: ModelView, BindableReceiver {
         self.keyPath = keyPath
         
         super.init(path: Path(), isLocked: false)
+        lineColor = .content
+        lineWidth = 1
         updateWithModel()
     }
     

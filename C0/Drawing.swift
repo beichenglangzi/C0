@@ -21,12 +21,12 @@ import CoreGraphics
 
 struct Drawing: Codable, Equatable {
     var lines = [Line]()
-    //membranes
-    static let lineWidth = 1.0.cg
+    var surfaces = [Surface]()
+    var isLocked = false
 }
 extension Drawing {
     var imageBounds: Rect {
-        return imageBounds(withLineWidth: Drawing.lineWidth)
+        return imageBounds(withLineWidth: 1)
     }
     func imageBounds(withLineWidth lineWidth: Real) -> Rect {
         return Line.imageBounds(with: lines, lineWidth: lineWidth)
@@ -339,22 +339,31 @@ extension Drawing {
 extension Drawing: Interpolatable {
     static func linear(_ f0: Drawing, _ f1: Drawing, t: Real) -> Drawing {
         let lines = [Line].linear(f0.lines, f1.lines, t: t)
-        return Drawing(lines: lines)
+        let surfaces = [Surface].linear(f0.surfaces, f1.surfaces, t: t)
+        let isLocked = f0.isLocked
+        return Drawing(lines: lines, surfaces: surfaces, isLocked: isLocked)
     }
     static func firstMonospline(_ f1: Drawing, _ f2: Drawing, _ f3: Drawing,
                                 with ms: Monospline) -> Drawing {
         let lines = [Line].firstMonospline(f1.lines, f2.lines, f3.lines, with: ms)
-        return Drawing(lines: lines)
+        let surfaces = [Surface].firstMonospline(f1.surfaces, f2.surfaces, f3.surfaces, with: ms)
+        let isLocked = f1.isLocked
+        return Drawing(lines: lines, surfaces: surfaces, isLocked: isLocked)
     }
     static func monospline(_ f0: Drawing, _ f1: Drawing, _ f2: Drawing, _ f3: Drawing,
                            with ms: Monospline) -> Drawing {
         let lines = [Line].monospline(f0.lines, f1.lines, f2.lines, f3.lines, with: ms)
-        return Drawing(lines: lines)
+        let surfaces = [Surface].monospline(f0.surfaces, f1.surfaces,
+                                            f2.surfaces, f3.surfaces, with: ms)
+        let isLocked = f1.isLocked
+        return Drawing(lines: lines, surfaces: surfaces, isLocked: isLocked)
     }
     static func lastMonospline(_ f0: Drawing, _ f1: Drawing, _ f2: Drawing,
                                with ms: Monospline) -> Drawing {
         let lines = [Line].lastMonospline(f0.lines, f1.lines, f2.lines, with: ms)
-        return Drawing(lines: lines)
+        let surfaces = [Surface].lastMonospline(f0.surfaces, f1.surfaces, f2.surfaces, with: ms)
+        let isLocked = f1.isLocked
+        return Drawing(lines: lines, surfaces: surfaces, isLocked: isLocked)
     }
 }
 extension Drawing: Viewable {
@@ -377,13 +386,20 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     var notifications = [((DrawingView<Binder>, BasicNotification) -> ())]()
     
-    var viewScale = 1.0.cg
+    let linesView: ArrayView<Line, Binder>
+    let surfacesView: ArrayView<Surface, Binder>
     
     init(binder: T, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
+        linesView = ArrayView(binder: binder, keyPath: keyPath.appending(path: \Model.lines))
+        surfacesView = ArrayView(binder: binder, keyPath: keyPath.appending(path: \Model.surfaces))
+        
         super.init(isLocked: false)
+        let view = View()
+        view.children = [linesView]
+        children = [surfacesView, view]
         updateWithModel()
     }
     
@@ -391,12 +407,12 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
         return model.imageBounds.size
     }
     func updateWithModel() {
-        children = model.lines.enumerated().map { (i, line) in
-            let view = line.concreteViewWith(binder: binder,
-                                             keyPath: keyPath.appending(path: \Model.lines[i]))
-            view.fillColor = .black
-            return view
-        }
+        surfacesView.updateWithModel()
+        linesView.updateWithModel()
+        updateIsLocked()
+    }
+    func updateIsLocked() {
+        opacity = model.isLocked ? 0.2 : 1
     }
     override var isEmpty: Bool {
         return false
@@ -409,7 +425,6 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
             nearest.minDistance² < Layouter.movablePadding ** 2 else {
                 return containsPath(p) ? self : nil
         }
-        
 //        switch nearest.result {
 //        case .linePoint(let linePoint):
 //            return children[linePoint.lineIndex].children[linePoint.pointIndex]
@@ -421,5 +436,39 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
 //            }
 //        }
         return nil
+    }
+    override func contains(_ p: Point) -> Bool {
+        return true
+    }
+}
+extension DrawingView: Lockable {
+    func lock(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        push(isLocked: true, to: version)
+    }
+    func push(isLocked: Bool, to version: Version) {
+        version.registerUndo(withTarget: self) { [oldModel = self.model.isLocked, unowned version] in
+            $0.push(isLocked: oldModel, to: version)
+        }
+        binder[keyPath: keyPath].isLocked = isLocked
+        updateIsLocked()
+    }
+}
+extension DrawingView: MakableStrokable {
+    func strokable(withRootView rootView: View) -> Strokable {
+        return StrokableUserObject(rootView: rootView, drawingView: self)
+    }
+}
+extension DrawingView: MovableOrigin {
+    var movingOrigin: Point {
+        get { return model.imageBounds.origin }
+        set {
+            let dp = newValue - binder[keyPath: keyPath].imageBounds.origin
+            for (i, _) in model.lines.enumerated() {
+                model.lines[i].beziers = model.lines[i].beziers.map { Bezier2(p0: $0.p0 + dp,
+                                                                              cp: $0.cp + dp,
+                                                                              p1: $0.p1 + dp) }
+            }
+            updateWithModel()
+        }
     }
 }

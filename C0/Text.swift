@@ -20,7 +20,7 @@
 import Foundation
 
 struct Text: Codable {
-    
+    var stringLines: [StringLine]
 }
 extension Text: Viewable {
     func viewWith<T: BinderProtocol>
@@ -42,10 +42,16 @@ final class TextView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     var notifications = [((TextView<Binder>, BasicNotification) -> ())]()
 
+    let stringLinesView: ArrayView<StringLine, Binder>
+    
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
+        stringLinesView = ArrayView(binder: binder,
+                                    keyPath: keyPath.appending(path: \Model.stringLines))
+        
         super.init(isLocked: false)
+        children = [stringLinesView]
     }
 }

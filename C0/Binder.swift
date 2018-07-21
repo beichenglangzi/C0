@@ -110,21 +110,21 @@ extension BindableReceiver {
         return model
     }
     func reset(for p: Point, _ version: Version) {}
-    func copiedObjects(at p: Point) -> [Object] {
+    
+    var copiedObject: Object {
         if let valueChain = model as? ValueChain,
             let value = valueChain.rootChainValue as? Object.Value {
             
-            return [Object(value)]
+            return Object(value)
         } else {
-            return [Object(model)]
+            return Object(model)
         }
     }
-    func paste(_ values: [Any], for p: Point, _ version: Version) {
-        for value in values {
-            if let model = value as? Model {
-                push(clippedModel(model), to: version)
-                return
-            }
+    func paste(_ object: Object,
+               with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        if let model = object.value as? Model {
+            push(clippedModel(model), to: version)
+            return
         }
     }
 }

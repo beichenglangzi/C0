@@ -129,6 +129,18 @@ struct ActionList {
     let zoomAction = Action(name: Localization(english: "Zoom", japanese: "ズーム"),
                             quasimode: Quasimode([.pinch(.pinch)]),
                             isEditable: false)
+    let strokeAction = Action(name: Localization(english: "Stroke", japanese: "ストローク"),
+                              quasimode: Quasimode([.drag(.drag)]))
+    let lassoFillAction = Action(name: Localization(english: "Lasso Fill", japanese: "囲み塗る"),
+                                 quasimode: Quasimode(modifier: [.input(.command)],
+                                                      [.drag(.drag)]))
+    let moveAction = Action(name: Localization(english: "Move", japanese: "移動"),
+                            quasimode: Quasimode(modifier: [.input(.shift)],
+                                                 [.drag(.drag)]))
+    let AddRectAction = Action(name: Localization(english: "Add Rect", japanese: "矩形を追加"),
+                                 quasimode: Quasimode(modifier: [.input(.option)],
+                                                      [.drag(.drag)]))
+    //duplicateAction
     
     //timeLeapAction
     let undoAction = Action(name: Localization(english: "Undo", japanese: "取り消す"),
@@ -163,57 +175,39 @@ struct ActionList {
                               quasimode: Quasimode(modifier: [.input(.command)],
                                                    [.input(.e)]))
     
-    let strokeAction = Action(name: Localization(english: "Stroke", japanese: "ストローク"),
-                              quasimode: Quasimode([.drag(.drag)]))
-    let moveAction = Action(name: Localization(english: "Move", japanese: "移動"),
-                            quasimode: Quasimode(modifier: [.input(.shift)],
-                                                 [.drag(.drag)]))
-    //duplicateAction
-    
-    struct Sub {
-        var actions: [Action]
-    }
-    
-    let subs: [Sub], actions: [Action]
+    let actions: [Action]
     init() {
-        subs = [Sub(actions: [zoomAction]),
-                Sub(actions: [undoAction, redoAction]),
-                Sub(actions: [cutAction, copyAction, pasteAction]),
-                Sub(actions: [lockAction, newAction, findAction, exportAction]),
-                Sub(actions: [strokeAction, moveAction])]
-        actions = subs.flatMap { $0.actions }
+        actions = [zoomAction, strokeAction, lassoFillAction,
+                   moveAction, AddRectAction,
+                   undoAction, redoAction,
+                   cutAction, copyAction, pasteAction,
+                   lockAction, newAction, findAction, exportAction]
     }
 }
 extension ActionList {
-    var layoutsAndSize: (layouts: [Layout<String>], size: Size) {
-        var layouts = [Layout<String>]()
+    var textAndSize: (text: Text, size: Size) {
+        var stringLines = [StringLine]()
         var maxNameX = 0.0.cg, y = 0.0.cg
-        for sub in subs {
-            for action in sub.actions {
-                let name = action.name.currentString
-                let view = StringFormView(string: name)
-                view.frame.origin.y = y
-                layouts.append(Layout(name, transform: Transform(translation: Point(x: 0, y: y),
-                                                                 z: 0)))
-                maxNameX = max(maxNameX, view.minSize.width)
-                y -= view.minSize.height
-            }
-            y -= Layouter.padding
+        for action in actions {
+            let name = action.name.currentString
+            let view = StringFormView(string: name)
+            view.frame.origin.y = y
+            stringLines.append(StringLine(string: name, origin: Point(x: 0, y: y)))
+            maxNameX = max(maxNameX, view.minSize.width)
+            y -= view.minSize.height
         }
         y = 0
         let x = maxNameX + Layouter.padding * 2
         var maxQuasimodeX = 0.0.cg
-        for sub in subs {
-            for action in sub.actions {
-                let quasimode = action.quasimode.displayText.currentString
-                let view = StringFormView(string: quasimode)
-                layouts.append(Layout(quasimode, transform: Transform(translation: Point(x: x, y: y),
-                                                                      z: 0)))
-                maxQuasimodeX = max(maxNameX, view.minSize.width)
-                y -= view.minSize.height
-            }
-            y -= Layouter.padding
+        for action in actions {
+            let quasimode = action.quasimode.displayText.currentString
+            let view = StringFormView(string: quasimode)
+            stringLines.append(StringLine(string: quasimode, origin: Point(x: x, y: y)))
+            maxQuasimodeX = max(maxNameX, view.minSize.width)
+            y -= view.minSize.height
         }
-        return (layouts, Size(width: x + maxQuasimodeX, height: -(y + Layouter.padding)))
+        
+        return (Text(stringLines: stringLines),
+                Size(width: x + maxQuasimodeX, height: -(y + Layouter.padding)))
     }
 }

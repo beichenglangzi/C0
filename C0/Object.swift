@@ -70,22 +70,22 @@ struct Object {
     static func append<T: Value & Viewable>(_ type: T.Type) {
         types[type.objectTypeName] = type
         appendInArray(type)
-        appendInArray(Layout<T>.self)
-        appendInLayout(type)
-        appendInLayout(Array<T>.self)
+        appendInArray(Transforming<T>.self)
+        appendInTransfoming(type)
+        appendInTransfoming(Array<T>.self)
     }
     static func appendInArray<T: Value & Viewable>(_ type: T.Type) {
         let arrayType = Array<T>.self
         types[arrayType.objectTypeName] = arrayType
     }
-    static func appendInLayout<T: Value & Viewable>(_ type: T.Type) {
-        let layoutType = Layout<T>.self
-        types[layoutType.objectTypeName] = layoutType
+    static func appendInTransfoming<T: Value & Viewable>(_ type: T.Type) {
+        let transformingType = Transforming<T>.self
+        types[transformingType.objectTypeName] = transformingType
     }
     static func appendTypes() {
         append(Drawing.self)
-        append(Layout<Color>.self)
-        append(Layout<Image>.self)
+        append(Color.self)
+        append(Image.self)
         append(Text.self)
     }
     

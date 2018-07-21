@@ -49,7 +49,7 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
     var notifications = [((ArrayView<ModelElement, Binder>, BasicNotification) -> ())]()
     
     private(set) var rootView: View
-    private(set) var modelViews: [View]
+    private(set) var modelViews: [ModelView]
     
     var newableValue: Object.Value?
     
@@ -65,7 +65,6 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
                                               binder: binder, keyPath: keyPath)
         
         super.init(isLocked: false)
-        isClipped = true
         
         rootView.children = modelViews
         children = [rootView]
@@ -100,14 +99,11 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
     func updateChildren() {
         modelViews = ArrayView.modelViewsWith(model: model,
                                               binder: binder, keyPath: keyPath)
-        if let views = modelViews as? [LayoutView<Object, Binder>] {
-            views.forEach { $0.updateWithModel() }
-        }
         self.rootView.children = modelViews
         updateLayout()
     }
     static func modelViewsWith(model: Model,
-                               binder: Binder, keyPath: BinderKeyPath) -> [View] {
+                               binder: Binder, keyPath: BinderKeyPath) -> [ModelView] {
         return model.enumerated().map { (i, element) in
             element.viewWith(binder: binder,
                              keyPath: keyPath.appending(path: \Model[i]))
@@ -118,14 +114,32 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
     }
     
     func append(_ element: ModelElement, _ version: Version) {
-        var model = self.model
-        model.append(element)
-        push(model, to: version)
+        version.registerUndo(withTarget: self) { [oldIndex = model.count - 1] in
+            $0.remove(at: oldIndex, version)
+        }
+        binder[keyPath: keyPath].append(element)
+        let view = element.viewWith(binder: binder,
+                                    keyPath: keyPath.appending(path: \Model[model.count - 1]))
+        append(child: view)
+        
+//        var model = self.model
+//        model.append(element)
+//        push(model, to: version)
     }
     func insert(_ element: ModelElement, at index: Int, _ version: Version) {
-        var model = self.model
-        model.insert(element, at: index)
-        push(model, to: version)
+        version.registerUndo(withTarget: self) {
+            $0.remove(at: index, version)
+        }
+        
+        binder[keyPath: keyPath].insert(element, at: index)
+        let view = element.viewWith(binder: binder,
+                                    keyPath: keyPath.appending(path: \Model[index]))
+        append(child: view)
+        
+//        remove(at: index, version)
+//        var model = self.model
+//        model.insert(element, at: index)
+//        push(model, to: version)
     }
     func remove(at index: Int, _ version: Version) {
         var model = self.model
