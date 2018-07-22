@@ -44,6 +44,9 @@ extension Size {
         return width >= other.width || height >= other.height
     }
 }
+func ceil(_ size: Size) -> Size {
+    return Size(width: size.width.rounded(.up), height: size.height.rounded(.up))
+}
 extension Size: AppliableAffineTransform {
     static func *(lhs: Size, rhs: AffineTransform) -> Size {
         return lhs.applying(rhs)

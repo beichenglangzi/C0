@@ -17,13 +17,18 @@
  along with C0.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import struct Foundation.URL
+
 struct Desktop: Codable {
     var version = Version()
     var copiedObject = Object(Text(stringLines:
         [StringLine(string: Localization(english: "Empty", japanese: "空").currentString,
                     origin: Point())]))
     var transform = Transform()
-    var objects = [Object]()
+    
+    var drawingFrame = Rect(x: -400, y: -400, width: 800, height: 800)
+    var drawing = Drawing()
+    var draftDrawing = Drawing()
 }
 extension Desktop: Viewable {
     func viewWith<T: BinderProtocol>
@@ -93,8 +98,13 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     let copiedObjectView: ObjectView<Binder>
     let transformView: TransformView<Binder>
-    let objectsView: ArrayView<Object, Binder>
+    let rootView = View()
+    let drawingFrameView: RectView<Binder>
+    let drawingView: DrawingView<Binder>
+    let draftDrawingView: DrawingView<Binder>
 
+    let drawingFrameAroundView: View
+    
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
@@ -103,27 +113,76 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
                                       keyPath: keyPath.appending(path: \Model.copiedObject))
         transformView = TransformView(binder: binder,
                                       keyPath: keyPath.appending(path: \Model.transform))
-        objectsView = ArrayView(binder: binder,
-                                keyPath: keyPath.appending(path: \Model.objects))
+        drawingView = DrawingView(binder: binder,
+                                  keyPath: keyPath.appending(path: \Model.drawing))
+        draftDrawingView = DrawingView(binder: binder,
+                                       keyPath: keyPath.appending(path: \Model.draftDrawing))
+        drawingFrameView = RectView(binder: binder,
+                                    keyPath: keyPath.appending(path: \Model.drawingFrame))
+        drawingFrameAroundView = View(path: Path())
         
         copiedObjectView.lineColor = .content
         copiedObjectView.opacity = 0.5
+        draftDrawingView.opacity = 0.2
+        
+        drawingFrameAroundView.fillColorComposition = .around
         
         super.init(isLocked: false)
+        drawingFrameView.notifications.append { [unowned self] (_, _) in
+            self.updateDrawingFrame()
+        }
         fillColor = .background
-        children = [objectsView]
+        rootView.children = [draftDrawingView, drawingView, drawingFrameView]
+        transformView.children = [rootView]
+        children = [transformView, drawingFrameAroundView]
     }
     
-    func update(withBounds bounds: Rect) {
-        objectsView.frame = bounds
-        self.bounds = bounds
-        updateTransform()
-    }
     override func updateLayout() {
-        objectsView.frame = bounds
         updateTransform()
     }
-
+    func updateDrawingFrame() {
+        drawingView.frame = model.drawingFrame
+        draftDrawingView.frame = model.drawingFrame
+        updateAround()
+    }
+    func updateTransform() {
+        var transform = zoomingTransform
+        let objectsPosition = Point(x: (bounds.width / 2).rounded(),
+                                    y: (bounds.height / 2).rounded())
+        transform.translation += objectsPosition
+        zoomingLocalView.transform = transform
+        
+        updateAround()
+    }
+    func updateAround() {
+        var path = Path()
+        path.append(bounds)
+        let affine = transform.affineTransform
+        path.append(PathLine(points: [model.drawingFrame.minXminYPoint * affine,
+                                      model.drawingFrame.maxXminYPoint * affine,
+                                      model.drawingFrame.maxXmaxYPoint * affine,
+                                      model.drawingFrame.minXmaxYPoint * affine]))
+        drawingFrameAroundView.path = path
+    }
+}
+extension DesktopView: RootModeler {
+    func userObject(at p: Point) -> UserObjectProtocol {
+        let tmo = TransformingMovableObject(viewAndFirstOrigins: [(drawingView, transform.translation)],
+                                            rootView: self)
+        let userObject = DesktopUserObject(rootView: self, transformingMovableObject: tmo)
+        if let view = rootView.at(p, Copiable.self) {
+            userObject.copiedObject = view.copiedObject
+        }
+        return userObject
+    }
+    func strokable(withRootView rootView: View) -> Strokable {
+        return StrokableUserObject(rootView: self, drawingView: drawingView)
+    }
+}
+extension DesktopView: Zoomable {
+    func captureTransform(to version: Version) {
+        transformView.push(model.transform, to: version)
+    }
     var zoomingTransform: Transform {
         get { return model.transform }
         set {
@@ -137,23 +196,11 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     func convertZoomingLocalToZoomingView(_ p: Point) -> Point {
         return zoomingLocalView.convert(p, to: zoomingView)
     }
-    func updateTransform() {
-        var transform = zoomingTransform
-        let objectsPosition = Point(x: (bounds.width - Layouter.padding * 2).rounded(),
-                                    y: (objectsView.bounds.height / 2).rounded())
-        transform.translation += objectsPosition
-        zoomingLocalView.transform = transform
-    }
     var zoomingView: View {
-        return objectsView
+        return self
     }
     var zoomingLocalView: View {
-        return objectsView.rootView
-    }
-}
-extension DesktopView: Zoomable {
-    func captureTransform(to version: Version) {
-        transformView.push(model.transform, to: version)
+        return rootView
     }
 }
 extension DesktopView: Undoable {
@@ -170,26 +217,89 @@ extension DesktopView: CopiableViewer {
         copiedObjectView.push(copiedObject, to: version)
     }
 }
-extension DesktopView: Assignable {
+extension DesktopView: CollectionAssignable {
+    func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        push(drawing: Drawing(), to: version)
+    }
     func paste(_ object: Object,
                with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        objectsView.insert(object, at: objectsView.model.count, version)
+        if let drawing = object.value as? Drawing {
+            push(drawing: model.drawing + drawing, to: version)
+        }
     }
 }
-extension DesktopView: MakableStrokable {
-    func strokable(withRootView rootView: View) -> Strokable {
-        objectsView.insert(Object(Drawing()), at: objectsView.model.count, version)
-        let objectView = objectsView.modelViews.last as! ObjectView<Binder>
-        let drawingView = objectView.valueView as! DrawingView<BasicBinder<Drawing>>
-        return StrokableUserObject(rootView: rootView, drawingView: drawingView)
+extension DesktopView: ChangeableDraft {
+    func changeToDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        push(draftDrawing: model.draftDrawing + model.drawing, to: version)
+        push(drawing: Drawing(), to: version)
+    }
+    func removeDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        push(draftDrawing: Drawing(), to: version)
+    }
+    func push(drawing: Drawing, to version: Version) {
+        version.registerUndo(withTarget: self) { [oldDrawing = model.drawing] in
+            $0.push(drawing: oldDrawing, to: version)
+        }
+        drawingView.model = drawing
+    }
+    func push(draftDrawing: Drawing, to version: Version) {
+        version.registerUndo(withTarget: self) { [oldDraftDrawing = model.draftDrawing] in
+            $0.push(draftDrawing: oldDraftDrawing, to: version)
+        }
+        draftDrawingView.model = draftDrawing
+    }
+    var draftValue: Object.Value {
+        return model.draftDrawing
     }
 }
-extension DesktopView: MakableKeyInputtable {
-    func keyInputable(withRootView rootView: View, at p: Point) -> KeyInputtable {
-        objectsView.insert(Object(Text(stringLines: [StringLine(string: "", origin: p)])),
-                           at: objectsView.model.count, version)
-        let objectView = objectsView.modelViews.last as! ObjectView<Binder>
-        let textView = objectView.valueView as! TextView<BasicBinder<Text>>
-        return textView.stringLinesView.modelViews.first! as! KeyInputtable
+extension DesktopView: URLEncodable {
+    func write(to url: URL,
+               progressClosure: @escaping (Real, inout Bool) -> () = { (_, _) in },
+               completionClosure: @escaping (Error?) -> () = { _ in }) throws {
+        let size = ceil(model.drawingFrame.size * model.transform.scale.x)
+        let image = drawingView.renderImage(with: size)
+        try image?.write(.png, to: url)
+        completionClosure(nil)
+    }
+}
+extension DesktopView: Exportable {
+    func export(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        URL.file(fileTypes: [Image.FileType.png]) { file in
+            try? self.write(to: file.url)
+        }
+    }
+}
+
+final class DesktopUserObject: UserObjectProtocol {
+    var draftValue: Object.Value
+    var copiedObject = Object(Text(stringLines: [StringLine(string: "None", origin: Point())]))
+    var rootView: Sender.RootView
+    var transformingMovableObject: TransformingMovableObject?
+    
+    init(rootView: Sender.RootView, transformingMovableObject: TransformingMovableObject?) {
+        self.rootView = rootView
+        self.transformingMovableObject = transformingMovableObject
+    }
+    
+    func move(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
+        transformingMovableObject?.move(with: eventValue, phase, version)
+    }
+    
+    func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        rootView.remove(with: eventValue, phase, version)
+    }
+    func paste(_ object: Object,
+               with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        rootView.paste(object, with: eventValue, phase, version)
+    }
+    
+    func changeToDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        rootView.changeToDraft(with: eventValue, phase, version)
+    }
+    func removeDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        rootView.removeDraft(with: eventValue, phase, version)
+    }
+    func export(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        rootView.export(with: eventValue, phase, version)
     }
 }

@@ -129,20 +129,31 @@ struct ActionList {
     let zoomAction = Action(name: Localization(english: "Zoom", japanese: "ズーム"),
                             quasimode: Quasimode([.pinch(.pinch)]),
                             isEditable: false)
+    let rotateAction = Action(name: Localization(english: "Rotate", japanese: "回転"),
+                            quasimode: Quasimode([.rotate(.rotate)]),
+                            isEditable: false)
+    let resetViewAction = Action(name: Localization(english: "Reset View", japanese: "表示を初期化"),
+                              quasimode: Quasimode([.input(.doubleTap)]),
+                              isEditable: false)
     let strokeAction = Action(name: Localization(english: "Stroke", japanese: "ストローク"),
                               quasimode: Quasimode([.drag(.drag)]))
     let lassoFillAction = Action(name: Localization(english: "Lasso Fill", japanese: "囲み塗る"),
                                  quasimode: Quasimode(modifier: [.input(.command)],
                                                       [.drag(.drag)]))
+    let lassoEraseAction = Action(name: Localization(english: "Lasso Erase", japanese: "囲み消す"),
+                                  quasimode: Quasimode(modifier: [.input(.option)],
+                                                       [.drag(.drag)]))
     let moveAction = Action(name: Localization(english: "Move", japanese: "移動"),
                             quasimode: Quasimode(modifier: [.input(.shift)],
                                                  [.drag(.drag)]))
-    let AddRectAction = Action(name: Localization(english: "Add Rect", japanese: "矩形を追加"),
-                                 quasimode: Quasimode(modifier: [.input(.option)],
+    let changeHueAction = Action(name: Localization(english: "Change Hue", japanese: "色相を変更"),
+                            quasimode: Quasimode(modifier: [.input(.control)],
+                                                 [.drag(.drag)]))
+    let changeSLAction = Action(name: Localization(english: "Change Saturation and Lightness",
+                                                   japanese: "彩度と色相を変更"),
+                                 quasimode: Quasimode(modifier: [.input(.control), .input(.shift)],
                                                       [.drag(.drag)]))
-    //duplicateAction
     
-    //timeLeapAction
     let undoAction = Action(name: Localization(english: "Undo", japanese: "取り消す"),
                             quasimode: Quasimode(modifier: [.input(.command)],
                                                  [.input(.z)]))
@@ -151,7 +162,6 @@ struct ActionList {
                                                             .input(.command)],
                                                  [.input(.z)]))
     
-    //delete
     let cutAction = Action(name: Localization(english: "Cut", japanese: "カット"),
                            quasimode: Quasimode(modifier: [.input(.command)],
                                                 [.input(.x)]))
@@ -162,26 +172,27 @@ struct ActionList {
                              quasimode: Quasimode(modifier: [.input(.command)],
                                                   [.input(.v)]))
     
-    let lockAction = Action(name: Localization(english: "Lock", japanese: "ロック"),
-                            quasimode: Quasimode(modifier: [.input(.command)],
-                                                 [.input(.l)]))
-    let newAction = Action(name: Localization(english: "New", japanese: "新規"),
-                           quasimode: Quasimode(modifier: [.input(.command)],
-                                                [.input(.d)]))
-    let findAction = Action(name: Localization(english: "Find", japanese: "検索"),
-                           quasimode: Quasimode(modifier: [.input(.command)],
-                                                [.input(.f)]))
+    let changeToDraftAction = Action(name: Localization(english: "Change to Draft",
+                                                        japanese: "下書き化"),
+                                     quasimode: Quasimode(modifier: [.input(.command)],
+                                                          [.input(.d)]))
+    let cutDraftAction = Action(name: Localization(english: "Cut Draft",
+                                                   japanese: "下書きをカット"),
+                                quasimode: Quasimode(modifier: [.input(.command), .input(.shift)],
+                                                     [.input(.x)]))
+    
     let exportAction = Action(name: Localization(english: "Export", japanese: "書き出す"),
                               quasimode: Quasimode(modifier: [.input(.command)],
                                                    [.input(.e)]))
     
     let actions: [Action]
     init() {
-        actions = [zoomAction, strokeAction, lassoFillAction,
-                   moveAction, AddRectAction,
+        actions = [zoomAction, rotateAction, resetViewAction,
+                   strokeAction, lassoFillAction, lassoEraseAction,
+                   moveAction, changeHueAction, changeSLAction,
                    undoAction, redoAction,
                    cutAction, copyAction, pasteAction,
-                   lockAction, newAction, findAction, exportAction]
+                   changeToDraftAction, cutDraftAction, exportAction]
     }
 }
 extension ActionList {

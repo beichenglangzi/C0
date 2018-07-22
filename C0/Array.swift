@@ -120,26 +120,18 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
         binder[keyPath: keyPath].append(element)
         let view = element.viewWith(binder: binder,
                                     keyPath: keyPath.appending(path: \Model[model.count - 1]))
+        modelViews.append(view)
         append(child: view)
-        
-//        var model = self.model
-//        model.append(element)
-//        push(model, to: version)
     }
     func insert(_ element: ModelElement, at index: Int, _ version: Version) {
         version.registerUndo(withTarget: self) {
             $0.remove(at: index, version)
         }
-        
         binder[keyPath: keyPath].insert(element, at: index)
         let view = element.viewWith(binder: binder,
                                     keyPath: keyPath.appending(path: \Model[index]))
-        append(child: view)
-        
-//        remove(at: index, version)
-//        var model = self.model
-//        model.insert(element, at: index)
-//        push(model, to: version)
+        modelViews.insert(view, at: index)
+        insert(child: view, at: index)
     }
     func remove(at index: Int, _ version: Version) {
         var model = self.model

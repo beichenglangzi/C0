@@ -55,6 +55,8 @@ struct InputEvent: Event {
         static let subClick
             = EventType(name: Localization(english: "Sub Click", japanese: "副クリック"))
         static let tap = EventType(name: Localization(english: "Tap", japanese: "タップ"))
+        static let doubleTap = EventType(name: Localization(english: "Double Tap",
+                                                            japanese: "ダブルタップ"))
         static let a = EventType(name: "A"), b = EventType(name: "B"), c = EventType(name: "C")
         static let d = EventType(name: "D"), e = EventType(name: "E"), f = EventType(name: "F")
         static let g = EventType(name: "G"), h = EventType(name: "H"), i = EventType(name: "I")

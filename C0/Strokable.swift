@@ -22,6 +22,9 @@ import func CoreGraphics.sqrt
 protocol MakableStrokable {
     func strokable(withRootView rootView: View) -> Strokable
 }
+enum StrokableType {
+    case normal, surface, other
+}
 final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
     var rootView: View
     var drawingView: DrawingView<Binder>
@@ -42,35 +45,36 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
     }
     
     var line: Line?
-    var lineWidth = 1.0.cg, lineColor = Color.black
+    var lineWidth = 1.0.cg, lineColor = Color.content
     
     struct Temp {
-        var point: Point, speed: Real
+        var control: Line.Control, speed: Real
     }
     var temps = [Temp]()
     var oldPoint = Point(), tempDistance = 0.0.cg, oldLastBounds = Rect.null
-    var beginTime = 0.0.cg, oldTime = 0.0.cg, oldTempTime = 0.0.cg
+    var beginTime = Real(0.0), oldTime = Real(0.0), oldTempTime = Real(0.0)
     
     var join = Join()
     
     struct Join {
         var lowAngle = 0.8.cg * (.pi / 2), angle = 1.5.cg * (.pi / 2)
         
-        func joinControlWith(_ line: Line, lastControl lc: Point) -> Point? {
-            guard line.points.count >= 4 else {
+        func joinControlWith(_ line: Line, lastControl lc: Line.Control) -> Line.Control? {
+            guard line.controls.count >= 4 else {
                 return nil
             }
-            let p0 = line.points[line.points.count - 4]
-            let p1 = line.points[line.points.count - 3], p2 = lc
-            guard p0 != p1 && p1 != p2 else {
+            let c0 = line.controls[line.controls.count - 4]
+            let c1 = line.controls[line.controls.count - 3], c2 = lc
+            guard c0.point != c1.point && c1.point != c2.point else {
                 return nil
             }
-            let dr = abs(Point.differenceAngle(p0: p0, p1: p1, p2: p2))
+            let dr = abs(Point.differenceAngle(p0: c0.point, p1: c1.point, p2: c2.point))
             if dr > angle {
-                return p1
+                return c1
             } else if dr > lowAngle {
                 let t = 1 - (dr - lowAngle) / (angle - lowAngle)
-                return Point.linear(p1, p2, t: t)
+                return Line.Control(point: Point.linear(c1.point, c2.point, t: t),
+                                    pressure: Real.linear(c1.pressure, c2.pressure, t: t))
             } else {
                 return nil
             }
@@ -81,7 +85,7 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
     
     struct Interval {
         var minSpeed = 100.0.cg, maxSpeed = 1500.0.cg, exp = 2.0.cg
-        var minTime = 0.1.cg, maxTime = 0.03.cg
+        var minTime = Real(0.1), maxTime = Real(0.03)
         var minDistance = 1.45.cg, maxDistance = 1.5.cg
         
         func speedTWith(distance: Real, deltaTime: Real, scale: Real) -> Real {
@@ -98,12 +102,12 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
             return deltaTime > time || isAppendPointWith(temps, scale: scale)
         }
         private func isAppendPointWith(_ temps: [Temp], scale: Real) -> Bool {
-            let ap = temps.first!.point, bp = temps.last!.point
-            for temp in temps {
-                let speed = temp.speed.clip(min: minSpeed, max: maxSpeed)
+            let ap = temps.first!.control.point, bp = temps.last!.control.point
+            for tc in temps {
+                let speed = tc.speed.clip(min: minSpeed, max: maxSpeed)
                 let t = ((speed - minSpeed) / (maxSpeed - minSpeed)) ** (1 / exp)
                 let maxD = minDistance + (maxDistance - minDistance) * t
-                if temp.point.distanceWithLine(ap: ap, bp: bp) > maxD / scale {
+                if tc.control.point.distanceWithLine(ap: ap, bp: bp) > maxD / scale {
                     return true
                 }
             }
@@ -114,28 +118,28 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
     var short = Short()
     
     struct Short {
-        var minTime = 0.1.cg, linearMaxDistance = 1.5.cg
+        var minTime = Real(0.1), linearMaxDistance = 1.5.cg
         
         func shortedLineWith(_ line: Line, deltaTime: Real, scale: Real) -> Line {
-            guard deltaTime < minTime && line.points.count > 3 else {
+            guard deltaTime < minTime && line.controls.count > 3 else {
                 return line
             }
             
-            var maxD = 0.0.cg, maxPoint = line.points[0]
-            line.points.forEach { point in
-                let d = point.distanceWithLine(ap: line.firstPoint, bp: line.lastPoint)
+            var maxD = 0.0.cg, maxControl = line.controls[0]
+            line.controls.forEach { control in
+                let d = control.point.distanceWithLine(ap: line.firstPoint, bp: line.lastPoint)
                 if d > maxD {
                     maxD = d
-                    maxPoint = point
+                    maxControl = control
                 }
             }
-            let mcp = maxPoint.nearestWithLine(ap: line.firstPoint, bp: line.lastPoint)
-            let cp = 2 * maxPoint - mcp
+            let mcp = maxControl.point.nearestWithLine(ap: line.firstPoint, bp: line.lastPoint)
+            let cp = 2 * maxControl.point - mcp
             let b = Bezier2(p0: line.firstPoint, cp: cp, p1: line.lastPoint)
             
             let linearMaxDistance = self.linearMaxDistance / scale
             var isShorted = true
-            for p in line.points {
+            for p in line.mainPointSequence {
                 let nd = sqrt(b.minDistance²(at: p))
                 if nd > linearMaxDistance {
                     isShorted = false
@@ -143,187 +147,104 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
             }
             return isShorted ?
                 line :
-                Line(points: [line.points[0],
-                              cp,
-                              line.points[line.points.count - 1]])
+                Line(controls: [line.controls[0],
+                                Line.Control(point: cp, pressure: maxControl.pressure),
+                                line.controls[line.controls.count - 1]])
         }
     }
     
-    var tempPoints = [Point]()
-    var minDistance = 2.0.cg, oldP = Point()
     func stroke(with eventValue: DragEvent.Value, _ phase: Phase,
-                isSurface: Bool, _ version: Version) {
+                strokableType: StrokableType, _ version: Version) {
         let p = rootView.convertFromRoot(eventValue.rootLocation)
         stroke(for: p, pressure: eventValue.pressure, time: eventValue.time, phase,
-               isSurface: isSurface, to: version)
+               strokeType: strokableType, to: version)
     }
-    func stroke(for point: Point, pressure: Real, time: Real, _ phase: Phase, isSurface: Bool,
+    func stroke(for point: Point, pressure: Real, time: Real, _ phase: Phase, strokeType: StrokableType,
                 isAppendLine: Bool = true, to version: Version? = nil) {
-        let ap = convertToCurrentLocal(point)
+        let p = convertToCurrentLocal(point)
         switch phase {
         case .began:
-            let line = Line(beziers: [Bezier2(p0: ap, cp: ap, p1: ap)])
+            let fc = Line.Control(point: p, pressure: pressure)
+            let line = Line(controls: [fc, fc, fc])
             self.line = line
-            oldP = ap
-            tempPoints = [ap]
+            oldPoint = p
+            oldTime = time
+            oldTempTime = time
+            tempDistance = 0
+            temps = [Temp(control: fc, speed: 0)]
+            beginTime = time
             if isAppendLine, let version = version {
-                if isSurface {
+                switch strokeType {
+                case .normal:
+                    drawingView.linesView.insert(line, at: drawingView.linesView.model.count, version)
+                    lineView = drawingView.linesView.modelViews.last as? LineView<Binder>
+                case .surface:
                     drawingView.surfacesView.insert(Surface(line: line),
                                                     at: drawingView.surfacesView.model.count, version)
                     lineView = (drawingView.surfacesView.modelViews.last as? SurfaceView<Binder>)?.lineView
-                } else {
-                    drawingView.linesView.insert(line, at: drawingView.linesView.model.count, version)
-                    lineView = drawingView.linesView.modelViews.last as? LineView<Binder>
+                case .other:
+                    break
                 }
             }
-        case .changed, .ended:
+        case .changed:
+            guard var line = line, p != oldPoint else { return }
+            let d = p.distance(oldPoint)
+            tempDistance += d
+            
+            let pressure = (temps.first!.control.pressure + pressure) / 2
+            let rc = Line.Control(point: line.controls[line.controls.count - 3].point,
+                                  pressure: pressure)
+            line.controls[line.controls.count - 3] = rc
+            
+            let speed = d / (time - oldTime)
+            temps.append(Temp(control: Line.Control(point: p, pressure: pressure), speed: speed))
+            let lPressure = temps.reduce(0.0.cg) { $0 + $1.control.pressure } / Real(temps.count)
+            let lc = Line.Control(point: p, pressure: lPressure)
+            
+            let mlc = lc.mid(temps[temps.count - 2].control)
+            if let jc = join.joinControlWith(line, lastControl: mlc) {
+                line.controls.insert(jc, at: line.controls.count - 2)
+                temps = [Temp(control: lc, speed: speed)]
+                oldTempTime = time
+                tempDistance = 0
+            } else if interval.isAppendPointWith(distance: tempDistance / viewScale,
+                                                 deltaTime: time - oldTempTime,
+                                                 temps,
+                                                 scale: viewScale) {
+                line.controls.insert(lc, at: line.controls.count - 2)
+                temps = [Temp(control: lc, speed: speed)]
+                oldTempTime = time
+                tempDistance = 0
+            }
+            
+            line.controls[line.controls.count - 2] = lc
+            line.controls[line.controls.count - 1] = lc
+            self.line = line
+            lineView?.model = line
+            oldTime = time
+            oldPoint = p
+        case .ended:
             guard var line = line else { return }
-            let p = ap.mid(oldP)
-            oldP = p
-            tempPoints.append(p)
-            var bezier: Bezier2? = nil
-            if line.beziers.count >= 2 {
-                let previousBezier = line.beziers[line.beziers.count - 2]
-                let startP = previousBezier.p1
-                let startCP = previousBezier.cp * 2 - previousBezier.p1
-                //                    let startDP = startCP - startP
-                
-                if tempPoints.count == 2 {
-                    bezier = Bezier2(p0: tempPoints[0], cp: tempPoints[1], p1: tempPoints[1])
-                } else if tempPoints.count == 3 {
-                    bezier = Bezier2(p0: tempPoints[0], cp: tempPoints[1], p1: tempPoints[2])
-                } else if tempPoints.count >= 4 {
-                    let endCP = tempPoints[tempPoints.count - 3]
-                        .mid(tempPoints[tempPoints.count - 2])
-                    let endP = p
-                    //                        let endDP = endCP - endP
-                    
-                    if let cp = Point.intersectionLineSegmentOver0(startCP, startP,
-                                                                   endP, endCP),
-                        cp.distanceWithLine(ap: startP, bp: endP)
-                            < startP.distance(endP) * 4 {
-                        
-                        bezier = Bezier2(p0: startP, cp: cp, p1: endP)
-                    }
-                }
-            } else {
-                if tempPoints.count == 2 {
-                    bezier = Bezier2(p0: tempPoints[0], cp: tempPoints[1], p1: tempPoints[1])
-                } else if tempPoints.count == 3 {
-                    bezier = Bezier2(p0: tempPoints[0], cp: tempPoints[1], p1: tempPoints[2])
-                } else if tempPoints.count >= 4 {
-                    let startCP = tempPoints[1].mid(tempPoints[2])
-                    let startP = tempPoints[0]
-                    //                        let startDP = startCP - startP
-                    let endCP = tempPoints[tempPoints.count - 3]
-                        .mid(tempPoints[tempPoints.count - 2])
-                    let endP = p
-                    //                        let endDP = endCP - endP
-                    
-                    if let cp = Point.intersectionLineSegmentOver0(startP, startCP,
-                                                                   endP, endCP),
-                        cp.distanceWithLine(ap: startP, bp: endP) < startP.distance(endP) * 4 {
-                        
-                        bezier = Bezier2(p0: startP, cp: cp, p1: endP)
-                    }
-                }
+            if !interval.isAppendPointWith(distance: tempDistance / viewScale,
+                                           deltaTime: time - oldTempTime,
+                                           temps,
+                                           scale: viewScale) {
+                line.controls.remove(at: line.controls.count - 2)
             }
-            guard let newBezier = bezier else {
-                let lastP = tempPoints.last!
-                tempPoints = [lastP, p]
-                line.beziers.append(Bezier2(p0: lastP, cp: lastP, p1: p))
-                self.line = line
-                lineView?.model = line
-                return
-            }
-            let distance = tempPoints.reduce(0.0.cg) {
-                max($0, newBezier.minDistance²(at: $1))
-            }
-            if distance < minDistance {
-                line.beziers[line.beziers.count - 1] = newBezier
-            } else {
-                let lastP = tempPoints.last!
-                tempPoints = [lastP, p]
-                line.beziers.append(Bezier2(p0: lastP, cp: lastP, p1: p))
-            }
+            line.controls[line.controls.count - 1]
+                = Line.Control(point: p, pressure: line.controls.last!.pressure)
+            line = short.shortedLineWith(line, deltaTime: time - beginTime,
+                                         scale: viewScale)
             self.line = line
             lineView?.model = line
         }
     }
     
-    //        func stroke(for point: Point, pressure: Real, time: Real, _ phase: Phase,
-    //                    isAppendLine: Bool = true, to version: Version? = nil) {
-    //            let p = viewStroker.convertToCurrentLocal(point)
-    //            switch phase {
-    //            case .began:
-    //                let line = Line(points: [p, p, p])
-    //                self.line = line
-    //                oldPoint = p
-    //                oldTime = time
-    //                oldTempTime = time
-    //                tempDistance = 0
-    //                temps = [Temp(point: p, speed: 0)]
-    //                beginTime = time
-    //                if isAppendLine, let version = version {
-    //                    viewStroker.insert(line, to: version)
-    //                }
-    //            case .changed:
-    //                guard var line = line, p != oldPoint else { return }
-    //                let viewScale = viewStroker.viewScale
-    //                let d = p.distance(oldPoint)
-    //                tempDistance += d
-    //
-    //                let rp = line.points[line.points.count - 3]
-    //                line.points[line.points.count - 3] = rp
-    //
-    //                let speed = d / (time - oldTime)
-    //                temps.append(Temp(point: p, speed: speed))
-    //                let lp = p
-    //
-    //                let mlp = lp.mid(temps[temps.count - 2].point)
-    //                if let jp = join.joinControlWith(line, lastControl: mlp) {
-    //                    line.points.insert(jp, at: line.points.count - 2)
-    //                    temps = [Temp(point: lp, speed: speed)]
-    //                    oldTempTime = time
-    //                    tempDistance = 0
-    //                } else if interval.isAppendPointWith(distance: tempDistance / viewScale,
-    //                                                     deltaTime: time - oldTempTime,
-    //                                                     temps,
-    //                                                     scale: viewScale) {
-    //                    line.points.insert(lp, at: line.points.count - 2)
-    //                    temps = [Temp(point: lp, speed: speed)]
-    //                    oldTempTime = time
-    //                    tempDistance = 0
-    //                }
-    //
-    //                line.points[line.points.count - 2] = lp
-    //                line.points[line.points.count - 1] = lp
-    //                self.line = line
-    //                viewStroker.update(line)
-    //                oldTime = time
-    //                oldPoint = p
-    //            case .ended:
-    //                guard var line = line else { return }
-    //                let viewScale = viewStroker.viewScale
-    //                if !interval.isAppendPointWith(distance: tempDistance / viewScale,
-    //                                               deltaTime: time - oldTempTime,
-    //                                               temps,
-    //                                               scale: viewScale) {
-    //                    line.points.remove(at: line.points.count - 2)
-    //                }
-    //                line.points[line.points.count - 1] = p
-    //                line = short.shortedLineWith(line, deltaTime: time - beginTime,
-    //                                             scale: viewScale)
-    //                self.line = line
-    //                viewStroker.update(line)
-    //            }
-    //        }
-    
     var lines = [Line]()
     
-    func lassoErase(for p: Point, pressure: Real, time: Real, _ phase: Phase) {
-        _ = stroke(for: p, pressure: pressure, time: time, phase,
-                   isSurface: false, isAppendLine: false)
+    func lassoErase(with eventValue: DragEvent.Value,
+                    _ phase: Phase, _ version: Version) {
+        _ = stroke(with: eventValue, phase, strokableType: .other, version)
         switch phase {
         case .began:
             break

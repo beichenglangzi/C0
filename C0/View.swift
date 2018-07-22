@@ -418,12 +418,6 @@ class View {
         }
         return isParent
     }
-//    func distance(at p: Point) -> Real {
-//
-//    }
-//    func nearest(at p: Point) -> View {
-//
-//    }
     
     func at(_ p: Point) -> View? {
         guard !(isLocked && _children.isEmpty) else {

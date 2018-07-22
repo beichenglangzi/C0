@@ -25,7 +25,9 @@ struct Ellipse {
 
 struct PathLine {
     struct Arc {
-        var radius: Real, startAngle: Real, endAngle: Real
+        var centerPosition: Point, radius: Real
+        var startAngle: Real, endAngle: Real
+        var clockwise: Bool
     }
     enum Element {
         case linear(Point)
@@ -97,17 +99,9 @@ struct Path {
             case .bezier3(let p, let cp0, let cp1): mcg.addCurve(to: p,
                                                                  control1: cp0, control2: cp1)
             case .arc(let arc):
-                let cp = Point(x: mcg.currentPoint.x - arc.radius * cos(arc.startAngle),
-                               y: mcg.currentPoint.y - arc.radius * sin(arc.endAngle))
-                if arc.startAngle < arc.endAngle {
-                    mcg.addArc(center: cp, radius: arc.radius,
-                               startAngle: arc.startAngle, endAngle: arc.endAngle,
-                               clockwise: false)
-                } else {
-                    mcg.addArc(center: cp, radius: arc.radius,
-                               startAngle: arc.startAngle, endAngle: arc.endAngle,
-                               clockwise: true)
-                }
+                mcg.addArc(center: arc.centerPosition, radius: arc.radius,
+                           startAngle: arc.startAngle, endAngle: arc.endAngle,
+                           clockwise: arc.clockwise)
             }
         }
     }

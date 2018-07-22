@@ -35,6 +35,61 @@ struct Hash {//swift 4.2
     }
 }
 
+struct Cursor {
+    static let arrow = Cursor(NSCursor.arrow)
+    static let stroke = circleCursor(size: 2)
+    
+    static func circleCursor(size s: Real, color: Color = .black,
+                             outlineColor: Color = .white) -> Cursor {
+        let lineWidth = 2.0.cg, subLineWidth = 1.0.cg
+        let d = subLineWidth + lineWidth / 2
+        let b = Rect(x: d, y: d, width: d * 2 + s, height: d * 2 + s)
+        let image = NSImage(size: Size(width: s + d * 2 * 2,  height: s + d * 2 * 2)) { ctx in
+            ctx.setLineWidth(lineWidth + subLineWidth * 2)
+            ctx.setFillColor(outlineColor.with(alpha: 0.35).cg)
+            ctx.setStrokeColor(outlineColor.with(alpha: 0.8).cg)
+            ctx.addEllipse(in: b)
+            ctx.drawPath(using: .fillStroke)
+            ctx.setLineWidth(lineWidth)
+            ctx.setStrokeColor(color.cg)
+            ctx.strokeEllipse(in: b)
+        }
+        let hotSpot = NSPoint(x: d * 2 + s / 2, y: -d * 2 - s / 2)
+        return Cursor(NSCursor(image: image, hotSpot: hotSpot))
+    }
+    var image: CGImage {
+        didSet {
+            nsCursor = NSCursor(image: NSImage(cgImage: image, size: NSSize()), hotSpot: hotSpot)
+        }
+    }
+    var hotSpot: Point {
+        didSet {
+            nsCursor = NSCursor(image: NSImage(cgImage: image, size: NSSize()), hotSpot: hotSpot)
+        }
+    }
+    fileprivate var nsCursor: NSCursor
+    private init(_ nsCursor: NSCursor) {
+        self.image = nsCursor.image.cgImage(forProposedRect: nil, context: nil, hints: nil)!
+        self.hotSpot = nsCursor.hotSpot
+        self.nsCursor = nsCursor
+    }
+    init(image: CGImage, hotSpot: Point) {
+        self.image = image
+        self.hotSpot = hotSpot
+        nsCursor = NSCursor(image: NSImage(cgImage: image, size: NSSize()), hotSpot: hotSpot)
+    }
+}
+extension NSImage {
+    convenience init(size: Size, closure: (CGContext) -> Void) {
+        self.init(size: size)
+        lockFocus()
+        if let ctx = NSGraphicsContext.current?.cgContext {
+            closure(ctx)
+        }
+        unlockFocus()
+    }
+}
+
 private struct C0Preference: Codable {
     var isFullScreen = false
     var windowFrame = NSRect()
@@ -418,8 +473,7 @@ final class C0View: NSView, NSTextInputClient {
         fatalError()
     }
     required init?(coder: NSCoder) {
-        var desktop = Desktop()
-        desktop.objects += [Object(ActionList().textAndSize.text)]
+        let desktop = Desktop()
         desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
         sender = Sender(rootView: desktopView)
@@ -579,6 +633,10 @@ final class C0View: NSView, NSTextInputClient {
         if let key = nsEvent.key {
             sender.send(InputEvent(type: key, value: inputEventValueWith(nsEvent, .ended)))
         }
+    }
+    
+    override func cursorUpdate(with nsEvent: NSEvent) {
+        Cursor.stroke.nsCursor.set()
     }
     
     private final class DragManager {
@@ -749,6 +807,11 @@ final class C0View: NSView, NSTextInputClient {
     override func quickLook(with nsEvent: NSEvent) {
         sender.send(InputEvent(type: .tap, value: inputEventValueWith(nsEvent, .began)))
         sender.send(InputEvent(type: .tap, value: inputEventValueWith(nsEvent, .ended)))
+    }
+    
+    override func smartMagnify(with nsEvent: NSEvent) {
+        sender.send(InputEvent(type: .doubleTap, value: inputEventValueWith(nsEvent, .began)))
+        sender.send(InputEvent(type: .doubleTap, value: inputEventValueWith(nsEvent, .ended)))
     }
     
     func sentKeyInput() {

@@ -22,7 +22,6 @@ import CoreGraphics
 struct Drawing: Codable, Equatable {
     var lines = [Line]()
     var surfaces = [Surface]()
-    var isLocked = false
 }
 extension Drawing {
     var imageBounds: Rect {
@@ -78,7 +77,7 @@ extension Drawing {
             return pointIndex == 0
         }
         var isLast: Bool {
-            return  pointIndex == line.points.count - 1
+            return  pointIndex == line.controls.count - 1
         }
     }
     struct LineCap {
@@ -104,7 +103,7 @@ extension Drawing {
         }
         
         var pointIndex: Int {
-            return orientation == .first ? 0 : line.points.count - 1
+            return orientation == .first ? 0 : line.controls.count - 1
         }
         var linePoint: LinePoint {
             return LinePoint(line: line, lineIndex: lineIndex, pointIndex: pointIndex)
@@ -126,7 +125,7 @@ extension Drawing {
                 for cap in caps {
                     let d² = (cap.orientation == .first ?
                         cap.line.bezier(at: 0) :
-                        cap.line.bezier(at: cap.line.points.count - 3)).minDistance²(at: p)
+                        cap.line.bezier(at: cap.line.controls.count - 3)).minDistance²(at: p)
                     if d² < minD² {
                         minLineCap = cap
                         minD² = d²
@@ -157,13 +156,13 @@ extension Drawing {
         func nearestLinePoint(from lines: [Line]) -> Bool {
             var isNearest = false
             for (j, line) in lines.enumerated() {
-                for (i, mp) in line.points.enumerated() {
-                    guard !(isVertex && i != 0 && i != line.points.count - 1) else { continue }
-                    let d² = hypot²(point.x - mp.x, point.y - mp.y)
+                for (i, mp) in line.controls.enumerated() {
+                    guard !(isVertex && i != 0 && i != line.controls.count - 1) else { continue }
+                    let d² = hypot²(point.x - mp.point.x, point.y - mp.point.y)
                     if d² < minD² {
                         minD² = d²
                         minLinePoint = LinePoint(line: line, lineIndex: j, pointIndex: i)
-                        minPoint = mp
+                        minPoint = mp.point
                         isNearest = true
                     }
                 }
@@ -235,10 +234,10 @@ extension Drawing {
     
     func snappedPoint(_ sp: Point, editLine: Line, editingMaxPointIndex empi: Int,
                       snapDistance: Real) -> Point {
-        let p: Point, isFirst = empi == 1 || empi == editLine.points.count - 1
+        let p: Point, isFirst = empi == 1 || empi == editLine.controls.count - 1
         if isFirst {
             p = editLine.firstPoint
-        } else if empi == editLine.points.count - 2 || empi == 0 {
+        } else if empi == editLine.controls.count - 2 || empi == 0 {
             p = editLine.lastPoint
         } else {
             fatalError()
@@ -246,26 +245,26 @@ extension Drawing {
         var snapLines = [(ap: Point, bp: Point)](), lastSnapLines = [(ap: Point, bp: Point)]()
         func snap(with lines: [Line]) {
             for line in lines {
-                if editLine.points.count == 3 {
+                if editLine.controls.count == 3 {
                     if line != editLine {
                         if line.firstPoint == editLine.firstPoint {
-                            snapLines.append((line.points[1], editLine.firstPoint))
+                            snapLines.append((line.controls[1].point, editLine.firstPoint))
                         } else if line.lastPoint == editLine.firstPoint {
-                            snapLines.append((line.points[line.points.count - 2],
+                            snapLines.append((line.controls[line.controls.count - 2].point,
                                               editLine.firstPoint))
                         }
                         if line.firstPoint == editLine.lastPoint {
-                            lastSnapLines.append((line.points[1], editLine.lastPoint))
+                            lastSnapLines.append((line.controls[1].point, editLine.lastPoint))
                         } else if line.lastPoint == editLine.lastPoint {
-                            lastSnapLines.append((line.points[line.points.count - 2],
+                            lastSnapLines.append((line.controls[line.controls.count - 2].point,
                                                   editLine.lastPoint))
                         }
                     }
                 } else {
                     if line.firstPoint == p && !(line == editLine && isFirst) {
-                        snapLines.append((line.points[1], p))
+                        snapLines.append((line.controls[1].point, p))
                     } else if line.lastPoint == p && !(line == editLine && !isFirst) {
-                        snapLines.append((line.points[line.points.count - 2], p))
+                        snapLines.append((line.controls[line.controls.count - 2].point, p))
                     }
                 }
             }
@@ -301,6 +300,11 @@ extension Drawing {
             }
             return minPoint
         }
+    }
+}
+extension Drawing {
+    static func +(lhs: Drawing, rhs: Drawing) -> Drawing {
+        return Drawing(lines: lhs.lines + rhs.lines, surfaces: lhs.surfaces + rhs.surfaces)
     }
 }
 extension Drawing {
@@ -340,30 +344,26 @@ extension Drawing: Interpolatable {
     static func linear(_ f0: Drawing, _ f1: Drawing, t: Real) -> Drawing {
         let lines = [Line].linear(f0.lines, f1.lines, t: t)
         let surfaces = [Surface].linear(f0.surfaces, f1.surfaces, t: t)
-        let isLocked = f0.isLocked
-        return Drawing(lines: lines, surfaces: surfaces, isLocked: isLocked)
+        return Drawing(lines: lines, surfaces: surfaces)
     }
     static func firstMonospline(_ f1: Drawing, _ f2: Drawing, _ f3: Drawing,
                                 with ms: Monospline) -> Drawing {
         let lines = [Line].firstMonospline(f1.lines, f2.lines, f3.lines, with: ms)
         let surfaces = [Surface].firstMonospline(f1.surfaces, f2.surfaces, f3.surfaces, with: ms)
-        let isLocked = f1.isLocked
-        return Drawing(lines: lines, surfaces: surfaces, isLocked: isLocked)
+        return Drawing(lines: lines, surfaces: surfaces)
     }
     static func monospline(_ f0: Drawing, _ f1: Drawing, _ f2: Drawing, _ f3: Drawing,
                            with ms: Monospline) -> Drawing {
         let lines = [Line].monospline(f0.lines, f1.lines, f2.lines, f3.lines, with: ms)
         let surfaces = [Surface].monospline(f0.surfaces, f1.surfaces,
                                             f2.surfaces, f3.surfaces, with: ms)
-        let isLocked = f1.isLocked
-        return Drawing(lines: lines, surfaces: surfaces, isLocked: isLocked)
+        return Drawing(lines: lines, surfaces: surfaces)
     }
     static func lastMonospline(_ f0: Drawing, _ f1: Drawing, _ f2: Drawing,
                                with ms: Monospline) -> Drawing {
         let lines = [Line].lastMonospline(f0.lines, f1.lines, f2.lines, with: ms)
         let surfaces = [Surface].lastMonospline(f0.surfaces, f1.surfaces, f2.surfaces, with: ms)
-        let isLocked = f1.isLocked
-        return Drawing(lines: lines, surfaces: surfaces, isLocked: isLocked)
+        return Drawing(lines: lines, surfaces: surfaces)
     }
 }
 extension Drawing: Viewable {
@@ -409,10 +409,6 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
     func updateWithModel() {
         surfacesView.updateWithModel()
         linesView.updateWithModel()
-        updateIsLocked()
-    }
-    func updateIsLocked() {
-        opacity = model.isLocked ? 0.2 : 1
     }
     override var isEmpty: Bool {
         return false
@@ -425,32 +421,10 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
             nearest.minDistance² < Layouter.movablePadding ** 2 else {
                 return containsPath(p) ? self : nil
         }
-//        switch nearest.result {
-//        case .linePoint(let linePoint):
-//            return children[linePoint.lineIndex].children[linePoint.pointIndex]
-//        case .lineCapResult(let lineCapResult):
-//            if let lineCap = lineCapResult.lineCapsItem.lineCaps.first {
-//                return children[lineCap.lineIndex].children[lineCap.pointIndex]
-//            } else {
-//                return containsPath(p) ? self : nil
-//            }
-//        }
         return nil
     }
     override func contains(_ p: Point) -> Bool {
         return true
-    }
-}
-extension DrawingView: Lockable {
-    func lock(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        push(isLocked: true, to: version)
-    }
-    func push(isLocked: Bool, to version: Version) {
-        version.registerUndo(withTarget: self) { [oldModel = self.model.isLocked, unowned version] in
-            $0.push(isLocked: oldModel, to: version)
-        }
-        binder[keyPath: keyPath].isLocked = isLocked
-        updateIsLocked()
     }
 }
 extension DrawingView: MakableStrokable {
@@ -463,10 +437,12 @@ extension DrawingView: MovableOrigin {
         get { return model.imageBounds.origin }
         set {
             let dp = newValue - binder[keyPath: keyPath].imageBounds.origin
+            let affineTransform = Transform(translation: dp, z: 0, rotation: 0).affineTransform
             for (i, _) in model.lines.enumerated() {
-                model.lines[i].beziers = model.lines[i].beziers.map { Bezier2(p0: $0.p0 + dp,
-                                                                              cp: $0.cp + dp,
-                                                                              p1: $0.p1 + dp) }
+                model.lines[i] = model.lines[i] * affineTransform
+            }
+            for (i, _) in model.surfaces.enumerated() {
+                model.surfaces[i].line = model.surfaces[i].line * affineTransform
             }
             updateWithModel()
         }

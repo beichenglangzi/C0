@@ -160,7 +160,7 @@ struct SurfaceLasso {
             isSplitLine = true
         }
         if isSplitLine && !lastPointInPath {
-            let endIndex = otherLine.points.count <= 2 ? 0 : otherLine.points.count - 3
+            let endIndex = otherLine.controls.count <= 2 ? 0 : otherLine.controls.count - 3
             newSplitedIndexes.append(Splited.Index(startIndex: oldIndex, startT: oldT,
                                                    endIndex: endIndex, endT: 1))
         }
@@ -222,18 +222,19 @@ final class SurfaceView<T: BinderProtocol>: ModelView, BindableReceiver {
     var notifications = [((SurfaceView<Binder>, BasicNotification) -> ())]()
     
     let lineView: LineView<Binder>
+    let pathView: View
     
     init(binder: T, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
         lineView = LineView(binder: binder, keyPath: keyPath.appending(path: \Model.line))
+        pathView = View(path: Path())
+        pathView.fillColor = binder[keyPath: keyPath].color
         
         super.init(isLocked: false)
-        lineView.fillColor = model.color
-        lineView.lineWidth = 0
-//        lineView.notifications.append { [unowned self] (_, _) in self.updateWithModel() }
-        children = [lineView]
+        lineView.notifications.append { [unowned self] (_, _) in self.updatePath() }
+        children = [pathView]
         updateWithModel()
     }
     
@@ -242,8 +243,9 @@ final class SurfaceView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     func updateWithModel() {
         lineView.updateWithModel()
+        updatePath()
     }
-//    func updatePath() {
-//
-//    }
+    func updatePath() {
+        pathView.path = model.path
+    }
 }
