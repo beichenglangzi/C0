@@ -397,10 +397,18 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
         surfacesView = ArrayView(binder: binder, keyPath: keyPath.appending(path: \Model.surfaces))
         
         super.init(isLocked: false)
+        updateLinesColor()
         let view = View()
         view.children = [linesView]
         children = [surfacesView, view]
         updateWithModel()
+    }
+    
+    var linesColor = Color.content {
+        didSet { updateLinesColor() }
+    }
+    func updateLinesColor() {
+        linesView.modelViews.forEach { $0.fillColor = linesColor }
     }
     
     var minSize: Size {
@@ -416,16 +424,16 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
     override func containsPath(_ p: Point) -> Bool {
         return true
     }
-    override func at(_ p: Point) -> View? {
-        guard let nearest = model.nearest(at: p, isVertex: false),
-            nearest.minDistance² < Layouter.movablePadding ** 2 else {
-                return containsPath(p) ? self : nil
-        }
-        return nil
-    }
-    override func contains(_ p: Point) -> Bool {
-        return true
-    }
+//    override func at(_ p: Point) -> View? {
+//        guard let nearest = model.nearest(at: p, isVertex: false),
+//            nearest.minDistance² < Layouter.movablePadding ** 2 else {
+//                return containsPath(p) ? self : nil
+//        }
+//        return nil
+//    }
+//    override func contains(_ p: Point) -> Bool {
+//        return true
+//    }
 }
 extension DrawingView: MakableStrokable {
     func strokable(withRootView rootView: View) -> Strokable {

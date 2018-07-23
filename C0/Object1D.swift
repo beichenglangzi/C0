@@ -208,9 +208,13 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: ModelView, Bin
         let cp = Point(x: bounds.midX, y: bounds.midY), r = bounds.width / 2
         let mr = r + width
         let fp0 = cp + Point(x: r, y: 0)
-        let arc0 = PathLine.Arc(radius: r, startAngle: 0, endAngle: 2 * .pi)
+        let arc0 = PathLine.Arc(centerPosition: cp, radius: r,
+                                startAngle: 0, endAngle: 2 * .pi,
+                                clockwise: false)
         let fp1 = cp + Point(x: mr, y: 0)
-        let arc1 = PathLine.Arc(radius: mr, startAngle: 2 * .pi, endAngle: 0)
+        let arc1 = PathLine.Arc(centerPosition: cp, radius: mr,
+                                startAngle: 2 * .pi, endAngle: 0,
+                                clockwise: true)
         var path = Path()
         path.append(PathLine(firstPoint: fp0, elements: [.arc(arc0)]))
         path.append(PathLine(firstPoint: fp1, elements: [.arc(arc1)]))
@@ -220,7 +224,9 @@ final class Circular1DView<T: Object1DOption, U: BinderProtocol>: ModelView, Bin
         let cp = Point(x: bounds.midX, y: bounds.midY), r = bounds.width / 2
         let mr = r - width
         let fp1 = cp + Point(x: mr, y: 0)
-        let arc1 = PathLine.Arc(radius: mr, startAngle: 2 * .pi, endAngle: 0)
+        let arc1 = PathLine.Arc(centerPosition: cp, radius: mr,
+                                startAngle: 2 * .pi, endAngle: 0,
+                                clockwise: true)
         var path = Path()
         path.append(PathLine(firstPoint: fp1, elements: [.arc(arc1)]))
         return path

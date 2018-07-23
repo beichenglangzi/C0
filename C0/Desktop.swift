@@ -26,7 +26,7 @@ struct Desktop: Codable {
                     origin: Point())]))
     var transform = Transform()
     
-    var drawingFrame = Rect(x: -400, y: -400, width: 800, height: 800)
+    var drawingFrame = Rect(x: -250, y: -310, width: 500, height: 620)
     var drawing = Drawing()
     var draftDrawing = Drawing()
 }
@@ -98,7 +98,6 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     
     let copiedObjectView: ObjectView<Binder>
     let transformView: TransformView<Binder>
-    let rootView = View()
     let drawingFrameView: RectView<Binder>
     let drawingView: DrawingView<Binder>
     let draftDrawingView: DrawingView<Binder>
@@ -123,6 +122,7 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         
         copiedObjectView.lineColor = .content
         copiedObjectView.opacity = 0.5
+        draftDrawingView.linesColor = .draft
         draftDrawingView.opacity = 0.2
         
         drawingFrameAroundView.fillColorComposition = .around
@@ -131,12 +131,24 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         drawingFrameView.notifications.append { [unowned self] (_, _) in
             self.updateDrawingFrame()
         }
+        transformView.notifications.append { [unowned self] (_, _) in
+            self.updateAround()
+        }
         fillColor = .background
-        rootView.children = [draftDrawingView, drawingView, drawingFrameView]
-        transformView.children = [rootView]
+        transformView.children = [draftDrawingView, drawingView, drawingFrameView]
         children = [transformView, drawingFrameAroundView]
+        updateWithModel()
+        updateAround()
     }
     
+    func updateWithModel() {
+        copiedObjectView.updateWithModel()
+        transformView.updateWithModel()
+        drawingFrameView.updateWithModel()
+        drawingView.updateWithModel()
+        draftDrawingView.updateWithModel()
+        updateDrawingFrame()
+    }
     override func updateLayout() {
         updateTransform()
     }
@@ -145,23 +157,25 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         draftDrawingView.frame = model.drawingFrame
         updateAround()
     }
-    func updateTransform() {
+    var zoomingLocalTransform: Transform {
         var transform = zoomingTransform
         let objectsPosition = Point(x: (bounds.width / 2).rounded(),
                                     y: (bounds.height / 2).rounded())
         transform.translation += objectsPosition
-        zoomingLocalView.transform = transform
-        
+        return transform
+    }
+    func updateTransform() {
+        transformView.transform = zoomingLocalTransform
         updateAround()
     }
     func updateAround() {
         var path = Path()
         path.append(bounds)
-        let affine = transform.affineTransform
+        let affine = zoomingLocalTransform.affineTransform
         path.append(PathLine(points: [model.drawingFrame.minXminYPoint * affine,
-                                      model.drawingFrame.maxXminYPoint * affine,
+                                      model.drawingFrame.minXmaxYPoint * affine,
                                       model.drawingFrame.maxXmaxYPoint * affine,
-                                      model.drawingFrame.minXmaxYPoint * affine]))
+                                      model.drawingFrame.maxXminYPoint * affine]))
         drawingFrameAroundView.path = path
     }
 }
@@ -170,7 +184,7 @@ extension DesktopView: RootModeler {
         let tmo = TransformingMovableObject(viewAndFirstOrigins: [(drawingView, transform.translation)],
                                             rootView: self)
         let userObject = DesktopUserObject(rootView: self, transformingMovableObject: tmo)
-        if let view = rootView.at(p, Copiable.self) {
+        if let view = at(p, Copiable.self) {
             userObject.copiedObject = view.copiedObject
         }
         return userObject
@@ -178,10 +192,24 @@ extension DesktopView: RootModeler {
     func strokable(withRootView rootView: View) -> Strokable {
         return StrokableUserObject(rootView: self, drawingView: drawingView)
     }
+    func changeableColor(with eventValue: DragEvent.Value, rootView: View) -> ChangeableColor? {
+        guard let surfaceView = at(eventValue.rootLocation) as? SurfaceView<Binder> else {
+            return nil
+        }
+        let uuColor = surfaceView.model.uuColor
+        let views: [View & ChangeableColorOwner] = drawingView.surfacesView.modelViews.compactMap {
+            let surfaceView = $0 as? SurfaceView<Binder>
+            return surfaceView?.model.uuColor == uuColor ? surfaceView : nil
+        }
+        return ChangeableColorObject(views: views, firstUUColor: uuColor)
+    }
 }
 extension DesktopView: Zoomable {
     func captureTransform(to version: Version) {
-        transformView.push(model.transform, to: version)
+        transformView.capture(model.transform, to: version)
+    }
+    var defaultTransform: Transform {
+        return Transform(translation: model.drawingFrame.centerPoint, z: 0, rotation: 0)
     }
     var zoomingTransform: Transform {
         get { return model.transform }
@@ -200,7 +228,7 @@ extension DesktopView: Zoomable {
         return self
     }
     var zoomingLocalView: View {
-        return rootView
+        return transformView
     }
 }
 extension DesktopView: Undoable {
@@ -271,7 +299,6 @@ extension DesktopView: Exportable {
 }
 
 final class DesktopUserObject: UserObjectProtocol {
-    var draftValue: Object.Value
     var copiedObject = Object(Text(stringLines: [StringLine(string: "None", origin: Point())]))
     var rootView: Sender.RootView
     var transformingMovableObject: TransformingMovableObject?
@@ -299,6 +326,10 @@ final class DesktopUserObject: UserObjectProtocol {
     func removeDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
         rootView.removeDraft(with: eventValue, phase, version)
     }
+    var draftValue: Object.Value {
+        return rootView.draftValue
+    }
+    
     func export(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
         rootView.export(with: eventValue, phase, version)
     }

@@ -30,12 +30,9 @@ struct Line: Codable {
     var controls = [Control]() {
         didSet {
             imageBounds = controls.imageBounds
-            firstAngle = controls.count < 2 ? 0 : controls[0].point.tangential(controls[1].point)
-            lastAngle = controls.count < 2 ? 0 : controls[controls.count - 2].point
-                .tangential(controls[controls.count - 1].point)
         }
     }
-    private(set) var imageBounds = Rect(), firstAngle = 0.0.cg, lastAngle = 0.0.cg
+    private(set) var imageBounds = Rect()
     
     init(bezier: Bezier2,
          p0Pressure: Real, cpPressure: Real, p1Pressure: Real) {
@@ -47,9 +44,6 @@ struct Line: Codable {
     init(controls: [Control] = []) {
         self.controls = controls
         imageBounds = controls.imageBounds
-        firstAngle = controls.count < 2 ? 0 : controls[0].point.tangential(controls[1].point)
-        lastAngle = controls.count < 2 ? 0 : controls[controls.count - 2].point
-            .tangential(controls[controls.count - 1].point)
     }
 }
 extension Array where Element == Line.Control {
@@ -551,6 +545,13 @@ extension Line {
         return hypot²(l1.x - l0.x, l1.y - l0.y) < hypot²(f1.x - l0.x, f1.y - l0.y)
     }
     
+    var firstAngle: Real {
+        return controls[0].point.tangential(controls[1].point)
+    }
+    var lastAngle: Real {
+        return controls[controls.count - 2].point
+            .tangential(controls[controls.count - 1].point)
+    }
     func angle(withPreviousLine preLine: Line) -> Real {
         return abs(lastAngle.differenceRotation(firstAngle))
     }
@@ -659,7 +660,15 @@ extension Line {
         let s = size / 2
         if controls.count <= 2 {
             guard controls.count == 2 else {
-                return Path()
+                let pres0 = s * controls[0].pressure
+                let dp0 = Point(x: pres0 * cos(0), y: pres0 * sin(0))
+                let fp = controls[0].point + dp0
+                let arc0 = PathLine.Arc(centerPosition: controls[0].point, radius: pres0,
+                                        startAngle: 0, endAngle: .pi * 2,
+                                        clockwise: false)
+                var path = Path()
+                path.append(PathLine(firstPoint: fp, elements: [.arc(arc0)]))
+                return path
             }
             let firstTheta = firstAngle + .pi / 2
             let pres0 = s * controls[0].pressure, pres1 = s * controls[1].pressure
@@ -667,22 +676,22 @@ extension Line {
             let dp1 = Point(x: pres1 * cos(firstTheta), y: pres1 * sin(firstTheta))
             
             let fp = controls[0].point + dp0
-            let p0 = controls[1].point + dp1
-            let arc0 = PathLine.Arc(centerPosition: controls[1].point, radius: pres1,
-                                    startAngle: firstTheta + .pi, endAngle: firstTheta - .pi,
+            let p1 = controls[1].point + dp1
+            let arc1 = PathLine.Arc(centerPosition: controls[1].point, radius: pres1,
+                                    startAngle: firstTheta, endAngle: firstTheta - .pi,
                                     clockwise: true)
-            let p1 = controls[0].point - dp0
-            let arc1 = PathLine.Arc(centerPosition: controls[0].point, radius: pres0,
-                                    startAngle: firstTheta - .pi, endAngle: firstTheta + .pi,
+            let p0 = controls[0].point - dp0
+            let arc0 = PathLine.Arc(centerPosition: controls[0].point, radius: pres0,
+                                    startAngle: firstTheta, endAngle: firstTheta + .pi,
                                     clockwise: true)
-            let pathLine = PathLine(firstPoint: fp, elements: [.linear(p0), .arc(arc0),
-                                                               .linear(p1), .arc(arc1)])
-            
+            let pathLine = PathLine(firstPoint: fp, elements: [.linear(p1), .arc(arc1),
+                                                               .linear(p0), .arc(arc0)])
             var path = Path()
             path.append(pathLine)
             return path
         } else {
-            let firstTheta = firstAngle + .pi / 2, fpres = s * controls[0].pressure
+            let firstTheta = firstAngle + .pi / 2
+            let fpres = s * controls[0].pressure
             var previousPressure = controls[0].pressure
             var es = [PathLine.Element](), res = [PathLine.Element]()
             let fp = controls[0].point + Point(x: fpres * cos(firstTheta),
@@ -696,7 +705,7 @@ extension Line {
                 if count > 0 {
                     let splitDeltaT = 1 / length
                     var t = 0.0.cg
-                    for _ in 0..<count {
+                    for _ in 1...count {
                         t += splitDeltaT
                         let p = bezier.position(withT: t)
                         let pres = t < 0.5 ?
@@ -718,7 +727,7 @@ extension Line {
                     if count > 0 {
                         let splitDeltaT = 1 / length
                         var t = 0.0.cg
-                        for _ in 0..<count {
+                        for _ in 1...count {
                             t += splitDeltaT
                             let p = bezier.position(withT: t)
                             let pres = Real.linear(s * previousPressure, s * nextPressure, t: t)
@@ -733,16 +742,18 @@ extension Line {
             }
             
             let lp = controls[controls.count - 1].point
-            let lastTheta = lastAngle - .pi / 2, lpres = s * controls[controls.count - 1].pressure
+            let lastTheta = lastAngle + .pi / 2
+            let lpres = s * controls[controls.count - 1].pressure
             es.append(.linear(lp + Point(x: lpres * cos(lastTheta),
                                          y: lpres * sin(lastTheta))))
-            
             es.append(.arc(PathLine.Arc(centerPosition: lp, radius: lpres,
-                                        startAngle: lastTheta + .pi, endAngle: lastTheta - .pi,
+                                        startAngle: lastTheta,
+                                        endAngle: lastTheta - .pi,
                                         clockwise: true)))
             es += res.reversed()
             es.append(.arc(PathLine.Arc(centerPosition: fp, radius: fpres,
-                                        startAngle: firstTheta - .pi, endAngle: firstTheta + .pi,
+                                        startAngle: firstTheta - .pi,
+                                        endAngle: firstTheta,
                                         clockwise: true)))
             
             var path = Path()
@@ -948,8 +959,7 @@ final class LineView<T: BinderProtocol>: ModelView, BindableReceiver {
         self.keyPath = keyPath
         
         super.init(path: Path(), isLocked: false)
-        lineColor = .content
-        lineWidth = 1
+        fillColor = .content
         updateWithModel()
     }
     

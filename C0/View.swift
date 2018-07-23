@@ -325,6 +325,7 @@ class View {
             ctx.concatenate(viewTransform.affineTransform)
             self.draw(in: ctx)
         })
+        drawView.bounds = frame
         drawView.render(in: ctx)
         return ctx.renderImage
     }

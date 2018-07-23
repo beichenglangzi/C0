@@ -99,7 +99,7 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
     func updateChildren() {
         modelViews = ArrayView.modelViewsWith(model: model,
                                               binder: binder, keyPath: keyPath)
-        self.rootView.children = modelViews
+        rootView.children = modelViews
         updateLayout()
     }
     static func modelViewsWith(model: Model,
@@ -113,6 +113,13 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
         updateChildren()
     }
     
+    override var isEmpty: Bool {
+        return model.isEmpty
+    }
+    override func containsPath(_ p: Point) -> Bool {
+        return true
+    }
+    
     func append(_ element: ModelElement, _ version: Version) {
         version.registerUndo(withTarget: self) { [oldIndex = model.count - 1] in
             $0.remove(at: oldIndex, version)
@@ -121,7 +128,7 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
         let view = element.viewWith(binder: binder,
                                     keyPath: keyPath.appending(path: \Model[model.count - 1]))
         modelViews.append(view)
-        append(child: view)
+        rootView.append(child: view)
     }
     func insert(_ element: ModelElement, at index: Int, _ version: Version) {
         version.registerUndo(withTarget: self) {
@@ -131,7 +138,7 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
         let view = element.viewWith(binder: binder,
                                     keyPath: keyPath.appending(path: \Model[index]))
         modelViews.insert(view, at: index)
-        insert(child: view, at: index)
+        rootView.insert(child: view, at: index)
     }
     func remove(at index: Int, _ version: Version) {
         var model = self.model

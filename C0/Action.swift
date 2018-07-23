@@ -179,7 +179,7 @@ struct ActionList {
     let cutDraftAction = Action(name: Localization(english: "Cut Draft",
                                                    japanese: "下書きをカット"),
                                 quasimode: Quasimode(modifier: [.input(.command), .input(.shift)],
-                                                     [.input(.x)]))
+                                                     [.input(.d)]))
     
     let exportAction = Action(name: Localization(english: "Export", japanese: "書き出す"),
                               quasimode: Quasimode(modifier: [.input(.command)],

@@ -46,10 +46,8 @@ struct Cursor {
         let b = Rect(x: d, y: d, width: d * 2 + s, height: d * 2 + s)
         let image = NSImage(size: Size(width: s + d * 2 * 2,  height: s + d * 2 * 2)) { ctx in
             ctx.setLineWidth(lineWidth + subLineWidth * 2)
-            ctx.setFillColor(outlineColor.with(alpha: 0.35).cg)
-            ctx.setStrokeColor(outlineColor.with(alpha: 0.8).cg)
-            ctx.addEllipse(in: b)
-            ctx.drawPath(using: .fillStroke)
+            ctx.setStrokeColor(outlineColor.cg)
+            ctx.strokeEllipse(in: b)
             ctx.setLineWidth(lineWidth)
             ctx.setStrokeColor(color.cg)
             ctx.strokeEllipse(in: b)
@@ -262,7 +260,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
         }
         
         if preference.windowFrame.isEmpty, let frame = NSScreen.main?.frame {
-            let size = NSSize(width: 1132, height: 780)
+            let size = desktop.drawingFrame.inset(by: -100).size
             let origin = NSPoint(x: round((frame.width - size.width) / 2),
                                  y: round((frame.height - size.height) / 2))
             preference.windowFrame = NSRect(origin: origin, size: size)
@@ -518,6 +516,11 @@ final class C0View: NSView, NSTextInputClient {
         return true
     }
     
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: Cursor.stroke.nsCursor)
+    }
+    
     override func viewDidChangeBackingProperties() {
         if let backingScaleFactor = window?.backingScaleFactor {
             desktopView.allChildrenAndSelf { $0.contentsScale = backingScaleFactor }
@@ -633,10 +636,6 @@ final class C0View: NSView, NSTextInputClient {
         if let key = nsEvent.key {
             sender.send(InputEvent(type: key, value: inputEventValueWith(nsEvent, .ended)))
         }
-    }
-    
-    override func cursorUpdate(with nsEvent: NSEvent) {
-        Cursor.stroke.nsCursor.set()
     }
     
     private final class DragManager {

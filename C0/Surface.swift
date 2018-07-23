@@ -23,7 +23,7 @@ struct Surface {
             path = Surface.path(with: line)
         }
     }
-    var color: Color
+    var uuColor: UU<Color>
     private(set) var path: Path
     
     private static func path(with line: Line) -> Path {
@@ -36,9 +36,9 @@ struct Surface {
         return path
     }
     
-    init(line: Line, color: Color = .gray) {
+    init(line: Line, uuColor: UU<Color> = UU(.surface)) {
         self.line = line
-        self.color = color
+        self.uuColor = uuColor
         path = Surface.path(with: line)
     }
 }
@@ -55,42 +55,45 @@ extension Surface: Equatable {
 extension Surface: Interpolatable {
     static func linear(_ f0: Surface, _ f1: Surface, t: Real) -> Surface {
         let line = Line.linear(f0.line, f1.line, t: t)
-        let color = Color.linear(f0.color, f1.color, t: t)
-        return Surface(line: line, color: color)
+        let color = Color.linear(f0.uuColor.value, f1.uuColor.value, t: t)
+        return Surface(line: line, uuColor: UU(color))
     }
     static func firstMonospline(_ f1: Surface, _ f2: Surface, _ f3: Surface,
                                 with ms: Monospline) -> Surface {
         let line = Line.firstMonospline(f1.line, f2.line, f3.line, with: ms)
-        let color = Color.firstMonospline(f1.color, f2.color, f3.color, with: ms)
-        return Surface(line: line, color: color)
+        let color = Color.firstMonospline(f1.uuColor.value, f2.uuColor.value,
+                                          f3.uuColor.value, with: ms)
+        return Surface(line: line, uuColor: UU(color))
     }
     static func monospline(_ f0: Surface, _ f1: Surface, _ f2: Surface, _ f3: Surface,
                            with ms: Monospline) -> Surface {
         let line = Line.monospline(f0.line, f1.line, f2.line, f3.line, with: ms)
-        let color = Color.monospline(f0.color, f1.color, f2.color, f3.color, with: ms)
-        return Surface(line: line, color: color)
+        let color = Color.monospline(f0.uuColor.value, f1.uuColor.value,
+                                     f2.uuColor.value, f3.uuColor.value, with: ms)
+        return Surface(line: line, uuColor: UU(color))
     }
     static func lastMonospline(_ f0: Surface, _ f1: Surface, _ f2: Surface,
                                with ms: Monospline) -> Surface {
         let line = Line.lastMonospline(f0.line, f1.line, f2.line, with: ms)
-        let color = Color.lastMonospline(f0.color, f1.color, f2.color, with: ms)
-        return Surface(line: line, color: color)
+        let color = Color.lastMonospline(f0.uuColor.value, f1.uuColor.value,
+                                         f2.uuColor.value, with: ms)
+        return Surface(line: line, uuColor: UU(color))
     }
 }
 extension Surface: Codable {
     private enum CodingKeys: String, CodingKey {
-        case line, color
+        case line, uuColor
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         line = try values.decode(Line.self, forKey: .line)
-        color = try values.decode(Color.self, forKey: .color)
+        uuColor = try values.decode(UU<Color>.self, forKey: .uuColor)
         path = Surface.path(with: line)
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(line, forKey: .line)
-        try container.encode(color, forKey: .color)
+        try container.encode(uuColor, forKey: .uuColor)
     }
 }
 extension Surface: Viewable {
@@ -230,7 +233,7 @@ final class SurfaceView<T: BinderProtocol>: ModelView, BindableReceiver {
         
         lineView = LineView(binder: binder, keyPath: keyPath.appending(path: \Model.line))
         pathView = View(path: Path())
-        pathView.fillColor = binder[keyPath: keyPath].color
+        pathView.fillColor = binder[keyPath: keyPath].uuColor.value
         
         super.init(isLocked: false)
         lineView.notifications.append { [unowned self] (_, _) in self.updatePath() }
@@ -238,14 +241,47 @@ final class SurfaceView<T: BinderProtocol>: ModelView, BindableReceiver {
         updateWithModel()
     }
     
+    //
+    override var isEmpty: Bool {
+        return false
+    }
+    override func containsPath(_ p: Point) -> Bool {
+        return true
+    }
+    
     var minSize: Size {
         return model.line.imageBounds.size
     }
     func updateWithModel() {
         lineView.updateWithModel()
+        updateColor()
         updatePath()
+    }
+    func updateColor() {
+        pathView.fillColor = model.uuColor.value
     }
     func updatePath() {
         pathView.path = model.path
+    }
+}
+extension SurfaceView: ChangeableColorOwner {
+    func captureUUColor(to version: Version) {
+        capture(uuColor: model.uuColor, to: version)
+    }
+    func capture(uuColor: UU<Color>, to version: Version) {
+        version.registerUndo(withTarget: self) { [oldUUColor = model.uuColor] in
+            $0.capture(uuColor: oldUUColor, to: version)
+        }
+        binder[keyPath: keyPath].uuColor = uuColor
+        updateColor()
+    }
+    var uuColor: UU<Color> {
+        get {
+            return model.uuColor
+        }
+        set {
+            model.uuColor = newValue
+            updateColor()
+        }
     }
 }

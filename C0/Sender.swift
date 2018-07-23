@@ -22,7 +22,7 @@ import class Foundation.OperationQueue
 
 protocol UserObjectProtocol: ChangeableDraft, Exportable, CollectionAssignable, Movable {}
 protocol RootModeler: Modeler, Undoable, Zoomable, ChangeableDraft, Exportable, CollectionAssignable,
-CopiableViewer, MakableStrokable {
+CopiableViewer, MakableStrokable, MakableChangeableColor {
     func userObject(at p: Point) -> UserObjectProtocol
 }
 
@@ -108,6 +108,7 @@ final class Sender {
     private var rotatableObject: RotatableObject?
     private var strokableUserObject: Strokable?
     private var movableObject: Movable?
+    private var changeableColorObject: ChangeableColor?
     
     private var fp = Point()
     private var layoutableViews = [(oldP: Point, reciever: MovableReceiver)]()
@@ -135,13 +136,11 @@ final class Sender {
             }
         case actionList.resetViewAction:
             rootView.captureTransform(to: rootView.version)
-            rootView.transform = Transform()
+            rootView.zoomingTransform = rootView.defaultTransform
         case actionList.strokeAction, actionList.lassoFillAction, actionList.lassoEraseAction:
             guard let eventValue = actionMap.eventValues(with: DragEvent.self).first else { return }
             if actionMap.phase == .began {
-                let userObject = rootView.userObject(at: eventValue.rootLocation)
-                strokableUserObject = (userObject as? MakableStrokable)?
-                    .strokable(withRootView: rootView) ?? rootView.strokable(withRootView: rootView)
+                strokableUserObject = rootView.strokable(withRootView: rootView)
             }
             let type: StrokableType = actionMap.action == actionList.lassoFillAction ?
                 .surface : (actionMap.action == actionList.strokeAction ? .normal : .other)
@@ -150,10 +149,20 @@ final class Sender {
             if actionMap.phase == .ended {
                 strokableUserObject = nil
             }
-        case actionList.changeHueAction:
-            
-        case actionList.changeSLAction:
-            
+        case actionList.changeHueAction, actionList.changeSLAction:
+            guard let eventValue = actionMap.eventValues(with: DragEvent.self).first else { return }
+            if actionMap.phase == .began {
+                changeableColorObject = rootView.changeableColor(with: eventValue,
+                                                                 rootView: rootView)
+            }
+            if actionMap.action == actionList.changeHueAction {
+                changeableColorObject?.changeHue(with: eventValue, actionMap.phase, rootView.version)
+            } else {
+                changeableColorObject?.changeSL(with: eventValue, actionMap.phase, rootView.version)
+            }
+            if actionMap.phase == .ended {
+                changeableColorObject = nil
+            }
         case actionList.moveAction:
             guard let eventValue = actionMap.eventValues(with: DragEvent.self).first else { return }
             if actionMap.phase == .began {
@@ -225,6 +234,7 @@ protocol MakableKeyInputtable {
 protocol Zoomable: class {
     func captureTransform(to version: Version)
     var zoomingView: View { get }
+    var defaultTransform: Transform { get }
     var zoomingTransform: Transform { get set }
     func convertZoomingLocalFromZoomingView(_ p: Point) -> Point
     func convertZoomingLocalToZoomingView(_ p: Point) -> Point
@@ -238,23 +248,24 @@ final class ZoomableObject {
     }
     
     var isEndSnap = true
-    var minZ = -20.0.cg, maxZ = 20.0.cg, zInterval = 0.02.cg
+    var minZ = -15.0.cg, maxZ = 15.0.cg, zInterval = 0.0.cg
     var correction = 3.0.cg
     private var beganZ = 0.0.cg, z = 0.0.cg
     
     func zoom(with eventValue: PinchEvent.Value, _ phase: Phase, _ version: Version) {
-        if phase == .began {
+        switch phase {
+        case .began:
+            zoomableView.captureTransform(to: version)
             beganZ = zoomableView.zoomingTransform.z
             z = 0
-            zoomableView.captureTransform(to: version)
-        }
-        let p = zoomableView.zoomingView.convertFromRoot(eventValue.rootLocation)
-        zoom(at: p) {
-            z += eventValue.magnification * correction
-            let newZ = (beganZ + z).interval(scale: zInterval).clip(min: minZ, max: maxZ)
-            zoomableView.zoomingTransform.z = newZ
-        }
-        if phase == .ended {
+        case .changed:
+            let p = zoomableView.zoomingView.convertFromRoot(eventValue.rootLocation)
+            zoom(at: p) {
+                z += eventValue.magnification * correction
+                let newZ = (beganZ + z).interval(scale: zInterval).clip(min: minZ, max: maxZ)
+                zoomableView.zoomingTransform.z = newZ
+            }
+        case .ended:
             if isEndSnap {
                 zoomableView.zoomingTransform.translation
                     = zoomableView.zoomingTransform.translation.rounded()
@@ -277,13 +288,14 @@ final class RotatableObject {
     }
     
     var isEndSnap = true
-    var rotationInterval = 2.0.cg
-    var correction = (1.0.cg / (3.2 * .pi)) * 180 / .pi
+    var rotationInterval = 0.0.cg
+    var correction = 0.08.cg * 180 / .pi
     private var beganRotation = 0.0.cg, rotation = 0.0.cg
     
     func rotate(with eventValue: RotateEvent.Value, _ phase: Phase, _ version: Version) {
         switch phase {
         case .began:
+            zoomableView.captureTransform(to: version)
             beganRotation = zoomableView.zoomingTransform.degreesRotation
             rotation = 0.0
         case .changed:
@@ -315,12 +327,65 @@ protocol Strokable: class {
     func lassoErase(with eventValue: DragEvent.Value,
                     _ phase: Phase, _ version: Version)
 }
-protocol ChangeableColor {
-    func changeHue(with eventValue: DragEvent.Value,
-                   _ phase: Phase, isSurface: Bool, _ version: Version)
-    func changeSL(with eventValue: DragEvent.Value,
-                  _ phase: Phase, isSurface: Bool, _ version: Version)
+
+protocol MakableChangeableColor {
+    func changeableColor(with eventValue: DragEvent.Value,
+                         rootView: View) -> ChangeableColor?
 }
+protocol ChangeableColorOwner: class {
+    func captureUUColor(to version: Version)
+    var uuColor: UU<Color> { get set }
+}
+protocol ChangeableColor {
+    func changeHue(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version)
+    func changeSL(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version)
+}
+final class ChangeableColorObject: ChangeableColor {
+    typealias ColorOwnerView = View & ChangeableColorOwner
+    
+    var views: [ColorOwnerView]
+    var fp = Point(), firstUUColor = UU(Color())
+    var hueCorrection = 0.002.cg, slCorrection = 0.002.cg
+    
+    init(views: [ColorOwnerView], firstUUColor: UU<Color>) {
+        self.views = views
+        self.firstUUColor = firstUUColor
+    }
+    
+    func changeHue(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
+        guard !views.isEmpty else { return }
+        if phase == .began {
+            views.forEach { $0.captureUUColor(to: version) }
+            fp = eventValue.rootLocation
+        }
+        let hue = ((eventValue.rootLocation.x - fp.x) * hueCorrection
+            + firstUUColor.value.hue).loopValue()
+        var uuColor = firstUUColor
+        uuColor.value.hue = hue
+        views.forEach { $0.uuColor = uuColor }
+        if phase == .ended {
+            views = []
+        }
+    }
+    func changeSL(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
+        guard !views.isEmpty else { return }
+        if phase == .began {
+            views.forEach { $0.captureUUColor(to: version) }
+            fp = eventValue.rootLocation
+        }
+        let lightness = ((eventValue.rootLocation.x - fp.x) * slCorrection
+            + firstUUColor.value.lightness).clip(min: 0, max: 1)
+        let saturation = ((eventValue.rootLocation.y - fp.y) * slCorrection
+            + firstUUColor.value.saturation).clip(min: 0, max: 1)
+        var uuColor = firstUUColor
+        uuColor.value.ls = Point(x: lightness, y: saturation)
+        views.forEach { $0.uuColor = uuColor }
+        if phase == .ended {
+            views = []
+        }
+    }
+}
+
 protocol Movable {
     func move(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version)
 }
@@ -354,7 +419,7 @@ final class TransformingMovableObject: Movable {
         }
         
         if phase == .ended {
-            self.viewAndFirstOrigins = []
+            viewAndFirstOrigins = []
         }
     }
 }

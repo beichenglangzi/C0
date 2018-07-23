@@ -273,13 +273,21 @@ final class RectView<T: BinderProtocol>: ModelView, BindableReceiver {
         super.init(isLocked: false)
         lineWidth = 1
         lineColor = .content
+        updateWithModel()
     }
     
     func updateWithModel() {
-        frame = model
+        frame = model.inset(by: -lineWidth)
+    }
+    
+    override func containsPath(_ p: Point) -> Bool {
+        return false
     }
     
     var oldFrame = Rect()
+    func captureWillMoveObject(at p: Point, to version: Version) {
+        oldFrame = frame
+    }
     func transform(with affineTransform: AffineTransform) {
         model = oldFrame.applying(affineTransform)
     }
@@ -322,8 +330,5 @@ final class RectView<T: BinderProtocol>: ModelView, BindableReceiver {
             minD = d
         }
         return anchorPoint
-    }
-    func captureWillMoveObject(at p: Point, to version: Version) {
-        oldFrame = frame
     }
 }
