@@ -309,7 +309,7 @@ class View {
         caLayer.draw(in: ctx)
     }
     func render(in ctx: CGContext) {
-        (caLayer as! C0DrawLayer).safetyRender(in: ctx)
+        caLayer.safetyRender(in: ctx)
     }
     func renderImage(with size: Size) -> Image? {
         guard let ctx = CGContext.bitmap(with: size, CGColorSpace.default) else {
@@ -317,16 +317,13 @@ class View {
         }
         let frame = transformedBoundingBox
         let scale = size.width / frame.size.width
-        let viewTransform = Transform(translation: Point(x: size.width / 2,
-                                                         y: size.height / 2),
+        let viewTransform = Transform(translation: Point(),
                                       scale: Point(x: scale, y: scale),
                                       rotation: 0)
-        let drawView = View(drawClosure: { ctx, _, _ in
-            ctx.concatenate(viewTransform.affineTransform)
-            self.draw(in: ctx)
-        })
-        drawView.bounds = frame
-        drawView.render(in: ctx)
+        ctx.setFillColor(Color.background.cg)
+        ctx.fill(Rect(origin: Point(), size: size))
+        ctx.concatenate(viewTransform.affineTransform)
+        render(in: ctx)
         return ctx.renderImage
     }
     
@@ -626,7 +623,6 @@ extension CALayer {
     func safetyRender(in ctx: CGContext) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        setNeedsDisplay()
         render(in: ctx)
         CATransaction.commit()
     }

@@ -109,9 +109,8 @@ extension BindableReceiver {
     func clippedModel(_ model: Model) -> Model {
         return model
     }
-    func reset(for p: Point, _ version: Version) {}
     
-    var copiedObject: Object {
+    var copiableObject: Object {
         if let valueChain = model as? ValueChain,
             let value = valueChain.rootChainValue as? Object.Value {
             

@@ -280,19 +280,53 @@ final class RectView<T: BinderProtocol>: ModelView, BindableReceiver {
         frame = model.inset(by: -lineWidth)
     }
     
+    var z = 0.0.cg
+    let drawingFrameDistance = 5.0.cg
     override func containsPath(_ p: Point) -> Bool {
+        var d = p.distanceWithLine(ap: model.minXminYPoint, bp: model.maxXminYPoint)
+        if d < drawingFrameDistance {
+            return true
+        }
+        d = p.distanceWithLine(ap: model.maxXminYPoint, bp: model.maxXmaxYPoint)
+        if d < drawingFrameDistance {
+            return true
+        }
+        d = p.distanceWithLine(ap: model.maxXmaxYPoint, bp: model.minXmaxYPoint)
+        if d < drawingFrameDistance {
+            return true
+        }
+        d = p.distanceWithLine(ap: model.minXmaxYPoint, bp: model.minXminYPoint)
+        if d < drawingFrameDistance {
+            return true
+        }
         return false
     }
-    
-    var oldFrame = Rect()
-    func captureWillMoveObject(at p: Point, to version: Version) {
-        oldFrame = frame
+}
+extension RectView: MakableMovable {
+    func movable(at p: Point) -> Movable {
+        return RectMovable(rectView: self)
     }
-    func transform(with affineTransform: AffineTransform) {
-        model = oldFrame.applying(affineTransform)
+}
+
+final class RectMovable<Binder: BinderProtocol>: Movable {
+    let rectView: RectView<Binder>
+    
+    init(rectView: RectView<Binder>) {
+        self.rectView = rectView
+    }
+    
+    var oldRect = Rect()
+    
+    func move(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
+        if phase == .began {
+            rectView.capture(rectView.model, to: version)
+            oldRect = rectView.model
+        }
+        
+//        model = oldFrame.applying(affineTransform)
     }
     func anchorPoint(from p: Point) -> Point {
-        let frame = transformedBoundingBox
+        let frame = rectView.transformedBoundingBox
         var minD = p.distance²(frame.minXminYPoint), anchorPoint = frame.maxXmaxYPoint
         var d = p.distance²(frame.midXminYPoint)
         if d < minD {

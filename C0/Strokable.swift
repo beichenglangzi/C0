@@ -19,9 +19,6 @@
 
 import func CoreGraphics.sqrt
 
-protocol MakableStrokable {
-    func strokable(withRootView rootView: View) -> Strokable
-}
 enum StrokableType {
     case normal, surface, other
 }
@@ -118,7 +115,7 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
     var short = Short()
     
     struct Short {
-        var minTime = Real(0.1), linearMaxDistance = 1.5.cg
+        var minTime = Real(0.1), linearMaxDistance = 1.0.cg
         
         func shortedLineWith(_ line: Line, deltaTime: Real, scale: Real) -> Line {
             guard deltaTime < minTime && line.controls.count > 3 else {
@@ -155,11 +152,16 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
     
     func stroke(with eventValue: DragEvent.Value, _ phase: Phase,
                 strokableType: StrokableType, _ version: Version) {
-        let p = rootView.convertFromRoot(eventValue.rootLocation)
-        stroke(for: p, pressure: eventValue.pressure, time: eventValue.time, phase,
-               strokeType: strokableType, to: version)
+        if strokableType == .other {
+            lassoErase(with: eventValue, phase, version)
+        } else {
+            let p = rootView.convertFromRoot(eventValue.rootLocation)
+            stroke(for: p, pressure: eventValue.pressure, time: eventValue.time, phase,
+                   strokeType: strokableType, to: version)
+        }
     }
-    func stroke(for point: Point, pressure: Real, time: Real, _ phase: Phase, strokeType: StrokableType,
+    func stroke(for point: Point, pressure: Real, time: Real, _ phase: Phase,
+                strokeType: StrokableType,
                 isAppendLine: Bool = true, to version: Version? = nil) {
         let p = convertToCurrentLocal(point)
         switch phase {
@@ -240,24 +242,24 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
         }
     }
     
-    var lines = [Line]()
-    
     func lassoErase(with eventValue: DragEvent.Value,
                     _ phase: Phase, _ version: Version) {
-        _ = stroke(with: eventValue, phase, strokableType: .other, version)
+        let p = rootView.convertFromRoot(eventValue.rootLocation)
+        stroke(for: p, pressure: eventValue.pressure, time: eventValue.time, phase,
+               strokeType: .normal, to: version)
         switch phase {
         case .began:
             break
         case .changed, .ended:
             if let line = line {
-                lassoErase(with: line)
+                lassoErase(with: line, to: version)
             }
         }
     }
-    func lassoErase(with line: Line) {
+    func lassoErase(with line: Line, to version: Version) {
         var isRemoveLineInDrawing = false
         let lasso = SurfaceLasso(surface: Surface(line: line))
-        let newDrawingLines = lines.reduce(into: [Line]()) {
+        let newDrawingLines = drawingView.linesView.model.reduce(into: [Line]()) {
             if let splitedLine = lasso.splitedLine(with: $1) {
                 switch splitedLine {
                 case .around:
@@ -271,7 +273,7 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
             }
         }
         if isRemoveLineInDrawing {
-            self.lines = newDrawingLines
+            drawingView.linesView.push(newDrawingLines, to: version)
         }
     }
 }

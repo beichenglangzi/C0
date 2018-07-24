@@ -123,7 +123,7 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         copiedObjectView.lineColor = .content
         copiedObjectView.opacity = 0.5
         draftDrawingView.linesColor = .draft
-        draftDrawingView.opacity = 0.2
+        draftDrawingView.opacity = 0.1
         
         drawingFrameAroundView.fillColorComposition = .around
         
@@ -179,31 +179,7 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         drawingFrameAroundView.path = path
     }
 }
-extension DesktopView: RootModeler {
-    func userObject(at p: Point) -> UserObjectProtocol {
-        let tmo = TransformingMovableObject(viewAndFirstOrigins: [(drawingView, transform.translation)],
-                                            rootView: self)
-        let userObject = DesktopUserObject(rootView: self, transformingMovableObject: tmo)
-        if let view = at(p, Copiable.self) {
-            userObject.copiedObject = view.copiedObject
-        }
-        return userObject
-    }
-    func strokable(withRootView rootView: View) -> Strokable {
-        return StrokableUserObject(rootView: self, drawingView: drawingView)
-    }
-    func changeableColor(with eventValue: DragEvent.Value, rootView: View) -> ChangeableColor? {
-        guard let surfaceView = at(eventValue.rootLocation) as? SurfaceView<Binder> else {
-            return nil
-        }
-        let uuColor = surfaceView.model.uuColor
-        let views: [View & ChangeableColorOwner] = drawingView.surfacesView.modelViews.compactMap {
-            let surfaceView = $0 as? SurfaceView<Binder>
-            return surfaceView?.model.uuColor == uuColor ? surfaceView : nil
-        }
-        return ChangeableColorObject(views: views, firstUUColor: uuColor)
-    }
-}
+
 extension DesktopView: Zoomable {
     func captureTransform(to version: Version) {
         transformView.capture(model.transform, to: version)
@@ -231,21 +207,61 @@ extension DesktopView: Zoomable {
         return transformView
     }
 }
+
+extension DesktopView: MakableStrokable {
+    func strokable(at p: Point) -> Strokable {
+        return StrokableUserObject(rootView: self, drawingView: drawingView)
+    }
+}
+
+extension DesktopView: MakableChangeableColor {
+    func changeableColor(at p: Point) -> ChangeableColor? {
+        let point = drawingView.convertFromRoot(p)
+        guard let surfaceView = drawingView.surfacesView.at(point) as? SurfaceView<Binder> else {
+            return nil
+        }
+        let uuColor = surfaceView.model.uuColor
+        let views: [View & ChangeableColorOwner] = drawingView.surfacesView.modelViews.compactMap {
+            let surfaceView = $0 as? SurfaceView<Binder>
+            return surfaceView?.model.uuColor == uuColor ? surfaceView : nil
+        }
+        return ChangeableColorObject(views: views, firstUUColor: uuColor)
+    }
+}
+
+extension DesktopView: MakableMovable {
+    func movable(at p: Point) -> Movable {
+        if let makableMovable = at(p, (View & MakableMovable).self), makableMovable != self {
+            return makableMovable.movable(at: makableMovable.convertFromRoot(p))
+        } else {
+            return drawingView
+        }
+    }
+}
+
 extension DesktopView: Undoable {
     var version: Version {
         return model.version
     }
 }
-extension DesktopView: CopiableViewer {
-    var copiedObject: Object {
-        get { return copiedObjectView.model }
-        set { copiedObjectView.model = newValue }
+
+extension DesktopView: MakableCollectionAssignable {
+    func collectionAssignable(at p: Point) -> CollectionAssignable {
+        
+        
+        return at(p, CollectionAssignable.self) ?? drawingView
     }
-    func push(_ copiedObject: Object, to version: Version) {
+    var copiedObject: Object {
+        return copiedObjectView.model
+    }
+    func push(copiedObject: Object, to version: Version) {
         copiedObjectView.push(copiedObject, to: version)
     }
 }
 extension DesktopView: CollectionAssignable {
+    var copiableObject: Object {
+        return Object(model.drawing)
+    }
     func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
         push(drawing: Drawing(), to: version)
     }
@@ -254,6 +270,12 @@ extension DesktopView: CollectionAssignable {
         if let drawing = object.value as? Drawing {
             push(drawing: model.drawing + drawing, to: version)
         }
+    }
+}
+
+extension DesktopView: MakableChangeableDraft {
+    func changeableDraft(at p: Point) -> ChangeableDraft {
+        return self
     }
 }
 extension DesktopView: ChangeableDraft {
@@ -280,11 +302,17 @@ extension DesktopView: ChangeableDraft {
         return model.draftDrawing
     }
 }
+
+extension DesktopView: MakableExportable {
+    func exportable(at p: Point) -> Exportable {
+        return self
+    }
+}
 extension DesktopView: URLEncodable {
     func write(to url: URL,
                progressClosure: @escaping (Real, inout Bool) -> () = { (_, _) in },
                completionClosure: @escaping (Error?) -> () = { _ in }) throws {
-        let size = ceil(model.drawingFrame.size * model.transform.scale.x)
+        let size = ceil(model.drawingFrame.size * model.transform.scale.x * contentsScale)
         let image = drawingView.renderImage(with: size)
         try image?.write(.png, to: url)
         completionClosure(nil)
@@ -298,39 +326,4 @@ extension DesktopView: Exportable {
     }
 }
 
-final class DesktopUserObject: UserObjectProtocol {
-    var copiedObject = Object(Text(stringLines: [StringLine(string: "None", origin: Point())]))
-    var rootView: Sender.RootView
-    var transformingMovableObject: TransformingMovableObject?
-    
-    init(rootView: Sender.RootView, transformingMovableObject: TransformingMovableObject?) {
-        self.rootView = rootView
-        self.transformingMovableObject = transformingMovableObject
-    }
-    
-    func move(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
-        transformingMovableObject?.move(with: eventValue, phase, version)
-    }
-    
-    func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        rootView.remove(with: eventValue, phase, version)
-    }
-    func paste(_ object: Object,
-               with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        rootView.paste(object, with: eventValue, phase, version)
-    }
-    
-    func changeToDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        rootView.changeToDraft(with: eventValue, phase, version)
-    }
-    func removeDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        rootView.removeDraft(with: eventValue, phase, version)
-    }
-    var draftValue: Object.Value {
-        return rootView.draftValue
-    }
-    
-    func export(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        rootView.export(with: eventValue, phase, version)
-    }
-}
+extension DesktopView: RootModeler {}

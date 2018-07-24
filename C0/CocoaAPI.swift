@@ -463,7 +463,7 @@ protocol CocoaKeyInputtable {
 }
 
 final class C0View: NSView, NSTextInputClient {
-    let sender: Sender
+    let sender: ActionSender
     let desktopBinder: DesktopBinder
     let desktopView: DesktopView<DesktopBinder>
     
@@ -474,7 +474,7 @@ final class C0View: NSView, NSTextInputClient {
         let desktop = Desktop()
         desktopBinder = DesktopBinder(rootModel: desktop)
         desktopView = DesktopView(binder: desktopBinder, keyPath: \DesktopBinder.rootModel)
-        sender = Sender(rootView: desktopView)
+        sender = ActionSender(rootView: desktopView)
         
         dragManager = DragManager(sender: sender, clickType: .click, dragType: .drag)
         subDragManager = DragManager(sender: sender, clickType: .subClick, dragType: .subDrag)
@@ -623,8 +623,9 @@ final class C0View: NSView, NSTextInputClient {
         }
     }
     
+    var isRepeatKey = true
     override func keyDown(with nsEvent: NSEvent) {
-        guard !nsEvent.isARepeat else { return }
+        guard isRepeatKey || (!isRepeatKey && !nsEvent.isARepeat) else { return }
         if let key = nsEvent.key {
             let eventValue = inputEventValueWith(nsEvent, .began)
             sender.send(InputEvent(type: key, value: eventValue))
@@ -639,11 +640,11 @@ final class C0View: NSView, NSTextInputClient {
     }
     
     private final class DragManager {
-        var sender: Sender
+        var sender: ActionSender
         let clickTime: TimeInterval
         let clickType: InputEvent.EventType, dragType: DragEvent.EventType
         
-        init(sender: Sender,
+        init(sender: ActionSender,
              clickTime: TimeInterval = 0.2,
              clickType: InputEvent.EventType, dragType: DragEvent.EventType) {
             

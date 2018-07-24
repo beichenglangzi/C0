@@ -19,6 +19,10 @@
 
 import struct Foundation.UUID
 
+extension UUID {
+    static let zero = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+}
+
 struct UU<Value: Object.Value & Viewable>: Codable {
     var value: Value
     var id: UUID
@@ -26,6 +30,9 @@ struct UU<Value: Object.Value & Viewable>: Codable {
     init(_ value: Value, id: UUID = UUID()) {
         self.value = value
         self.id = id
+    }
+    mutating func newID() {
+        id = UUID()
     }
 }
 extension UU: ValueChain {

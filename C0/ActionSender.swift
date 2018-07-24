@@ -20,25 +20,18 @@
 import struct Foundation.Locale
 import class Foundation.OperationQueue
 
-protocol UserObjectProtocol: ChangeableDraft, Exportable, CollectionAssignable, Movable {}
-protocol RootModeler: Modeler, Undoable, Zoomable, ChangeableDraft, Exportable, CollectionAssignable,
-CopiableViewer, MakableStrokable, MakableChangeableColor {
-    func userObject(at p: Point) -> UserObjectProtocol
-}
+protocol RootModeler: Modeler, Zoomable, MakableStrokable, MakableChangeableColor, MakableMovable,
+Undoable, MakableCollectionAssignable, MakableChangeableDraft, MakableExportable {}
 
-final class Sender {
+final class ActionSender {
     typealias RootView = View & RootModeler
     var rootView: RootView
     let actionList = ActionList()
     var eventMap = EventMap()
     var actionMaps = [ActionMap]()
-    var backgroundQueue = OperationQueue()
     
     init(rootView: RootView) {
         self.rootView = rootView
-    }
-    deinit {
-        backgroundQueue.cancelAllOperations()
     }
     
     func actionMapIndex<T: Event>(with event: T) -> Array<ActionMap>.Index? {
@@ -96,23 +89,11 @@ final class Sender {
         }
     }
     
-    typealias CopiedObjectViewer = View & CopiableViewer
-    typealias AssignableReceiver = View & Assignable
-    typealias CollectionReceiver = View & CollectionAssignable
-    typealias CopiableReceiver = View & Copiable
-    typealias ExportableReceiver = View & Exportable
-    typealias PointMovableReceiver = View & PointMovable
-    typealias MovableReceiver = View & Movable
-    
     private var zoomableObject: ZoomableObject?
     private var rotatableObject: RotatableObject?
-    private var strokableUserObject: Strokable?
+    private var strokableObject: Strokable?
     private var movableObject: Movable?
     private var changeableColorObject: ChangeableColor?
-    
-    private var fp = Point()
-    private var layoutableViews = [(oldP: Point, reciever: MovableReceiver)]()
-    private var viewPointMover: ViewPointMover?
     
     func send(_ actionMap: ActionMap) {
         switch actionMap.action {
@@ -140,20 +121,19 @@ final class Sender {
         case actionList.strokeAction, actionList.lassoFillAction, actionList.lassoEraseAction:
             guard let eventValue = actionMap.eventValues(with: DragEvent.self).first else { return }
             if actionMap.phase == .began {
-                strokableUserObject = rootView.strokable(withRootView: rootView)
+                strokableObject = rootView.strokable(at: eventValue.rootLocation)
             }
             let type: StrokableType = actionMap.action == actionList.lassoFillAction ?
                 .surface : (actionMap.action == actionList.strokeAction ? .normal : .other)
-            strokableUserObject?.stroke(with: eventValue, actionMap.phase,
+            strokableObject?.stroke(with: eventValue, actionMap.phase,
                                         strokableType: type, rootView.version)
             if actionMap.phase == .ended {
-                strokableUserObject = nil
+                strokableObject = nil
             }
         case actionList.changeHueAction, actionList.changeSLAction:
             guard let eventValue = actionMap.eventValues(with: DragEvent.self).first else { return }
             if actionMap.phase == .began {
-                changeableColorObject = rootView.changeableColor(with: eventValue,
-                                                                 rootView: rootView)
+                changeableColorObject = rootView.changeableColor(at: eventValue.rootLocation)
             }
             if actionMap.action == actionList.changeHueAction {
                 changeableColorObject?.changeHue(with: eventValue, actionMap.phase, rootView.version)
@@ -166,7 +146,7 @@ final class Sender {
         case actionList.moveAction:
             guard let eventValue = actionMap.eventValues(with: DragEvent.self).first else { return }
             if actionMap.phase == .began {
-                movableObject = rootView.userObject(at: eventValue.rootLocation)
+                movableObject = rootView.movable(at: eventValue.rootLocation)
             }
             movableObject?.move(with: eventValue, actionMap.phase, rootView.version)
             if actionMap.phase == .ended {
@@ -183,52 +163,46 @@ final class Sender {
         case actionList.cutAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let userObject = rootView.userObject(at: eventValue.rootLocation)
-            let copiedObject = userObject.copiedObject
+            let collectionAssignable = rootView.collectionAssignable(at: eventValue.rootLocation)
+            let copiedObject = collectionAssignable.copiableObject
             stopEditableEvents()
-            userObject.remove(with: eventValue, actionMap.phase, rootView.version)
-            rootView.push(copiedObject, to: rootView.version)
+            collectionAssignable.remove(with: eventValue, actionMap.phase, rootView.version)
+            rootView.push(copiedObject: copiedObject, to: rootView.version)
         case actionList.copyAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let userObject = rootView.userObject(at: eventValue.rootLocation)
-            let copiedObject = userObject.copiedObject
+            let collectionAssignable = rootView.collectionAssignable(at: eventValue.rootLocation)
+            let copiedObject = collectionAssignable.copiableObject
             stopEditableEvents()
-            rootView.push(copiedObject, to: rootView.version)
+            rootView.push(copiedObject: copiedObject, to: rootView.version)
         case actionList.pasteAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let userObject = rootView.userObject(at: eventValue.rootLocation)
+            let collectionAssignable = rootView.collectionAssignable(at: eventValue.rootLocation)
             stopEditableEvents()
-            userObject.paste(rootView.copiedObject,
-                             with: eventValue, actionMap.phase, rootView.version)
-        case actionList.changeToDraftAction:
+            collectionAssignable.paste(rootView.copiedObject,
+                                       with: eventValue, actionMap.phase, rootView.version)
+        case actionList.changeToDraftAction, actionList.cutDraftAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let userObject = rootView.userObject(at: eventValue.rootLocation)
+            let changeableDraft = rootView.changeableDraft(at: eventValue.rootLocation)
             stopEditableEvents()
-            userObject.changeToDraft(with: eventValue, actionMap.phase, rootView.version)
-        case actionList.cutDraftAction:
-            guard actionMap.phase == .began else { break }
-            guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let userObject = rootView.userObject(at: eventValue.rootLocation)
-            let copiedObject = Object(userObject.draftValue)
-            stopEditableEvents()
-            userObject.removeDraft(with: eventValue, actionMap.phase, rootView.version)
-            rootView.push(copiedObject, to: rootView.version)
+            if actionMap.action == actionList.changeToDraftAction {
+                changeableDraft.changeToDraft(with: eventValue, actionMap.phase, rootView.version)
+            } else {
+                let copiedObject = Object(changeableDraft.draftValue)
+                changeableDraft.removeDraft(with: eventValue, actionMap.phase, rootView.version)
+                rootView.push(copiedObject: copiedObject, to: rootView.version)
+            }
         case actionList.exportAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let userObject = rootView.userObject(at: eventValue.rootLocation)
+            let exportable = rootView.exportable(at: eventValue.rootLocation)
             stopEditableEvents()
-            userObject.export(with: eventValue, actionMap.phase, rootView.version)
+            exportable.export(with: eventValue, actionMap.phase, rootView.version)
         default: break
         }
     }
-}
-
-protocol MakableKeyInputtable {
-    func keyInputable(withRootView rootView: View, at p: Point) -> KeyInputtable
 }
 
 protocol Zoomable: class {
@@ -321,6 +295,9 @@ final class RotatableObject {
     }
 }
 
+protocol MakableStrokable {
+    func strokable(at p: Point) -> Strokable
+}
 protocol Strokable: class {
     func stroke(with eventValue: DragEvent.Value,
                 _ phase: Phase, strokableType: StrokableType, _ version: Version)
@@ -329,23 +306,22 @@ protocol Strokable: class {
 }
 
 protocol MakableChangeableColor {
-    func changeableColor(with eventValue: DragEvent.Value,
-                         rootView: View) -> ChangeableColor?
-}
-protocol ChangeableColorOwner: class {
-    func captureUUColor(to version: Version)
-    var uuColor: UU<Color> { get set }
+    func changeableColor(at p: Point) -> ChangeableColor?
 }
 protocol ChangeableColor {
     func changeHue(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version)
     func changeSL(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version)
+}
+protocol ChangeableColorOwner: class {
+    func captureUUColor(to version: Version)
+    var uuColor: UU<Color> { get set }
 }
 final class ChangeableColorObject: ChangeableColor {
     typealias ColorOwnerView = View & ChangeableColorOwner
     
     var views: [ColorOwnerView]
     var fp = Point(), firstUUColor = UU(Color())
-    var hueCorrection = 0.002.cg, slCorrection = 0.002.cg
+    var hueCorrection = 0.004.cg, slCorrection = 0.004.cg
     
     init(views: [ColorOwnerView], firstUUColor: UU<Color>) {
         self.views = views
@@ -362,6 +338,7 @@ final class ChangeableColorObject: ChangeableColor {
             + firstUUColor.value.hue).loopValue()
         var uuColor = firstUUColor
         uuColor.value.hue = hue
+        uuColor.newID()
         views.forEach { $0.uuColor = uuColor }
         if phase == .ended {
             views = []
@@ -379,6 +356,7 @@ final class ChangeableColorObject: ChangeableColor {
             + firstUUColor.value.saturation).clip(min: 0, max: 1)
         var uuColor = firstUUColor
         uuColor.value.ls = Point(x: lightness, y: saturation)
+        uuColor.newID()
         views.forEach { $0.uuColor = uuColor }
         if phase == .ended {
             views = []
@@ -386,6 +364,9 @@ final class ChangeableColorObject: ChangeableColor {
     }
 }
 
+protocol MakableMovable {
+    func movable(at p: Point) -> Movable
+}
 protocol Movable {
     func move(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version)
 }
@@ -461,12 +442,13 @@ protocol Undoable {
     var version: Version { get }
 }
 
-protocol CopiableViewer: class {
+protocol MakableCollectionAssignable {
+    func collectionAssignable(at p: Point) -> CollectionAssignable
+    func push(copiedObject: Object, to version: Version)
     var copiedObject: Object { get }
-    func push(_ copiedObject: Object, to version: Version)
 }
 protocol Copiable {
-    var copiedObject: Object { get }
+    var copiableObject: Object { get }
 }
 protocol Assignable: Copiable {
     func paste(_ object: Object,
@@ -476,10 +458,17 @@ protocol CollectionAssignable: Assignable {
     func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
 }
 
+protocol MakableChangeableDraft {
+    func changeableDraft(at p: Point) -> ChangeableDraft
+}
 protocol ChangeableDraft {
     func changeToDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
     func removeDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
     var draftValue: Object.Value { get }
+}
+
+protocol MakableExportable {
+    func exportable(at p: Point) -> Exportable
 }
 protocol Exportable {
     func export(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)

@@ -114,11 +114,11 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
     }
     
     override var isEmpty: Bool {
-        return model.isEmpty
-    }
-    override func containsPath(_ p: Point) -> Bool {
         return true
     }
+//    override func containsPath(_ p: Point) -> Bool {
+//        return true
+//    }
     
     func append(_ element: ModelElement, _ version: Version) {
         version.registerUndo(withTarget: self) { [oldIndex = model.count - 1] in
@@ -141,8 +141,11 @@ final class ArrayView<T: AbstractElement, U: BinderProtocol>: ModelView, Bindabl
         rootView.insert(child: view, at: index)
     }
     func remove(at index: Int, _ version: Version) {
-        var model = self.model
-        model.remove(at: index)
-        push(model, to: version)
+        version.registerUndo(withTarget: self) { [oldElement = model[index]] in
+            $0.insert(oldElement, at: index, version)
+        }
+        binder[keyPath: keyPath].remove(at: index)
+        modelViews.remove(at: index)
+        rootView.children[index].removeFromParent()
     }
 }

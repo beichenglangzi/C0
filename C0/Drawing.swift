@@ -61,7 +61,6 @@ extension Drawing {
         }
         struct LineItem {
             var pointIndexes: [Int]
-            //isPressure
         }
         
         case drawing(DrawingItem)
@@ -417,6 +416,7 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
     func updateWithModel() {
         surfacesView.updateWithModel()
         linesView.updateWithModel()
+        updateLinesColor()
     }
     override var isEmpty: Bool {
         return false
@@ -424,23 +424,11 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
     override func containsPath(_ p: Point) -> Bool {
         return true
     }
-//    override func at(_ p: Point) -> View? {
-//        guard let nearest = model.nearest(at: p, isVertex: false),
-//            nearest.minDistance² < Layouter.movablePadding ** 2 else {
-//                return containsPath(p) ? self : nil
-//        }
-//        return nil
-//    }
-//    override func contains(_ p: Point) -> Bool {
-//        return true
-//    }
 }
-extension DrawingView: MakableStrokable {
-    func strokable(withRootView rootView: View) -> Strokable {
-        return StrokableUserObject(rootView: rootView, drawingView: self)
+extension DrawingView: Movable {
+    func move(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
+        
     }
-}
-extension DrawingView: MovableOrigin {
     var movingOrigin: Point {
         get { return model.imageBounds.origin }
         set {
@@ -454,5 +442,10 @@ extension DrawingView: MovableOrigin {
             }
             updateWithModel()
         }
+    }
+}
+extension DrawingView: CollectionAssignable {
+    func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        
     }
 }

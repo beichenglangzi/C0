@@ -546,11 +546,25 @@ extension Line {
     }
     
     var firstAngle: Real {
-        return controls[0].point.tangential(controls[1].point)
+        if controls.count < 2 {
+            return 0
+        } else if controls.count >= 3  && controls[0].point == controls[1].point {
+            return controls[0].point.tangential(controls[2].point)
+        } else {
+            return controls[0].point.tangential(controls[1].point)
+        }
     }
     var lastAngle: Real {
-        return controls[controls.count - 2].point
-            .tangential(controls[controls.count - 1].point)
+        if controls.count < 2 {
+            return 0
+        } else if controls.count >= 3 &&
+            controls[controls.count - 2].point == controls[controls.count - 1].point {
+            
+            return controls[controls.count - 3].point.tangential(controls[controls.count - 1].point)
+        } else {
+            return controls[controls.count - 2].point
+                .tangential(controls[controls.count - 1].point)
+        }
     }
     func angle(withPreviousLine preLine: Line) -> Real {
         return abs(lastAngle.differenceRotation(firstAngle))
@@ -969,4 +983,9 @@ final class LineView<T: BinderProtocol>: ModelView, BindableReceiver {
     func updateWithModel() {
         path = model.path(lineWidth: width)
     }
+}
+
+final class LineMovable {
+    //
+    //pressure
 }

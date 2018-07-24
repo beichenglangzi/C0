@@ -36,7 +36,7 @@ struct Surface {
         return path
     }
     
-    init(line: Line, uuColor: UU<Color> = UU(.surface)) {
+    init(line: Line, uuColor: UU<Color> = UU(.surface, id: .zero)) {
         self.line = line
         self.uuColor = uuColor
         path = Surface.path(with: line)
@@ -225,30 +225,19 @@ final class SurfaceView<T: BinderProtocol>: ModelView, BindableReceiver {
     var notifications = [((SurfaceView<Binder>, BasicNotification) -> ())]()
     
     let lineView: LineView<Binder>
-    let pathView: View
     
     init(binder: T, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
         lineView = LineView(binder: binder, keyPath: keyPath.appending(path: \Model.line))
-        pathView = View(path: Path())
-        pathView.fillColor = binder[keyPath: keyPath].uuColor.value
         
-        super.init(isLocked: false)
+        super.init(path: Path(), isLocked: false)
+        fillColor = binder[keyPath: keyPath].uuColor.value
         lineView.notifications.append { [unowned self] (_, _) in self.updatePath() }
-        children = [pathView]
         updateWithModel()
     }
-    
-    //
-    override var isEmpty: Bool {
-        return false
-    }
-    override func containsPath(_ p: Point) -> Bool {
-        return true
-    }
-    
+
     var minSize: Size {
         return model.line.imageBounds.size
     }
@@ -258,10 +247,10 @@ final class SurfaceView<T: BinderProtocol>: ModelView, BindableReceiver {
         updatePath()
     }
     func updateColor() {
-        pathView.fillColor = model.uuColor.value
+        fillColor = model.uuColor.value
     }
     func updatePath() {
-        pathView.path = model.path
+        path = model.path
     }
 }
 extension SurfaceView: ChangeableColorOwner {

@@ -333,12 +333,3 @@ final class TransformingView<Value: Object.Value & Viewable, Binder: BinderProto
         transform = model.transform
     }
 }
-extension TransformingView: MovableOrigin {
-    var movingOrigin: Point {
-        get { return model.transform.translation }
-        set {
-            binder[keyPath: keyPath].transform.translation = newValue
-            self.transform.translation = newValue
-        }
-    }
-}
