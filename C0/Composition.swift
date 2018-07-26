@@ -69,7 +69,7 @@ struct Composition<T: Equatable>: Equatable {
 extension Composition where T == Color {
     static let select = Composition(value: Color.selected, opacity: 0.3)
     static let anti = Composition(value: Color(red: 0.9, green: 0.3, blue: 0), opacity: 0.3)
-    static let around = Composition(value: Color(white: 0.4), opacity: 0.75)
+    static let around = Composition(value: Color(white: 0.6), opacity: 0.75)
     
     func multiply(alpha: Real) -> Composition<Color> {
         return Composition(value: Color(hue: value.hue,

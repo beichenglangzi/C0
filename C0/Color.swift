@@ -98,10 +98,13 @@ extension Color {
     static let background = Color(white: 0.93)
     static let content = Color(white: 0.1)
     static let selected = Color(red: 0.1, green: 0.7, blue: 1)
-    static let surface = Color(hue: 0.75, saturation: 0.75, brightness: 0.75)
+    static let surface = Color(hue: 0.75, saturation: 0.75, lightness: 0.75)
     static let draft = Color(red: 0, green: 0.5, blue: 1)
     static let caution = orange
     static let warning = red
+}
+extension UU where Value == Color {
+    static let surface = UU(.surface, id: .zero)
 }
 extension Color {
     static func random(rgbColorSpace: RGBColorSpace = .sRGB) -> Color {
@@ -587,7 +590,7 @@ final class ColorView<T: BinderProtocol>: ModelView, BindableReceiver {
                                                            startPoint: Point(x: 0, y: 0),
                                                            endPoint: Point(x: 1, y: 0)))
         
-        super.init(isLocked: false)
+        super.init(path: Path(), isLocked: false)
         lineColor = .content
         fillColor = binder[keyPath: keyPath]
         hueDrawView.fillColor = nil

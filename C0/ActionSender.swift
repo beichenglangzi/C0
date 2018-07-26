@@ -56,6 +56,9 @@ final class ActionSender {
         }
         actionMaps = []
     }
+    func resetEventMap() {
+        eventMap.events = []
+    }
     
     func send<T: Event>(_ event: T) {
         switch event.value.phase {
@@ -182,23 +185,30 @@ final class ActionSender {
             stopEditableEvents()
             collectionAssignable.paste(rootView.copiedObject,
                                        with: eventValue, actionMap.phase, rootView.version)
-        case actionList.changeToDraftAction, actionList.cutDraftAction:
+        case actionList.changeToDraftAction, actionList.cutDraftAction,
+             actionList.exchangeWithDraftAction:
+            
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
             let changeableDraft = rootView.changeableDraft(at: eventValue.rootLocation)
             stopEditableEvents()
-            if actionMap.action == actionList.changeToDraftAction {
+            switch actionMap.action {
+            case actionList.changeToDraftAction:
                 changeableDraft.changeToDraft(with: eventValue, actionMap.phase, rootView.version)
-            } else {
+            case actionList.cutDraftAction:
                 let copiedObject = Object(changeableDraft.draftValue)
                 changeableDraft.removeDraft(with: eventValue, actionMap.phase, rootView.version)
                 rootView.push(copiedObject: copiedObject, to: rootView.version)
+            case actionList.exchangeWithDraftAction:
+                changeableDraft.exchangeWithDraft(with: eventValue, actionMap.phase, rootView.version)
+            default: break
             }
         case actionList.exportAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
             let exportable = rootView.exportable(at: eventValue.rootLocation)
-            stopEditableEvents()
+            stopAllEvents()
+            resetEventMap()
             exportable.export(with: eventValue, actionMap.phase, rootView.version)
         default: break
         }
@@ -263,7 +273,7 @@ final class RotatableObject {
     
     var isEndSnap = true
     var rotationInterval = 0.0.cg
-    var correction = 0.08.cg * 180 / .pi
+    var correction = 0.06.cg * 180 / .pi
     private var beganRotation = 0.0.cg, rotation = 0.0.cg
     
     func rotate(with eventValue: RotateEvent.Value, _ phase: Phase, _ version: Version) {
@@ -330,35 +340,37 @@ final class ChangeableColorObject: ChangeableColor {
     
     func changeHue(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
         guard !views.isEmpty else { return }
-        if phase == .began {
+        switch phase {
+        case .began:
             views.forEach { $0.captureUUColor(to: version) }
             fp = eventValue.rootLocation
-        }
-        let hue = ((eventValue.rootLocation.x - fp.x) * hueCorrection
-            + firstUUColor.value.hue).loopValue()
-        var uuColor = firstUUColor
-        uuColor.value.hue = hue
-        uuColor.newID()
-        views.forEach { $0.uuColor = uuColor }
-        if phase == .ended {
+        case .changed:
+            let hue = ((eventValue.rootLocation.x - fp.x) * hueCorrection
+                + firstUUColor.value.hue).loopValue()
+            var uuColor = firstUUColor
+            uuColor.value.hue = hue
+            uuColor.newID()
+            views.forEach { $0.uuColor = uuColor }
+        case .ended:
             views = []
         }
     }
     func changeSL(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
         guard !views.isEmpty else { return }
-        if phase == .began {
+        switch phase {
+        case .began:
             views.forEach { $0.captureUUColor(to: version) }
             fp = eventValue.rootLocation
-        }
-        let lightness = ((eventValue.rootLocation.x - fp.x) * slCorrection
-            + firstUUColor.value.lightness).clip(min: 0, max: 1)
-        let saturation = ((eventValue.rootLocation.y - fp.y) * slCorrection
-            + firstUUColor.value.saturation).clip(min: 0, max: 1)
-        var uuColor = firstUUColor
-        uuColor.value.ls = Point(x: lightness, y: saturation)
-        uuColor.newID()
-        views.forEach { $0.uuColor = uuColor }
-        if phase == .ended {
+        case .changed:
+            let lightness = ((eventValue.rootLocation.x - fp.x) * slCorrection
+                + firstUUColor.value.lightness).clip(min: 0, max: 1)
+            let saturation = ((eventValue.rootLocation.y - fp.y) * slCorrection
+                + firstUUColor.value.saturation).clip(min: 0, max: 1)
+            var uuColor = firstUUColor
+            uuColor.value.ls = Point(x: lightness, y: saturation)
+            uuColor.newID()
+            views.forEach { $0.uuColor = uuColor }
+        case .ended:
             views = []
         }
     }
@@ -394,12 +406,15 @@ final class TransformingMovableObject: Movable {
     
     func move(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
         guard !viewAndFirstOrigins.isEmpty else { return }
-        viewAndFirstOrigins.forEach { (receiver, oldP) in
-            let p = rootView.convertFromRoot(eventValue.rootLocation)
-            receiver.movingOrigin = (oldP + p - fp).rounded()
-        }
-        
-        if phase == .ended {
+        switch phase {
+        case .began:
+            break
+        case .changed:
+            viewAndFirstOrigins.forEach { (receiver, oldP) in
+                let p = rootView.convertFromRoot(eventValue.rootLocation)
+                receiver.movingOrigin = (oldP + p - fp).rounded()
+            }
+        case .ended:
             viewAndFirstOrigins = []
         }
     }
@@ -464,6 +479,7 @@ protocol MakableChangeableDraft {
 protocol ChangeableDraft {
     func changeToDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
     func removeDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
+    func exchangeWithDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
     var draftValue: Object.Value { get }
 }
 

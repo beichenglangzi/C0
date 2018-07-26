@@ -23,7 +23,7 @@ enum StrokableType {
     case normal, surface, other
 }
 final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
-    var rootView: View
+    var rootView: View & Zoomable
     var drawingView: DrawingView<Binder>
     var surfaceView: SurfaceView<Binder>?
     var lineView: LineView<Binder>?
@@ -32,11 +32,10 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
         return drawingView.convertFromRoot(point)
     }
     var viewScale: Real {
-        get { return rootView.transform.z }
-        set { rootView.transform.z = newValue }
+        return rootView.zoomingTransform.scale.x
     }
     
-    init(rootView: View, drawingView: DrawingView<Binder>) {
+    init(rootView: View & Zoomable, drawingView: DrawingView<Binder>) {
         self.rootView = rootView
         self.drawingView = drawingView
     }
@@ -83,7 +82,7 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
     struct Interval {
         var minSpeed = 100.0.cg, maxSpeed = 1500.0.cg, exp = 2.0.cg
         var minTime = Real(0.1), maxTime = Real(0.03)
-        var minDistance = 1.45.cg, maxDistance = 1.5.cg
+        var minDistance = 1.1.cg, maxDistance = 1.35.cg
         
         func speedTWith(distance: Real, deltaTime: Real, scale: Real) -> Real {
             let speed = ((distance / scale) / deltaTime).clip(min: minSpeed, max: maxSpeed)
@@ -112,10 +111,25 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
         }
     }
     
+    var cap = Cap()
+    
+    struct Cap {
+        var minTime = 0.025.cg, minDistance = 2.0.cg
+        func isJoinedCapWith(_ line: Line,
+                             index0: Int, index1: Int,
+                             time: Real, oldTime: Real, scale: Real) -> Bool {
+            let deltaTime = time - oldTime
+            let p0 = line.controls[line.controls.count - 3].point
+            let p1 = line.controls[line.controls.count - 2].point
+            let d = p0.distance(p1)
+            return deltaTime < minTime && d / scale < minDistance
+        }
+    }
+    
     var short = Short()
     
     struct Short {
-        var minTime = Real(0.1), linearMaxDistance = 1.0.cg
+        var minTime = Real(0.1), linearMaxDistance = 1.2.cg
         
         func shortedLineWith(_ line: Line, deltaTime: Real, scale: Real) -> Line {
             guard deltaTime < minTime && line.controls.count > 3 else {
@@ -209,11 +223,17 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
                 temps = [Temp(control: lc, speed: speed)]
                 oldTempTime = time
                 tempDistance = 0
-            } else if interval.isAppendPointWith(distance: tempDistance / viewScale,
+            } else if interval.isAppendPointWith(distance: tempDistance,
                                                  deltaTime: time - oldTempTime,
                                                  temps,
                                                  scale: viewScale) {
                 line.controls.insert(lc, at: line.controls.count - 2)
+                if line.controls.count <= 4 && cap.isJoinedCapWith(line,
+                                                                  index0: 1, index1: 0,
+                                                                  time: time, oldTime: oldTempTime,
+                                                                  scale: viewScale) {
+                    line.controls.removeFirst()
+                }
                 temps = [Temp(control: lc, speed: speed)]
                 oldTempTime = time
                 tempDistance = 0
@@ -227,16 +247,14 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
             oldPoint = p
         case .ended:
             guard var line = line else { return }
-            if !interval.isAppendPointWith(distance: tempDistance / viewScale,
-                                           deltaTime: time - oldTempTime,
-                                           temps,
-                                           scale: viewScale) {
-                line.controls.remove(at: line.controls.count - 2)
+            
+            if cap.isJoinedCapWith(line,
+                                   index0: line.controls.count - 3, index1: line.controls.count - 2,
+                                   time: time, oldTime: oldTempTime,
+                                   scale:  viewScale) {
+                line.controls.removeLast()
+                line.controls.removeLast()
             }
-            line.controls[line.controls.count - 1]
-                = Line.Control(point: p, pressure: line.controls.last!.pressure)
-            line = short.shortedLineWith(line, deltaTime: time - beginTime,
-                                         scale: viewScale)
             self.line = line
             lineView?.model = line
         }
@@ -246,11 +264,14 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
                     _ phase: Phase, _ version: Version) {
         let p = rootView.convertFromRoot(eventValue.rootLocation)
         stroke(for: p, pressure: eventValue.pressure, time: eventValue.time, phase,
-               strokeType: .normal, to: version)
+               strokeType: .normal, isAppendLine: false, to: version)
         switch phase {
         case .began:
             break
-        case .changed, .ended:
+        case .changed:
+            drawingView.lassoCutLine = line
+        case .ended:
+            drawingView.lassoCutLine = nil
             if let line = line {
                 lassoErase(with: line, to: version)
             }

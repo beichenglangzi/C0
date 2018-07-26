@@ -102,6 +102,7 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     let drawingView: DrawingView<Binder>
     let draftDrawingView: DrawingView<Binder>
 
+    let transformCenterView: View
     let drawingFrameAroundView: View
     
     init(binder: Binder, keyPath: BinderKeyPath) {
@@ -123,8 +124,9 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         copiedObjectView.lineColor = .content
         copiedObjectView.opacity = 0.5
         draftDrawingView.linesColor = .draft
-        draftDrawingView.opacity = 0.1
+        draftDrawingView.opacity = 0.2
         
+        transformCenterView = View()
         drawingFrameAroundView.fillColorComposition = .around
         
         super.init(isLocked: false)
@@ -132,11 +134,12 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
             self.updateDrawingFrame()
         }
         transformView.notifications.append { [unowned self] (_, _) in
-            self.updateAround()
+            self.updateTransform()
         }
         fillColor = .background
         transformView.children = [draftDrawingView, drawingView, drawingFrameView]
-        children = [transformView, drawingFrameAroundView]
+        transformCenterView.children = [transformView]
+        children = [transformCenterView, drawingFrameAroundView]
         updateWithModel()
         updateAround()
     }
@@ -150,11 +153,13 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         updateDrawingFrame()
     }
     override func updateLayout() {
-        updateTransform()
+        transformCenterView.position = Point(x: (bounds.width / 2).rounded(),
+                                             y: (bounds.height / 2).rounded())
+        updateAround()
     }
     func updateDrawingFrame() {
-        drawingView.frame = model.drawingFrame
-        draftDrawingView.frame = model.drawingFrame
+        drawingView.bounds = model.drawingFrame
+        draftDrawingView.bounds = model.drawingFrame
         updateAround()
     }
     var zoomingLocalTransform: Transform {
@@ -164,35 +169,38 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         transform.translation += objectsPosition
         return transform
     }
+    var zoomingLocalAffineTransform: AffineTransform {
+        var affine = transformView.transform.affineTransform
+        affine *= transformCenterView.transform.affineTransform
+        return affine
+    }
     func updateTransform() {
-        transformView.transform = zoomingLocalTransform
+        drawingView.viewScale = model.transform.scale.x
+        drawingFrameView.viewScale = model.transform.scale.x
         updateAround()
     }
     func updateAround() {
         var path = Path()
         path.append(bounds)
-        let affine = zoomingLocalTransform.affineTransform
-        path.append(PathLine(points: [model.drawingFrame.minXminYPoint * affine,
-                                      model.drawingFrame.minXmaxYPoint * affine,
-                                      model.drawingFrame.maxXmaxYPoint * affine,
-                                      model.drawingFrame.maxXminYPoint * affine]))
+        let affine = zoomingLocalAffineTransform
+        path.append(PathLine(points: [model.drawingFrame.minXMinYPoint * affine,
+                                      model.drawingFrame.minXMaxYPoint * affine,
+                                      model.drawingFrame.maxXMaxYPoint * affine,
+                                      model.drawingFrame.maxXMinYPoint * affine]))
         drawingFrameAroundView.path = path
     }
 }
 
 extension DesktopView: Zoomable {
     func captureTransform(to version: Version) {
-        transformView.capture(model.transform, to: version)
+//        transformView.capture(model.transform, to: version)
     }
     var defaultTransform: Transform {
-        return Transform(translation: model.drawingFrame.centerPoint, z: 0, rotation: 0)
+        return Transform(translation: -model.drawingFrame.centerPoint, z: 0, rotation: 0)
     }
     var zoomingTransform: Transform {
-        get { return model.transform }
-        set {
-            binder[keyPath: keyPath].transform = newValue
-            updateTransform()
-        }
+        get { return transformView.model }
+        set { transformView.model = newValue }
     }
     func convertZoomingLocalFromZoomingView(_ p: Point) -> Point {
         return zoomingLocalView.convert(p, from: zoomingView)
@@ -247,8 +255,6 @@ extension DesktopView: Undoable {
 
 extension DesktopView: MakableCollectionAssignable {
     func collectionAssignable(at p: Point) -> CollectionAssignable {
-        
-        
         return at(p, CollectionAssignable.self) ?? drawingView
     }
     var copiedObject: Object {
@@ -286,6 +292,11 @@ extension DesktopView: ChangeableDraft {
     func removeDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
         push(draftDrawing: Drawing(), to: version)
     }
+    func exchangeWithDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        let drawing = model.drawing
+        push(drawing: model.draftDrawing, to: version)
+        push(draftDrawing: drawing, to: version)
+    }
     func push(drawing: Drawing, to version: Version) {
         version.registerUndo(withTarget: self) { [oldDrawing = model.drawing] in
             $0.push(drawing: oldDrawing, to: version)
@@ -309,10 +320,14 @@ extension DesktopView: MakableExportable {
     }
 }
 extension DesktopView: URLEncodable {
+    var encodableSize: Size {
+        let scale = min(10, model.transform.scale.x * contentsScale)
+        return ceil(model.drawingFrame.size * scale)
+    }
     func write(to url: URL,
                progressClosure: @escaping (Real, inout Bool) -> () = { (_, _) in },
                completionClosure: @escaping (Error?) -> () = { _ in }) throws {
-        let size = ceil(model.drawingFrame.size * model.transform.scale.x * contentsScale)
+        let size = encodableSize
         let image = drawingView.renderImage(with: size)
         try image?.write(.png, to: url)
         completionClosure(nil)
@@ -320,8 +335,11 @@ extension DesktopView: URLEncodable {
 }
 extension DesktopView: Exportable {
     func export(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        URL.file(fileTypes: [Image.FileType.png]) { file in
+        let size = encodableSize
+        let message = Localization("\(Int(size.width)) x \(Int(size.height)) PNG")
+        URL.file(message: message, fileTypes: [Image.FileType.png]) { file in
             try? self.write(to: file.url)
+            try? file.setAttributes()
         }
     }
 }

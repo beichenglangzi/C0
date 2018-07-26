@@ -35,31 +35,31 @@ extension Rect {
         self = union(other)
     }
     
-    var minXminYPoint: Point {
+    var minXMinYPoint: Point {
         return Point(x: minX, y: minY)
     }
-    var midXminYPoint: Point {
+    var midXMinYPoint: Point {
         return Point(x: midX, y: minY)
     }
-    var maxXminYPoint: Point {
+    var maxXMinYPoint: Point {
         return Point(x: maxX, y: minY)
     }
-    var minXmidYPoint: Point {
+    var minXMidYPoint: Point {
         return Point(x: minX, y: midY)
     }
     var centerPoint: Point {
         return Point(x: midX, y: midY)
     }
-    var maxXmidYPoint: Point {
+    var maxXMidYPoint: Point {
         return Point(x: maxX, y: midY)
     }
-    var minXmaxYPoint: Point {
+    var minXMaxYPoint: Point {
         return Point(x: minX, y: maxY)
     }
-    var midXmaxYPoint: Point {
+    var midXMaxYPoint: Point {
         return Point(x: midX, y: maxY)
     }
-    var maxXmaxYPoint: Point {
+    var maxXMaxYPoint: Point {
         return Point(x: maxX, y: maxY)
     }
     
@@ -277,26 +277,33 @@ final class RectView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     
     func updateWithModel() {
-        frame = model.inset(by: -lineWidth)
+        bounds = model.inset(by: -lineWidth)
     }
     
-    var z = 0.0.cg
+    var viewScale = 1.0.cg {
+        didSet {
+            lineWidth = 1 / viewScale
+            bounds = model.inset(by: -lineWidth)
+            lineColor = viewScale != 1 ? .caution : .content
+        }
+    }
     let drawingFrameDistance = 5.0.cg
     override func containsPath(_ p: Point) -> Bool {
-        var d = p.distanceWithLine(ap: model.minXminYPoint, bp: model.maxXminYPoint)
-        if d < drawingFrameDistance {
+        var d = p.distanceWithLine(ap: model.minXMinYPoint, bp: model.maxXMinYPoint)
+        let dfd = drawingFrameDistance / viewScale
+        if d < dfd {
             return true
         }
-        d = p.distanceWithLine(ap: model.maxXminYPoint, bp: model.maxXmaxYPoint)
-        if d < drawingFrameDistance {
+        d = p.distanceWithLine(ap: model.maxXMinYPoint, bp: model.maxXMaxYPoint)
+        if d < dfd {
             return true
         }
-        d = p.distanceWithLine(ap: model.maxXmaxYPoint, bp: model.minXmaxYPoint)
-        if d < drawingFrameDistance {
+        d = p.distanceWithLine(ap: model.maxXMaxYPoint, bp: model.minXMaxYPoint)
+        if d < dfd {
             return true
         }
-        d = p.distanceWithLine(ap: model.minXmaxYPoint, bp: model.minXminYPoint)
-        if d < drawingFrameDistance {
+        d = p.distanceWithLine(ap: model.minXMaxYPoint, bp: model.minXMinYPoint)
+        if d < dfd {
             return true
         }
         return false
@@ -315,54 +322,86 @@ final class RectMovable<Binder: BinderProtocol>: Movable {
         self.rectView = rectView
     }
     
-    var oldRect = Rect()
-    
+    var oldRect = Rect(), fp = Point(), control = Control.minXMinY
+
+    enum Control {
+        case minXMinY, midXMinY, maxXMinY, minXMidY, maxXMidY, minXMaxY, midXMaxY, maxXMaxY
+    }
     func move(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
         if phase == .began {
             rectView.capture(rectView.model, to: version)
             oldRect = rectView.model
+            fp = rectView.convertFromRoot(eventValue.rootLocation)
+            let p = rectView.convertFromRoot(eventValue.rootLocation)
+            control = self.control(from: p)
         }
-        
-//        model = oldFrame.applying(affineTransform)
+        let dp = rectView.convertFromRoot(eventValue.rootLocation) - fp
+        var minX = oldRect.minX, maxX = oldRect.maxX
+        var minY = oldRect.minY, maxY = oldRect.maxY
+        switch control {
+        case .minXMinY:
+            minX += dp.x
+            minY += dp.y
+        case .midXMinY:
+            minY += dp.y
+        case .maxXMinY:
+            maxX += dp.x
+            minY += dp.y
+        case .minXMidY:
+            minX += dp.x
+        case .maxXMidY:
+            maxX += dp.x
+        case .minXMaxY:
+            minX += dp.x
+            maxY += dp.y
+        case .midXMaxY:
+            maxY += dp.y
+        case .maxXMaxY:
+            maxX += dp.x
+            maxY += dp.y
+        }
+        let newAABB = AABB(minX: min(minX, maxX).rounded(), maxX: max(minX, maxX).rounded(),
+                           minY: min(minY, maxY).rounded(), maxY: max(minY, maxY).rounded())
+        rectView.model = newAABB.rect
     }
-    func anchorPoint(from p: Point) -> Point {
+    func control(from p: Point) -> Control {
         let frame = rectView.transformedBoundingBox
-        var minD = p.distance²(frame.minXminYPoint), anchorPoint = frame.maxXmaxYPoint
-        var d = p.distance²(frame.midXminYPoint)
+        var minD = p.distance²(frame.minXMinYPoint), control = Control.minXMinY
+        var d = p.distance²(frame.midXMinYPoint)
         if d < minD {
-            anchorPoint = frame.midXmaxYPoint
+            control = .midXMinY
             minD = d
         }
-        d = p.distance²(frame.maxXminYPoint)
+        d = p.distance²(frame.maxXMinYPoint)
         if d < minD {
-            anchorPoint = frame.minXmaxYPoint
+            control = .maxXMinY
             minD = d
         }
-        d = p.distance²(frame.minXmidYPoint)
+        d = p.distance²(frame.minXMidYPoint)
         if d < minD {
-            anchorPoint = frame.maxXmidYPoint
+            control = .minXMidY
             minD = d
         }
-        d = p.distance²(frame.maxXmidYPoint)
+        d = p.distance²(frame.maxXMidYPoint)
         if d < minD {
-            anchorPoint = frame.minXmidYPoint
+            control = .maxXMidY
             minD = d
         }
-        d = p.distance²(frame.minXmaxYPoint)
+        d = p.distance²(frame.minXMaxYPoint)
         if d < minD {
-            anchorPoint = frame.maxXminYPoint
+            control = .minXMaxY
             minD = d
         }
-        d = p.distance²(frame.midXmaxYPoint)
+        d = p.distance²(frame.midXMaxYPoint)
         if d < minD {
-            anchorPoint = frame.midXminYPoint
+            control = .midXMaxY
             minD = d
         }
-        d = p.distance²(frame.maxXmaxYPoint)
+        d = p.distance²(frame.maxXMaxYPoint)
         if d < minD {
-            anchorPoint = frame.minXminYPoint
+            control = .maxXMaxY
             minD = d
         }
-        return anchorPoint
+        return control
     }
 }

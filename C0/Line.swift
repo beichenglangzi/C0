@@ -560,7 +560,15 @@ extension Line {
         } else if controls.count >= 3 &&
             controls[controls.count - 2].point == controls[controls.count - 1].point {
             
-            return controls[controls.count - 3].point.tangential(controls[controls.count - 1].point)
+            if controls.count >= 4 &&
+                controls[controls.count - 3].point == controls[controls.count - 1].point {
+                
+                return controls[controls.count - 4].point
+                    .tangential(controls[controls.count - 1].point)
+            } else {
+                return controls[controls.count - 3].point
+                    .tangential(controls[controls.count - 1].point)
+            }
         } else {
             return controls[controls.count - 2].point
                 .tangential(controls[controls.count - 1].point)
@@ -670,36 +678,48 @@ extension Line {
         view.lineWidth = 1
         return view
     }
+    func fillPath() -> Path {
+        guard let elementsTuple = bezierCurveElementsTuple else {
+            return Path()
+        }
+        var path = Path()
+        path.append(PathLine(firstPoint: elementsTuple.firstPoint,
+                             elements: elementsTuple.elements))
+        return path
+    }
     func path(lineWidth size: Real) -> Path {
         let s = size / 2
         if controls.count <= 2 {
-            guard controls.count == 2 else {
+            guard controls.count > 0 else {
+                return Path()
+            }
+            guard controls.count == 2 && controls[0].point != controls[1].point else {
                 let pres0 = s * controls[0].pressure
                 let dp0 = Point(x: pres0 * cos(0), y: pres0 * sin(0))
-                let fp = controls[0].point + dp0
-                let arc0 = PathLine.Arc(centerPosition: controls[0].point, radius: pres0,
+                let fp = controls[0].point
+                let arc0 = PathLine.Arc(centerPosition: fp, radius: pres0,
                                         startAngle: 0, endAngle: .pi * 2,
                                         clockwise: false)
                 var path = Path()
-                path.append(PathLine(firstPoint: fp, elements: [.arc(arc0)]))
+                path.append(PathLine(firstPoint: fp + dp0, elements: [.arc(arc0)]))
                 return path
             }
-            let firstTheta = firstAngle + .pi / 2
+            let theta = firstAngle + .pi / 2
+            let cosTheta = cos(theta), sinTheta = sin(theta)
             let pres0 = s * controls[0].pressure, pres1 = s * controls[1].pressure
-            let dp0 = Point(x: pres0 * cos(firstTheta), y: pres0 * sin(firstTheta))
-            let dp1 = Point(x: pres1 * cos(firstTheta), y: pres1 * sin(firstTheta))
+            let dp0 = Point(x: pres0 * cosTheta, y: pres0 * sinTheta)
+            let dp1 = Point(x: pres1 * cosTheta, y: pres1 * sinTheta)
             
-            let fp = controls[0].point + dp0
-            let p1 = controls[1].point + dp1
-            let arc1 = PathLine.Arc(centerPosition: controls[1].point, radius: pres1,
-                                    startAngle: firstTheta, endAngle: firstTheta - .pi,
+            let fp = controls[0].point, lp = controls[1].point
+            let arc1 = PathLine.Arc(centerPosition: lp, radius: pres1,
+                                    startAngle: theta, endAngle: theta - .pi,
                                     clockwise: true)
-            let p0 = controls[0].point - dp0
-            let arc0 = PathLine.Arc(centerPosition: controls[0].point, radius: pres0,
-                                    startAngle: firstTheta, endAngle: firstTheta + .pi,
+            let p0 = fp - dp0, p1 = lp + dp1
+            let arc0 = PathLine.Arc(centerPosition: fp, radius: pres0,
+                                    startAngle: theta - .pi, endAngle: theta,
                                     clockwise: true)
-            let pathLine = PathLine(firstPoint: fp, elements: [.linear(p1), .arc(arc1),
-                                                               .linear(p0), .arc(arc0)])
+            let pathLine = PathLine(firstPoint: fp + dp0, elements: [.linear(p1), .arc(arc1),
+                                                                     .linear(p0), .arc(arc0)])
             var path = Path()
             path.append(pathLine)
             return path
@@ -708,51 +728,44 @@ extension Line {
             let fpres = s * controls[0].pressure
             var previousPressure = controls[0].pressure
             var es = [PathLine.Element](), res = [PathLine.Element]()
-            let fp = controls[0].point + Point(x: fpres * cos(firstTheta),
-                                               y: fpres * sin(firstTheta))
-            if controls.count == 3 {
-                let bezier = self.bezier(at: 0)
-                let pr0 = s * controls[0].pressure
-                let pr1 = s * controls[1].pressure, pr2 = s * controls[2].pressure
-                let length = bezier.p0.distance(bezier.cp) + bezier.cp.distance(bezier.p1)
-                let count = Int(length)
-                if count > 0 {
+            let fp = controls[0].point
+            for (i, b) in bezierSequence.enumerated() {
+                guard b.cp != b.p1 else {
+                    let nextPressure = i == controls.count - 3 ?
+                        controls[controls.count - 1].pressure :
+                        (controls[i + 1].pressure + controls[i + 2].pressure) / 2
+                    let theta = b.p0.tangential(b.p1) + .pi / 2
+                    let cosTheta = cos(theta), sinTheta = sin(theta)
+                    let pres = s * nextPressure
+                    let dp = Point(x: pres * cosTheta, y: pres * sinTheta)
+                    es.append(.linear(b.p1 + dp))
+                    res.append(.linear(b.p1 - dp))
+                    previousPressure = nextPressure
+                    continue
+                }
+                let bs = b.midSplit()
+                func append(with bezier: Bezier2) {
+                    let length = max(1,
+                                     bezier.p0.distance(bezier.cp) + bezier.cp.distance(bezier.p1))
+                    let nextPressure = i == controls.count - 3 ?
+                        controls[controls.count - 1].pressure :
+                        (controls[i + 1].pressure + controls[i + 2].pressure) / 2
+                    let count = Int(length)
                     let splitDeltaT = 1 / length
                     var t = 0.0.cg
                     for _ in 1...count {
                         t += splitDeltaT
                         let p = bezier.position(withT: t)
-                        let pres = t < 0.5 ?
-                            Real.linear(pr0, pr1, t: t * 2) :
-                            Real.linear(pr1, pr2, t: (t - 0.5) * 2)
+                        let pres = Real.linear(s * previousPressure, s * nextPressure, t: t)
                         let dp = bezier.difference(withT: t)
                             .perpendicularDeltaPoint(withDistance: pres)
                         es.append(.linear(p + dp))
                         res.append(.linear(p - dp))
                     }
-                }
-            } else {
-                for (i, bezier) in bezierSequence.enumerated() {
-                    let length = bezier.p0.distance(bezier.cp) + bezier.cp.distance(bezier.p1)
-                    let nextPressure = i == controls.count - 3 ?
-                        controls[controls.count - 1].pressure :
-                        (controls[i + 1].pressure + controls[i + 2].pressure) / 2
-                    let count = Int(length)
-                    if count > 0 {
-                        let splitDeltaT = 1 / length
-                        var t = 0.0.cg
-                        for _ in 1...count {
-                            t += splitDeltaT
-                            let p = bezier.position(withT: t)
-                            let pres = Real.linear(s * previousPressure, s * nextPressure, t: t)
-                            let dp = bezier.difference(withT: t)
-                                .perpendicularDeltaPoint(withDistance: pres)
-                            es.append(.linear(p + dp))
-                            res.append(.linear(p - dp))
-                        }
-                    }
                     previousPressure = nextPressure
                 }
+                append(with: bs.b0)
+                append(with: bs.b1)
             }
             
             let lp = controls[controls.count - 1].point
@@ -767,11 +780,12 @@ extension Line {
             es += res.reversed()
             es.append(.arc(PathLine.Arc(centerPosition: fp, radius: fpres,
                                         startAngle: firstTheta - .pi,
-                                        endAngle: firstTheta,
+                                        endAngle: firstTheta - 2 * .pi,
                                         clockwise: true)))
             
             var path = Path()
-            path.append(PathLine(firstPoint: fp, elements: es))
+            path.append(PathLine(firstPoint: fp + Point(x: fpres * cos(firstTheta),
+                                                        y: fpres * sin(firstTheta)), elements: es))
             return path
         }
     }

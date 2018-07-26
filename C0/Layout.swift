@@ -40,7 +40,7 @@ enum Layouter {
     static let padding = 3.0.cg
     static let movablePadding = 6.0.cg
     static let minWidth = 30.0.cg
-    static let lineWidth = 1.2.cg
+    static let lineWidth = 1.5.cg
     static let movableLineWidth = 2.0.cg
     static let textHeight = Font.default.ceilHeight(withPadding: 1)
     static let textPaddingHeight = textHeight + padding * 2

@@ -315,9 +315,9 @@ class View {
         guard let ctx = CGContext.bitmap(with: size, CGColorSpace.default) else {
                 return nil
         }
-        let frame = transformedBoundingBox
-        let scale = size.width / frame.size.width
-        let viewTransform = Transform(translation: Point(),
+        let scale = size.width / bounds.width
+        let viewTransform = Transform(translation: Point(x: -bounds.centerPoint.x * scale + size.width / 2,
+                                                         y: -bounds.centerPoint.y * scale + size.height / 2),
                                       scale: Point(x: scale, y: scale),
                                       rotation: 0)
         ctx.setFillColor(Color.background.cg)

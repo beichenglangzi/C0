@@ -88,8 +88,8 @@ extension BindableReceiver {
         get { return binder[keyPath: keyPath] }
         set {
             binder[keyPath: keyPath] = newValue
-            notifications.forEach { $0(self, ._didChange) }
             updateWithModel()
+            notifications.forEach { $0(self, ._didChange) }
         }
     }
     

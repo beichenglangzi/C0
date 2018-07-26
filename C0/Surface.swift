@@ -20,26 +20,16 @@
 struct Surface {
     var line: Line {
         didSet {
-            path = Surface.path(with: line)
+            path = line.fillPath()
         }
     }
     var uuColor: UU<Color>
     private(set) var path: Path
     
-    private static func path(with line: Line) -> Path {
-        guard let elementsTuple = line.bezierCurveElementsTuple else {
-            return Path()
-        }
-        var path = Path()
-        path.append(PathLine(firstPoint: elementsTuple.firstPoint,
-                             elements: elementsTuple.elements))
-        return path
-    }
-    
-    init(line: Line, uuColor: UU<Color> = UU(.surface, id: .zero)) {
+    init(line: Line, uuColor: UU<Color> = .surface) {
         self.line = line
         self.uuColor = uuColor
-        path = Surface.path(with: line)
+        path = line.fillPath()
     }
 }
 extension Surface: AppliableAffineTransform {
@@ -88,7 +78,7 @@ extension Surface: Codable {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         line = try values.decode(Line.self, forKey: .line)
         uuColor = try values.decode(UU<Color>.self, forKey: .uuColor)
-        path = Surface.path(with: line)
+        path = line.fillPath()
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -257,20 +247,38 @@ extension SurfaceView: ChangeableColorOwner {
     func captureUUColor(to version: Version) {
         capture(uuColor: model.uuColor, to: version)
     }
-    func capture(uuColor: UU<Color>, to version: Version) {
-        version.registerUndo(withTarget: self) { [oldUUColor = model.uuColor] in
-            $0.capture(uuColor: oldUUColor, to: version)
+    
+    func push(uuColor: UU<Color>, to version: Version) {
+        version.registerUndo(withTarget: self) { [oldUUColor = model.uuColor, unowned version] in
+            $0.push(uuColor: oldUUColor, to: version)
         }
         binder[keyPath: keyPath].uuColor = uuColor
         updateColor()
     }
-    var uuColor: UU<Color> {
-        get {
-            return model.uuColor
+    func capture(uuColor: UU<Color>, to version: Version) {
+        version.registerUndo(withTarget: self) { [oldUUColor = model.uuColor, unowned version] in
+            $0.push(uuColor: oldUUColor, to: version)
         }
+    }
+    var uuColor: UU<Color> {
+        get { return model.uuColor }
         set {
             model.uuColor = newValue
             updateColor()
+        }
+    }
+}
+extension SurfaceView: CollectionAssignable {
+    var copiableObject: Object {
+        return Object(model.uuColor)
+    }
+    func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        push(uuColor: .surface, to: version)
+    }
+    func paste(_ object: Object,
+               with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        if let uuColor = object.value as? UU<Color> {
+            push(uuColor: uuColor, to: version)
         }
     }
 }

@@ -140,7 +140,7 @@ struct ActionList {
     let lassoFillAction = Action(name: Localization(english: "Lasso Fill", japanese: "囲み塗る"),
                                  quasimode: Quasimode(modifier: [.input(.command)],
                                                       [.drag(.drag)]))
-    let lassoEraseAction = Action(name: Localization(english: "Lasso Erase", japanese: "囲み消す"),
+    let lassoEraseAction = Action(name: Localization(english: "Lasso Cut", japanese: "囲みカット"),
                                   quasimode: Quasimode(modifier: [.input(.option)],
                                                        [.drag(.drag)]))
     let moveAction = Action(name: Localization(english: "Move", japanese: "移動"),
@@ -180,6 +180,11 @@ struct ActionList {
                                                    japanese: "下書きをカット"),
                                 quasimode: Quasimode(modifier: [.input(.command), .input(.shift)],
                                                      [.input(.d)]))
+    let exchangeWithDraftAction = Action(name: Localization(english: "Exchange with Draft",
+                                                            japanese: "下書きと交換"),
+                                         quasimode: Quasimode(modifier: [.input(.command),
+                                                                         .input(.option)],
+                                                              [.input(.d)]))
     
     let exportAction = Action(name: Localization(english: "Export", japanese: "書き出す"),
                               quasimode: Quasimode(modifier: [.input(.command)],
@@ -192,7 +197,7 @@ struct ActionList {
                    moveAction, changeHueAction, changeSLAction,
                    undoAction, redoAction,
                    cutAction, copyAction, pasteAction,
-                   changeToDraftAction, cutDraftAction, exportAction]
+                   changeToDraftAction, cutDraftAction, exchangeWithDraftAction, exportAction]
     }
 }
 extension ActionList {

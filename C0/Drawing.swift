@@ -410,6 +410,34 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
         linesView.modelViews.forEach { $0.fillColor = linesColor }
     }
     
+    var viewScale = 1.0.cg {
+        didSet {
+            lassoPathView?.lineWidth = 1 / viewScale
+        }
+    }
+    var lassoPathView: View?
+    var lassoCutLine: Line? {
+        didSet {
+            if let lassoCutLine = lassoCutLine {
+                if lassoPathView != nil {
+                    lassoPathView?.path = lassoCutLine.fillPath()
+                } else {
+                    let lassoPathView = View(path: lassoCutLine.fillPath())
+                    lassoPathView.lineColor = .warning
+                    lassoPathView.fillColorComposition = .anti
+                    lassoPathView.lineWidth = 1 / viewScale
+                    append(child: lassoPathView)
+                    self.lassoPathView = lassoPathView
+                }
+            } else {
+                if lassoPathView != nil {
+                    lassoPathView?.removeFromParent()
+                    lassoPathView = nil
+                }
+            }
+        }
+    }
+    
     var minSize: Size {
         return model.imageBounds.size
     }
@@ -446,6 +474,6 @@ extension DrawingView: Movable {
 }
 extension DrawingView: CollectionAssignable {
     func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        
+        push(Drawing(), to: version)
     }
 }

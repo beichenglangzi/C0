@@ -949,6 +949,11 @@ extension URL {
         var attributes: [FileAttributeKey: Any] {
             return [.extensionHidden: isExtensionHidden]
         }
+        
+        func setAttributes() throws {
+            try FileManager.default.setAttributes(attributes,
+                                                  ofItemAtPath: url.path)
+        }
     }
     static func file(message: Localization? = nil,
                      name: Localization? = nil,
