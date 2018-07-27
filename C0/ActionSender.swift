@@ -21,7 +21,8 @@ import struct Foundation.Locale
 import class Foundation.OperationQueue
 
 protocol RootModeler: Modeler, Zoomable, MakableStrokable, MakableChangeableColor, MakableMovable,
-Undoable, MakableCollectionAssignable, MakableChangeableDraft, MakableExportable {}
+Undoable, MakableCollectionAssignable, MakableChangeableDraft,
+MakableUpdatableAutoFill, MakableExportable {}
 
 final class ActionSender {
     typealias RootView = View & RootModeler
@@ -203,6 +204,11 @@ final class ActionSender {
                 changeableDraft.exchangeWithDraft(with: eventValue, actionMap.phase, rootView.version)
             default: break
             }
+        case actionList.updateAutoFillAction:
+            guard actionMap.phase == .began else { break }
+            guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
+            let updatableAutoFill = rootView.updatableAutoFill(at: eventValue.rootLocation)
+            updatableAutoFill.updateAutoFill(with: eventValue, actionMap.phase, rootView.version)
         case actionList.exportAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
@@ -481,6 +487,13 @@ protocol ChangeableDraft {
     func removeDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
     func exchangeWithDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
     var draftValue: Object.Value { get }
+}
+
+protocol MakableUpdatableAutoFill {
+    func updatableAutoFill(at p: Point) -> UpdatableAutoFill
+}
+protocol UpdatableAutoFill {
+    func updateAutoFill(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version)
 }
 
 protocol MakableExportable {

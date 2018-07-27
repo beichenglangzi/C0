@@ -314,6 +314,18 @@ extension DesktopView: ChangeableDraft {
     }
 }
 
+extension DesktopView: MakableUpdatableAutoFill {
+    func updatableAutoFill(at p: Point) -> UpdatableAutoFill {
+        return self
+    }
+}
+extension DesktopView: UpdatableAutoFill {
+    func updateAutoFill(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        drawingView.surfacesView.push(drawingView.model.surfacesWith(inFrame: model.drawingFrame),
+                                      to: version)
+    }
+}
+
 extension DesktopView: MakableExportable {
     func exportable(at p: Point) -> Exportable {
         return self

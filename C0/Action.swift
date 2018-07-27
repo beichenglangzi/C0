@@ -186,6 +186,11 @@ struct ActionList {
                                                                          .input(.option)],
                                                               [.input(.d)]))
     
+    let updateAutoFillAction = Action(name: Localization(english: "Auto Fill",
+                                                        japanese: "自動着色"),
+                                      quasimode: Quasimode(modifier: [.input(.command)],
+                                                           [.input(.no1)]))
+    
     let exportAction = Action(name: Localization(english: "Export", japanese: "書き出す"),
                               quasimode: Quasimode(modifier: [.input(.command)],
                                                    [.input(.e)]))
@@ -197,7 +202,8 @@ struct ActionList {
                    moveAction, changeHueAction, changeSLAction,
                    undoAction, redoAction,
                    cutAction, copyAction, pasteAction,
-                   changeToDraftAction, cutDraftAction, exchangeWithDraftAction, exportAction]
+                   changeToDraftAction, cutDraftAction, exchangeWithDraftAction,
+                   updateAutoFillAction, exportAction]
     }
 }
 extension ActionList {

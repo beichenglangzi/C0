@@ -43,6 +43,9 @@ extension Size {
     func intersects(_ other: Size) -> Bool {
         return width >= other.width || height >= other.height
     }
+    var area: Real {
+        return width * height
+    }
 }
 func ceil(_ size: Size) -> Size {
     return Size(width: size.width.rounded(.up), height: size.height.rounded(.up))
@@ -50,5 +53,13 @@ func ceil(_ size: Size) -> Size {
 extension Size: AppliableAffineTransform {
     static func *(lhs: Size, rhs: AffineTransform) -> Size {
         return lhs.applying(rhs)
+    }
+}
+extension Size {
+    static func <(lhs: Size, rhs: Size) -> Bool {
+        return lhs.area < rhs.area
+    }
+    static func >(lhs: Size, rhs: Size) -> Bool {
+        return lhs.area > rhs.area
     }
 }
