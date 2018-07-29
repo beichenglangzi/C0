@@ -316,8 +316,9 @@ class View {
                 return nil
         }
         let scale = size.width / bounds.width
-        let viewTransform = Transform(translation: Point(x: -bounds.centerPoint.x * scale + size.width / 2,
-                                                         y: -bounds.centerPoint.y * scale + size.height / 2),
+        let translation = Point(x: -bounds.centerPoint.x * scale + size.width / 2,
+                                y: -bounds.centerPoint.y * scale + size.height / 2)
+        let viewTransform = Transform(translation: translation,
                                       scale: Point(x: scale, y: scale),
                                       rotation: 0)
         ctx.setFillColor(Color.background.cg)

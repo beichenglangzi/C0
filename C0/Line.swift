@@ -19,7 +19,7 @@
 
 import CoreGraphics
 
-struct Line: Codable {
+struct Line {//: Codable {
     struct Control: Equatable, Hashable {
         var point = Point(), pressure = 1.0.cg
         
@@ -34,6 +34,8 @@ struct Line: Codable {
     }
     private(set) var imageBounds = Rect()
     
+    var uuColor: UU<Color>
+    
     init(bezier: Bezier2,
          p0Pressure: Real, cpPressure: Real, p1Pressure: Real) {
         
@@ -41,9 +43,27 @@ struct Line: Codable {
                              Control(point: bezier.cp, pressure: cpPressure),
                              Control(point: bezier.p1, pressure: p1Pressure)])
     }
-    init(controls: [Control] = []) {
+    init(controls: [Control] = [], uuColor: UU<Color> = UU(.black)) {
         self.controls = controls
+        self.uuColor = uuColor
         imageBounds = controls.imageBounds
+    }
+}
+extension Line: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case controls, imageBounds, uuColor
+    }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        controls = try values.decode([Control].self, forKey: .controls)
+        imageBounds = try values.decode(Rect.self, forKey: .imageBounds)
+        uuColor = (try? values.decode(UU<Color>.self, forKey: .uuColor)) ?? UU(.black)
+    }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(controls, forKey: .controls)
+        try container.encode(imageBounds, forKey: .imageBounds)
+        try container.encode(uuColor, forKey: .uuColor)
     }
 }
 extension Array where Element == Line.Control {
@@ -987,7 +1007,6 @@ final class LineView<T: BinderProtocol>: ModelView, BindableReceiver {
         self.keyPath = keyPath
         
         super.init(path: Path(), isLocked: false)
-        fillColor = .content
         updateWithModel()
     }
     
@@ -996,6 +1015,49 @@ final class LineView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     func updateWithModel() {
         path = model.path(lineWidth: width)
+        updateColor()
+    }
+    func updateColor() {
+        fillColor = model.uuColor.value
+    }
+}
+extension LineView: ChangeableColorOwner {
+    func captureUUColor(to version: Version) {
+        capture(uuColor: model.uuColor, to: version)
+    }
+    
+    func push(uuColor: UU<Color>, to version: Version) {
+        version.registerUndo(withTarget: self) { [oldUUColor = model.uuColor, unowned version] in
+            $0.push(uuColor: oldUUColor, to: version)
+        }
+        binder[keyPath: keyPath].uuColor = uuColor
+        updateColor()
+    }
+    func capture(uuColor: UU<Color>, to version: Version) {
+        version.registerUndo(withTarget: self) { [oldUUColor = model.uuColor, unowned version] in
+            $0.push(uuColor: oldUUColor, to: version)
+        }
+    }
+    var uuColor: UU<Color> {
+        get { return model.uuColor }
+        set {
+            model.uuColor = newValue
+            updateColor()
+        }
+    }
+}
+extension LineView: CollectionAssignable {
+    var copiableObject: Object {
+        return Object(model.uuColor)
+    }
+    func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        push(uuColor: .surface, to: version)
+    }
+    func paste(_ object: Object,
+               with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        if let uuColor = object.value as? UU<Color> {
+            push(uuColor: uuColor, to: version)
+        }
     }
 }
 

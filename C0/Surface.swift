@@ -473,7 +473,9 @@ final class SurfaceView<T: BinderProtocol>: ModelView, BindableReceiver {
         fillColor = model.uuColor.value
     }
     func updatePath() {
-        path = model.path
+        var path = Path()
+        path.append((PathLine(points: model.line.controls.map { $0.point })))
+        self.path = path
     }
 }
 extension SurfaceView: ChangeableColorOwner {

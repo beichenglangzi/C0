@@ -321,7 +321,8 @@ extension DesktopView: MakableUpdatableAutoFill {
 }
 extension DesktopView: UpdatableAutoFill {
     func updateAutoFill(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        drawingView.surfacesView.push(drawingView.model.surfacesWith(inFrame: model.drawingFrame),
+        drawingView.surfacesView.push(drawingView.model.surfacesWith(inFrame: model.drawingFrame,
+                                                                     old: model.drawing.surfaces),
                                       to: version)
     }
 }

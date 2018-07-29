@@ -18,6 +18,7 @@
  */
 
 import CoreGraphics
+import struct Foundation.URL
 
 struct Drawing: Codable, Equatable {
     var lines = [Line]()
@@ -306,164 +307,203 @@ extension Drawing {
     private typealias FilledUInt = UInt16
     func surfacesRenderingViewWith(lineWidth: Real) -> View {
         let view = View()
-        view.children = lines.compactMap { $0.view(lineWidth: lineWidth, fillColor: .black) }
+        view.children = lines.compactMap { $0.view(lineWidth: lineWidth, fillColor: .white) }
         return view
     }
-    func surfacesWith(inFrame: Rect) -> [Surface] {
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else {
-            return []
-        }
+    func surfacesWith(inFrame bounds: Rect, old oldSurfaces: [Surface]) -> [Surface] {
         let grayColorSpace = CGColorSpaceCreateDeviceGray()
-        let size = inFrame.size
-        guard let lineCTX = CGContext(data: nil, width: Int(size.width), height: Int(size.height),
+        let scale = 2.0.cg
+        let size = Size(width: bounds.width * scale, height: bounds.height * scale)
+        let w = Int(size.width), h = Int(size.height)
+        guard let lineCTX = CGContext(data: nil, width: w, height: h,
                                       bitsPerComponent: MemoryLayout<LineUInt>.size * 8,
-                                      bytesPerRow: 0, space: colorSpace,
-                                      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) else {
+                                      bytesPerRow: 0, space: grayColorSpace,
+                                      bitmapInfo: CGImageAlphaInfo.none.rawValue) else {
                                         return []
         }
-        guard let filledCTX = CGContext(data: nil, width: Int(size.width), height: Int(size.height),
+        guard let filledCTX = CGContext(data: nil, width: w, height: h,
                                         bitsPerComponent: MemoryLayout<FilledUInt>.size * 8,
                                         bytesPerRow: 0, space: grayColorSpace,
                                         bitmapInfo: CGImageAlphaInfo.none.rawValue) else {
                                             return []
         }
+        
+        let translation = Point(x: -bounds.centerPoint.x * scale + size.width / 2,
+                                y: -bounds.centerPoint.y * scale + size.height / 2)
+        let viewTransform = Transform(translation: translation,
+                                      scale: Point(x: scale, y: scale),
+                                      rotation: 0)
+        lineCTX.concatenate(viewTransform.affineTransform)
+        
         let view = surfacesRenderingViewWith(lineWidth: 1)
-        view.bounds = inFrame
+        view.bounds = bounds
         view.render(in: lineCTX)
-        return autoFill(in: filledCTX, from: lineCTX)
+        let surfaces = autoFill(in: filledCTX, from: lineCTX)
+        let invertedAffine = viewTransform.affineTransform.inverted()
+        
+        var isFilleds = Array(repeating: false, count: surfaces.count)
+        return surfaces.map {
+            var surface = Surface(line: $0.line * invertedAffine, uuColor: $0.uuColor)
+            
+            if !oldSurfaces.isEmpty {
+                var minColor = surface.uuColor, minD = Real.infinity, maxArea = 0.0.cg, minIndex = 0
+                let newArea = surface.path.boundingBoxOfPath.size.area
+                for (i, oldSurface) in oldSurfaces.enumerated() {
+                    let r = oldSurface.path.boundingBoxOfPath
+                        .intersection(surface.path.boundingBoxOfPath)
+                    let area = r.size.area
+                    let d = abs(newArea - oldSurface.path.boundingBoxOfPath.size.area)
+                    if !r.isEmpty && d <= minD && area >= maxArea {
+                        minColor = oldSurface.uuColor
+                        minD = d
+                        maxArea = area
+                        minIndex = i
+                    }
+                }
+                if isFilleds[minIndex] {
+                    surface.uuColor = UU(Color.random())
+                } else {
+                    surface.uuColor = minColor
+                    isFilleds[minIndex] = true
+                }
+            }
+            return surface
+        }
     }
     private func autoFill(in filledCTX: CGContext, from lineCTX: CGContext,
-                          threshold: Real = 0) -> [Surface] {
+                          threshold: Real = 0.25) -> [Surface] {
         guard let lineData = lineCTX.data?.assumingMemoryBound(to: LineUInt.self),
             let filledData = filledCTX.data?.assumingMemoryBound(to: FilledUInt.self) else {
-            return []
+                return []
         }
-        let t = UInt8(threshold * Real(UInt8.max))
-        let lineBytesPerPixel = lineCTX.bitsPerPixel / lineCTX.bitsPerComponent
-        let filledBytesPerPixel = filledCTX.bitsPerPixel / filledCTX.bitsPerComponent
+        let t = UInt8(threshold * Real(LineUInt.max))
+        let lineOffsetPerRow = lineCTX.bytesPerRow / (lineCTX.bitsPerComponent / 8)
+        let lineOffsetPerPixel = lineCTX.bitsPerPixel / lineCTX.bitsPerComponent
+        let filledOffsetPerRow = filledCTX.bytesPerRow / (filledCTX.bitsPerComponent / 8)
+        let filledOffsetPerPixel = filledCTX.bitsPerPixel / filledCTX.bitsPerComponent
         let w = lineCTX.width, h = lineCTX.height
         
-        func alphaAt(x: Int, y: Int) -> LineUInt {
-            let lineOffset = lineCTX.bytesPerRow * y + x * lineBytesPerPixel
-            return lineData[lineOffset]
-//            return lineData.load(fromByteOffset: lineOffset, as: LineUInt.self)
+        func lineValueAt(x: Int, y: Int) -> LineUInt {
+            return lineData[lineOffsetPerRow * y + x * lineOffsetPerPixel]
         }
-        func isFill(x: Int, y: Int) -> Bool {
-            return alphaAt(x: x, y: y) <= t
+        func isLine(x: Int, y: Int) -> Bool {
+            return lineValueAt(x: x, y: y) > t
         }
         func filledValueAt(x: Int, y: Int) -> FilledUInt {
-            let filledOffset = filledCTX.bytesPerRow * y + x * filledBytesPerPixel
-            return filledData[filledOffset]
-//            return filledData.load(fromByteOffset: filledOffset, as: FilledUInt.self)
+            return filledData[filledOffsetPerRow * y + x * filledOffsetPerPixel]
+        }
+        func isFilledEquale(_ value: FilledUInt, x: Int, y: Int) -> Bool {
+            return filledValueAt(x: x, y: y) == value
         }
         func fill(_ value: FilledUInt, atX x: Int, y: Int) {
-            let filledOffset = filledCTX.bytesPerRow * y + x * filledBytesPerPixel
-            return filledData[filledOffset] = value
-//            filledData.storeBytes(of: value, toByteOffset: filledOffset, as: FilledUInt.self)
+            filledData[filledOffsetPerRow * y + x * filledOffsetPerPixel] = value
+        }
+        func isGap4Way(_ value: FilledUInt, x: Int, y: Int) -> Bool {
+            return !(x > 0 && isFilledEquale(value, x: x - 1, y: y))
+                || !(x < w - 1 && isFilledEquale(value, x: x + 1, y: y))
+                || !(y > 0 && isFilledEquale(value, x: x, y: y - 1))
+                || !(y < h - 1 && isFilledEquale(value, x: x, y: y + 1))
         }
         func floodFill(_ value: FilledUInt, atX x: Int, y: Int) {
-            enum DownUp {
-                case down, up, none
+            let inValue = filledValueAt(x: x, y: y)
+            
+            func leftDownFillAt(x: Int, y: Int) {
+                var x = x, y = y
+                while true {
+                    let ax = x, ay = y
+                    while x > 0 && isFilledEquale(inValue, x: x - 1, y: y) { x -= 1 }
+                    while y > 0 && isFilledEquale(inValue, x: x, y: y - 1) { y -= 1 }
+                    if x == ax && y == ay { break }
+                }
+                fillAt(x: x, y: y)
             }
-            struct Range {
-                var minX: Int, maxX: Int, y: Int, downUp: DownUp
-                var isExtendLeft: Bool, isExtendRight: Bool
+            func fillAt(x: Int, y: Int) {
+                var lastRowLength = 0, x = x, y = y
+                repeat {
+                    var rowLength = 0, sx = x
+                    if lastRowLength != 0 && !isFilledEquale(inValue, x: x, y: y) {
+                        repeat {
+                            lastRowLength -= 1
+                            if lastRowLength == 0 { return }
+                            x += 1
+                        } while !isFilledEquale(inValue, x: x, y: y)
+                        sx = x
+                    } else {
+                        while x != 0 && isFilledEquale(inValue, x: x - 1, y: y) {
+                            x -= 1
+                            fill(value, atX: x, y: y)
+                            if y != 0 && isFilledEquale(inValue, x: x, y: y - 1) {
+                                leftDownFillAt(x: x, y: y - 1)
+                            }
+                            rowLength += 1
+                            lastRowLength += 1
+                        }
+                    }
+                    
+                    while sx < w && isFilledEquale(inValue, x: sx, y: y) {
+                        fill(value, atX: sx, y: y)
+                        rowLength += 1
+                        sx += 1
+                    }
+                    if rowLength < lastRowLength {
+                        let end = x + lastRowLength
+                        sx += 1
+                        while sx < end {
+                            if isFilledEquale(inValue, x: sx, y: y) {
+                                fillAt(x: sx, y: y)
+                            }
+                            sx += 1
+                        }
+                    } else if rowLength > lastRowLength && y != 0 {
+                        var ux = x + lastRowLength
+                        ux += 1
+                        while ux < sx {
+                            if isFilledEquale(inValue, x: ux, y: y - 1) {
+                                leftDownFillAt(x: ux, y: y - 1)
+                            }
+                            ux += 1
+                        }
+                    }
+                    lastRowLength = rowLength
+                    y += 1
+                } while lastRowLength != 0 && y < h
             }
             
-            var ranges = [Range(minX: x, maxX: x, y: y, downUp: .none,
-                                isExtendLeft: true, isExtendRight: true)]
-            fill(value, atX: x, y: y)
-            
-            while let range = ranges.last {
-                ranges.removeLast()
-                
-                var minX = range.minX, maxX = range.maxX
-                let ry = range.y
-                if range.isExtendLeft {
-                    while minX > 0 && isFill(x: minX - 1, y: ry) {
-                        minX -= 1
-                        fill(value, atX: minX, y: ry)
-                    }
-                }
-                if range.isExtendRight {
-                    while maxX < w - 1 && isFill(x: maxX + 1, y: ry) {
-                        maxX += 1
-                        fill(value, atX: maxX, y: ry)
-                    }
-                }
-                let rMinX = range.minX - 1, rMaxX = range.maxX + 1
-                
-                func appendNextLineWith(y ny: Int, isNext: Bool, downUp: DownUp) {
-                    var nrMinX = minX, isInRange = false
-                    for var nx in minX...maxX {
-                        let isEmpty = (isNext || (nx < rMinX || nx > rMaxX)) && isFill(x: nx, y: ny)
-                        if !isInRange && isEmpty {
-                            nrMinX = nx
-                            isInRange = true
-                        } else if isInRange && !isEmpty {
-                            ranges.append(Range(minX: nrMinX, maxX: nx - 1, y: ny,
-                                                downUp: downUp,
-                                                isExtendLeft: nrMinX == minX, isExtendRight: false))
-                            isInRange = false
-                        }
-                        if isInRange {
-                            fill(value, atX: nx, y: ny)
-                        }
-                        if !isNext && nx == rMinX {
-                            nx = rMaxX
-                        }
-                    }
-                    if isInRange {
-                        ranges.append(Range(minX: nrMinX, maxX: x - 1, y: ny,
-                                            downUp: downUp,
-                                            isExtendLeft: nrMinX == minX, isExtendRight: true))
-                    }
-                }
-                if ry < h - 1 {
-                    appendNextLineWith(y: ry + 1, isNext: range.downUp != .up, downUp: .down)
-                }
-                if ry > 0 {
-                    appendNextLineWith(y: ry - 1, isNext: range.downUp != .down, downUp: .up)
-                }
-            }
+            fillAt(x: x, y: y)
         }
         
         func nearestFill() {
-            func valueAt(x: Int, y: Int) -> FilledUInt? {
-                if x >= 0 && x < w && y >= 0 && y < h {
-                    let v = filledValueAt(x: x, y: y)
-                    if v != 0 {
-                        return v
-                    }
+            func nearestValueAt(x: Int, y: Int, maxRadius r: Int) -> FilledUInt? {
+                let minX = max(x - r, 0), maxX = min(x + r, w - 1)
+                let minY = max(y - r, 0), maxY = min(y + r, h - 1)
+                guard minX <= maxX && minY <= maxY else {
+                    return nil
                 }
-                return nil
-            }
-            func nearestValueAt(x: Int, y: Int, maxCount: Int = 100) -> FilledUInt? {
-                var i = 0, x = x, y = y, count = 1, xd = 1, yd = 1
-                while i < maxCount {
-                    for _ in 0..<count {
-                        x += xd
-                        if let v = valueAt(x: x, y: y) {
-                            return v
+                let r² = r * r
+                var minValue: FilledUInt?, minD² = Int.max
+                for iy in minY...maxY {
+                    for ix in minX...maxX {
+                        if !isLine(x: ix, y: iy) && !isFilledEquale(0, x: ix, y: iy) {
+                            let dx = ix - x, dy = iy - y
+                            let d² = dx * dx + dy * dy
+                            if d² < r² {
+                                let value = filledValueAt(x: ix, y: iy)
+                                if d² < minD² {
+                                    minD² = d²
+                                    minValue = value
+                                }
+                            }
                         }
                     }
-                    for _ in 0..<count {
-                        y += yd
-                        if let v = valueAt(x: x, y: y) {
-                            return v
-                        }
-                    }
-                    xd = -xd
-                    yd = -yd
-                    count += 1
-                    i += count * 2
                 }
-                return nil
+                return minValue
             }
             for y in 0..<h {
                 for x in 0..<w {
-                    if !isFill(x: x, y: y) {
-                        if let v = nearestValueAt(x: x, y: y) {
+                    if isLine(x: x, y: y) || isFilledEquale(0, x: x, y: y) {
+                        if let v = nearestValueAt(x: x, y: y, maxRadius: 3) {
+                            fill(v, atX: x, y: y)
+                        } else if let v = nearestValueAt(x: x, y: y, maxRadius: 10) {
                             fill(v, atX: x, y: y)
                         }
                     }
@@ -472,55 +512,113 @@ extension Drawing {
         }
         
         func surfaces() -> [Surface] {
-            guard let filledData = filledCTX.data else {
-                return []
-            }
-            let filledBytesPerPixel = filledCTX.bitsPerPixel / filledCTX.bitsPerComponent
-            let w = filledCTX.width, h = filledCTX.height
-            
-            func filledValueAt(x: Int, y: Int) -> FilledUInt {
-                let filledOffset = filledCTX.bytesPerRow * y + x * filledBytesPerPixel
-                return filledData.load(fromByteOffset: filledOffset, as: FilledUInt.self)
-            }
             func aroundSurface(with value: FilledUInt, atX fx: Int, y fy: Int) -> Surface {
                 var points = [Point]()
-                
-                func isAround(x: Int, y: Int) -> Bool {
-                    if x >= 0 && x < w && y >= 0 && y < h {
-                        return filledValueAt(x: x, y: y) == value
+                func pointAt(x: Int, y: Int) -> Point {
+                    return Point(x: x, y: h - y)
+                }
+                var x = fx, y = fy
+                func update(x nx: Int, y ny: Int) -> Bool {
+                    if nx >= 0 && nx < w && ny >= 0 && ny < h
+                        && filledValueAt(x: nx, y: ny) == value {
+                        
+                        x = nx
+                        y = ny
+                        return true
                     } else {
                         return false
                     }
                 }
-                
-                var x = fx, y = fy
-                points.append(Point(x: x, y: y))
-                while x != fx || y != fy {
-                    if isAround(x: x - 1, y: y - 1) {
-                        x -= 1
-                        y -= 1
-                    } else if filledValueAt(x: x, y: y - 1) == value {
-                        y -= 1
-                    } else if filledValueAt(x: x + 1, y: y - 1) == value {
-                        x += 1
-                        y -= 1
-                    } else if filledValueAt(x: x + 1, y: y) == value {
-                        x += 1
-                    } else if filledValueAt(x: x + 1, y: y + 1) == value {
-                        x += 1
-                        y += 1
-                    } else if filledValueAt(x: x, y: y + 1) == value {
-                        y += 1
-                    } else if filledValueAt(x: x - 1, y: y + 1) == value {
-                        x -= 1
-                        y += 1
-                    } else if filledValueAt(x: x - 1, y: y) == value {
-                        x -= 1
+                func update(at index: Int) -> Bool {
+                    if index == 0 {
+                        return update(x: x - 1, y: y)
+                    } else if index == 1 {
+                        return update(x: x - 1, y: y + 1)
+                    } else if index == 2 {
+                        return update(x: x, y: y + 1)
+                    } else if index == 3 {
+                        return update(x: x + 1, y: y + 1)
+                    } else if index == 4 {
+                        return update(x: x + 1, y: y)
+                    } else if index == 5 {
+                        return update(x: x + 1, y: y - 1)
+                    } else if index == 6 {
+                        return update(x: x, y: y - 1)
+                    } else if index == 7 {
+                        return update(x: x - 1, y: y - 1)
+                    } else {
+                        return false
                     }
-                    points.append(Point(x: x, y: y))
+                }
+                func point(at index: Int) -> Point? {
+                    if index == 0 {
+                        return pointAt(x: x, y: y)
+                    } else if index == 2 {
+                        return pointAt(x: x, y: y + 1)
+                    } else if index == 4 {
+                        return pointAt(x: x + 1, y: y + 1)
+                    } else if index == 6 {
+                        return pointAt(x: x + 1, y: y)
+                    } else {
+                        return nil
+                    }
+                }
+                var lastPoint = pointAt(x: x, y: y)
+                var oldPoint = lastPoint
+                points.append(lastPoint)
+                func append(_ p: Point) {
+                    if lastPoint.x != p.x || lastPoint.y != p.y {
+                        points.append(oldPoint)
+                        lastPoint = p
+                    }
+                    oldPoint = p
                 }
                 
-                let line = Line(controls: points.map { Line.Control(point: $0, pressure: 1) })
+                var index = 0, firstIndexes = Array(repeating: false, count: 8)
+                while true {
+                    let isFirstPoint = x == fx && y == fy
+                    var firstIndex = index
+                    for _ in 0..<7 {
+                        index = index + 1 > 7 ? 0 : index + 1
+                        firstIndex = index
+                        if update(at: index) {
+                            index = index + 4 > 7 ? index - 4 : index + 4
+                            break
+                        } else {
+                            if let point = point(at: index) {
+                                append(point)
+                            }
+                        }
+                    }
+                    if isFirstPoint {
+                        if firstIndexes[firstIndex] {
+                            break
+                        } else {
+                            firstIndexes[firstIndex] = true
+                        }
+                    }
+                }
+                
+                var oldP = points.first!, oldIndex = 0
+                var previousP = oldP
+                var nPoints = [Point]()
+                nPoints.reserveCapacity(points.count)
+                nPoints.append(oldP)
+                let maxD = 0.25.cg
+                for i in 1..<points.count {
+                    let p = points[i]
+                    for j in oldIndex..<i {
+                        let d = points[j].distanceWithLine(ap: oldP, bp: p)
+                        if d > maxD {
+                            nPoints.append(previousP)
+                            oldIndex = i
+                            oldP = p
+                        }
+                    }
+                    previousP = p
+                }
+                
+                let line = Line(controls: nPoints.map { Line.Control(point: $0, pressure: 1) })
                 return Surface(line: line, uuColor: UU(Color.random()))
             }
             
@@ -535,16 +633,23 @@ extension Drawing {
                 }
             }
             return surfaces.sorted(by: {
-                $0.path.boundingBoxOfPath.size > $1.path.boundingBoxOfPath.size
-            })
+                $0.path.boundingBoxOfPath.size < $1.path.boundingBoxOfPath.size
+            }).reversed()
         }
         
-        var value: FilledUInt = 1
+        let lineValue: FilledUInt = 1
         for y in 0..<h {
             for x in 0..<w {
-                let v = filledValueAt(x: x, y: y)
-                let a = alphaAt(x: x, y: y)
-                if v != 0 && a > t {
+                if isLine(x: x, y: y) {
+                    fill(lineValue, atX: x, y: y)
+                }
+            }
+        }
+
+        var value: FilledUInt = 2
+        for y in 0..<h {
+            for x in 0..<w {
+                if isFilledEquale(0, x: x, y: y) && isGap4Way(1, x: x, y: y) {
                     floodFill(value, atX: x, y: y)
                     value = value &+ 1
                 }

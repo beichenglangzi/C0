@@ -230,10 +230,6 @@ final class C0Document: NSDocument, NSWindowDelegate {
         rootDataModel = DataModel(key: rootDataModelKey, directoryWith: [preferenceDataModel])
         
         super.init()
-        preferenceDataModel.didChangeIsWriteClosure = { [unowned self] (_, isWrite) in
-            self.updateChangeCount(.changeDone)
-        }
-        preferenceDataModel.dataClosure = { [unowned self] in self.preference.jsonData }
     }
     convenience init(type typeName: String) throws {
         self.init()
@@ -265,8 +261,19 @@ final class C0Document: NSDocument, NSWindowDelegate {
                                  y: round((frame.height - size.height) / 2))
             preference.windowFrame = NSRect(origin: origin, size: size)
         }
+        preferenceDataModel.didChangeIsWriteClosure = { [unowned self] (_, isWrite) in
+            self.updateChangeCount(.changeDone)
+        }
+        preferenceDataModel.dataClosure = { [unowned self] in self.preference.jsonData }
         setupWindow(with: preference)
         
+        if let copiedObject = NSPasteboard.general.copiedObjects.first {
+            oldChangeCountWithPsteboard = NSPasteboard.general.changeCount
+            c0View.desktopView.copiedObjectView.push(copiedObject,
+                                                     to: c0View.desktopView.version)
+            desktop.version.removeAllActions()
+        }
+        c0View.desktopBinder.diffDesktopDataModel.isWrite = false
         let isWriteClosure: (DataModel, Bool) -> Void = { [unowned self] (_, _) in
             self.updateChangeCount(.changeDone)
         }
@@ -274,12 +281,6 @@ final class C0Document: NSDocument, NSWindowDelegate {
         c0View.desktopBinder.diffDesktopDataModel.didChangeIsWriteClosure = isWriteClosure
         preferenceDataModel.didChangeIsWriteClosure = isWriteClosure
         
-        c0View.desktopBinder.diffDesktopDataModel.isWrite = false
-        
-        if let copiedObject = NSPasteboard.general.copiedObjects.first {
-            c0View.desktopView.copiedObjectView.push(copiedObject,
-                                                     to: c0View.desktopView.version)
-        }
         c0View.desktopView.copiedObjectView.notifications.append({ [unowned self] _, _ in
             self.didSetCopiedObjects()
         })
@@ -326,6 +327,7 @@ final class C0Document: NSDocument, NSWindowDelegate {
             if let copiedObject = pasteboard.copiedObjects.first {
                 c0View.desktopView.copiedObjectView.push(copiedObject,
                                                          to: c0View.desktopView.version)
+                
             }
             oldChangeCountWithCopiedObjects = changeCountWithCopiedObjects
         }
@@ -338,7 +340,14 @@ final class C0Document: NSDocument, NSWindowDelegate {
             oldChangeCountWithPsteboard = pasteboard.changeCount
         }
     }
-    
+    func windowWillBeginSheet(_ notification: Notification) {
+        c0View.sender.stopAllEvents()
+        c0View.sender.resetEventMap()
+    }
+    func windowDidResignKey(_ notification: Notification) {
+        c0View.sender.stopAllEvents()
+        c0View.sender.resetEventMap()
+    }
     func openEmoji() {
         NSApp.orderFrontCharacterPalette(nil)
     }

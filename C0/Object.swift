@@ -71,12 +71,21 @@ struct Object {
         types[type.objectTypeName] = type
         appendInArray(type)
         appendInArray(Transforming<T>.self)
+        appendInArray(UU<T>.self)
         appendInTransfoming(type)
         appendInTransfoming(Array<T>.self)
+        appendInTransfoming(UU<T>.self)
+        appendInUU(type)
+        appendInUU(Array<T>.self)
+        appendInUU(Transforming<T>.self)
     }
     static func appendInArray<T: Value & Viewable>(_ type: T.Type) {
         let arrayType = Array<T>.self
         types[arrayType.objectTypeName] = arrayType
+    }
+    static func appendInUU<T: Value & Viewable>(_ type: T.Type) {
+        let uuType = UU<T>.self
+        types[uuType.objectTypeName] = uuType
     }
     static func appendInTransfoming<T: Value & Viewable>(_ type: T.Type) {
         let transformingType = Transforming<T>.self

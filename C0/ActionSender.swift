@@ -140,7 +140,7 @@ final class ActionSender {
                 changeableColorObject = rootView.changeableColor(at: eventValue.rootLocation)
             }
             if actionMap.action == actionList.changeHueAction {
-                changeableColorObject?.changeHue(with: eventValue, actionMap.phase, rootView.version)
+                changeableColorObject?.changeHL(with: eventValue, actionMap.phase, rootView.version)
             } else {
                 changeableColorObject?.changeSL(with: eventValue, actionMap.phase, rootView.version)
             }
@@ -214,7 +214,6 @@ final class ActionSender {
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
             let exportable = rootView.exportable(at: eventValue.rootLocation)
             stopAllEvents()
-            resetEventMap()
             exportable.export(with: eventValue, actionMap.phase, rootView.version)
         default: break
         }
@@ -325,7 +324,7 @@ protocol MakableChangeableColor {
     func changeableColor(at p: Point) -> ChangeableColor?
 }
 protocol ChangeableColor {
-    func changeHue(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version)
+    func changeHL(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version)
     func changeSL(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version)
 }
 protocol ChangeableColorOwner: class {
@@ -337,14 +336,14 @@ final class ChangeableColorObject: ChangeableColor {
     
     var views: [ColorOwnerView]
     var fp = Point(), firstUUColor = UU(Color())
-    var hueCorrection = 0.004.cg, slCorrection = 0.004.cg
+    var hueCorrection = 0.003.cg, saturationCorrection = 0.01.cg, lightnessCorrection = 0.004.cg
     
     init(views: [ColorOwnerView], firstUUColor: UU<Color>) {
         self.views = views
         self.firstUUColor = firstUUColor
     }
     
-    func changeHue(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
+    func changeHL(with eventValue: DragEvent.Value, _ phase: Phase, _ version: Version) {
         guard !views.isEmpty else { return }
         switch phase {
         case .began:
@@ -353,8 +352,11 @@ final class ChangeableColorObject: ChangeableColor {
         case .changed:
             let hue = ((eventValue.rootLocation.x - fp.x) * hueCorrection
                 + firstUUColor.value.hue).loopValue()
+            let lightness = ((eventValue.rootLocation.y - fp.y) * lightnessCorrection
+                + firstUUColor.value.lightness).clip(min: 0, max: 1)
             var uuColor = firstUUColor
             uuColor.value.hue = hue
+            uuColor.value.lightness = lightness
             uuColor.newID()
             views.forEach { $0.uuColor = uuColor }
         case .ended:
@@ -368,10 +370,10 @@ final class ChangeableColorObject: ChangeableColor {
             views.forEach { $0.captureUUColor(to: version) }
             fp = eventValue.rootLocation
         case .changed:
-            let lightness = ((eventValue.rootLocation.x - fp.x) * slCorrection
-                + firstUUColor.value.lightness).clip(min: 0, max: 1)
-            let saturation = ((eventValue.rootLocation.y - fp.y) * slCorrection
+            let saturation = ((eventValue.rootLocation.x - fp.x) * saturationCorrection
                 + firstUUColor.value.saturation).clip(min: 0, max: 1)
+            let lightness = ((eventValue.rootLocation.y - fp.y) * lightnessCorrection
+                + firstUUColor.value.lightness).clip(min: 0, max: 1)
             var uuColor = firstUUColor
             uuColor.value.ls = Point(x: lightness, y: saturation)
             uuColor.newID()
