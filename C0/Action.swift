@@ -137,8 +137,13 @@ struct ActionList {
                               isEditable: false)
     let strokeAction = Action(name: Localization(english: "Stroke", japanese: "ストローク"),
                               quasimode: Quasimode([.drag(.drag)]))
-    let lassoFillAction = Action(name: Localization(english: "Lasso Fill", japanese: "囲み塗る"),
+    let strokeSubLineAction = Action(name: Localization(english: "Stroke Sub Line",
+                                                        japanese: "補助線をストローク"),
                                  quasimode: Quasimode(modifier: [.input(.command)],
+                                                      [.drag(.drag)]))
+    let lassoFillLineAction = Action(name: Localization(english: "Lasso Fill Line",
+                                                        japanese: "線を囲み着色"),
+                                 quasimode: Quasimode(modifier: [.input(.command), .input(.shift)],
                                                       [.drag(.drag)]))
     let lassoEraseAction = Action(name: Localization(english: "Lasso Cut", japanese: "囲みカット"),
                                   quasimode: Quasimode(modifier: [.input(.option)],
@@ -198,7 +203,7 @@ struct ActionList {
     let actions: [Action]
     init() {
         actions = [zoomAction, rotateAction, resetViewAction,
-                   strokeAction, lassoFillAction, lassoEraseAction,
+                   strokeAction, strokeSubLineAction, lassoFillLineAction, lassoEraseAction,
                    moveAction, changeHueAction, changeSLAction,
                    undoAction, redoAction,
                    cutAction, copyAction, pasteAction,

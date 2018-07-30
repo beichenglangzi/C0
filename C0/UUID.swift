@@ -20,7 +20,12 @@
 import struct Foundation.UUID
 
 extension UUID {
-    static let zero = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+    init(index i: UInt8) {
+        self = UUID(uuid: (i, i, i, i, i, i, i, i, i, i, i, i, i, i, i, i))
+    }
+    
+    static let zero = UUID(index: 0)
+    static let one = UUID(index: 1)
 }
 
 struct UU<Value: Object.Value & Viewable>: Codable {

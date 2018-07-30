@@ -96,9 +96,10 @@ extension Color {
     static let orange = Color(hue: 38.0 / 360, saturation: 1, brightness: 0.95)
     
     static let background = Color(white: 0.93)
-    static let content = black
+    static let content = Color(white: 0.1)
     static let selected = Color(red: 0.1, green: 0.7, blue: 1)
     static let surface = Color(hue: 0.75, saturation: 0.75, lightness: 0.75)
+    static let subLine = Color(red: 0, green: 0.6, blue: 1)
     static let draft = Color(red: 0, green: 0.5, blue: 1)
     static let caution = orange
     static let warning = red

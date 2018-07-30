@@ -37,13 +37,15 @@ struct Line {//: Codable {
     var uuColor: UU<Color>
     
     init(bezier: Bezier2,
-         p0Pressure: Real, cpPressure: Real, p1Pressure: Real) {
+         p0Pressure: Real, cpPressure: Real, p1Pressure: Real,
+         uuColor: UU<Color> = UU(.content, id: .zero)) {
         
         self.init(controls: [Control(point: bezier.p0, pressure: p0Pressure),
                              Control(point: bezier.cp, pressure: cpPressure),
-                             Control(point: bezier.p1, pressure: p1Pressure)])
+                             Control(point: bezier.p1, pressure: p1Pressure)],
+                  uuColor: uuColor)
     }
-    init(controls: [Control] = [], uuColor: UU<Color> = UU(.black)) {
+    init(controls: [Control] = [], uuColor: UU<Color> = UU(.content, id: .zero)) {
         self.controls = controls
         self.uuColor = uuColor
         imageBounds = controls.imageBounds
@@ -57,7 +59,7 @@ extension Line: Codable {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         controls = try values.decode([Control].self, forKey: .controls)
         imageBounds = try values.decode(Rect.self, forKey: .imageBounds)
-        uuColor = (try? values.decode(UU<Color>.self, forKey: .uuColor)) ?? UU(.black)
+        uuColor = (try? values.decode(UU<Color>.self, forKey: .uuColor)) ?? UU(.content, id: .zero)
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -94,7 +96,7 @@ extension Array where Element == Line.Control {
 }
 extension Line {
     func reversed() -> Line {
-        return Line(controls: controls.reversed())
+        return Line(controls: controls.reversed(), uuColor: uuColor)
     }
     func warpedWith(deltaPoint dp: Point, isFirst: Bool) -> Line {
         guard controls.count >= 2 else {
@@ -116,7 +118,7 @@ extension Line {
             let t = isFirst ? 1 - allAD * reciprocalAllD : allAD * reciprocalAllD
             return Control(point: Point(x: $0.point.x + dp.x * t, y: $0.point.y + dp.y * t),
                            pressure: $0.pressure)
-        })
+        }, uuColor: uuColor)
     }
     func warpedWith(deltaPoint dp: Point, at index: Int) -> Line {
         guard controls.count >= 2 else {
@@ -158,7 +160,7 @@ extension Line {
                                        pressure: controls[i].pressure))
             oldP = p
         }
-        return Line(controls: newControls)
+        return Line(controls: newControls, uuColor: uuColor)
     }
     func warpedWith(deltaPoint dp: Point, controlPoint: Point,
                     minDistance: Real, maxDistance: Real) -> Line {
@@ -167,7 +169,7 @@ extension Line {
             let ds = d > maxDistance ? 0 : (1 - (d - minDistance) / (maxDistance - minDistance))
             return Control(point: Point(x: $0.point.x + dp.x * ds, y: $0.point.y + dp.y * ds),
                            pressure: $0.pressure)
-        })
+        }, uuColor: uuColor)
     }
     func autoPressure(minPressure: Real = 0.5) -> Line {
         let maxAngle = .pi / 4.0.cg
@@ -181,7 +183,7 @@ extension Line {
                 let pressure = Real.linear(minPressure, 1, t: min(angle, maxAngle) / maxAngle)
                 return Control(point: control.point, pressure: pressure)
             }
-        })
+        }, uuColor: uuColor)
     }
     
     func splited(at i: Int) -> Line {
@@ -198,7 +200,7 @@ extension Line {
             var cs = controls
             cs[i] = controls[i - 1].mid(controls[i])
             cs.insert(controls[i].mid(controls[i + 1]), at: i + 1)
-            return Line(controls: cs)
+            return Line(controls: cs, uuColor: uuColor)
         }
     }
     func removedControl(at i: Int) -> Line {
@@ -212,11 +214,11 @@ extension Line {
         } else {
             cs.remove(at: i)
         }
-        return Line(controls: cs)
+        return Line(controls: cs, uuColor: uuColor)
     }
     
     func splited(startIndex: Int, endIndex: Int) -> Line {
-        return Line(controls: Array(controls[startIndex...endIndex]))
+        return Line(controls: Array(controls[startIndex...endIndex]), uuColor: uuColor)
     }
     func splited(startIndex: Int, startT: Real, endIndex: Int, endT: Real,
                  isMultiLine: Bool = true) -> [Line] {
@@ -247,7 +249,8 @@ extension Line {
             let pr1 = endIndex == controls.count - 3 && endT == 1 ?
                 controls[controls.count - 1].pressure :
                 pressure(at: endIndex, t: endT)
-            return [Line(bezier: b, p0Pressure: pr0, cpPressure: (pr0 + pr1) / 2, p1Pressure: pr1)]
+            return [Line(bezier: b, p0Pressure: pr0, cpPressure: (pr0 + pr1) / 2, p1Pressure: pr1,
+                         uuColor: uuColor)]
         } else if isMultiLine {
             var newLines = [Line]()
             let indexes = startIndex + 1..<endIndex + 2
@@ -260,19 +263,21 @@ extension Line {
                 newLines.append(Line(bezier: bezier(at: startIndex).clip(startT: startT, endT: 1),
                                      p0Pressure: fprs0,
                                      cpPressure: (fprs0 + fprs1) / 2,
-                                     p1Pressure: fprs1))
+                                     p1Pressure: fprs1,
+                                     uuColor: uuColor))
             }
             if endIndex == controls.count - 3 && endT == 1 {
                 cs.append(controls[controls.count - 1])
-                newLines.append(Line(controls: cs))
+                newLines.append(Line(controls: cs, uuColor: uuColor))
             } else {
                 cs[cs.count - 1] = controls[endIndex].mid(controls[endIndex + 1])
-                newLines.append(Line(controls: cs))
+                newLines.append(Line(controls: cs, uuColor: uuColor))
                 let eprs0 = cs[cs.count - 1].pressure, eprs1 = pressure(at: endIndex, t: endT)
                 newLines.append(Line(bezier: bezier(at: endIndex).clip(startT: 0, endT: endT),
                                      p0Pressure: eprs0,
                                      cpPressure: (eprs0 + eprs1) / 2,
-                                     p1Pressure: eprs1))
+                                     p1Pressure: eprs1,
+                                     uuColor: uuColor))
             }
             return newLines
         } else {
@@ -295,7 +300,7 @@ extension Line {
                 Control(point: bezier(at: endIndex).position(withT: endT),
                         pressure: pressure(at: endIndex + 1, t: endT))
             cs.append(lc)
-            return [Line(controls: cs)]
+            return [Line(controls: cs, uuColor: uuColor)]
         }
     }
     
@@ -303,7 +308,8 @@ extension Line {
         if controls.count <= 2 {
             return controls.count < 2 ?
                 self :
-                Line(controls: [controls[0], controls[0].mid(controls[1]), controls[1]])
+                Line(controls: [controls[0], controls[0].mid(controls[1]), controls[1]],
+                     uuColor: uuColor)
         } else if controls.count == 3 {
             return self
         } else {
@@ -319,7 +325,8 @@ extension Line {
             let cp = 2 * maxControl.point - mcp
             return Line(controls: [controls[0],
                                    Line.Control(point: cp, pressure: maxControl.pressure),
-                                   controls[controls.count - 1]])
+                                   controls[controls.count - 1]],
+                        uuColor: uuColor)
         }
     }
     
@@ -694,8 +701,7 @@ extension Line {
     func view(lineWidth size: Real, fillColor: Color) -> View {
         let path = self.path(lineWidth: size)
         let view = View(path: path)
-        view.lineColor = fillColor
-        view.lineWidth = 1
+        view.fillColor = fillColor
         return view
     }
     func fillPath() -> Path {
@@ -814,7 +820,7 @@ extension Line: AppliableAffineTransform {
     static func *(lhs: Line, rhs: AffineTransform) -> Line {
         return Line(controls: lhs.controls.map {
             Control(point: $0.point * rhs, pressure: $0.pressure)
-        })
+        }, uuColor: lhs.uuColor)
     }
 }
 extension Line.Control: Codable {
@@ -1034,8 +1040,8 @@ extension LineView: ChangeableColorOwner {
         updateColor()
     }
     func capture(uuColor: UU<Color>, to version: Version) {
-        version.registerUndo(withTarget: self) { [oldUUColor = model.uuColor, unowned version] in
-            $0.push(uuColor: oldUUColor, to: version)
+        version.registerUndo(withTarget: self) { [unowned version] in
+            $0.push(uuColor: uuColor, to: version)
         }
     }
     var uuColor: UU<Color> {
@@ -1046,12 +1052,9 @@ extension LineView: ChangeableColorOwner {
         }
     }
 }
-extension LineView: CollectionAssignable {
+extension LineView: Assignable {
     var copiableObject: Object {
         return Object(model.uuColor)
-    }
-    func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        push(uuColor: .surface, to: version)
     }
     func paste(_ object: Object,
                with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
@@ -1062,6 +1065,5 @@ extension LineView: CollectionAssignable {
 }
 
 final class LineMovable {
-    //
     //pressure
 }

@@ -20,13 +20,14 @@
 import func CoreGraphics.sqrt
 
 enum StrokableType {
-    case normal, surface, other
+    case normal, sub, fillLine, erase
 }
 final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
     var rootView: View & Zoomable
     var drawingView: DrawingView<Binder>
     var surfaceView: SurfaceView<Binder>?
     var lineView: LineView<Binder>?
+    var fillLineColor: UU<Color>
     
     func convertToCurrentLocal(_ point: Point) -> Point {
         return drawingView.convertFromRoot(point)
@@ -35,9 +36,10 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
         return rootView.zoomingTransform.scale.x
     }
     
-    init(rootView: View & Zoomable, drawingView: DrawingView<Binder>) {
+    init(rootView: View & Zoomable, drawingView: DrawingView<Binder>, fillLineColor: UU<Color>) {
         self.rootView = rootView
         self.drawingView = drawingView
+        self.fillLineColor = fillLineColor
     }
     
     var line: Line?
@@ -166,7 +168,9 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
     
     func stroke(with eventValue: DragEvent.Value, _ phase: Phase,
                 strokableType: StrokableType, _ version: Version) {
-        if strokableType == .other {
+        if strokableType == .fillLine {
+            lassoFillLine(with: eventValue, phase, version)
+        } else if strokableType == .erase {
             lassoErase(with: eventValue, phase, version)
         } else {
             let p = rootView.convertFromRoot(eventValue.rootLocation)
@@ -181,7 +185,7 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
         switch phase {
         case .began:
             let fc = Line.Control(point: p, pressure: pressure)
-            let line = Line(controls: [fc, fc, fc])
+            var line = Line(controls: [fc, fc, fc])
             self.line = line
             oldPoint = p
             oldTime = time
@@ -194,11 +198,12 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
                 case .normal:
                     drawingView.linesView.insert(line, at: drawingView.linesView.model.count, version)
                     lineView = drawingView.linesView.modelViews.last as? LineView<Binder>
-                case .surface:
-                    drawingView.surfacesView.insert(Surface(line: line),
-                                                    at: drawingView.surfacesView.model.count, version)
-                    lineView = (drawingView.surfacesView.modelViews.last as? SurfaceView<Binder>)?.lineView
-                case .other:
+                case .sub:
+                    line.uuColor = UU(Color.subLine, id: .one)
+                    self.line = line
+                    drawingView.linesView.insert(line, at: 0, version)
+                    lineView = drawingView.linesView.modelViews.first as? LineView<Binder>
+                default:
                     break
                 }
             }
@@ -228,12 +233,12 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
                                                  temps,
                                                  scale: viewScale) {
                 line.controls.insert(lc, at: line.controls.count - 2)
-                if line.controls.count <= 4 && cap.isJoinedCapWith(line,
-                                                                  index0: 1, index1: 0,
-                                                                  time: time, oldTime: oldTempTime,
-                                                                  scale: viewScale) {
-                    line.controls.removeFirst()
-                }
+//                if line.controls.count <= 4 && cap.isJoinedCapWith(line,
+//                                                                  index0: 1, index1: 0,
+//                                                                  time: time, oldTime: oldTempTime,
+//                                                                  scale: viewScale) {
+//                    line.controls.removeFirst()
+//                }
                 temps = [Temp(control: lc, speed: speed)]
                 oldTempTime = time
                 tempDistance = 0
@@ -260,6 +265,53 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
         }
     }
     
+    var oldLassoFillLineViews = [Int: (lineView: LineView<Binder>, uuColor: UU<Color>)]()
+    func lassoFillLine(with eventValue: DragEvent.Value,
+                       _ phase: Phase, _ version: Version) {
+        let p = rootView.convertFromRoot(eventValue.rootLocation)
+        stroke(for: p, pressure: eventValue.pressure, time: eventValue.time, phase,
+               strokeType: .normal, isAppendLine: false, to: version)
+        switch phase {
+        case .began:
+            oldLassoFillLineViews = [:]
+            drawingView.lassoPathViewColor = .selected
+            drawingView.lassoPathViewFillColorComposition = .select
+            break
+        case .changed:
+            drawingView.lassoLine = line
+            if let line = line {
+                updateFillLineViews(with: line)
+            }
+        case .ended:
+            if let line = line {
+                updateFillLineViews(with: line)
+            }
+            oldLassoFillLineViews.values.forEach { (lineView, uuColor) in
+                lineView.capture(uuColor: uuColor, to: version)
+            }
+            drawingView.lassoLine = nil
+            oldLassoFillLineViews = [:]
+        }
+    }
+    func updateFillLineViews(with line: Line) {
+        for (i, drawingLine) in drawingView.model.lines.enumerated() {
+            if LassoSurface(line: line).intersects(drawingLine) {
+                if oldLassoFillLineViews[i] == nil,
+                    let lineView = drawingView.linesView.modelViews[i] as? LineView<Binder> {
+                    
+                    let oldUUColor = lineView.uuColor
+                    lineView.uuColor = fillLineColor
+                    oldLassoFillLineViews[i] = (lineView, oldUUColor)
+                }
+            } else {
+                if let (lineView, uuColor) = oldLassoFillLineViews[i] {
+                    lineView.uuColor = uuColor
+                    oldLassoFillLineViews[i] = nil
+                }
+            }
+        }
+    }
+    
     func lassoErase(with eventValue: DragEvent.Value,
                     _ phase: Phase, _ version: Version) {
         let p = rootView.convertFromRoot(eventValue.rootLocation)
@@ -269,9 +321,11 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
         case .began:
             break
         case .changed:
-            drawingView.lassoCutLine = line
+            drawingView.lassoPathViewColor = .warning
+            drawingView.lassoPathViewFillColorComposition = .anti
+            drawingView.lassoLine = line
         case .ended:
-            drawingView.lassoCutLine = nil
+            drawingView.lassoLine = nil
             if let line = line {
                 lassoErase(with: line, to: version)
             }
@@ -279,7 +333,7 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
     }
     func lassoErase(with line: Line, to version: Version) {
         var isRemoveLineInDrawing = false
-        let lasso = SurfaceLasso(surface: Surface(line: line))
+        let lasso = LassoSurface(line: line)
         let newDrawingLines = drawingView.linesView.model.reduce(into: [Line]()) {
             if let splitedLine = lasso.splitedLine(with: $1) {
                 switch splitedLine {

@@ -122,13 +122,23 @@ final class ActionSender {
         case actionList.resetViewAction:
             rootView.captureTransform(to: rootView.version)
             rootView.zoomingTransform = rootView.defaultTransform
-        case actionList.strokeAction, actionList.lassoFillAction, actionList.lassoEraseAction:
+        case actionList.strokeAction, actionList.strokeSubLineAction,
+             actionList.lassoFillLineAction, actionList.lassoEraseAction:
+            
             guard let eventValue = actionMap.eventValues(with: DragEvent.self).first else { return }
             if actionMap.phase == .began {
                 strokableObject = rootView.strokable(at: eventValue.rootLocation)
             }
-            let type: StrokableType = actionMap.action == actionList.lassoFillAction ?
-                .surface : (actionMap.action == actionList.strokeAction ? .normal : .other)
+            let type: StrokableType
+            if actionMap.action == actionList.strokeAction {
+                type = .normal
+            } else if actionMap.action == actionList.strokeSubLineAction {
+                type = .sub
+            } else if actionMap.action == actionList.lassoFillLineAction {
+                type = .fillLine
+            } else {
+                type = .erase
+            }
             strokableObject?.stroke(with: eventValue, actionMap.phase,
                                         strokableType: type, rootView.version)
             if actionMap.phase == .ended {

@@ -121,7 +121,6 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
                                     keyPath: keyPath.appending(path: \Model.drawingFrame))
         drawingFrameAroundView = View(path: Path())
         
-        copiedObjectView.lineColor = .content
         copiedObjectView.opacity = 0.5
         draftDrawingView.linesColor = .draft
         draftDrawingView.opacity = 0.2
@@ -218,22 +217,26 @@ extension DesktopView: Zoomable {
 
 extension DesktopView: MakableStrokable {
     func strokable(at p: Point) -> Strokable {
-        return StrokableUserObject(rootView: self, drawingView: drawingView)
+        let uuColor = (copiedObject.value as? UU<Color>) ?? UU(.subLine, id: .one)
+        return StrokableUserObject(rootView: self, drawingView: drawingView,
+                                   fillLineColor: uuColor)
     }
 }
 
 extension DesktopView: MakableChangeableColor {
     func changeableColor(at p: Point) -> ChangeableColor? {
         let point = drawingView.convertFromRoot(p)
-        guard let surfaceView = drawingView.surfacesView.at(point) as? SurfaceView<Binder> else {
-            return nil
+        guard let view = drawingView.linesView.at(point) as? ChangeableColorOwner ??
+            drawingView.surfacesView.at(point) as? ChangeableColorOwner else {
+                return nil
         }
-        let uuColor = surfaceView.model.uuColor
-        let views: [View & ChangeableColorOwner] = drawingView.surfacesView.modelViews.compactMap {
-            let surfaceView = $0 as? SurfaceView<Binder>
-            return surfaceView?.model.uuColor == uuColor ? surfaceView : nil
+        let uuColor = view.uuColor
+        let views = drawingView.surfacesView.modelViews + drawingView.linesView.modelViews
+        let colorViews: [View & ChangeableColorOwner] = views.compactMap {
+            let colorView = $0 as? View & ChangeableColorOwner
+            return colorView?.uuColor == uuColor ? colorView : nil
         }
-        return ChangeableColorObject(views: views, firstUUColor: uuColor)
+        return ChangeableColorObject(views: colorViews, firstUUColor: uuColor)
     }
 }
 
@@ -255,7 +258,7 @@ extension DesktopView: Undoable {
 
 extension DesktopView: MakableCollectionAssignable {
     func collectionAssignable(at p: Point) -> CollectionAssignable {
-        return at(p, CollectionAssignable.self) ?? drawingView
+        return at(p, CollectionAssignable.self) ?? self
     }
     var copiedObject: Object {
         return copiedObjectView.model
@@ -269,7 +272,19 @@ extension DesktopView: CollectionAssignable {
         return Object(model.drawing)
     }
     func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        push(drawing: Drawing(), to: version)
+        if let view = at(eventValue.rootLocation) {
+            if view is SurfaceView<Binder> {
+                drawingView.surfacesView.push([], to: version)
+            } else if let lineView = view as? LineView<Binder> {
+                if let i = (drawingView.linesView.modelViews as [View]).index(of: lineView),
+                    i < drawingView.linesView.model.count {
+                    
+                    drawingView.linesView.remove(at: i, version)
+                }
+            }
+        } else {
+            push(drawing: Drawing(), to: version)
+        }
     }
     func paste(_ object: Object,
                with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {

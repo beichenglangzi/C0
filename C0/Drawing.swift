@@ -341,9 +341,9 @@ extension Drawing {
         let surfaces = autoFill(in: filledCTX, from: lineCTX)
         let invertedAffine = viewTransform.affineTransform.inverted()
         
-        var isFilleds = Array(repeating: false, count: surfaces.count)
+        var isFilleds = Array(repeating: false, count: oldSurfaces.count)
         return surfaces.map {
-            var surface = Surface(line: $0.line * invertedAffine, uuColor: $0.uuColor)
+            var surface = $0 * invertedAffine
             
             if !oldSurfaces.isEmpty {
                 var minColor = surface.uuColor, minD = Real.infinity, maxArea = 0.0.cg, minIndex = 0
@@ -618,8 +618,7 @@ extension Drawing {
                     previousP = p
                 }
                 
-                let line = Line(controls: nPoints.map { Line.Control(point: $0, pressure: 1) })
-                return Surface(line: line, uuColor: UU(Color.random()))
+                return Surface(points: nPoints, uuColor: UU(Color.random()))
             }
             
             var surfaces = [Surface]()
@@ -651,7 +650,7 @@ extension Drawing {
             for x in 0..<w {
                 if isFilledEquale(0, x: x, y: y) && isGap4Way(1, x: x, y: y) {
                     floodFill(value, atX: x, y: y)
-                    value = value &+ 1
+                    value = value + 1 <= FilledUInt.max ? value + 1 : 2
                 }
             }
         }
@@ -689,32 +688,6 @@ extension Drawing {
         }
         
         return capPointDic.compactMap { $0.value ? jointedView(for: $0.key) : nil }
-    }
-}
-extension Drawing: Interpolatable {
-    static func linear(_ f0: Drawing, _ f1: Drawing, t: Real) -> Drawing {
-        let lines = [Line].linear(f0.lines, f1.lines, t: t)
-        let surfaces = [Surface].linear(f0.surfaces, f1.surfaces, t: t)
-        return Drawing(lines: lines, surfaces: surfaces)
-    }
-    static func firstMonospline(_ f1: Drawing, _ f2: Drawing, _ f3: Drawing,
-                                with ms: Monospline) -> Drawing {
-        let lines = [Line].firstMonospline(f1.lines, f2.lines, f3.lines, with: ms)
-        let surfaces = [Surface].firstMonospline(f1.surfaces, f2.surfaces, f3.surfaces, with: ms)
-        return Drawing(lines: lines, surfaces: surfaces)
-    }
-    static func monospline(_ f0: Drawing, _ f1: Drawing, _ f2: Drawing, _ f3: Drawing,
-                           with ms: Monospline) -> Drawing {
-        let lines = [Line].monospline(f0.lines, f1.lines, f2.lines, f3.lines, with: ms)
-        let surfaces = [Surface].monospline(f0.surfaces, f1.surfaces,
-                                            f2.surfaces, f3.surfaces, with: ms)
-        return Drawing(lines: lines, surfaces: surfaces)
-    }
-    static func lastMonospline(_ f0: Drawing, _ f1: Drawing, _ f2: Drawing,
-                               with ms: Monospline) -> Drawing {
-        let lines = [Line].lastMonospline(f0.lines, f1.lines, f2.lines, with: ms)
-        let surfaces = [Surface].lastMonospline(f0.surfaces, f1.surfaces, f2.surfaces, with: ms)
-        return Drawing(lines: lines, surfaces: surfaces)
     }
 }
 extension Drawing: Viewable {
@@ -755,11 +728,15 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
         updateWithModel()
     }
     
-    var linesColor = Color.content {
+    var linesColor: Color? {
         didSet { updateLinesColor() }
     }
     func updateLinesColor() {
-        linesView.modelViews.forEach { $0.fillColor = linesColor }
+        if let linesColor = linesColor {
+            linesView.modelViews.forEach { $0.fillColor = linesColor }
+        } else {
+            linesView.modelViews.forEach { ($0 as? LineView<Binder>)?.updateColor() }
+        }
     }
     
     var viewScale = 1.0.cg {
@@ -767,16 +744,23 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
             lassoPathView?.lineWidth = 1 / viewScale
         }
     }
-    var lassoPathView: View?
-    var lassoCutLine: Line? {
+    
+    private(set) var lassoPathView: View?
+    var lassoPathViewColor = Color.warning {
+        didSet { lassoPathView?.fillColor = lassoPathViewColor }
+    }
+    var lassoPathViewFillColorComposition = Composition.anti {
+        didSet { lassoPathView?.fillColorComposition = lassoPathViewFillColorComposition }
+    }
+    var lassoLine: Line? {
         didSet {
-            if let lassoCutLine = lassoCutLine {
+            if let lassoLine = lassoLine {
                 if lassoPathView != nil {
-                    lassoPathView?.path = lassoCutLine.fillPath()
+                    lassoPathView?.path = lassoLine.fillPath()
                 } else {
-                    let lassoPathView = View(path: lassoCutLine.fillPath())
-                    lassoPathView.lineColor = .warning
-                    lassoPathView.fillColorComposition = .anti
+                    let lassoPathView = View(path: lassoLine.fillPath())
+                    lassoPathView.lineColor = lassoPathViewColor
+                    lassoPathView.fillColorComposition = lassoPathViewFillColorComposition
                     lassoPathView.lineWidth = 1 / viewScale
                     append(child: lassoPathView)
                     self.lassoPathView = lassoPathView
@@ -818,14 +802,14 @@ extension DrawingView: Movable {
                 model.lines[i] = model.lines[i] * affineTransform
             }
             for (i, _) in model.surfaces.enumerated() {
-                model.surfaces[i].line = model.surfaces[i].line * affineTransform
+                model.surfaces[i] = model.surfaces[i] * affineTransform
             }
             updateWithModel()
         }
     }
 }
-extension DrawingView: CollectionAssignable {
-    func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        push(Drawing(), to: version)
-    }
-}
+//extension DrawingView: CollectionAssignable {
+//    func remove(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+//        push(Drawing(), to: version)
+//    }
+//}
