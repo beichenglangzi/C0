@@ -70,8 +70,8 @@ extension Modeler where Self: View {
     }
 }
 
-protocol BindableReceiver: Modeler, Assignable {
-    associatedtype Model: Object.Value
+protocol BindableReceiver: Modeler {
+    associatedtype Model
     associatedtype Binder: BinderProtocol
     associatedtype Notification: NotificationProtocol
     var model: Model { get set }
@@ -81,6 +81,9 @@ protocol BindableReceiver: Modeler, Assignable {
     var notifications: [((Self, Notification) -> ())] { get }
     func push(_ model: Model, to version: Version)
     func capture(_ model: Model, to version: Version)
+}
+protocol InitializableBindableReceiver: BindableReceiver {
+    init(binder: Binder, keyPath: ReferenceWritableKeyPath<Binder, Model>)
 }
 extension BindableReceiver {
     typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
@@ -108,22 +111,5 @@ extension BindableReceiver {
 extension BindableReceiver {
     func clippedModel(_ model: Model) -> Model {
         return model
-    }
-    
-    var copiableObject: Object {
-        if let valueChain = model as? ValueChain,
-            let value = valueChain.rootChainValue as? Object.Value {
-            
-            return Object(value)
-        } else {
-            return Object(model)
-        }
-    }
-    func paste(_ object: Object,
-               with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        if let model = object.value as? Model {
-            push(clippedModel(model), to: version)
-            return
-        }
     }
 }

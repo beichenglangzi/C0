@@ -25,7 +25,7 @@ extension Point {
         return Point(x: (x + other.x) / 2, y: (y + other.y) / 2)
     }
     
-    static func intersection(p0: Point, p1: Point, q0: Point, q1: Point) -> Bool {
+    static func intersects(p0: Point, p1: Point, q0: Point, q1: Point) -> Bool {
         let a0 = (p0.x - p1.x) * (q0.y - p0.y) + (p0.y - p1.y) * (p0.x - q0.x)
         let b0 = (p0.x - p1.x) * (q1.y - p0.y) + (p0.y - p1.y) * (p0.x - q1.x)
         if a0 * b0 < 0 {
@@ -33,6 +33,20 @@ extension Point {
             let b1 = (q0.x - q1.x) * (p1.y - q0.y) + (q0.y - q1.y) * (q0.x - p1.x)
             if a1 * b1 < 0 {
                 return true
+            }
+        }
+        return false
+    }
+    static func intersectsLineSegment(_ p0: Point, _ p1: Point,
+                                      _ p2: Point, _ p3: Point) -> Bool {
+        let delta = (p1.x - p0.x) * (p3.y - p2.y) - (p1.y - p0.y) * (p3.x - p2.x)
+        if delta != 0 {
+            let u = ((p2.x - p0.x) * (p3.y - p2.y) - (p2.y - p0.y) * (p3.x - p2.x)) / delta
+            if u >= 0 && u <= 1 {
+                let v = ((p2.x - p0.x) * (p1.y - p0.y) - (p2.y - p0.y) * (p1.x - p0.x)) / delta
+                if v >= 0 && v <= 1 {
+                    return true
+                }
             }
         }
         return false

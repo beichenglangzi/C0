@@ -82,9 +82,9 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
     var interval = Interval()
     
     struct Interval {
-        var minSpeed = 100.0.cg, maxSpeed = 1500.0.cg, exp = 2.0.cg
-        var minTime = Real(0.1), maxTime = Real(0.03)
-        var minDistance = 1.1.cg, maxDistance = 1.35.cg
+        var minSpeed = 100.0.cg, maxSpeed = 600.0.cg, exp = 2.0.cg
+        var minTime = Real(0.08), maxTime = Real(0.03)
+        var minDistance = 1.1.cg, maxDistance = 1.25.cg
         
         func speedTWith(distance: Real, deltaTime: Real, scale: Real) -> Real {
             let speed = ((distance / scale) / deltaTime).clip(min: minSpeed, max: maxSpeed)
@@ -197,12 +197,12 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
                 switch strokeType {
                 case .normal:
                     drawingView.linesView.insert(line, at: drawingView.linesView.model.count, version)
-                    lineView = drawingView.linesView.modelViews.last as? LineView<Binder>
+                    lineView = drawingView.linesView.elementViews.last
                 case .sub:
                     line.uuColor = UU(Color.subLine, id: .one)
                     self.line = line
                     drawingView.linesView.insert(line, at: 0, version)
-                    lineView = drawingView.linesView.modelViews.first as? LineView<Binder>
+                    lineView = drawingView.linesView.elementViews.first
                 default:
                     break
                 }
@@ -219,7 +219,8 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
             
             let speed = d / (time - oldTime)
             temps.append(Temp(control: Line.Control(point: p, pressure: pressure), speed: speed))
-            let lPressure = temps.reduce(0.0.cg) { $0 + $1.control.pressure } / Real(temps.count)
+//            let lPressure = temps.reduce(0.0.cg) { $0 + $1.control.pressure } / Real(temps.count)
+            let lPressure = temps.reduce(0.0.cg) { max($0, $1.control.pressure) }
             let lc = Line.Control(point: p, pressure: lPressure)
             
             let mlc = lc.mid(temps[temps.count - 2].control)
@@ -276,7 +277,7 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
             oldLassoFillLineViews = [:]
             drawingView.lassoPathViewColor = .selected
             drawingView.lassoPathViewFillColorComposition = .select
-            break
+            drawingView.lassoLine = line
         case .changed:
             drawingView.lassoLine = line
             if let line = line {
@@ -296,9 +297,8 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
     func updateFillLineViews(with line: Line) {
         for (i, drawingLine) in drawingView.model.lines.enumerated() {
             if LassoSurface(line: line).intersects(drawingLine) {
-                if oldLassoFillLineViews[i] == nil,
-                    let lineView = drawingView.linesView.modelViews[i] as? LineView<Binder> {
-                    
+                if oldLassoFillLineViews[i] == nil {
+                    let lineView = drawingView.linesView.elementViews[i]
                     let oldUUColor = lineView.uuColor
                     lineView.uuColor = fillLineColor
                     oldLassoFillLineViews[i] = (lineView, oldUUColor)
@@ -332,23 +332,22 @@ final class StrokableUserObject<Binder: BinderProtocol>: Strokable {
         }
     }
     func lassoErase(with line: Line, to version: Version) {
-        var isRemoveLineInDrawing = false
+
         let lasso = LassoSurface(line: line)
-        let newDrawingLines = drawingView.linesView.model.reduce(into: [Line]()) {
-            if let splitedLine = lasso.splitedLine(with: $1) {
-                switch splitedLine {
-                case .around:
-                    isRemoveLineInDrawing = true
-                case .splited(let lines):
-                    isRemoveLineInDrawing = true
-                    $0 += lines
-                }
-            } else {
-                $0.append($1)
+        let slt = lasso.splitedLinesTuple(with: drawingView.linesView.model)
+        if !slt.removedIndexes.isEmpty {
+            var di = 0
+            for i in slt.removedIndexes {
+                drawingView.linesView.remove(at: i + di, version)
+                di -= 1
             }
+//            drawingView.linesView.remove(at: slt.removedIndexes, version)
         }
-        if isRemoveLineInDrawing {
-            drawingView.linesView.push(newDrawingLines, to: version)
+        if !slt.splitedLines.isEmpty {
+            for line in slt.splitedLines {
+                drawingView.linesView.append(line, version)
+            }
+//            drawingView.linesView.append(slt.splitedLines, version)
         }
     }
 }

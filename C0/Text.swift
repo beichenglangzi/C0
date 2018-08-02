@@ -42,7 +42,7 @@ final class TextView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     var notifications = [((TextView<Binder>, BasicNotification) -> ())]()
 
-    let stringLinesView: ArrayView<StringLine, Binder>
+    let stringLinesView: ArrayView<StringLineView<Binder>>
     
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder

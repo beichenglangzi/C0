@@ -752,6 +752,8 @@ extension Line {
         } else {
             let firstTheta = firstAngle + .pi / 2
             let fpres = s * controls[0].pressure
+            let fdp = Point(x: fpres * cos(firstTheta),
+                            y: fpres * sin(firstTheta))
             var previousPressure = controls[0].pressure
             var es = [PathLine.Element](), res = [PathLine.Element]()
             let fp = controls[0].point
@@ -769,6 +771,7 @@ extension Line {
                     previousPressure = nextPressure
                     continue
                 }
+                
                 let bs = b.midSplit()
                 func append(with bezier: Bezier2) {
                     let length = max(1,
@@ -810,8 +813,7 @@ extension Line {
                                         clockwise: true)))
             
             var path = Path()
-            path.append(PathLine(firstPoint: fp + Point(x: fpres * cos(firstTheta),
-                                                        y: fpres * sin(firstTheta)), elements: es))
+            path.append(PathLine(firstPoint: fp + fdp, elements: es))
             return path
         }
     }
@@ -995,15 +997,13 @@ extension Array where Element == Point {
     }
 }
 
-final class LineView<T: BinderProtocol>: ModelView, BindableReceiver {
+final class LineView<T: BinderProtocol>: ModelView, InitializableBindableReceiver {
     typealias Model = Line
     typealias Binder = T
     var binder: Binder {
         didSet { updateWithModel() }
     }
-    var keyPath: BinderKeyPath {
-        didSet { updateWithModel() }
-    }
+    var keyPath: BinderKeyPath
     var notifications = [((LineView<Binder>, BasicNotification) -> ())]()
     
     var width = Layouter.lineWidth

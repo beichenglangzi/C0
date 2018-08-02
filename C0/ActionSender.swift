@@ -140,7 +140,7 @@ final class ActionSender {
                 type = .erase
             }
             strokableObject?.stroke(with: eventValue, actionMap.phase,
-                                        strokableType: type, rootView.version)
+                                    strokableType: type, rootView.version)
             if actionMap.phase == .ended {
                 strokableObject = nil
             }
@@ -185,14 +185,14 @@ final class ActionSender {
         case actionList.copyAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let collectionAssignable = rootView.collectionAssignable(at: eventValue.rootLocation)
+            let collectionAssignable = rootView.copiable(at: eventValue.rootLocation)
             let copiedObject = collectionAssignable.copiableObject
             stopEditableEvents()
             rootView.push(copiedObject: copiedObject, to: rootView.version)
         case actionList.pasteAction:
             guard actionMap.phase == .began else { break }
             guard let eventValue = actionMap.eventValues(with: InputEvent.self).first else { break }
-            let collectionAssignable = rootView.collectionAssignable(at: eventValue.rootLocation)
+            let collectionAssignable = rootView.assignable(at: eventValue.rootLocation)
             stopEditableEvents()
             collectionAssignable.paste(rootView.copiedObject,
                                        with: eventValue, actionMap.phase, rootView.version)
@@ -475,10 +475,16 @@ protocol Undoable {
     var version: Version { get }
 }
 
-protocol MakableCollectionAssignable {
-    func collectionAssignable(at p: Point) -> CollectionAssignable
+protocol MakableCopiable {
+    func copiable(at p: Point) -> Copiable
     func push(copiedObject: Object, to version: Version)
     var copiedObject: Object { get }
+}
+protocol MakableAssignable: MakableCopiable {
+    func assignable(at p: Point) -> Assignable
+}
+protocol MakableCollectionAssignable: MakableAssignable {
+    func collectionAssignable(at p: Point) -> CollectionAssignable
 }
 protocol Copiable {
     var copiableObject: Object { get }

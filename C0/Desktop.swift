@@ -99,9 +99,10 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
     let copiedObjectView: ObjectView<Binder>
     let transformView: TransformView<Binder>
     let drawingFrameView: RectView<Binder>
-    let drawingView: DrawingView<Binder>
-    let draftDrawingView: DrawingView<Binder>
+    var drawingView: DrawingView<Binder>
+    var draftDrawingView: DrawingView<Binder>
 
+    var draftOpacity = 0.2.cg
     let transformCenterView: View
     let drawingFrameAroundView: View
     
@@ -123,7 +124,7 @@ final class DesktopView<T: BinderProtocol>: ModelView, BindableReceiver {
         
         copiedObjectView.opacity = 0.5
         draftDrawingView.linesColor = .draft
-        draftDrawingView.opacity = 0.2
+        draftDrawingView.opacity = draftOpacity
         
         transformCenterView = View()
         drawingFrameAroundView.fillColorComposition = .around
@@ -231,7 +232,8 @@ extension DesktopView: MakableChangeableColor {
                 return nil
         }
         let uuColor = view.uuColor
-        let views = drawingView.surfacesView.modelViews + drawingView.linesView.modelViews
+        let views = drawingView.surfacesView.elementViews as [View]
+            + drawingView.linesView.elementViews as [View]
         let colorViews: [View & ChangeableColorOwner] = views.compactMap {
             let colorView = $0 as? View & ChangeableColorOwner
             return colorView?.uuColor == uuColor ? colorView : nil
@@ -257,6 +259,12 @@ extension DesktopView: Undoable {
 }
 
 extension DesktopView: MakableCollectionAssignable {
+    func copiable(at p: Point) -> Copiable {
+        return at(p, Copiable.self) ?? self
+    }
+    func assignable(at p: Point) -> Assignable {
+        return at(p, Assignable.self) ?? self
+    }
     func collectionAssignable(at p: Point) -> CollectionAssignable {
         return at(p, CollectionAssignable.self) ?? self
     }
@@ -275,21 +283,22 @@ extension DesktopView: CollectionAssignable {
         if let view = at(eventValue.rootLocation) {
             if view is SurfaceView<Binder> {
                 drawingView.surfacesView.push([], to: version)
+                return
             } else if let lineView = view as? LineView<Binder> {
-                if let i = (drawingView.linesView.modelViews as [View]).index(of: lineView),
+                if let i = drawingView.linesView.elementViews.index(of: lineView),
                     i < drawingView.linesView.model.count {
                     
                     drawingView.linesView.remove(at: i, version)
+                    return
                 }
             }
-        } else {
-            push(drawing: Drawing(), to: version)
         }
+        push(drawing: Drawing(), to: version)
     }
     func paste(_ object: Object,
                with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
         if let drawing = object.value as? Drawing {
-            push(drawing: model.drawing + drawing, to: version)
+            push(drawing: drawing, to: version)
         }
     }
 }
@@ -307,23 +316,110 @@ extension DesktopView: ChangeableDraft {
     func removeDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
         push(draftDrawing: Drawing(), to: version)
     }
-    func exchangeWithDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
-        let drawing = model.drawing
-        push(drawing: model.draftDrawing, to: version)
-        push(draftDrawing: drawing, to: version)
-    }
     func push(drawing: Drawing, to version: Version) {
-        version.registerUndo(withTarget: self) { [oldDrawing = model.drawing] in
-            $0.push(drawing: oldDrawing, to: version)
+        version.registerUndo(withTarget: self) {
+            [oldDrawingView = self.drawingView,
+            oldDrawing = self.model.drawing] in
+            
+            $0.push(drawingView: oldDrawingView, drawing: oldDrawing, to: version)
         }
-        drawingView.model = drawing
+        binder[keyPath: keyPath].drawing = drawing
+        let drawingView =  DrawingView(binder: binder,
+                                       keyPath: keyPath.appending(path: \Model.drawing))
+        self.drawingView = drawingView
+        transformView.children = [draftDrawingView, drawingView, drawingFrameView]
+    }
+    func push(drawingView: DrawingView<Binder>, drawing: Drawing, to version: Version) {
+        version.registerUndo(withTarget: self) {
+            [oldDrawingView = self.drawingView,
+            oldDrawing = self.model.drawing] in
+            
+            $0.push(drawingView: oldDrawingView, drawing: oldDrawing, to: version)
+        }
+        binder[keyPath: keyPath].drawing = drawing
+        drawingView.keyPath = keyPath.appending(path: \Model.drawing)
+        drawingView.linesColor = nil
+        drawingView.opacity = 1
+        self.drawingView = drawingView
+        transformView.children = [draftDrawingView, drawingView, drawingFrameView]
     }
     func push(draftDrawing: Drawing, to version: Version) {
-        version.registerUndo(withTarget: self) { [oldDraftDrawing = model.draftDrawing] in
-            $0.push(draftDrawing: oldDraftDrawing, to: version)
+        version.registerUndo(withTarget: self) {
+            [oldDraftDrawingView = self.draftDrawingView,
+            oldDraftDrawing = self.model.draftDrawing] in
+            
+            $0.push(draftDrawingView: oldDraftDrawingView, draftDrawing: oldDraftDrawing, to: version)
         }
-        draftDrawingView.model = draftDrawing
+        binder[keyPath: keyPath].draftDrawing = draftDrawing
+        let draftDrawingView =  DrawingView(binder: binder,
+                                            keyPath: keyPath.appending(path: \Model.draftDrawing))
+        draftDrawingView.linesColor = .draft
+        draftDrawingView.opacity = draftOpacity
+        self.draftDrawingView = draftDrawingView
+        transformView.children = [draftDrawingView, drawingView, drawingFrameView]
     }
+    func push(draftDrawingView: DrawingView<Binder>, draftDrawing: Drawing, to version: Version) {
+        version.registerUndo(withTarget: self) {
+            [oldDraftDrawingView = self.draftDrawingView,
+            oldDraftDrawing = self.model.draftDrawing] in
+            
+            $0.push(draftDrawingView: oldDraftDrawingView, draftDrawing: oldDraftDrawing, to: version)
+        }
+        binder[keyPath: keyPath].draftDrawing = draftDrawing
+        draftDrawingView.keyPath = keyPath.appending(path: \Model.draftDrawing)
+        draftDrawingView.linesColor = .draft
+        draftDrawingView.opacity = draftOpacity
+        self.draftDrawingView = draftDrawingView
+        transformView.children = [draftDrawingView, drawingView, drawingFrameView]
+    }
+    
+    func exchangeWithDraft(with eventValue: InputEvent.Value, _ phase: Phase, _ version: Version) {
+        pushExchange(drawingView: draftDrawingView, draftDrawingView: drawingView,
+                     drawing: model.draftDrawing, draftDrawing: model.drawing,
+                     to: version)
+//        let drawing = model.drawing
+//        push(drawing: model.draftDrawing, to: version)
+//        push(draftDrawing: drawing, to: version)
+    }
+    func pushExchange(drawingView: DrawingView<Binder>, draftDrawingView: DrawingView<Binder>,
+                      drawing: Drawing, draftDrawing: Drawing, to version: Version) {
+        version.registerUndo(withTarget: self) {
+            $0.pushExchange(drawingView: draftDrawingView, draftDrawingView: drawingView,
+                            drawing: draftDrawing, draftDrawing: drawing,
+                            to: version)
+        }
+        binder[keyPath: keyPath].drawing = drawing
+        binder[keyPath: keyPath].draftDrawing = draftDrawing
+        drawingView.keyPath = keyPath.appending(path: \Model.drawing)
+        draftDrawingView.keyPath = keyPath.appending(path: \Model.draftDrawing)
+        self.drawingView = drawingView
+        self.draftDrawingView = draftDrawingView
+        drawingView.linesColor = nil
+        drawingView.opacity = 1
+        draftDrawingView.linesColor = .draft
+        draftDrawingView.opacity = draftOpacity
+        transformView.children = [draftDrawingView, drawingView, drawingFrameView]
+    }
+    
+//    func push(drawing: Drawing, to version: Version) {
+//        version.registerUndo(withTarget: self) { [oldDrawing = model.drawing] in
+//            $0.push(drawing: oldDrawing, to: version)
+//        }
+//        drawingView.model = drawing
+//    }
+//    func push(drawingView: DrawingView<Binder>, drawing: Drawing, to version: Version) {
+//        version.registerUndo(withTarget: self) { [oldDrawing = model.drawing] in
+//            $0.push(drawing: oldDrawing, to: version)
+//        }
+//        drawingView.model = drawing
+//    }
+//    func push(draftDrawing: Drawing, to version: Version) {
+//        version.registerUndo(withTarget: self) { [oldDraftDrawing = model.draftDrawing] in
+//            $0.push(draftDrawing: oldDraftDrawing, to: version)
+//        }
+//        draftDrawingView.model = draftDrawing
+//    }
+    
     var draftValue: Object.Value {
         return model.draftDrawing
     }

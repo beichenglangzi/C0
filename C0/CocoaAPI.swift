@@ -255,17 +255,20 @@ final class C0Document: NSDocument, NSWindowDelegate {
             rootDataModel.insert(c0View.desktopBinder.dataModel)
         }
         
+        undoManager = desktop.version
+        
         if preference.windowFrame.isEmpty, let frame = NSScreen.main?.frame {
             let size = desktop.drawingFrame.inset(by: -100).size
             let origin = NSPoint(x: round((frame.width - size.width) / 2),
                                  y: round((frame.height - size.height) / 2))
             preference.windowFrame = NSRect(origin: origin, size: size)
         }
+        setupWindow(with: preference)
+        preferenceDataModel.isWrite = false
         preferenceDataModel.didChangeIsWriteClosure = { [unowned self] (_, isWrite) in
             self.updateChangeCount(.changeDone)
         }
         preferenceDataModel.dataClosure = { [unowned self] in self.preference.jsonData }
-        setupWindow(with: preference)
         
         if let copiedObject = NSPasteboard.general.copiedObjects.first {
             oldChangeCountWithPsteboard = NSPasteboard.general.changeCount

@@ -199,6 +199,23 @@ extension LassoSurface {
                                        endIndex: si.endIndex, endT: si.endT)
         }
     }
+    
+    func splitedLinesTuple(with lines: [Line]) -> (splitedLines: [Line], removedIndexes: [Int]) {
+        var splitedLines = [Line]()
+        var removedIndexes = [Int]()
+        for (i, aLine) in lines.enumerated() {
+            if let splitedLine = splitedLine(with: aLine) {
+                switch splitedLine {
+                case .around:
+                    removedIndexes.append(i)
+                case .splited(let lines):
+                    removedIndexes.append(i)
+                    splitedLines += lines
+                }
+            }
+        }
+        return (splitedLines, removedIndexes)
+    }
 }
 extension LassoSurface {
     func contains(_ p: Point) -> Bool {
@@ -234,15 +251,13 @@ extension LassoSurface {
     }
 }
 
-final class SurfaceView<T: BinderProtocol>: ModelView, BindableReceiver {
+final class SurfaceView<T: BinderProtocol>: ModelView, InitializableBindableReceiver {
     typealias Model = Surface
     typealias Binder = T
     var binder: Binder {
         didSet { updateWithModel() }
     }
-    var keyPath: BinderKeyPath {
-        didSet { updateWithModel() }
-    }
+    var keyPath: BinderKeyPath
     var notifications = [((SurfaceView<Binder>, BasicNotification) -> ())]()
 
     init(binder: T, keyPath: BinderKeyPath) {
@@ -272,7 +287,6 @@ extension SurfaceView: ChangeableColorOwner {
     func captureUUColor(to version: Version) {
         capture(uuColor: model.uuColor, to: version)
     }
-
     func push(uuColor: UU<Color>, to version: Version) {
         version.registerUndo(withTarget: self) { [oldUUColor = model.uuColor, unowned version] in
             $0.push(uuColor: oldUUColor, to: version)

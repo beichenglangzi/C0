@@ -141,7 +141,7 @@ extension StringLine: Viewable {
 }
 extension StringLine: ObjectViewable {}
 
-final class StringLineView<T: BinderProtocol>: ModelView, BindableReceiver {
+final class StringLineView<T: BinderProtocol>: ModelView, InitializableBindableReceiver {
     typealias Model = StringLine
     typealias Binder = T
     var binder: Binder {
@@ -175,8 +175,11 @@ final class StringLineView<T: BinderProtocol>: ModelView, BindableReceiver {
         didSet { displayLinkDraw() }
     }
 
+    convenience init(binder: Binder, keyPath: BinderKeyPath) {
+        self.init(binder: binder, keyPath: keyPath, textMaterial: TextMaterial(color: .content))
+    }
     init(binder: Binder, keyPath: BinderKeyPath,
-         textMaterial: TextMaterial = TextMaterial(color: .content),
+         textMaterial: TextMaterial,
          lineBreakWidth: Real? = .infinity, paddingSize: Size = Size(square: 1)) {
 
         self.binder = binder

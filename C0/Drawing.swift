@@ -706,12 +706,15 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
         didSet { updateWithModel() }
     }
     var keyPath: BinderKeyPath {
-        didSet { updateWithModel() }
+        didSet {
+            linesView.keyPath = keyPath.appending(path: \Model.lines)
+            surfacesView.keyPath = keyPath.appending(path: \Model.surfaces)
+        }
     }
     var notifications = [((DrawingView<Binder>, BasicNotification) -> ())]()
     
-    let linesView: ArrayView<Line, Binder>
-    let surfacesView: ArrayView<Surface, Binder>
+    let linesView: ArrayView<LineView<Binder>>
+    let surfacesView: ArrayView<SurfaceView<Binder>>
     
     init(binder: T, keyPath: BinderKeyPath) {
         self.binder = binder
@@ -733,9 +736,9 @@ final class DrawingView<T: BinderProtocol>: ModelView, BindableReceiver {
     }
     func updateLinesColor() {
         if let linesColor = linesColor {
-            linesView.modelViews.forEach { $0.fillColor = linesColor }
+            linesView.elementViews.forEach { $0.fillColor = linesColor }
         } else {
-            linesView.modelViews.forEach { ($0 as? LineView<Binder>)?.updateColor() }
+            linesView.elementViews.forEach { $0.updateColor() }
         }
     }
     
